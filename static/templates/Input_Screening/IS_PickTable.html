@@ -2,7 +2,7 @@
 {% load static %}
 {% load stock_filters %} 
 {% block content %}
-<script>console.log("🔥 CRITICAL DEBUG: IS_PickTable.html LOADED 🔥");</script>
+<script nonce="{{ csp_nonce }}">console.log("🔥 CRITICAL DEBUG: IS_PickTable.html LOADED 🔥");</script>
   <style>
     /* ✅ FIX: Ensure acceptedTrayCancelBtn is always accessible */
     #acceptedTrayCancelBtn {
@@ -1761,19 +1761,29 @@ function autoTriggerTrayValidation(scannedTrayId) {
 function searchLotIdAcrossPages(lotId, trayId, currentPage) {
   console.log(`🔍 Searching for Lot ID ${lotId} across pages (current: ${currentPage})`);
   
-  // Try to navigate to the page containing the lot_id
-  // We'll navigate to different pages and check if the row exists
   const maxPages = 10; // Reasonable limit to prevent infinite searching
-  let pageToCheck = 1;
+  
+  // ✅ FIXED: Use sessionStorage to track next page to check across navigations
+  let pageToCheck = parseInt(sessionStorage.getItem('pendingScanNextPage') || '1');
+  
+  // If this is a fresh search (not a continuation), reset counter
+  const existingLotId = sessionStorage.getItem('pendingScanLotId');
+  if (!existingLotId || existingLotId !== lotId) {
+    pageToCheck = 1;
+  }
   
   function checkNextPage() {
     if (pageToCheck > maxPages) {
-      // Not found in reasonable number of pages
+      // Not found in reasonable number of pages - clear session and stop
+      sessionStorage.removeItem('pendingScanLotId');
+      sessionStorage.removeItem('pendingScanTrayId');
+      sessionStorage.removeItem('pendingScanOriginalPage');
+      sessionStorage.removeItem('pendingScanNextPage');
       const scanStatus = document.getElementById("scanStatusMessage");
       const scanInput = document.getElementById("scanHiddenInput");
       if (scanStatus) {
         scanStatus.style.color = "#dc3545";
-        scanStatus.textContent = "Tray found but not visible on current pages";
+        scanStatus.textContent = "Tray found but lot not visible on any page";
       }
       if (scanInput) {
         scanInput.value = "";
@@ -1799,6 +1809,8 @@ function searchLotIdAcrossPages(lotId, trayId, currentPage) {
     sessionStorage.setItem('pendingScanLotId', lotId);
     sessionStorage.setItem('pendingScanTrayId', trayId);
     sessionStorage.setItem('pendingScanOriginalPage', currentPage);
+    // ✅ FIXED: Store next page to check so we don't restart from 1
+    sessionStorage.setItem('pendingScanNextPage', (pageToCheck + 1).toString());
     
     // Navigate to the page
     window.location.href = newUrl.toString();
@@ -4343,63 +4355,45 @@ if (redoBtn && validateInput) {
      }
    
       // DELETE BUTTON HANDLER - REMOVED (Now handled via event delegation)
-      // Event delegation is used instead to handle dynamically created delete buttons
-           })
-           .then(res => res.json())
-           .then(data => {
-             if (data.success) {
-               row.remove();
-               Swal.fire({
-                 icon: 'success',
-                 title: 'Deleted!',
-                 text: 'Batch has been deleted.',
-                 timer: 1200,
-                 showConfirmButton: false
-               });                  
-             } else {
-               Swal.fire('Error', data.error || 'Delete failed', 'error');
-             }
-           });
-         }
-       });
-     });
-   });
    
    
    // Helper function to show error notification
    function showErrorNotification(message) {
-   // Create or get existing notification element
-   let notification = document.getElementById('error-notification');
-   if (!notification) {
-   notification = document.createElement('div');
-   notification.id = 'error-notification';
-  notification.style.cssText = `
-     position: fixed;
-     left: 50%;
-     top: 50%;
-     transform: translate(-50%, -50%);
-     background: #dc3545;
-     color: white;
-     padding: 18px 32px;
-     border-radius: 12px;
-     box-shadow: 0 4px 24px rgba(220,53,69,0.18);
-     z-index: 10001;
-     font-weight: 600;
-     font-size: 18px;
-     text-align: center;
-     transition: opacity 0.3s ease;
-     opacity: 1;
-  `;
- 
-notification.textContent = message;
+     // Create or get existing notification element
+     let notification = document.getElementById('error-notification');
+     if (!notification) {
+       notification = document.createElement('div');
+       notification.id = 'error-notification';
+       notification.style.cssText = `
+         position: fixed;
+         left: 50%;
+         top: 50%;
+         transform: translate(-50%, -50%);
+         background: #dc3545;
+         color: white;
+         padding: 18px 32px;
+         border-radius: 12px;
+         box-shadow: 0 4px 24px rgba(220,53,69,0.18);
+         z-index: 10001;
+         font-weight: 600;
+         font-size: 18px;
+         text-align: center;
+         transition: opacity 0.3s ease;
+         opacity: 1;
+       `;
+       document.body.appendChild(notification);
+     }
 
-// Show notification
-notification.style.opacity = '1';
+     notification.textContent = message;
 
-// Hide notification after 4 seconds
-setTimeout(() => {
-   notification.style.opacity = '0';
-}, 4000);
+     // Show notification
+     notification.style.opacity = '1';
+
+     // Hide notification after 4 seconds
+     setTimeout(() => {
+       notification.style.opacity = '0';
+     }, 4000);
+   }
    
    const table = document.getElementById("order-listing");
      if (!table) {

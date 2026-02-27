@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.renderers import TemplateHTMLRenderer
 from django.shortcuts import render
-from django.db.models import OuterRef, Subquery, Exists, F
+from django.db.models import OuterRef, Subquery, Exists, F, Sum
 from django.core.paginator import Paginator
 from django.templatetags.static import static
 import math
@@ -205,6 +205,47 @@ class IQFPickTableView(APIView):
             lot_id = data.get('stock_lot_id')
             total_stock_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
             if total_stock_obj:
+                # ✅ HEALING LOGIC: If iqf_physical_qty is 0/None and no missing qty recorded, try to recover from Brass QC/Audit
+                # This fixes the bug where "assigned quantity" is lost after draft save
+                current_physical_qty = total_stock_obj.iqf_physical_qty or 0
+                current_missing_qty = total_stock_obj.iqf_missing_qty or 0
+                
+                # Strict conditions: 
+                # 1. Physical qty is 0 or None
+                # 2. Missing qty is 0 or None (if user set missing, 0 physical is valid)
+                # 3. Not yet finalized (not fully accepted or rejected)
+                needs_healing = (
+                    current_physical_qty <= 0 and 
+                    current_missing_qty <= 0 and
+                    not total_stock_obj.iqf_acceptance and 
+                    not total_stock_obj.iqf_rejection
+                )
+
+                if needs_healing:
+                    try:
+                        # Determine source based on flag
+                        use_audit = getattr(total_stock_obj, 'send_brass_audit_to_iqf', False)
+                        
+                        if use_audit:
+                            reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                        else:
+                            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                        
+                        if reason_store and reason_store.total_rejection_quantity > 0:
+                            qty_to_heal = reason_store.total_rejection_quantity
+                            print(f"🚑 HEALING: Recovering iqf_physical_qty for {lot_id} -> {qty_to_heal}")
+                            
+                            # Persist the recovered quantity
+                            total_stock_obj.iqf_physical_qty = qty_to_heal
+                            total_stock_obj.iqf_missing_qty = 0
+                            total_stock_obj.save(update_fields=['iqf_physical_qty', 'iqf_missing_qty'])
+                            
+                            # Update local object for immediate use in this view
+                            total_stock_obj.iqf_physical_qty = qty_to_heal
+                    except Exception as e:
+                        print(f"⚠️ HEALING FAILED for {lot_id}: {str(e)}")
+
+                # Standard assignment using (possibly healed) value
                 if total_stock_obj.iqf_physical_qty and total_stock_obj.iqf_physical_qty > 0:
                     data['available_qty'] = total_stock_obj.iqf_physical_qty
                 else:
@@ -478,9 +519,57 @@ class IQFTrayValidate_Complete_APIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             tray_id = str(data.get('tray_id', '')).strip()
+            batch_id = str(data.get('batch_id', '')).strip()
 
+            print(f"[IQF Validation] Validating tray {tray_id} for batch {batch_id}")
+            
+            # 1. Basic Existence Check
             # Only check if tray_id exists in TrayId table
-            exists = TrayId.objects.filter(tray_id=tray_id).exists()
+            tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
+            exists = bool(tray_obj)
+
+            if not exists:
+                return JsonResponse({
+                    'success': True,
+                    'exists': False,
+                    'error': f'Tray {tray_id} not found in system'
+                })
+
+            # 2. Tray Type Validation
+            if batch_id:
+                try:
+                    # Get expected tray type from batch
+                    # Note: batch_id in request might be lot_id or batch_id, handling both
+                    batch_obj = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
+                    if not batch_obj:
+                         # Try as lot_id
+                         batch_obj = ModelMasterCreation.objects.filter(lot_id=batch_id).first()
+                    
+                    if batch_obj:
+                        expected_tray_type = batch_obj.tray_type
+                        
+                        # Get actual tray type
+                        actual_tray_type = tray_obj.tray_type
+                        
+                        print(f"   - Expected Type: {expected_tray_type}")
+                        print(f"   - Actual Type: {actual_tray_type}")
+                        
+                        # Normalize for comparison
+                        expected_norm = str(expected_tray_type).strip().lower() if expected_tray_type else ''
+                        actual_norm = str(actual_tray_type).strip().lower() if actual_tray_type else ''
+                        
+                        # Strict Validation: If batch has a type, tray must match
+                        if expected_norm:
+                            if expected_norm != actual_norm:
+                                return JsonResponse({
+                                    'success': False,
+                                    'exists': True,
+                                    'error': f'Tray Type Mismatch! Expected: {expected_tray_type}, Scanned: {actual_tray_type or "None"}'
+                                })
+                            
+                except Exception as val_e:
+                    print(f"   - Validation Error: {val_e}")
+                    # Don't block flow on error, but log it
 
             return JsonResponse({
                 'success': True,
@@ -2272,7 +2361,7 @@ class IQFTrayValidateAPIView(APIView):
             
             if not lot_id_input or not tray_id:
                 return JsonResponse({
-                    'success': False, 
+                    'success': False,
                     'error': 'Both lot_id and tray_id are required'
                 }, status=400)
 
@@ -2308,18 +2397,278 @@ class IQFTrayValidateAPIView(APIView):
                 print(f"[DEBUG] Tray '{tray_id}' found in TrayId for lot_ids: {tray_lot_ids}")
             
             print(f"[DEBUG] Final result - exists: {tray_exists}")
-            print("="*50)
             
-            return JsonResponse({
-                'success': True, 
-                'exists': tray_exists,
-                'debug_info': {
-                    'lot_id_received': lot_id_input,
-                    'tray_id_received': tray_id,
-                    'all_trays_in_brass_qc_store': list(all_trays),
-                    'tray_exists_in_brass_qc_store': tray_exists
-                }
-            })
+            # ----------------------------
+            # CLASSIFY TRAY FIRST (minimal, correct fix)
+            # ----------------------------
+            # ----------------------------
+            # 1. CLASSIFY TRAY
+            # ----------------------------
+            # Get TrayId (Global Master)
+            tray_id_obj = TrayId.objects.filter(tray_id=tray_id).first()
+            # Get IQFTrayId (Lot Specific)
+            ip_tray_obj = IQFTrayId.objects.filter(lot_id=lot_id_input, tray_id=tray_id).first()
+            
+            print(f"\n[IQF VALIDATION DEBUG] Start Validation --------------------------------")
+            print(f"[IQFTrayValidate] Request Tray: {tray_id}, Lot: {lot_id_input}")
+            
+            # Definition: New Tray = Exists in Master AND (No lot assigned OR Marked as new_tray)
+            is_free_tray = bool(tray_id_obj and not tray_id_obj.lot_id)
+            is_marked_new = bool(tray_id_obj and getattr(tray_id_obj, 'new_tray', False))
+            is_new_tray = (ip_tray_obj is None) and (is_free_tray or is_marked_new)
+
+            # Definition: Existing Tray = Already in IQFTrayId for this lot
+            is_existing_tray = bool(ip_tray_obj)
+            
+            # Check status of existing tray
+            is_empty_existing_tray = False
+            is_occupied_existing_tray = False
+            tray_qty_db = 0
+            
+            if is_existing_tray:
+                tray_qty_db = getattr(ip_tray_obj, 'tray_quantity', 0)
+                if tray_qty_db > 0:
+                    is_occupied_existing_tray = True
+                else:
+                    is_empty_existing_tray = True
+            
+            print(f"[IQFTrayValidate] TRAY STATUS:")
+            print(f"  - In IQFTrayId (Existing)? {is_existing_tray}")
+            print(f"  - In TrayId (Master)? {bool(tray_id_obj)}")
+            if tray_id_obj:
+                 print(f"    -> Master Lot: '{tray_id_obj.lot_id}'")
+            print(f"  - Qty in DB: {tray_qty_db}")
+            print(f"  - Flags: New={is_new_tray}, Empt={is_empty_existing_tray}, Occ={is_occupied_existing_tray}")
+
+            # ----------------------------
+            # 2. CALCULATE REUSE LIMITS (Always calculate for visibility)
+            # ----------------------------
+            remaining_reuse_slots = 0
+            used_reusable_trays = set()
+            try:
+                # Parse optional session allocations
+                current_session_allocations = []
+                try:
+                    alloc_raw = data.get('current_session_allocations', [])
+                    if isinstance(alloc_raw, str):
+                        current_session_allocations = json.loads(alloc_raw)
+                    elif isinstance(alloc_raw, list):
+                        current_session_allocations = alloc_raw
+                except Exception:
+                    current_session_allocations = []
+
+                # Get Tray Capacity
+                tray_capacity = 0
+                if ip_tray_obj:
+                     tray_capacity = getattr(ip_tray_obj, 'tray_capacity', 0)
+                
+                if not tray_capacity:
+                    ts = TotalStockModel.objects.filter(lot_id=lot_id_input).first()
+                    if ts and ts.batch_id:
+                        tray_capacity = getattr(ts.batch_id, 'tray_capacity', 12) or 12
+                    else:
+                        tray_capacity = 12
+
+                # Get Total Rejected Quantity (Not used in new formula, but kept for reference if needed, commented out)
+                # ts = TotalStockModel.objects.filter(lot_id=lot_id_input).first()
+                # use_audit = getattr(ts, 'send_brass_audit_to_iqf', False) if ts else False
+                # total_rejected_qty = 0
+                
+                # --- NEW PHYSICAL CAPACITY FORMULA ---
+
+                # 1. Total Trays (All physical trays for the lot)
+                non_rejected_trays_qs = IQFTrayId.objects.filter(lot_id=lot_id_input)
+                total_tray_count = non_rejected_trays_qs.count()
+
+                # 2. Total Quantity currently present (Sum of tray_quantity)
+                total_qty_agg = non_rejected_trays_qs.aggregate(total_sum=Sum('tray_quantity'))
+                total_qty = total_qty_agg.get('total_sum', 0) or 0
+
+                # ✅ FALLBACK: When no IQFTrayId records exist yet (initial rejection entry)
+                frontend_total_iqf_qty = int(request.GET.get('total_iqf_qty', 0))
+                
+                if total_tray_count == 0 and frontend_total_iqf_qty > 0:
+                    ts_fb = TotalStockModel.objects.filter(lot_id=lot_id_input).first()
+                    if ts_fb:
+                        physical_qty = getattr(ts_fb, 'iqf_physical_qty', 0) or 0
+                        if not physical_qty:
+                            physical_qty = getattr(ts_fb, 'quantity', 0) or 0
+                        
+                        if physical_qty > 0 and tray_capacity > 0:
+                            total_tray_count = math.ceil(physical_qty / tray_capacity)
+                            total_qty = physical_qty
+                            print(f"  [IQF FALLBACK] No IQFTrayId records. physical_qty={physical_qty}, estimated_trays={total_tray_count}")
+
+                # 3. Get IQF Rejections (Store + Draft)
+                iqf_rejected_qty = 0
+                
+                # A. Committed Rejections
+                iqf_rejection_record = IQF_Rejection_ReasonStore.objects.filter(lot_id=lot_id_input).order_by('-id').first()
+                if iqf_rejection_record:
+                    iqf_rejected_qty += iqf_rejection_record.total_rejection_quantity or 0
+
+                # B. Draft Rejections
+                draft_rejected_qty = 0
+                draft_record = IQF_Draft_Store.objects.filter(lot_id=lot_id_input, draft_type='tray_rejection').first()
+                if draft_record and draft_record.draft_data:
+                    try:
+                        draft_data = draft_record.draft_data
+                        if isinstance(draft_data, str):
+                            import json
+                            draft_data = json.loads(draft_data)
+                        
+                        # Sum up rejections in draft
+                        tray_rejections = draft_data.get('tray_rejections', [])
+                        for rej in tray_rejections:
+                            draft_rejected_qty += int(rej.get('qty', 0) or 0)
+                    except Exception as e:
+                        print(f"Error parsing draft rejection data: {e}")
+
+                total_iqf_rejected_qty = iqf_rejected_qty + draft_rejected_qty
+                
+                # If no committed/draft rejections but frontend has rejection qty, use it
+                if total_iqf_rejected_qty == 0 and frontend_total_iqf_qty > 0:
+                    total_iqf_rejected_qty = frontend_total_iqf_qty
+
+                # 4. Remaining Qty = Total Qty (Physical) - Total IQF Rejected (Committed + Draft)
+                remaining_qty = max(0, total_qty - total_iqf_rejected_qty)
+
+                # 5. Trays Needed = ceil(Remaining Qty / Tray Capacity)
+                trays_needed = 0
+                if tray_capacity > 0:
+                     trays_needed = math.ceil(remaining_qty / tray_capacity)
+
+                # 6. Max Reusable Trays
+                max_reusable_trays = max(0, total_tray_count - trays_needed)
+
+                print(f"  REUSE CALCULATION (Physical Formula - Updated with IQF_Draft_Store):")
+                print(f"  - Total Tray Count: {total_tray_count}")
+                print(f"  - Total Quantity (Physical Sum): {total_qty}")
+                print(f"  - IQF Rejected Qty (Store): {iqf_rejected_qty}")
+                print(f"  - IQF Rejected Qty (Draft): {draft_rejected_qty}")
+                print(f"  - Remaining Qty: {remaining_qty}")
+                print(f"  - Trays Needed: {trays_needed} (ceil({remaining_qty}/{tray_capacity}))")
+                print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed})")
+                max_reusable_trays = max(0, total_tray_count - trays_needed)
+                
+                # Count ALREADY used reusable trays in session
+                for alloc in current_session_allocations:
+                    t_ids = alloc.get('tray_ids', [])
+                    if isinstance(t_ids, str): t_ids = [t_ids]
+                    
+                    for t_id in t_ids:
+                        if not t_id: continue
+                        # Check if this tray is an EXISTING tray for this lot
+                        t_ip_obj = IQFTrayId.objects.filter(tray_id=t_id, lot_id=lot_id_input).first()
+                        if t_ip_obj:
+                            # If it's the specific top-most working tray (optional check, but logic says ANY empty tray is reusable)
+                            # Actually, user logic implies we just count reuses.
+                            # We should check if t_id was originally empty? No, session allocation implies we just filled it.
+                            # Let's count it if it's being used as a reuse tray.
+                            used_reusable_trays.add(t_id)
+
+                used_reusable_count = len(used_reusable_trays)
+                remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
+                    
+                print(f"  REUSE CALCULATION (Physical Formula):")
+                print(f"  - Total Tray Count: {total_tray_count}")
+                print(f"  - Total Quantity (Sum): {total_qty}")
+                print(f"  - Total Rejected Qty: {total_rejected_qty}")
+                print(f"  - Remaining Qty: {remaining_qty}")
+                print(f"  - Tray Capacity: {tray_capacity}")
+                print(f"  - Trays Needed: {trays_needed} (ceil({remaining_qty}/{tray_capacity}))")
+                print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed})")
+                print(f"  - Used Reusable Count: {used_reusable_count}")
+                print(f"  = Remaining Slots: {remaining_reuse_slots}")
+
+            except Exception as e:
+                print(f"  Error Calculating Reuse Limit: {e}")
+                import traceback
+                traceback.print_exc()
+
+            # ----------------------------
+            # 3. HARD RULES
+            # ----------------------------
+            
+            # RULE A: Occupied existing trays are NEVER allowed for reuse/rejection
+            if is_occupied_existing_tray:
+                # Check if it's "Occupied"
+                if tray_qty_db > 0:
+                    if remaining_reuse_slots > 0:
+                        # ALLOW REUSE: Physical capacity logic says we have room to empty a tray.
+                        print(f"  [IQF Reuse Validation] ALLOWING Occupied Tray {tray_id} (Reuse Slots Available: {remaining_reuse_slots})")
+                        # Proceed. This tray counts as one reuse instance.
+                        return JsonResponse({
+                            'exists': True,
+                            'success': True,
+                            'is_valid': True,
+                            'status_message': 'Available (can rearrange)',
+                            'validation_type': 'reuse_occupied', 
+                            'tray_capacity': tray_capacity,
+                            'current_quantity': tray_qty_db
+                        })
+                    else:
+                        # BLOCK: No reuse slots left, and tray is occupied.
+                        print(f"  [IQF Reuse Validation] BLOCKING: Tray is Occupied (Qty: {tray_qty_db}) and No Reuse Slots ({remaining_reuse_slots})")
+                        return JsonResponse({
+                            'exists': True,
+                            'success': False,
+                            'valid_for_rejection': False,
+                            'error': 'Tray still contains material. Reuse limit reached.',
+                            'status_message': 'Tray Not Empty. Reuse Exhausted.'
+                        })
+            
+            # RULE B: New trays are ALWAYS allowed (Logic: Reuse limit does not apply to new trays)
+            if is_new_tray:
+                print(f"[IQFTrayValidate] ALLOWING: Valid New Tray")
+                if tray_id_obj and tray_id_obj.lot_id and str(tray_id_obj.lot_id) != str(lot_id_input):
+                     print(f"[IQFTrayValidate] WARNING: Tray assigned to other lot '{tray_id_obj.lot_id}'")
+                     return JsonResponse({
+                        'exists': False,
+                        'success': False,
+                        'valid_for_rejection': False,
+                        'status_message': 'Tray assigned to other lot'
+                    })
+                    
+                return JsonResponse({
+                    'exists': True,
+                    'success': True,
+                    'valid_for_rejection': True,
+                    'status_message': 'New tray allowed',
+                    'validation_type': 'new_tray'
+                })
+
+            # ----------------------------
+            # 4. REUSE LOGIC (Only for Existing Empty Trays)
+            # ----------------------------
+            if is_empty_existing_tray:
+                print(f"[IQFTrayValidate] CHECKING REUSE for Empty Existing Tray...")
+                
+                # CHECK: Is this specific tray (tray_id) already one of the used ones?
+                # If so, it's allowed (already counted). 
+                if tray_id in used_reusable_trays:
+                        print(f"  RESULT: Allowed (Already in use session)")
+                        pass # Allowed, already accounted for
+                elif remaining_reuse_slots <= 0:
+                    # FAIL: Limit reached and this is a NEW addition to the reuse set
+                    print(f"  RESULT: BLOCKED (Reuse limit reached)")
+                    return JsonResponse({
+                        'exists': True,
+                        'valid_for_rejection': False,
+                        'error': 'Reuse limit reached for existing trays',
+                        'status_message': 'Tray Not Empty. Reuse Exhausted.'
+                    })
+                else:
+                    print(f"  RESULT: Allowed (Slots available)")
+
+                # If logic passes:
+                return JsonResponse({
+                    'exists': True,
+                    'success': True,
+                    'valid_for_rejection': True,
+                    'status_message': 'Tray accepted (Reusable)',
+                    'validation_type': 'reuse_existing'
+                })
             
         except Exception as e:
             print(f"[DEBUG] ERROR: {str(e)}")
@@ -2962,126 +3311,363 @@ def iqf_reject_check_tray_id_simple(request):
         lot_id = request.GET.get('lot_id', '').strip()
         rejection_qty = int(request.GET.get('rejection_qty', 0))
         
-        # Parse current session allocations
-        try:
-            current_session_allocations = json.loads(request.GET.get('current_session_allocations', '[]'))
-        except:
-            current_session_allocations = []
+         # Parse current session allocations
+        from urllib.parse import unquote
+        import json as _json  # Local import to avoid shadowing
+        print(f"[IQF DEBUG] Request Keys: {list(request.GET.keys())}")
+        raw_allocations = request.GET.get('current_session_allocations', None)
+        print(f"[IQF DEBUG] Raw allocations (from param): {raw_allocations}")
+        
+        if raw_allocations is None:
+             print("[IQF DEBUG] 'current_session_allocations' param is MISSING.")
+             current_session_allocations = []
+        else:
+             try:
+                # URL-decode first, then parse JSON
+                decoded = unquote(raw_allocations)
+                print(f"[IQF DEBUG] After URL decode: {decoded}")
+                current_session_allocations = _json.loads(decoded)
+                print(f"[IQF DEBUG] Parsed allocations: {current_session_allocations}, Type: {type(current_session_allocations)}")
+             except Exception as e:
+                print(f"[IQF DEBUG] Failed to parse allocations: {e}")
+                current_session_allocations = []
 
         print(f"[IQF Reject Validation] tray_id: {tray_id}, lot_id: {lot_id}, qty: {rejection_qty}")
 
-        # ✅ STEP 1: Check if tray exists in IQFTrayId (Existing IQF Tray)
-        iqf_tray_obj = IQFTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
+        # ----------------------------
+        # 1. CLASSIFY TRAY
+        # ----------------------------
+        # Get TrayId (Global Master)
+        tray_id_obj = TrayId.objects.filter(tray_id=tray_id).first()
+        # Get IQFTrayId (Lot Specific)
+        ip_tray_obj = IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).first()
         
-        if iqf_tray_obj:
-            # Check if tray is completely rejected (if flag exists) - IQFTrayId might not have rejected_tray flag?
-            # Assuming it does based on other models
-            if getattr(iqf_tray_obj, 'rejected_tray', False):
-                 return JsonResponse({
-                    'exists': False, 
-                    'valid_for_rejection': False, 
-                    'error': 'Already rejected',
-                    'status_message': 'Already Rejected'
-                })
+        # Definition: New Tray = Not in IQFTrayId for this lot, and available for use
+        # A tray is "new" if it's not already tracked in IQF for this lot
+        # It could be: (a) free/unassigned, (b) marked new, (c) assigned to THIS lot but not yet in IQF
+        is_existing_tray = bool(ip_tray_obj)
+        
+        # If tray is assigned to a DIFFERENT lot, reject early
+        if not is_existing_tray and tray_id_obj and tray_id_obj.lot_id and str(tray_id_obj.lot_id) != str(lot_id):
+            print(f"[IQF Reject Validation] Tray {tray_id} belongs to different lot: {tray_id_obj.lot_id}")
+            return JsonResponse({
+                'exists': True,
+                'valid_for_rejection': False,
+                'is_valid': False,
+                'status_message': 'Different Lot',
+                'error': f'Tray assigned to lot {tray_id_obj.lot_id}'
+            })
+        
+        is_new_tray = not is_existing_tray  # If not in IQFTrayId, it's new (we already handled different-lot above)
+        
+        # Check status of existing tray
+        is_empty_existing_tray = False
+        is_occupied_existing_tray = False
+        tray_qty_db = 0
+        
+        if is_existing_tray:
+            tray_qty_db = getattr(ip_tray_obj, 'tray_quantity', 0)
+            if tray_qty_db > 0:
+                is_occupied_existing_tray = True
+            else:
+                is_empty_existing_tray = True
+        
+        print(f"[IQF Reject Validation] Classification: New={is_new_tray}, Existing={is_existing_tray} (Empty={is_empty_existing_tray}, Occupied={is_occupied_existing_tray})")
 
-            # Validate capacity and usage
-            tray_qty = iqf_tray_obj.tray_quantity or 0
-            tray_capacity = getattr(iqf_tray_obj, 'tray_capacity', 12) or 12
+        # ----------------------------
+        # 2. CALCULATE REUSE LIMITS (Always calculate for visibility)
+        # ----------------------------
+        remaining_reuse_slots = 0
+        used_reusable_trays = set()
+        try:
+             # Get Tray Capacity
+            tray_capacity = 0
+            if ip_tray_obj:
+                    tray_capacity = getattr(ip_tray_obj, 'tray_capacity', 0)
             
-            # Calculate effective qty with session allocations
-            session_usage = 0
-            for alloc in current_session_allocations:
-                if tray_id in alloc.get('tray_ids', []):
-                    session_usage += int(alloc.get('qty', 0))
+            if not tray_capacity:
+                ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                if ts and ts.batch_id:
+                    tray_capacity = getattr(ts.batch_id, 'tray_capacity', 12) or 12
+                else:
+                    tray_capacity = 12
+
+            # Get Total Rejected Quantity (Not used in new formula)
+            # ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            # use_audit = getattr(ts, 'send_brass_audit_to_iqf', False) if ts else False
+            # total_rejected_qty = 0
             
-            effective_qty = max(0, tray_qty - session_usage)
-            remaining_in_tray = effective_qty - rejection_qty
+            # --- NEW PHYSICAL CAPACITY FORMULA ---
             
-            # If pieces remain, check if they fit in other trays
-            if remaining_in_tray > 0:
-                _, total_free_space = get_iqf_available_quantities_with_session_allocations(lot_id, current_session_allocations)
+            # 1. Total Trays (All physical trays associated to this lot)
+            non_rejected_trays_qs = IQFTrayId.objects.filter(lot_id=lot_id)
+            total_tray_count = non_rejected_trays_qs.count()
+
+            # 2. Total Quantity currently present (Sum of tray_quantity)
+            total_qty_agg = non_rejected_trays_qs.aggregate(total_sum=Sum('tray_quantity'))
+            total_qty = total_qty_agg.get('total_sum', 0) or 0
+
+            # ✅ FALLBACK: When no IQFTrayId records exist yet (initial rejection entry)
+            # Use TotalStockModel + Brass data to estimate tray count and remaining qty
+            frontend_total_iqf_qty = int(request.GET.get('total_iqf_qty', 0))
+            
+            if total_tray_count == 0 and frontend_total_iqf_qty > 0:
+                ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                if ts:
+                    # Get the physical quantity from Brass QC/Audit
+                    physical_qty = getattr(ts, 'iqf_physical_qty', 0) or 0
+                    if not physical_qty:
+                        physical_qty = getattr(ts, 'quantity', 0) or 0
+                    
+                    if physical_qty > 0 and tray_capacity > 0:
+                        # Calculate total trays from physical qty
+                        total_tray_count = math.ceil(physical_qty / tray_capacity)
+                        total_qty = physical_qty
+                        print(f"  [IQF FALLBACK] No IQFTrayId records. Using TotalStockModel:")
+                        print(f"  [IQF FALLBACK] physical_qty={physical_qty}, tray_capacity={tray_capacity}, estimated_trays={total_tray_count}")
+
+            # 3. Get IQF Rejections (Store + Draft)
+            iqf_rejected_qty = 0
+            
+            # A. Committed Rejections
+            iqf_rejection_record = IQF_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+            if iqf_rejection_record:
+                iqf_rejected_qty += iqf_rejection_record.total_rejection_quantity or 0
+
+            # B. Draft Rejections (Using IQF_Draft_Store)
+            draft_rejected_qty = 0
+            draft_record = IQF_Draft_Store.objects.filter(lot_id=lot_id, draft_type='tray_rejection').first()
+            if draft_record and draft_record.draft_data:
+                try:
+                    draft_data = draft_record.draft_data
+                    if isinstance(draft_data, str):
+                        import json
+                        draft_data = json.loads(draft_data)
+                    
+                    # Sum up rejections in draft
+                    tray_rejections = draft_data.get('tray_rejections', [])
+                    for rej in tray_rejections:
+                        draft_rejected_qty += int(rej.get('qty', 0) or 0)
+                except Exception as e:
+                    print(f"Error parsing draft rejection data: {e}")
+
+            total_iqf_rejected_qty = iqf_rejected_qty + draft_rejected_qty
+            
+            # If no committed/draft rejections exist but frontend has rejection qty, use it
+            if total_iqf_rejected_qty == 0 and frontend_total_iqf_qty > 0:
+                total_iqf_rejected_qty = frontend_total_iqf_qty
+                print(f"  [IQF FALLBACK] Using frontend total_iqf_qty={frontend_total_iqf_qty} as rejection qty")
+
+            # 4. Remaining Qty = Total Qty (Physical) - Total IQF Rejected (Committed + Draft)
+            remaining_qty = max(0, total_qty - total_iqf_rejected_qty)
+
+            # 5. Trays needed for rejected qty (reserved for rejection, cannot be reused for acceptance)
+            trays_for_rejection = 0
+            if tray_capacity > 0 and total_iqf_rejected_qty > 0:
+                trays_for_rejection = math.ceil(total_iqf_rejected_qty / tray_capacity)
+
+            # 6. Max Reusable Trays = Total original trays - Trays reserved for rejection
+            max_reusable_trays = max(0, total_tray_count - trays_for_rejection)
+
+            # Count ALREADY used reusable trays in session
+            # ✅ IMPORTANT: Exclude the CURRENT tray being validated to avoid self-blocking
+            for item in current_session_allocations:
+                # Handle both list of strings (new frontend) and list of objects (legacy/other)
+                t_ids = []
+                if isinstance(item, str):
+                    t_ids = [item]
+                elif isinstance(item, dict):
+                     val = item.get('tray_ids', [])
+                     if isinstance(val, list): t_ids = val
+                     elif isinstance(val, str): t_ids = [val]
                 
-                current_tray_free_space = max(0, tray_capacity - effective_qty)
-                available_space_in_other_trays = max(0, total_free_space - current_tray_free_space)
-                
-                if remaining_in_tray > available_space_in_other_trays:
-                     return JsonResponse({
-                        'exists': False,
-                        'valid_for_rejection': False,
-                        'error': f'Cannot reject: {remaining_in_tray} pieces remain, only {available_space_in_other_trays} space elsewhere',
-                        'status_message': 'Need New Tray'
+                for t_id in t_ids:
+                    if not t_id: continue
+                    # Skip the current tray being validated
+                    if t_id == tray_id:
+                        print(f"[IQF DEBUG] Skipping current tray {t_id} from reuse count")
+                        continue
+                    # Check if this tray is an EXISTING tray for this lot
+                    t_ip_obj = IQFTrayId.objects.filter(tray_id=t_id, lot_id=lot_id).first()
+                    
+                    # If it exists in DB, it's a reusable tray
+                    if t_ip_obj:
+                         used_reusable_trays.add(t_id)
+
+            used_reusable_count = len(used_reusable_trays)
+            
+            # FALLBACK: If current_session_allocations was missing (cached frontend),
+            # use already_allocated as proxy for how many trays are already used
+            if raw_allocations is None and used_reusable_count == 0:
+                already_allocated_count = int(request.GET.get('already_allocated', 0))
+                if already_allocated_count > 0:
+                    # Assume worst case: all already-allocated trays could be reusable
+                    used_reusable_count = min(already_allocated_count, max_reusable_trays)
+                    print(f"[IQF DEBUG] FALLBACK: Using already_allocated={already_allocated_count} as proxy, used_reusable_count={used_reusable_count}")
+            
+            remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
+            
+            print(f"  [IQF Reject Validation] REUSE CALCULATION (Rejection-Based Formula):")
+            print(f"  - Total Tray Count: {total_tray_count}")
+            print(f"  - Total Quantity (Sum): {total_qty}")
+            print(f"  - Total IQF Rejected Qty: {total_iqf_rejected_qty}")
+            print(f"  - Remaining Qty (Accepted): {remaining_qty}")
+            print(f"  - Tray Capacity: {tray_capacity}")
+            print(f"  - Trays For Rejection: {trays_for_rejection} (ceil({total_iqf_rejected_qty}/{tray_capacity}))")
+            print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_for_rejection})")
+            print(f"  - Used Reusable Count: {used_reusable_count}")
+            print(f"  = Remaining Slots: {remaining_reuse_slots}")
+
+        except Exception as e:
+            print(f"  Error Calculating Reuse Limit: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+        # ----------------------------
+        # 3. HARD RULES
+        # ----------------------------
+        
+        # RULE A: Occupied existing trays are allowed for reuse IF we have reuse slots available (Physical Capacity Logic)
+        if is_occupied_existing_tray:
+            if remaining_reuse_slots > 0:
+                 # ALLOW REUSE
+                 print(f"[IQF Reject Validation] ALLOWING Occupied Tray {tray_id} (Reuse Slots Available: {remaining_reuse_slots})")
+                 # We treat this as a valid reuse. The tray will be overwritten/used for rejection.
+                 return JsonResponse({
+                    'exists': True,
+                    'valid_for_rejection': True,
+                    'is_valid': True,
+                    'status_message': 'Available (can rearrange)',
+                    'tray_capacity': tray_capacity,
+                    'current_quantity': tray_qty_db # Frontend might warn, but here we explicitly allow
+                 })
+            else:
+                 print(f"[IQF Reject Validation] BLOCKING: Tray is Occupied (Qty: {tray_qty_db}) and No Reuse Slots ({remaining_reuse_slots})")
+                 return JsonResponse({
+                    'exists': True,
+                    'valid_for_rejection': False,
+                    'is_valid': False,
+                    'error': 'Tray still contains material and reuse limit reached',
+                    'status_message': 'Tray Not Empty. Reuse Exhausted.'
+                })
+        
+        # RULE B: New trays - check if physically occupied for THIS lot
+        if is_new_tray:
+            # Check: does this tray belong to THIS lot and have stock?
+            # (Different-lot trays were already rejected above)
+            tray_master_qty = 0
+            if tray_id_obj:
+                tray_master_qty = getattr(tray_id_obj, 'tray_quantity', 0) or 0
+                tray_master_lot = str(getattr(tray_id_obj, 'lot_id', '') or '')
+                print(f"[IQF Reject Validation] New tray {tray_id}: master_qty={tray_master_qty}, master_lot={tray_master_lot}, current_lot={lot_id}")
+            else:
+                print(f"[IQF Reject Validation] New tray {tray_id}: NO TrayId record (truly new)")
+            
+            # If tray belongs to THIS lot and has stock → physically occupied → apply reuse limits
+            if tray_id_obj and tray_master_qty > 0 and str(getattr(tray_id_obj, 'lot_id', '') or '') == str(lot_id):
+                if remaining_reuse_slots > 0:
+                    print(f"[IQF Reject Validation] ALLOWING occupied tray (Reuse Slots: {remaining_reuse_slots})")
+                    return JsonResponse({
+                        'exists': True,
+                        'valid_for_rejection': True,
+                        'is_valid': True,
+                        'status_message': 'Available (can rearrange)',
+                        'tray_capacity': tray_capacity,
+                        'current_quantity': tray_master_qty
                     })
+                else:
+                    print(f"[IQF Reject Validation] BLOCKING occupied tray {tray_id} (qty={tray_master_qty}, No Reuse Slots)")
+                    return JsonResponse({
+                        'exists': True,
+                        'valid_for_rejection': False,
+                        'is_valid': False,
+                        'error': 'Tray still contains material and reuse limit reached',
+                        'status_message': 'Tray Not Empty. Reuse Exhausted.'
+                    })
+            
+            # Strict Tray Type Validation for truly empty/free New Tray
+            try:
+                mm_obj = None
+                mm_obj = ModelMasterCreation.objects.filter(lot_id=lot_id).first()
+                if not mm_obj:
+                        mm_obj = ModelMasterCreation.objects.filter(batch_id=lot_id).first()
+                if not mm_obj:
+                    ts_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                    if ts_obj:
+                        mm_obj = ts_obj.batch_id
+
+                if mm_obj:
+                        expected_type = mm_obj.tray_type
+                        actual_type = tray_id_obj.tray_type if tray_id_obj else None
+                        
+                        norm_expected = str(expected_type).strip().lower() if expected_type else ''
+                        norm_actual = str(actual_type).strip().lower() if actual_type else ''
+
+                        if norm_expected and norm_expected != norm_actual:
+                                return JsonResponse({
+                                'exists': True, 
+                                'valid_for_rejection': False,
+                                'is_valid': False,
+                                'status_message': 'Wrong Tray Type',
+                                'error': f'Tray Type Mismatch! Expected: {expected_type}, Scanned: {actual_type or "None"}'
+                            })
+            except Exception as e:
+                print(f"Error checking tray type: {e}")
 
             return JsonResponse({
                 'exists': True,
                 'valid_for_rejection': True,
-                'status_message': 'Available (can rearrange)',
-                'validation_type': 'existing_iqf_tray',
-                'tray_capacity': tray_capacity,
-                'current_quantity': tray_qty
+                'is_valid': True,
+                'status_message': 'New Tray Available',
+                'validation_type': 'new_tray'
             })
 
-        # ✅ STEP 2: Check global TrayId for new trays
-        tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
-        
-        if not tray_obj:
-             return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'status_message': 'Invalid Barcode'
-            })
-            
-        # Check if tray belongs to different lot
-        if tray_obj.lot_id and str(tray_obj.lot_id).strip() and str(tray_obj.lot_id).strip() != lot_id:
-             return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'status_message': 'Different Lot'
-            })
-            
-        # New tray available
+        # ----------------------------
+        # 4. REUSE LOGIC (Only for Existing Empty Trays)
+        # ----------------------------
+        if is_empty_existing_tray:
+            try:
+                # CHECK: Is this specific tray (tray_id) already one of the used ones?
+                if tray_id in used_reusable_trays:
+                        pass # Allowed
+                elif remaining_reuse_slots <= 0:
+                    # FAIL: Limit reached
+                    return JsonResponse({
+                        'exists': True,
+                        'valid_for_rejection': False,
+                        'is_valid': False,
+                        'error': 'Tray still contains material and reuse limit reached',
+                        'status_message': 'Tray Not Empty. Reuse Exhausted.'
+                    })
+
+                return JsonResponse({
+                    'exists': True,
+                    'valid_for_rejection': True,
+                    'is_valid': True,
+                    'status_message': 'Available (can rearrange)',
+                    'validation_type': 'reuse_existing',
+                    'tray_capacity': tray_capacity,
+                    'current_quantity': 0
+                })
+
+            except Exception as e:
+                print(f"Error in reuse logic: {e}")
+                return JsonResponse({'exists': False, 'error': f'Validation Error: {str(e)}'})
+
+        # Fallback (Should not catch anything if logic is sound, but strictly safe)
         return JsonResponse({
-            'exists': True,
-            'valid_for_rejection': True,
-            'status_message': 'New Tray Available',
-            'validation_type': 'new_tray'
+            'exists': False, 
+            'valid_for_rejection': False, 
+            'status_message': 'Invalid Tray State',
+            'error': 'Tray could not be classified'
         })
 
     except Exception as e:
-        print(f"[IQF Reject Validation] Error: {e}")
-        return JsonResponse({'exists': False, 'valid_for_rejection': False, 'status_message': 'System Error'})
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'exists': False, 'error': str(e)}, status=500)
 
-
-    # New tray validation
-    if not tray_obj.lot_id or str(tray_obj.lot_id).strip() == '':
-        try:
-            selected_lot_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            if selected_lot_obj and hasattr(selected_lot_obj, 'batch_id'):
-                expected_tray_type = getattr(selected_lot_obj.batch_id, 'tray_type', None)
-
-                if (hasattr(tray_obj, 'tray_type') and
-                    tray_obj.tray_type and
-                    expected_tray_type and
-                    tray_obj.tray_type != expected_tray_type):
-                    return JsonResponse({
-                        'exists': False,
-                        'valid_for_rejection': False,
-                        'status_message': 'Wrong Tray Type'
-                    })
-        except Exception as e:
-            print(f"[DEBUG] Error checking tray type: {e}")
-
-        return JsonResponse({
-            'exists': True,
-            'valid_for_rejection': True,
-            'status_message': 'New Tray Available'
-        })
-
-    return JsonResponse({
-        'exists': False,
-        'valid_for_rejection': False,
-        'status_message': 'Need New Tray'
-    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -3279,11 +3865,60 @@ def iqf_get_remaining_trays(request):
     
     try:
         # 1. Get all initial IQF tray IDs for this lot (original trays after IP verification)
-        iqf_trays = IQFTrayId.objects.filter(
-            lot_id=lot_id,
-            IP_tray_verified=True
-            # Removed rejected_tray=True filter to include all original trays
-        ).order_by('id')
+        # ✅ FIXED: Recover tray IDs from multiple sources since active IQFTrayId/DPTrayId_History might be incomplete
+        
+        # Get history from various sources to ensure we have ALL trays
+        dp_history_ids = set(DPTrayId_History.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True))
+        brass_ids = set(BrassTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
+        ip_ids = set(IPTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
+        
+        # Get list of tray IDs that have rejections for this lot
+        rejected_scan_tray_ids = set(IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(tray_id='').values_list('tray_id', flat=True))
+        
+        # Combine all known tray IDs and filter out None/Empty
+        all_known_tray_ids = (dp_history_ids | brass_ids | ip_ids | rejected_scan_tray_ids)
+        all_known_tray_ids = {t for t in all_known_tray_ids if t} # Remove None and empty strings
+        
+        print(f"[DEBUG] Found trays - DP: {len(dp_history_ids)}, Brass: {len(brass_ids)}, IP: {len(ip_ids)}, Scan: {len(rejected_scan_tray_ids)}")
+        print(f"[DEBUG] Valid combined tray IDs: {all_known_tray_ids}")
+        
+        if all_known_tray_ids:
+            # Filter IQFTrayId for these specific trays, regardless of their current lot_id status
+            found_iqf_trays = list(IQFTrayId.objects.filter(
+                tray_id__in=all_known_tray_ids
+            ).distinct().order_by('id'))
+            
+            # Identify missing tray IDs
+            found_ids = {t.tray_id for t in found_iqf_trays}
+            missing_ids = all_known_tray_ids - found_ids
+            
+            if missing_ids:
+                print(f"[DEBUG] Missing IQFTrayId records for: {missing_ids}. Reconstructing...")
+                # Create temporary objects for missing trays
+                for mid in missing_ids:
+                    # Provide defaults as if they were new/reset trays
+                    # We assume capacity will be filled later or treated as empty initially
+                    temp_tray = IQFTrayId(
+                        tray_id=mid,
+                        lot_id=lot_id, # Assume they belong to this lot
+                        tray_quantity=0, # Default to 0, let logic distribute
+                        IP_tray_verified=True,
+                        rejected_tray=False,
+                        delink_tray=False 
+                    )
+                    found_iqf_trays.append(temp_tray)
+            
+            iqf_trays = found_iqf_trays
+        else:
+            # Fallback to standard query if no history found (unlikely for valid stock)
+            iqf_trays = list(IQFTrayId.objects.filter(
+                lot_id=lot_id,
+                IP_tray_verified=True
+            ).order_by('id'))
+        
+        print(f"[DEBUG] Total iqf_trays found (recovered + reconstructed): {len(iqf_trays)}")
+        print(f"[DEBUG] Trays: {[t.tray_id for t in iqf_trays]}")
+
         
         # Get total rejection quantity from Brass_QC_Rejection_ReasonStore table
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
@@ -3814,16 +4449,37 @@ def iqf_process_all_tray_data(request):
 @permission_classes([IsAuthenticated])
 def get_tray_capacity(request):
     lot_id = request.GET.get('lot_id')
-    print(f"Received tray capacity request for lot_id: {lot_id}")
+    rejection_qty = int(request.GET.get('rejection_qty', 0))
+    print(f"Received tray capacity request for lot_id: {lot_id}, rejection_qty: {rejection_qty}")
 
     if not lot_id:
         return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
     try:
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        tray_capacity = 0
         if stock and stock.batch_id and hasattr(stock.batch_id, 'tray_capacity'):
             tray_capacity = stock.batch_id.tray_capacity
-        print(f"Tray capacity for lot_id {lot_id}: {tray_capacity}")  # <-- Add this line
-        return Response({'success': True, 'tray_capacity': tray_capacity})
+        print(f"Tray capacity for lot_id {lot_id}: {tray_capacity}")
+
+        response_data = {'success': True, 'tray_capacity': tray_capacity}
+
+        # Calculate max reusable trays when rejection_qty is provided
+        if tray_capacity and tray_capacity > 0:
+            total_tray_count = IQFTrayId.objects.filter(lot_id=lot_id).count()
+
+            # Fallback: estimate tray count from physical qty if no IQFTrayId records
+            if total_tray_count == 0 and stock:
+                physical_qty = getattr(stock, 'iqf_physical_qty', 0) or 0
+                if physical_qty > 0:
+                    total_tray_count = math.ceil(physical_qty / tray_capacity)
+
+            trays_for_rejection = math.ceil(rejection_qty / tray_capacity) if rejection_qty > 0 else 0
+            max_reusable_trays = max(0, total_tray_count - trays_for_rejection)
+            response_data['max_reusable_trays'] = max_reusable_trays
+            response_data['total_tray_count'] = total_tray_count
+            print(f"  Reuse calc: total_trays={total_tray_count}, trays_for_rej={trays_for_rejection}, max_reusable={max_reusable_trays}")
+
+        return Response(response_data)
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
     

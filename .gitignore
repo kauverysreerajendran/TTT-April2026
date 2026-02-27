@@ -23,3 +23,7 @@ settings/
 # System
 .DS_Store
 Thumbs.db
+
+docs/
+
+

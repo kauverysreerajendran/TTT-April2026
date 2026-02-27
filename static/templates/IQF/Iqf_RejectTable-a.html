@@ -1555,8 +1555,8 @@ document.addEventListener("DOMContentLoaded", function () {
                   <tbody>
               `;
               
-              // Sort rejected trays by tray_id alphabetically ASC
-              const sortedRejectedTrays = rejectedTraysData.slice().sort((a, b) => (a.tray_id || "").localeCompare(b.tray_id || ""));
+              // Sort rejected trays by tray_quantity ascending
+              const sortedRejectedTrays = rejectedTraysData.slice().sort((a, b) => (a.tray_quantity || 0) - (b.tray_quantity || 0));
               
               sortedRejectedTrays.forEach((tray, idx) => {
                 const isTopTray = tray.top_tray || tray.is_top_tray || false;

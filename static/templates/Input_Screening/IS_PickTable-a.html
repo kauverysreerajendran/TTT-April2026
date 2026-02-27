@@ -3126,7 +3126,7 @@ window.triggerAutoSave = function() {
   
   // ✅ NEW: Set auto-save active flag and show indicator
   window.isAutoSaveActive = true;
-  showAutoSaveIndicator();
+  // showAutoSaveIndicator(); // Disabled - no indicator shown
   
   const trayScanModal = document.getElementById("trayScanModal");
   if (trayScanModal) {
@@ -4166,6 +4166,67 @@ if (redoBtn && validateInput) {
    document.addEventListener("DOMContentLoaded", function () {
      // Use event delegation to handle dynamically created buttons
      document.addEventListener('click', function(e) {
+       // ✅ Check if the clicked element is a Delete button
+       const deleteBtn = e.target.closest('.delete-batch-btn') || 
+                        (e.target.tagName === 'IMG' && e.target.alt === 'Delete' && e.target.closest('a[class*="delete-batch-btn"]'));
+       
+       if (deleteBtn) {
+         e.preventDefault();
+         
+         const row = deleteBtn.closest('tr');
+         if (!row) return;
+         
+         const batchId = deleteBtn.getAttribute('data-batch-id');
+         const stockLotId = deleteBtn.getAttribute('data-stock-lot-id');
+         
+         if (!batchId || !stockLotId) {
+           Swal.fire('Error', 'Batch ID or Stock Lot ID not found!', 'error');
+           return;
+         }
+         
+         Swal.fire({
+           title: 'Are you sure?',
+           text: 'Do you really want to delete this batch?',
+           icon: 'warning',
+           showCancelButton: true,
+           confirmButtonColor: '#d33',
+           cancelButtonColor: '#3085d6',
+           confirmButtonText: 'Yes, delete it!',
+           cancelButtonText: 'Cancel'
+         }).then((result) => {
+           if (result.isConfirmed) {
+             fetch('/inputscreening/ip_delete_batch/', {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/json',
+                 'X-CSRFToken': getCookie('csrftoken')
+               },
+               body: JSON.stringify({ batch_id: batchId, stock_lot_id: stockLotId })
+             })
+             .then(res => res.json())
+             .then(data => {
+               if (data.success) {
+                 row.remove();
+                 Swal.fire({
+                   icon: 'success',
+                   title: 'Deleted!',
+                   text: 'Batch has been deleted successfully.',
+                   timer: 2000,
+                   showConfirmButton: false
+                 });
+               } else {
+                 Swal.fire('Error', data.message || 'Failed to delete batch', 'error');
+               }
+             })
+             .catch(error => {
+               console.error('Delete error:', error);
+               Swal.fire('Error', 'An error occurred while deleting the batch', 'error');
+             });
+           }
+         });
+         return;
+       }
+       
        // Check if the clicked element is an Accept button
        if (e.target.closest('.btn-twitter')) {
          const acceptBtn = e.target.closest('.btn-twitter');
@@ -4281,36 +4342,8 @@ if (redoBtn && validateInput) {
        });
      }
    
-      // DELETE BUTTON HANDLER
-   document.querySelectorAll('.delete-batch-btn').forEach(function(btn) {
-     btn.addEventListener('click', function(e) {
-       e.preventDefault();
-       const row = btn.closest('tr');
-       if (!row) return;
-       const batchId = btn.getAttribute('data-batch-id');
-       const stockLotId = btn.getAttribute('data-stock-lot-id');
-       if (!batchId || !stockLotId) {
-         Swal.fire('Error', 'Batch ID or Stock Lot ID not found!', 'error');
-         return;
-       }
-       Swal.fire({
-         title: 'Are you sure?',
-         text: 'Do you really want to delete this batch?',
-         icon: 'warning',
-         showCancelButton: true,
-         confirmButtonColor: '#d33',
-         cancelButtonColor: '#3085d6',
-         confirmButtonText: 'Yes, delete it!',
-         cancelButtonText: 'Cancel'
-       }).then((result) => {
-         if (result.isConfirmed) {
-           fetch('/inputscreening/ip_delete_batch/', {
-             method: 'POST',
-             headers: {
-               'Content-Type': 'application/json',
-               'X-CSRFToken': getCookie('csrftoken')
-             },
-             body: JSON.stringify({ batch_id: batchId, stock_lot_id: stockLotId })
+      // DELETE BUTTON HANDLER - REMOVED (Now handled via event delegation)
+      // Event delegation is used instead to handle dynamically created delete buttons
            })
            .then(res => res.json())
            .then(data => {
@@ -5554,22 +5587,22 @@ window.loadDraftDataIntoForm = function(draftData) {
    if (currentValue > maxAllowed) {
      currentInput.value = maxAllowed;
      
-     // Show helpful message
-     let helpSpan = document.createElement('span');
-     helpSpan.className = 'qty-help';
-     helpSpan.style.color = '#f39c12';
-     helpSpan.style.fontSize = '12px';
-     helpSpan.style.display = 'block';
-     helpSpan.style.marginTop = '2px';
-     helpSpan.textContent = `Max allowed: ${maxAllowed} (Total limit: ${availableQty})`;
-     currentInput.parentElement.appendChild(helpSpan);
+     // Suggestion disabled - no help message shown
+     // let helpSpan = document.createElement('span');
+     // helpSpan.className = 'qty-help';
+     // helpSpan.style.color = '#f39c12';
+     // helpSpan.style.fontSize = '12px';
+     // helpSpan.style.display = 'block';
+     // helpSpan.style.marginTop = '2px';
+     // helpSpan.textContent = `Max allowed: ${maxAllowed} (Total limit: ${availableQty})`;
+     // currentInput.parentElement.appendChild(helpSpan);
      
      // Auto-hide the help message after 3 seconds
-     setTimeout(() => {
-       if (helpSpan.parentNode) {
-         helpSpan.parentNode.removeChild(helpSpan);
-       }
-     }, 3000);
+     // setTimeout(() => {
+     //   if (helpSpan.parentNode) {
+     //     helpSpan.parentNode.removeChild(helpSpan);
+     //   }
+     // }, 3000);
    }
    
    // Get final adjusted value
@@ -9592,11 +9625,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
 
   // ✅ NEW: Delink required alert
   const delinkAlert = rescanData.delink_required ? `
-    <div class="alert alert-warning alert-dismissible fade show" role="alert" style="margin-bottom: 15px; border-left: 4px solid #ffc107;">
-      <i class="fa fa-exclamation-triangle" style="color: #856404;"></i>
-      <strong>Delink Required:</strong> ${rescanData.empty_trays_count || 0} empty tray(s) created by rejection. Please scan delink trays below.
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+    
   ` : '';
 
   const headerColor = isDraft ? '#f39c12' : (rescanData.delink_required ? '#dc3545' : '#028084');
@@ -9635,7 +9664,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
         </div>
       </div>
 
-      <!-- ✅ REDESIGNED: Compact table styling matching rejection form colors -->
+      <!-- ✅ Delink Section -->
       <div class="table-responsive" style="border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); background: #fff; scrollbar-width: none; -ms-overflow-style: none; display: grid; grid-template-columns: 1fr; overflow: auto !important;  margin-bottom: 12px;">
         <table class="table table-bordered text-center mb-0" style="font-size: 11px; border-collapse: collapse; border-color: #dc3545;">
           <thead style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); position: relative;">
@@ -11112,16 +11141,12 @@ function addAcceptedTrayFormInterceptor() {
    }
    });
    
-   // Re-attach Delete button listeners
-   document.querySelectorAll('.delete-batch-btn').forEach(function(btn) {
-   btn.addEventListener('click', function(e) {
-     // Your existing delete button logic here
-   });
-   });
+   // Re-attach Delete button listeners - REMOVED (Using event delegation instead)
+   // Delete button functionality is now handled via event delegation in the main click listener
    
    // Re-attach any other dynamic event listeners as needed
    }
-   // Helper function to reattach other event listeners
+   // Helper function to reattach other event listeners - DUPLICATE FUNCTION
    function reattachOtherEventListeners() {
    // Re-attach Accept button listeners
    document.addEventListener('click', function(e) {
@@ -11130,12 +11155,8 @@ function addAcceptedTrayFormInterceptor() {
    }
    });
    
-   // Re-attach Delete button listeners
-   document.querySelectorAll('.delete-batch-btn').forEach(function(btn) {
-   btn.addEventListener('click', function(e) {
-     // Your existing delete button logic here
-   });
-   });
+   // Re-attach Delete button listeners - REMOVED (Using event delegation instead)
+   // Delete button functionality is now handled via event delegation in the main click listener
    
    // Re-attach any other dynamic event listeners as needed
    }
@@ -12715,6 +12736,11 @@ document.addEventListener("DOMContentLoaded", function () {
            const el = document.getElementById(id);
            if (el) el.style.pointerEvents = "auto";
          });
+         // ✅ Allow pointer events for delete buttons (both button and image)
+         document.querySelectorAll('.delete-batch-btn, img[alt="Delete"], a[class*="delete-batch-btn"]').forEach(el => {
+           el.style.pointerEvents = 'auto';
+           el.style.cursor = 'pointer';
+         });
          // Restrict pointer events for holding rows but preserve cursor style
          document.querySelectorAll('tr.row-inactive, tr.row-inactive *').forEach(el => {
            el.style.cursor = "pointer";
@@ -12725,6 +12751,11 @@ document.addEventListener("DOMContentLoaded", function () {
          modalIds.forEach(id => {
            const el = document.getElementById(id);
            if (el) el.style.pointerEvents = "";
+         });
+         // Reset pointer events for delete buttons
+         document.querySelectorAll('.delete-batch-btn, img[alt="Delete"], a[class*="delete-batch-btn"]').forEach(el => {
+           el.style.pointerEvents = '';
+           el.style.cursor = '';
          });
          // Restore pointer events for holding rows but preserve cursor style
          document.querySelectorAll('tr.row-inactive, tr.row-inactive *').forEach(el => {

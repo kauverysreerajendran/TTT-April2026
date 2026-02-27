@@ -5692,40 +5692,44 @@ def get_lot_id_for_tray(request):
     
     try:
         # Strategy 1: Check BrassAuditTrayId table first (most specific to Brass Audit)
-        try:
-            brass_audit_tray = BrassAuditTrayId.objects.get(tray_id=tray_id)
+        brass_audit_tray = BrassAuditTrayId.objects.filter(tray_id=tray_id).first()
+        if brass_audit_tray and brass_audit_tray.lot_id:
             return JsonResponse({
                 'success': True,
-                'lot_id': brass_audit_tray.lot_id,
+                'lot_id': str(brass_audit_tray.lot_id),
                 'source': 'BrassAuditTrayId',
                 'message': f'Tray {tray_id} found in Brass Audit system'
             })
-        except BrassAuditTrayId.DoesNotExist:
-            pass
             
-        # Strategy 2: Check TotalStockModel table
-        try:
-            stock_model = TotalStockModel.objects.get(lot_id=tray_id)
+        # Strategy 2: Check BrassTrayId table (trays coming from Brass QC)
+        brass_tray = BrassTrayId.objects.filter(tray_id=tray_id).first()
+        if brass_tray and brass_tray.lot_id:
             return JsonResponse({
                 'success': True,
-                'lot_id': stock_model.lot_id,
+                'lot_id': str(brass_tray.lot_id),
+                'source': 'BrassTrayId',
+                'message': f'Tray {tray_id} found in Brass QC system'
+            })
+            
+        # Strategy 3: Check TotalStockModel table
+        stock_model = TotalStockModel.objects.filter(lot_id__icontains=tray_id).first()
+        if stock_model:
+            return JsonResponse({
+                'success': True,
+                'lot_id': str(stock_model.lot_id),
                 'source': 'TotalStockModel',
                 'message': f'Tray {tray_id} found as lot_id in system'
             })
-        except TotalStockModel.DoesNotExist:
-            pass
             
-        # Strategy 3: Check main TrayId table (fallback)
-        try:
-            tray_obj = TrayId.objects.get(tray_id=tray_id)
+        # Strategy 4: Check main TrayId table (fallback)
+        tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
+        if tray_obj and tray_obj.lot_id:
             return JsonResponse({
                 'success': True,
-                'lot_id': tray_obj.lot_id,
+                'lot_id': str(tray_obj.lot_id),
                 'source': 'TrayId',
                 'message': f'Tray {tray_id} found in main tray system'
             })
-        except TrayId.DoesNotExist:
-            pass
             
         # Tray not found in any table
         return JsonResponse({

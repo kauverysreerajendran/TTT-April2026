@@ -4088,6 +4088,17 @@ async function renderModalWithOptimalDistribution(allRemainingTrays, allComments
   addNormalModeEventListeners(lotId);
   
   // ✅ CRITICAL: Setup auto-save for accepted tray modal
+  if (typeof autoSaveManager === 'undefined') {
+    window.autoSaveManager = {
+      setupAutoSaveListeners: function(lotId, batchId) {
+        console.log('🔧 [AUTO-SAVE] Mock setup for', {lotId, batchId});
+      },
+      showAutoSaveNotification: function(message) {
+        console.log('📤 [AUTO-SAVE]', message);
+      }
+    };
+  }
+  
   if (typeof autoSaveManager !== 'undefined') {
     // Setup auto-save listeners for this modal
     setTimeout(() => {
@@ -4340,9 +4351,57 @@ function showInputValidationError(input, errorMessage) {
   input.parentNode.appendChild(errorDiv);
 }
 
-// ✅ COMPLETE VALIDATION FUNCTION (add this near the top of your script):
+// ✅ COMPLETE VALIDATION FUNCTION WITH ACCEPTED TRAY ID VALIDATION
 function validateSubmitRequirementsWithFeedback() {
-  // 1. Validate delink table (if present)
+  // 1. Validate accepted tray IDs (if present) - CHECK FOR INVALID TRAY IDS
+  const acceptedTrayInputs = document.querySelectorAll('.accepted-tray-id-input');
+  let invalidAcceptedTrays = [];
+  let emptyAcceptedTrays = [];
+  
+  acceptedTrayInputs.forEach((input, index) => {
+    const trayId = input.value.trim();
+    const validationState = input.validationState || 'pending';
+    
+    if (trayId) {
+      // Only block if explicitly marked as error OR tray ID is too short
+      if (validationState === 'error' || trayId.length < 9) {
+        invalidAcceptedTrays.push(index + 1);
+        input.style.borderColor = '#f44336';
+        input.style.borderWidth = '3px';
+        input.style.backgroundColor = '#ffebee';
+      }
+    } else {
+      emptyAcceptedTrays.push(index + 1);
+      input.style.borderColor = '#f44336';
+      input.style.borderWidth = '3px';
+      input.style.backgroundColor = '#ffebee';
+    }
+  });
+  
+  // Block if any invalid tray IDs found
+  if (invalidAcceptedTrays.length > 0) {
+    const firstInvalidInput = acceptedTrayInputs[invalidAcceptedTrays[0] - 1];
+    if (firstInvalidInput) {
+      firstInvalidInput.focus();
+      firstInvalidInput.select();
+      firstInvalidInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    alert(`❌ Invalid tray IDs found in accepted tray table (Row ${invalidAcceptedTrays.join(', ')}). Please scan valid tray IDs before proceeding.`);
+    return false;
+  }
+  
+  // Block if any empty tray IDs found
+  if (emptyAcceptedTrays.length > 0) {
+    const firstEmptyInput = acceptedTrayInputs[emptyAcceptedTrays[0] - 1];
+    if (firstEmptyInput) {
+      firstEmptyInput.focus();
+      firstEmptyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    alert(`❌ Empty tray IDs found in accepted tray table (Row ${emptyAcceptedTrays.join(', ')}). Please scan all required tray IDs before proceeding.`);
+    return false;
+  }
+
+  // 2. Validate delink table (if present)
   const delinkInputs = document.querySelectorAll('.delink-tray-id-input');
   let allDelinkFilled = true;
   let emptyDelinkInputs = [];
@@ -4364,13 +4423,13 @@ function validateSubmitRequirementsWithFeedback() {
       firstEmptyInput.focus();
       firstEmptyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    alert(`Please fill all delink tray IDs (missing: Row ${emptyDelinkInputs.join(', ')})`);
+    alert(`❌ Invalid or missing delink tray IDs found (Row ${emptyDelinkInputs.join(', ')}). Please scan valid tray IDs before proceeding.`);
     return false;
   }
 
-  // 2. Validate "Verify All" checkbox
+  // 3. Validate "Verify All" checkbox (only when it exists in the DOM)
   const selectAllCheckbox = document.getElementById('selectAllVerifyCheckbox');
-  if (!selectAllCheckbox || !selectAllCheckbox.checked) {
+  if (selectAllCheckbox && !selectAllCheckbox.checked) {
     // Highlight and show error
     let label = document.querySelector('label[for="selectAllVerifyCheckbox"]');
     if (label) {
@@ -4388,13 +4447,14 @@ function validateSubmitRequirementsWithFeedback() {
         label.style.fontWeight = '';
       }
     }, 3000);
-    alert('Please check "Verify All" before submitting.');
+    alert('❌ Please check "Verify All" before submitting.');
     return false;
   }
 
-  // 3. No individual row checkbox validation needed
+  // 4. No individual row checkbox validation needed
 
   // All validations passed
+  console.log('✅ All validation checks passed - proceeding');
   return true;
 }
 
@@ -4886,6 +4946,11 @@ async function checkOptimalDistributionDraft(lotId) {
 
 // ✅ FIXED: Modified processAllTrayData to match backend expectations
 function processAllTrayData(lotId, isDraft, successMessage) {
+  // ✅ CRITICAL: Validate all tray IDs before processing (unless it's a draft)
+  if (!isDraft && !validateSubmitRequirementsWithFeedback()) {
+    return; // Stop processing if validation fails
+  }
+
   const msgP = document.getElementById("acceptedTrayMsg");
   
   if (msgP) {
@@ -5502,7 +5567,7 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
         <!-- ✅ ENHANCED: Premium table design with superior styling -->
 
     <div id="rejection-reasons-section" class="table-responsive"
-         style="max-height: 280px; min-width: 100% !important; overflow-y: auto; border: 2px solid #dee2e6; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); background: #fff;">
+         style="max-height: 280px; min-width: 100% !important; overflow-x: auto; overflow-y: auto; border: 2px solid #dee2e6; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); background: #fff;">
            <table class="table table-bordered text-center mb-0" style="width: 100%; font-size: 14px; border-collapse: separate; border-spacing: 0;">
             <thead style="background: linear-gradient(135deg, #028084 0%, #026066 100%); position: sticky; top: 0; z-index: 10;">
               <tr>
@@ -5596,7 +5661,7 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
 
           <!-- ✅ ENHANCED: Premium Accepted Tray Table Container -->
           <div id="accepted-tray-table-container" class="table-responsive"
-               style="margin-top: 12px; display: none; border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); background: #fff; overflow: hidden; scrollbar-width: thin; scrollbar-color: #fff #fff;">
+               style="margin-top: 12px; display: none; border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); background: #fff; overflow-x: auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #fff #fff;">
             <div style="background: linear-gradient(135deg, #28a745 0%, #20a741 100%); padding: 6px 12px; border-bottom: 1px solid #1e7e34;">
               <h5 style="color: #fff; margin: 0; font-weight: 500; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 5px;">
                 Accepted Tray Table - Qty: <span id="accepted-qty-display" style="color: #d4edda; font-weight: 600;">0</span>
@@ -5676,7 +5741,8 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
         totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
       });
       const brassTotalElement = document.getElementById('brass-rejection-total-qty');
-      if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
+      // ✅ FIXED: Show Physical Qty instead of calculated total
+      if (brassTotalElement) brassTotalElement.textContent = displayPhysicalQty;
 
       // ✅ Add character count functionality for remarks
       const acceptanceRemarksInput = document.getElementById('acceptanceRemarksInput');
@@ -5768,7 +5834,8 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
               totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
             });
             const brassTotalElement = document.getElementById('brass-rejection-total-qty');
-            if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
+            // ✅ FIXED: Show Physical Qty instead of calculated total
+            if (brassTotalElement) brassTotalElement.textContent = displayPhysicalQty;
           }
         });
       }
@@ -5913,7 +5980,8 @@ document.querySelectorAll('.rejection-qty-input').forEach(function(input, idx, a
     const totalQtyElement = document.getElementById('rejection-total-qty');
     const brassTotalElement = document.getElementById('brass-rejection-total-qty');
     if (totalQtyElement) totalQtyElement.textContent = totalEnteredQty;
-    if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
+    // ✅ FIXED: Keep showing Physical Qty (maxAllowedQty) instead of calculated total
+    if (brassTotalElement) brassTotalElement.textContent = maxAllowedQty;
 
     try {
       const capacityResult = await fetchTrayCapacityDynamic(stockLotId);
@@ -6936,6 +7004,22 @@ async function updateAcceptedTrayTable(totalBrassQty, totalEnteredQty, providedT
       headerQtyElement.textContent = acceptedQty;
     }
 
+    // ✅ Fetch max reusable trays from backend based on rejection qty
+    let maxReusableTrays = 0;
+    try {
+      const stockLotIdForReuse = document.getElementById('trayScanModal').dataset.stockLotId || '';
+      if (stockLotIdForReuse && totalEnteredQty >= 0) {
+        const reuseResp = await fetch(`/iqf/get_tray_capacity/?lot_id=${encodeURIComponent(stockLotIdForReuse)}&rejection_qty=${totalEnteredQty}`);
+        const reuseData = await reuseResp.json();
+        if (reuseData.success && reuseData.max_reusable_trays !== undefined) {
+          maxReusableTrays = reuseData.max_reusable_trays;
+          console.log(`📊 Max reusable trays from backend: ${maxReusableTrays}`);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching reuse info:', e);
+    }
+
     // Calculate tray distribution with verified capacity
     const remainder = acceptedQty % trayCapacity;
     const fullTrays = Math.floor(acceptedQty / trayCapacity);
@@ -6961,6 +7045,10 @@ async function updateAcceptedTrayTable(totalBrassQty, totalEnteredQty, providedT
     // ✅ FIXED: Create rows and restore existing tray IDs
     trayQuantities.forEach((qty, idx) => {
       const savedTrayId = existingTrayIds[idx] || '';
+      const isReuseRow = idx < maxReusableTrays;
+      const reuseLabel = totalEnteredQty > 0 ? (isReuseRow ?
+        '<span style="color:#2e7d32;font-size:11px;display:block;margin-top:2px;font-weight:600">Reuse allowed</span>' :
+        '<span style="color:#1976d2;font-size:11px;display:block;margin-top:2px;font-weight:600">Scan with new tray</span>') : '';
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${idx + 1}${idx === 0 && remainder > 0 ? ' (Top Tray)' : ''}</td>
@@ -6973,7 +7061,9 @@ async function updateAcceptedTrayTable(totalBrassQty, totalEnteredQty, providedT
                  ${idx === 0 ? 'autofocus' : ''}
                  data-row-index="${idx}"
                  data-tray-qty="${qty}"
+                 data-reuse-allowed="${isReuseRow}"
                  style="width: 100%;" />
+          ${reuseLabel}
           <div class="tray-id-validation-msg" style="display: none; margin-top: 4px; font-size: 12px;"></div>
         </td>
         <td>${qty}</td>
@@ -7009,17 +7099,58 @@ function addAcceptedTrayIdValidation() {
     return '';
   }
   
-  // Use the global validation system for instant validation
-  if (window.IQFTrayValidation) {
-    const currentLotId = getCurrentLotId();
-    const container = document.getElementById('accepted-tray-table-container') || document;
-    
-    // ✅ AUTO-SAVE: Setup auto-save for accepted tray container
-    if (currentLotId) {
-      window.IQFTrayValidation.onModalOpen(container, currentLotId);
-    } else {
-      window.IQFTrayValidation.attachToContainer(container);
+  // ✅ AUTO-SAVE: Save accepted tray IDs to backend after each successful scan
+  function autoSaveAcceptedTrays() {
+    const lotId = getCurrentLotId();
+    if (!lotId) {
+      console.log('⚠️ [AUTO-SAVE] No lot_id found, skipping auto-save');
+      return;
     }
+    
+    // Collect all scanned accepted tray IDs
+    const allInputs = document.querySelectorAll('.accepted-tray-id-input');
+    const trayIds = [];
+    allInputs.forEach(function(inp) {
+      const val = inp.value.trim();
+      if (val && inp.validationState === 'success') {
+        trayIds.push(val);
+      }
+    });
+    
+    if (trayIds.length === 0) {
+      console.log('⚠️ [AUTO-SAVE] No valid tray IDs to save');
+      return;
+    }
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                      document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+    
+    const payload = {
+      lot_id: lotId,
+      is_auto_save: true,
+      delink_trays: trayIds,
+      top_tray_id: '',
+      top_tray_qty: 0
+    };
+    
+    console.log('💾 [AUTO-SAVE] Saving accepted trays:', trayIds);
+    
+    fetch('/iqf/iqf_save_accepted_tray_draft/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log('✅ [AUTO-SAVE] Saved:', data);
+    })
+    .catch(err => {
+      console.error('❌ [AUTO-SAVE] Error:', err);
+    });
   }
   
   // Keep existing duplicate check logic for accepted trays
@@ -7127,6 +7258,7 @@ function addAcceptedTrayIdValidation() {
                          statusMsg === 'Invalid Barcode' ||
                          statusMsg === 'Need New Tray' ||
                          statusMsg.includes('Not Found') ||
+                         statusMsg.includes('Duplicate') ||
                          data.is_valid === false;
           
           if (isSuccess) {
@@ -7153,6 +7285,9 @@ function addAcceptedTrayIdValidation() {
             if (!isNaN(currentIndex) && currentIndex + 1 < allInputs.length) {
               allInputs[currentIndex + 1].focus();
             }
+            
+            // ✅ AUTO-SAVE after successful validation
+            autoSaveAcceptedTrays();
           } else if (isError) {
             // ✅ Error state with instant auto-select
             input.style.borderColor = '#dc3545';
@@ -7175,7 +7310,7 @@ function addAcceptedTrayIdValidation() {
             // ✅ INSTANT AUTO-SELECT on error
             input.select();
           } else {
-            // Unknown status - treat as neutral/pending
+            // Unknown status - treat as neutral/pending to allow checking later
             input.style.borderColor = '#ffc107';
             input.style.backgroundColor = '#fffef5';
             input.validationState = 'pending';
@@ -7392,6 +7527,60 @@ function checkIfLotRejectionCommentScenario() {
   return false;
 }
 
+// ✅ Helper function to check if all tray IDs are valid (used by validation functions)
+function checkAllTrayIdsValid() {
+  const acceptedTrayInputs = document.querySelectorAll('.accepted-tray-id-input');
+  let allValid = true;
+  let errorDetails = [];
+  
+  acceptedTrayInputs.forEach((input, index) => {
+    const trayId = input.value.trim();
+    const validationState = input.validationState || 'pending';
+    
+    if (trayId) {
+      if (validationState === 'error') {
+        allValid = false;
+        const msgDiv = input.parentElement.querySelector('.tray-id-validation-msg');
+        const errorMsg = msgDiv ? msgDiv.textContent.replace(/.*?[✓×]\s*/, '') : 'Unknown error';
+        errorDetails.push(`Row ${index + 1}: ${errorMsg}`);
+      } else if (validationState === 'pending') {
+        allValid = false;
+        errorDetails.push(`Row ${index + 1}: Not validated yet`);
+      }
+    } else if (input.parentElement.parentElement.style.display !== 'none') {
+      // Only check empty if row is visible
+      allValid = false;
+      errorDetails.push(`Row ${index + 1}: Empty tray ID`);
+    }
+  });
+  
+  console.log('🔍 [VALIDATION] Check tray IDs result:', { allValid, errorDetails });
+  return { allValid, errorDetails };
+}
+
+// ✅ Enhanced validation function for delink tray IDs
+function checkAllDelinkTrayIdsValid() {
+  const delinkInputs = document.querySelectorAll('.delink-tray-id-input');
+  let allValid = true;
+  let errorDetails = [];
+  
+  delinkInputs.forEach((input, index) => {
+    const trayId = input.value.trim();
+    const isValid = input.style.borderColor === 'rgb(40, 167, 69)'; // Green border
+    
+    if (!trayId) {
+      allValid = false;
+      errorDetails.push(`Delink Row ${index + 1}: Empty tray ID`);
+    } else if (!isValid) {
+      allValid = false;
+      errorDetails.push(`Delink Row ${index + 1}: Invalid tray ID (${trayId})`);
+    }
+  });
+  
+  console.log('🔍 [VALIDATION] Check delink tray IDs result:', { allValid, errorDetails });
+  return { allValid, errorDetails };
+}
+
 // Hide/Show functions
 function hideAcceptedTrayTable() {
   const acceptedTrayContainer = document.getElementById('accepted-tray-table-container');
@@ -7493,6 +7682,12 @@ function handleLotRejection(batchId, stockLotId, msgDiv, proceedButton) {
 }
 
 function handleTrayWiseRejectionWithAcceptance(batchId, stockLotId, msgDiv, proceedButton) {
+  // ✅ CRITICAL: Validate all tray IDs before proceeding
+  if (!validateSubmitRequirementsWithFeedback()) {
+    proceedButton.disabled = false;
+    return;
+  }
+
   // Add validation before proceeding
   if (!validateTotalQuantityBeforeSubmit()) {
     proceedButton.disabled = false;
@@ -7632,6 +7827,14 @@ function handleTrayWiseRejectionWithAcceptance(batchId, stockLotId, msgDiv, proc
       }
       proceedButton.disabled = false;
     }
+  })
+  .catch(err => {
+    console.error('❌ Network error in tray rejection:', err);
+    if (msgDiv) {
+      msgDiv.style.color = "#d32f2f";
+      msgDiv.textContent = "Network error. Please try again.";
+    }
+    proceedButton.disabled = false;
   });
 }
 
@@ -7696,6 +7899,38 @@ function handleLotRejectionDraft(batchId, stockLotId, msgDiv, draftButton) {
 
 // ✅ FIXED: Simplified tray rejection draft (Following Brass QC pattern)
 function handleTrayWiseRejectionDraft(batchId, stockLotId, msgDiv, draftButton) {
+  // ✅ CRITICAL: For draft, be more lenient but still check for critical invalid tray IDs
+  const acceptedTrayInputs = document.querySelectorAll('.accepted-tray-id-input');
+  let hasInvalidTrays = false;
+  
+  acceptedTrayInputs.forEach((input) => {
+    const trayId = input.value.trim();
+    const validationState = input.validationState || 'pending';
+    
+    // Only block if there are serious validation errors (like wrong lot, invalid barcode, etc.)
+    if (trayId && validationState === 'error') {
+      const msgDiv = input.parentElement.querySelector('.tray-id-validation-msg');
+      const errorMsg = msgDiv ? msgDiv.textContent : '';
+      
+      // Block only for serious errors, not for "Need New Tray" type messages
+      if (errorMsg.includes('Different Lot') || errorMsg.includes('Invalid Barcode') || errorMsg.includes('HOLD')) {
+        hasInvalidTrays = true;
+        input.style.borderColor = '#f44336';
+        input.style.borderWidth = '3px';
+        input.style.backgroundColor = '#ffebee';
+      }
+    }
+  });
+  
+  if (hasInvalidTrays) {
+    if (msgDiv) {
+      msgDiv.style.color = "#d32f2f";
+      msgDiv.textContent = "❌ Cannot save draft with invalid tray IDs. Please fix the invalid tray IDs first.";
+    }
+    draftButton.disabled = false;
+    return;
+  }
+
   // ✅ Collect tray rejection reasons with enhanced structure
   const rejectionRows = document.querySelectorAll("#rejection-table-body tr");
   let tray_rejections = [];
