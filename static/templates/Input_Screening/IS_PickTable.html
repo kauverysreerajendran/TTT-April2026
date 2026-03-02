@@ -2196,11 +2196,24 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
              qtyInput.value = qtyInput.getAttribute('data-initial');
              qtyInput.setAttribute('readonly', true);
            }
-   
-   
+
+
            // Hide Tray Validation Status column by rebuilding table without it
          if (modal && detailsDiv && modal.buildTableHTML) {
-           detailsDiv.innerHTML = modal.buildTableHTML(false);
+           // ✅ INSTANT FIX: Clear ALL verification data instantly
+           modal.verificationData = {};
+           
+           // ✅ INSTANT FIX: Reset ALL tray verification flags
+           if (modal.traysData && modal.traysData.length > 0) {
+             modal.traysData.forEach(tray => {
+               tray.IP_tray_verified = false;
+               tray.tray_verified = false;
+               tray.is_verified = false;
+             });
+           }
+           
+           // ✅ INSTANT FIX: Force rebuild table immediately with forceNotVerified=true
+           detailsDiv.innerHTML = modal.buildTableHTML(false, true);
          }
           // ✅ Remove draft/cancel buttons and info message
          if (window.removeDraftCancelButtons) {
@@ -2600,7 +2613,7 @@ if (modalTopHeader) {
          }
    
          // ✅ TABLE BUILDING FUNCTION
-         function buildTableHTML(showValidationColumn = false) {
+         function buildTableHTML(showValidationColumn = false, forceNotVerified = false) {
            let html = `
              <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
                <thead>
@@ -2624,7 +2637,8 @@ if (modalTopHeader) {
                const verification = verificationData[position];
                const isVerifiedByUser = verification ? verification.is_verified : false;
                const isVerifiedInDB = tray.IP_tray_verified || false;
-               const isVerified = isVerifiedByUser || isVerifiedInDB;
+               // ✅ FORCE NOT VERIFIED when forceNotVerified is true
+               const isVerified = forceNotVerified ? false : (isVerifiedByUser || isVerifiedInDB);
                
                const verificationStatus = verification ? verification.verification_status : null;
                const verifiedTrayId = verification ? verification.tray_id : '';
@@ -4083,12 +4097,23 @@ if (redoBtn && validateInput) {
  
       // 3. Update modal's verificationData and rebuild table
       if (modal) {
-        modal.verificationData = verificationData;
-        // Rebuild the table to reflect "Not verified" status
+        // ✅ INSTANT FIX: Force clear ALL verification data
+        modal.verificationData = {};
+        
+        // ✅ INSTANT FIX: Reset ALL tray verification flags immediately 
+        if (modal.traysData && modal.traysData.length > 0) {
+          modal.traysData.forEach(tray => {
+            tray.IP_tray_verified = false;
+            tray.tray_verified = false;
+            tray.is_verified = false;
+          });
+        }
+        
+        // Rebuild the table to reflect "Not verified" status with forceNotVerified=true
         if (typeof modal.buildTableHTML === "function") {
           const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
           if (detailsDiv) {
-            detailsDiv.innerHTML = modal.buildTableHTML(false);
+            detailsDiv.innerHTML = modal.buildTableHTML(false, true);
           }
         }
       }
@@ -10958,7 +10983,7 @@ function addAcceptedTrayFormInterceptor() {
          }
    
          // TABLE BUILDING FUNCTION (reuse your existing buildTableHTML)
-         function buildTableHTML(showValidationColumn = false) {
+         function buildTableHTML(showValidationColumn = false, forceNotVerified = false) {
            let html = `
              <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
                <thead>
@@ -10982,7 +11007,8 @@ function addAcceptedTrayFormInterceptor() {
                const verification = verificationData[position];
                const isVerifiedByUser = verification ? verification.is_verified : false;
                const isVerifiedInDB = tray.IP_tray_verified || false;
-               const isVerified = isVerifiedByUser || isVerifiedInDB;
+               // ✅ FORCE NOT VERIFIED when forceNotVerified is true
+               const isVerified = forceNotVerified ? false : (isVerifiedByUser || isVerifiedInDB);
                
                const verificationStatus = verification ? verification.verification_status : null;
                const verifiedTrayId = verification ? verification.tray_id : '';
@@ -11036,7 +11062,7 @@ function addAcceptedTrayFormInterceptor() {
              for (let i = 0; i < totalRows; i++) {
                const position = i + 1;
                const verification = verificationData[position];
-               const isVerified = verification ? verification.is_verified : false;
+               const isVerified = forceNotVerified ? false : (verification ? verification.is_verified : false);
                const verificationStatus = verification ? verification.verification_status : null;
                const verifiedTrayId = verification ? verification.tray_id : '';
                const trayQty = trayQtyList[i] || trayCapacity;

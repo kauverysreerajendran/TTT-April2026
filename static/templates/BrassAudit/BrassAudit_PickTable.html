@@ -2664,19 +2664,23 @@ document.addEventListener("DOMContentLoaded", function () {
 <script nonce="{{ csp_nonce }}">
   
     document.addEventListener("DOMContentLoaded", () => {
-      const trayScanLinks = document.querySelectorAll(".tray-scan-btn");
       const trayModal = document.getElementById("trayScanModal");
       const closeTrayBtn = document.getElementById("closeTrayScanModal");
       const detailsDiv = document.getElementById("trayScanDetails");
       const newPopupModal = document.getElementById("newPopupModal");
       const closeNewPopupBtn = document.getElementById("closeNewPopupModal");
 
-      // ✅ UPDATED: Direct accepted tray modal for "Set Top Tray" button
-      trayScanLinks.forEach((link) => {
-        link.addEventListener("click", (event) => {
-          event.preventDefault();
+      // ✅ FIXED: Use event delegation to handle reject button clicks robustly
+      // This works regardless of DOM manipulation (row moves, highlights, etc.)
+      document.addEventListener("click", (event) => {
+        const link = event.target.closest(".tray-scan-btn");
+        if (!link) return;
+        // Skip delink-only buttons - they have their own handler
+        if (link.getAttribute('data-is-delink-only') === 'true') return;
+        event.preventDefault();
       
-          const row = event.target.closest("tr");
+          const row = link.closest("tr");
+          if (!row) return;
           const batchId = link.getAttribute('data-batch-id');
           const stockLotId = link.getAttribute('data-stock-lot-id');
           const isOnHold = row.getAttribute('data-brass-onhold-picking') === 'True';
@@ -2798,8 +2802,7 @@ if (isBatchRejection) {
             showEditableRejectionForm(stockLotId, batchId, detailsDiv, row);
             trayModal.classList.add("open");
           }
-        });
-      });
+        });  // end document click delegation
 
 
 
@@ -8179,11 +8182,29 @@ function showConfirm(title, text, onConfirm) {
         }).then((result) => {
             if (result.isConfirmed) {
                 onConfirm();
+            } else if (result.isDismissed) {
+                // ✅ FIX: Restore row position and refresh when cancelled
+                console.log('❌ User cancelled - restoring row position and refreshing');
+                if (typeof brassAuditRestorePreviousRowPosition === 'function') {
+                    brassAuditRestorePreviousRowPosition();
+                }
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
             }
         });
     } else {
         if (confirm(title + '\n' + text)) {
             onConfirm();
+        } else {
+            // ✅ FIX: Fallback for browsers without SweetAlert
+            console.log('❌ User cancelled - restoring row position and refreshing');
+            if (typeof brassAuditRestorePreviousRowPosition === 'function') {
+                brassAuditRestorePreviousRowPosition();
+            }
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         }
     }
 }
