@@ -1689,6 +1689,25 @@ def brass_audit_reject_check_tray_id_simple(request):
         print(f"  - is_new_tray (lot_id None or empty): {is_new_tray}")
         
         if is_new_tray:
+            # ✅ NEW: Before allowing new tray, check if existing trays can handle this rejection
+            print(f"[Brass Reject Validation] New tray detected - checking if existing trays can handle rejection qty: {rejection_qty}")
+            
+            # Check if we have existing trays that could handle this rejection
+            existing_trays_check = check_existing_trays_for_rejection_before_new_tray(current_lot_id, rejection_qty)
+            
+            if existing_trays_check['can_handle_with_existing']:
+                print(f"[Brass Reject Validation] Existing trays CAN handle this rejection - refusing new tray")
+                return JsonResponse({
+                    'exists': False,
+                    'valid_for_rejection': False,
+                    'error': 'Delink required: Existing trays can handle this rejection',
+                    'status_message': 'Need Delink',
+                    'delink_required': True,
+                    'eligible_existing_trays': existing_trays_check['eligible_trays'],
+                    'validation_type': 'delink_required_instead_of_new_tray'
+                })
+            
+            print(f"[Brass Reject Validation] Existing trays CANNOT handle this rejection - allowing new tray")
             return JsonResponse({
                 'exists': True,
                 'valid_for_rejection': True,
@@ -1720,6 +1739,109 @@ def brass_audit_reject_check_tray_id_simple(request):
         })
         
         
+# ✅ NEW: Helper function to check if existing trays can handle rejection before allowing new tray
+def check_existing_trays_for_rejection_before_new_tray(lot_id, rejection_qty):
+    """
+    Check if existing trays for this lot can handle the rejection quantity through rearrangement.
+    This prevents unnecessary new tray usage when reuse is possible.
+    
+    Returns:
+    - can_handle_with_existing: Boolean indicating if existing trays can handle it
+    - eligible_trays: List of existing trays that could be used
+    - reason: Explanation of the decision
+    """
+    try:
+        print(f"🔍 [check_existing_trays_for_rejection] Checking lot_id: {lot_id}, rejection_qty: {rejection_qty}")
+        
+        # Get all non-rejected BrassAuditTrayId records for this lot
+        existing_trays = BrassAuditTrayId.objects.filter(
+            lot_id=lot_id,
+            rejected_tray=False,
+            tray_quantity__gt=0
+        ).exclude(top_tray=True).order_by('-tray_quantity')  # Exclude top_tray, order by quantity
+        
+        if not existing_trays.exists():
+            print(f"ℹ️ [check_existing_trays_for_rejection] No existing non-rejected trays found for lot {lot_id}")
+            return {
+                'can_handle_with_existing': False,
+                'eligible_trays': [],
+                'reason': 'No existing trays available'
+            }
+        
+        eligible_trays = []
+        total_available_qty = 0
+        available_quantities = []
+        original_capacities = []
+        
+        # Collect data about existing trays
+        for tray in existing_trays:
+            tray_qty = tray.tray_quantity or 0
+            tray_capacity = tray.tray_capacity or 0
+            
+            if tray_qty > 0:  # Only consider trays with some quantity
+                eligible_trays.append({
+                    'tray_id': tray.tray_id,
+                    'tray_quantity': tray_qty,
+                    'tray_capacity': tray_capacity,
+                    'available_space': tray_capacity - tray_qty
+                })
+                available_quantities.append(tray_qty)
+                original_capacities.append(tray_capacity)
+                total_available_qty += tray_qty
+        
+        print(f"🔍 [check_existing_trays_for_rejection] Found {len(eligible_trays)} eligible trays")
+        print(f"🔍 [check_existing_trays_for_rejection] Available quantities: {available_quantities}")
+        print(f"🔍 [check_existing_trays_for_rejection] Original capacities: {original_capacities}")
+        print(f"🔍 [check_existing_trays_for_rejection] Total available qty: {total_available_qty}")
+        
+        # Check 1: Do we have enough total quantity?
+        if rejection_qty > total_available_qty:
+            print(f"❌ [check_existing_trays_for_rejection] Insufficient total quantity: need {rejection_qty}, have {total_available_qty}")
+            return {
+                'can_handle_with_existing': False,
+                'eligible_trays': eligible_trays,
+                'reason': f'Insufficient total quantity: need {rejection_qty}, have {total_available_qty}'
+            }
+        
+        # Check 2: Can we handle the rejection with rearrangement?
+        remaining_after_rejection = total_available_qty - rejection_qty
+        rearrangement_result = can_rearrange_remaining_pieces(
+            available_quantities, 
+            original_capacities, 
+            rejection_qty, 
+            remaining_after_rejection
+        )
+        
+        print(f"🔍 [check_existing_trays_for_rejection] Rearrangement result: {rearrangement_result}")
+        
+        if rearrangement_result['success']:
+            print(f"✅ [check_existing_trays_for_rejection] Existing trays CAN handle rejection through rearrangement")
+            return {
+                'can_handle_with_existing': True,
+                'eligible_trays': eligible_trays,
+                'reason': f'Can rearrange: {rearrangement_result["message"]}',
+                'rearrangement_plan': rearrangement_result.get('plan', [])
+            }
+        else:
+            print(f"❌ [check_existing_trays_for_rejection] Existing trays CANNOT handle rejection: {rearrangement_result['message']}")
+            return {
+                'can_handle_with_existing': False,
+                'eligible_trays': eligible_trays,
+                'reason': f'Cannot rearrange: {rearrangement_result["message"]}'
+            }
+        
+    except Exception as e:
+        print(f"❌ [check_existing_trays_for_rejection] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        # On error, allow new tray (safe fallback)
+        return {
+            'can_handle_with_existing': False,
+            'eligible_trays': [],
+            'reason': f'Error during check: {str(e)}'
+        }
+
+
 # ✅ NEW: Helper function to validate tray capacity compatibility for Brass Audit
 def validate_brass_audit_tray_capacity_compatibility(tray_obj, lot_id):
     """
@@ -3165,28 +3287,33 @@ def brass_audit_view_tray_list(request):
 
         # ✅ PRIORITY 1: Always check BrassAuditTrayId first (transferred from Brass QC)
         # This table is populated when Brass QC transfers accepted data to Brass Audit
-        brass_audit_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id, rejected_tray=False, delink_tray=False).order_by('id')
+        # ✅ FIXED: Get ALL trays (accepted, rejected, delink) to show proper status
+        brass_audit_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id).order_by('id')
         if brass_audit_trays.exists():
-            # ✅ FIXED: Identify the top tray first
-            # Priority: 1. Tray marked as top_tray=True, 2. Tray with smallest quantity
-            top_tray_obj = brass_audit_trays.filter(top_tray=True).first()
+            # ✅ FIXED: Identify the top tray first from accepted trays only
+            accepted_trays = brass_audit_trays.filter(rejected_tray=False, delink_tray=False)
+            top_tray_obj = accepted_trays.filter(top_tray=True).first()
             if not top_tray_obj:
-                # Fallback: Find tray with smallest quantity
-                top_tray_obj = brass_audit_trays.order_by('tray_quantity').first()
+                # Fallback: Find tray with smallest quantity from accepted trays
+                top_tray_obj = accepted_trays.order_by('tray_quantity').first()
             
-            # ✅ Build tray list with top tray first
+            # ✅ Build tray list with top tray first, then accepted, then rejected/delink
             sno = 1
+            
+            # Add top tray first if it exists
             if top_tray_obj:
                 tray_list.append({
                     'sno': sno,
                     'tray_id': top_tray_obj.tray_id,
                     'tray_qty': top_tray_obj.tray_quantity,
                     'top_tray': True,
+                    'rejected_tray': False,
+                    'delink_tray': False,
                 })
                 sno += 1
             
-            # Add remaining trays (excluding the top tray)
-            for tray_obj in brass_audit_trays:
+            # Add remaining accepted trays (excluding the top tray)
+            for tray_obj in accepted_trays:
                 if top_tray_obj and tray_obj.tray_id == top_tray_obj.tray_id:
                     continue  # Skip the top tray, already added
                 tray_list.append({
@@ -3194,10 +3321,31 @@ def brass_audit_view_tray_list(request):
                     'tray_id': tray_obj.tray_id,
                     'tray_qty': tray_obj.tray_quantity,
                     'top_tray': False,
+                    'rejected_tray': False,
+                    'delink_tray': False,
                 })
                 sno += 1
             
-            print(f"✅ [brass_audit_view_tray_list] Found {len(tray_list)} trays from BrassAuditTrayId for lot: {lot_id}")
+            # ✅ NEW: Add rejected and delink trays with proper status
+            rejected_or_delink_trays = brass_audit_trays.filter(
+                Q(rejected_tray=True) | Q(delink_tray=True)
+            ).order_by('tray_quantity')
+            
+            for tray_obj in rejected_or_delink_trays:
+                tray_list.append({
+                    'sno': sno,
+                    'tray_id': tray_obj.tray_id,
+                    'tray_qty': tray_obj.tray_quantity,
+                    'top_tray': False,
+                    'rejected_tray': tray_obj.rejected_tray or False,
+                    'delink_tray': tray_obj.delink_tray or False,
+                })
+                sno += 1
+            
+            print(f"✅ [brass_audit_view_tray_list] Found {len(tray_list)} total trays from BrassAuditTrayId for lot: {lot_id}")
+            print(f"   - Accepted: {len([t for t in tray_list if not t['rejected_tray'] and not t['delink_tray']])}")
+            print(f"   - Rejected: {len([t for t in tray_list if t['rejected_tray']])}")
+            print(f"   - Delink: {len([t for t in tray_list if t['delink_tray']])}")
             
             return Response({
                 'success': True,
@@ -3247,6 +3395,9 @@ def brass_audit_view_tray_list(request):
                         'sno': idx + 1,
                         'tray_id': tray_id or '',
                         'tray_qty': int(scan.rejected_tray_quantity) if scan.rejected_tray_quantity else 0,
+                        'top_tray': False,
+                        'rejected_tray': True,
+                        'delink_tray': False,
                     })
             else:
                 # Fallback: get from main TrayId table for lot rejections
@@ -3257,6 +3408,9 @@ def brass_audit_view_tray_list(request):
                             'sno': idx + 1,
                             'tray_id': tray.tray_id,
                             'tray_qty': tray.tray_quantity or 0,
+                            'top_tray': False,
+                            'rejected_tray': True,
+                            'delink_tray': False,
                         })
                 else:
                     # Final fallback: split total_rejection_qty by tray_capacity if no records found
@@ -3272,6 +3426,9 @@ def brass_audit_view_tray_list(request):
                                 'sno': i + 1,
                                 'tray_id': tray_id,
                                 'tray_qty': qty,
+                                'top_tray': False,
+                                'rejected_tray': True,
+                                'delink_tray': False,
                             })
                             qty_left -= qty
         else:
@@ -3285,6 +3442,9 @@ def brass_audit_view_tray_list(request):
                         'sno': idx + 1,
                         'tray_id': obj.tray_id,
                         'tray_qty': obj.tray_qty,
+                        'top_tray': False,
+                        'rejected_tray': False,
+                        'delink_tray': False,
                     })
                 print(f"✅ [brass_audit_view_tray_list] Found {len(tray_list)} transferred trays from Brass QC")
             else:
@@ -3303,6 +3463,9 @@ def brass_audit_view_tray_list(request):
                             'sno': idx + 1,
                             'tray_id': tray.tray_id,
                             'tray_qty': tray.tray_quantity,
+                            'top_tray': False,
+                            'rejected_tray': False,
+                            'delink_tray': False,
                         })
                     print(f"✅ [brass_audit_view_tray_list] Found {len(tray_list)} trays from TrayId table")
                 else:
