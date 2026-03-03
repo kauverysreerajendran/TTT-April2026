@@ -1003,7 +1003,8 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 style="background-color: #e57373;"
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
                                 data-batch-id="{{ data.batch_id }}"
-                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
+                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
                           <i class="fa fa-times-circle"></i> Reject
                         </button>
 
@@ -1048,7 +1049,8 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 style="background-color: #e57373;"
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
                                 data-batch-id="{{ data.batch_id }}"
-                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
+                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
                           <i class="fa fa-times-circle"></i>Reject
                         </button>
                       {% endif %}
