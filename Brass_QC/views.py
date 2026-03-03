@@ -1358,24 +1358,61 @@ def brass_get_tray_capacity_for_lot(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@method_decorator(login_required, name='dispatch')   
+from django.db import transaction
+from django.db.models.deletion import ProtectedError
+
 @method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(login_required, name='dispatch')
 class BQDeleteBatchAPIView(APIView):
     def post(self, request):
-        try:
-            data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
-            stock_lot_id = data.get('lot_id')
-            print(f"🔍 [BQDeleteBatchAPIView] Deleting stock lot with ID: {stock_lot_id}")
-            if not stock_lot_id:
-                return JsonResponse({'success': False, 'error': 'Missing stock_lot_id'}, status=400)
-            obj = TotalStockModel.objects.filter(lot_id=stock_lot_id).first()
-            if not obj:
-                return JsonResponse({'success': False, 'error': 'Stock lot not found'}, status=404)
-            obj.delete()
-            return JsonResponse({'success': True, 'message': 'Stock lot deleted'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+        lot_id = data.get('lot_id')
 
+        print(f"🔍 [BQDeleteBatchAPIView] Deleting stock lot with ID: {lot_id}")
+
+        if not lot_id:
+            return JsonResponse({'success': False, 'error': 'Missing lot_id'}, status=400)
+
+        try:
+            with transaction.atomic():
+                # 🔥 DELETE CHILD TABLES FIRST (order matters)
+
+                BrassAuditTrayId.objects.filter(lot_id=lot_id).delete()
+                Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+                Brass_Audit_Accepted_TrayScan.objects.filter(lot_id=lot_id).delete()
+                Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
+                Brass_Audit_Draft_Store.objects.filter(lot_id=lot_id).delete()
+                Brass_Audit_TopTray_Draft_Store.objects.filter(lot_id=lot_id).delete()
+                Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).delete()
+
+                BrassTrayId.objects.filter(lot_id=lot_id).delete()
+                Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+                Brass_Qc_Accepted_TrayScan.objects.filter(lot_id=lot_id).delete()
+                Brass_QC_Draft_Store.objects.filter(lot_id=lot_id).delete()
+                Brass_TopTray_Draft_Store.objects.filter(lot_id=lot_id).delete()
+                Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).delete()
+                Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
+
+                IPTrayId.objects.filter(lot_id=lot_id).delete()
+                IQFTrayId.objects.filter(lot_id=lot_id).delete()
+                DPTrayId_History.objects.filter(lot_id=lot_id).delete()
+                TrayId.objects.filter(lot_id=lot_id).delete()
+
+                # 🔥 FINALLY delete parent
+                TotalStockModel.objects.filter(lot_id=lot_id).delete()
+
+            print(f"✅ Successfully deleted lot {lot_id}")
+            return JsonResponse({'success': True, 'message': 'Stock lot deleted'})
+
+        except ProtectedError as e:
+            print("❌ ProtectedError:", e)
+            return JsonResponse({'success': False, 'error': 'Foreign key protection error'}, status=500)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        
 
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
@@ -4393,7 +4430,6 @@ class BrassValidateTrayIdAPIView(APIView):
             'valid_for_lot': exists
         })
 
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def brass_view_tray_list(request):
@@ -4408,425 +4444,44 @@ def brass_view_tray_list(request):
         return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
 
     try:
-        # Check if this lot has brass_qc_accptance = True
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
         brass_qc_accptance = False
         tray_capacity = 0
-        
+
         if stock:
             brass_qc_accptance = stock.brass_qc_accptance or False
             if stock.batch_id and hasattr(stock.batch_id, 'tray_capacity'):
                 tray_capacity = stock.batch_id.tray_capacity or 0
 
         tray_list = []
-        
-        # ✅ FIXED: Initialize added_tray_ids set BEFORE any loops to prevent duplicates
         added_tray_ids = set()
-
-        # Include rejected trays from Input Screening if any
-        # (IP Rejections are always relevant as they are pre-Brass QC)
-        # rejected_trays = IP_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
-        rejected_trays = [] # Filtered out as per requirement
         rejected_count = 0
-        print(f"   🔍 [IP Rejected] Found {len(rejected_trays)} IP rejected trays for lot {lot_id}")
-        for tray in rejected_trays:
-            tray_id = tray.rejected_tray_id or ''
-            
-            # Skip if already added (prevent duplicates)
-            if tray_id and tray_id in added_tray_ids:
-                print(f"   ⚠️ Skipping duplicate IP rejected tray: {tray_id}")
-                continue
-            
-            # ✅ FIXED: Use actual rejection quantity from IP_Rejected_TrayScan (CharField)
-            raw_qty = tray.rejected_tray_quantity
-            print(f"   🔍 [IP Rejected] Tray {tray_id}: raw_qty='{raw_qty}' (type: {type(raw_qty).__name__})")
-            
-            # Convert string to int
-            try:
-                rejection_qty = int(raw_qty) if raw_qty else 0
-            except (ValueError, TypeError):
-                rejection_qty = 0
-            
+
+        # --- FIX: Include delinked trays in completed tray list ---
+        trays = BrassTrayId.objects.filter(lot_id=lot_id)
+        for idx, tray in enumerate(trays):
             tray_list.append({
-                'sno': rejected_count + 1,
-                'tray_id': tray_id,
-                'tray_qty': rejection_qty,
-                'is_rejected': True,
-                'ip_top_tray': False,
-                'brass_top_tray': False,
-                'top_tray': False,
+                'sno': idx + 1,
+                'tray_id': tray.tray_id,
+                'tray_qty': tray.tray_quantity,
+                'brass_top_tray': getattr(tray, 'top_tray', False),
+                'is_rejected': getattr(tray, 'rejected_tray', False),
+                'delink_tray': getattr(tray, 'delink_tray', False),  # <-- Added field
+                # Add other fields as needed for modal
             })
-            if tray_id:
-                added_tray_ids.add(tray_id)
-            rejected_count += 1
-            print(f"   📦 Added IP rejected tray: {tray_id} (qty: {rejection_qty})")
-        
-        # ✅ NEW: Check for Brass QC lot rejection (brass_rejected_tray=True in TrayId)
-        # Priority order: 1. BrassTrayId (most recent), 2. TrayId, 3. Brass_QC_Rejected_TrayScan
-        
-        # ✅ FIXED: Exclude delinked trays - only show actual rejected trays
-        brass_rejected_trays_brass = BrassTrayId.objects.filter(
-            lot_id=lot_id, 
-            rejected_tray=True,
-            delink_tray=False  # ✅ Exclude delinked trays
-        ).order_by('tray_id')
-        brass_rejected_trays_trayid = TrayId.objects.filter(lot_id=lot_id, brass_rejected_tray=True).order_by('tray_id')
-        brass_rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
-        
-        # Check if we have any rejected trays from any source
-        has_brass_rejection = False # Force false to skip showing rejected trays
-        # has_brass_rejection = (brass_rejected_trays_brass.exists() or 
-        #                       brass_rejected_trays_trayid.exists() or 
-        #                       brass_rejected_scans.exists())
-        
-        # ✅ FIXED: Only show Brass Rejected trays if NOT Partial Rejection (or if Full Rejection)
-        # If Partial Rejection, user wants to see Accepted Trays (Available stock).
-        if has_brass_rejection and not is_partial_rejection:
-            print(f"✅ [BRASS LOT REJECTION] Found brass rejected trays for lot {lot_id}")
-            print(f"   - BrassTrayId count: {brass_rejected_trays_brass.count()}")
-            print(f"   - TrayId count: {brass_rejected_trays_trayid.count()}")
-            print(f"   - Brass_QC_Rejected_TrayScan count: {brass_rejected_scans.count()}")
-            
-            # Priority 1: Get from BrassTrayId table (most authoritative for Brass Audit rejections)
-            for tray in brass_rejected_trays_brass:
-                if tray.tray_id and tray.tray_id not in added_tray_ids:
-                    # ✅ FIXED: Multi-level fallback for tray quantity
-                    tray_qty = tray.tray_quantity or 0
-                    if tray_qty == 0:
-                        # Fallback 1: Try to get quantity from Brass_QC_Rejected_TrayScan
-                        rejection_scan = Brass_QC_Rejected_TrayScan.objects.filter(
-                            lot_id=lot_id,
-                            rejected_tray_id=tray.tray_id
-                        ).first()
-                        if rejection_scan and rejection_scan.rejected_tray_quantity:
-                            tray_qty = int(rejection_scan.rejected_tray_quantity)
-                            print(f"   📦 Using quantity from Brass_QC_Rejected_TrayScan: {tray_qty}")
-                        else:
-                            # Fallback 2: Use tray_capacity for batch rejections (full tray)
-                            tray_qty = tray_capacity if tray_capacity > 0 else 0
-                            print(f"   📦 Using tray_capacity as fallback: {tray_qty}")
-                    
-                    tray_list.append({
-                        'sno': rejected_count + 1,
-                        'tray_id': tray.tray_id,
-                        'tray_qty': tray_qty,
-                        'is_rejected': True,
-                        'rejected_status': 'REJECTED',
-                        'ip_top_tray': False,
-                        'brass_top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                        'top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                    })
-                    added_tray_ids.add(tray.tray_id)
-                    rejected_count += 1
-                    print(f"   ✅ Added rejected tray from BrassTrayId: {tray.tray_id} (qty: {tray_qty})")
-            
-            # Priority 2: Get from TrayId table (only if not already added from BrassTrayId)
-            for tray in brass_rejected_trays_trayid:
-                if tray.tray_id and tray.tray_id not in added_tray_ids:
-                    # ✅ FIXED: Multi-level fallback for tray quantity
-                    tray_qty = tray.tray_quantity or 0
-                    if tray_qty == 0:
-                        # Fallback 1: Try to get quantity from Brass_QC_Rejected_TrayScan
-                        rejection_scan = Brass_QC_Rejected_TrayScan.objects.filter(
-                            lot_id=lot_id,
-                            rejected_tray_id=tray.tray_id
-                        ).first()
-                        if rejection_scan and rejection_scan.rejected_tray_quantity:
-                            tray_qty = int(rejection_scan.rejected_tray_quantity)
-                            print(f"   📦 Using quantity from Brass_QC_Rejected_TrayScan: {tray_qty}")
-                        else:
-                            # Fallback 2: Use tray_capacity for batch rejections (full tray)
-                            tray_qty = tray_capacity if tray_capacity > 0 else 0
-                            print(f"   📦 Using tray_capacity as fallback: {tray_qty}")
-                    
-                    tray_list.append({
-                        'sno': rejected_count + 1,
-                        'tray_id': tray.tray_id,
-                        'tray_qty': tray_qty,
-                        'is_rejected': True,
-                        'rejected_status': 'REJECTED',
-                        'ip_top_tray': tray.ip_top_tray if hasattr(tray, 'ip_top_tray') else False,
-                        'brass_top_tray': tray.brass_top_tray if hasattr(tray, 'brass_top_tray') else False,
-                        'top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                    })
-                    added_tray_ids.add(tray.tray_id)
-                    rejected_count += 1
-                    print(f"   ✅ Added rejected tray from TrayId: {tray.tray_id} (qty: {tray_qty})")
-            
-            # Priority 3: Get from Brass_QC_Rejected_TrayScan table (only if not already added)
-            for scan in brass_rejected_scans:
-                tray_id = scan.rejected_tray_id or ''
-                if tray_id and tray_id not in added_tray_ids:
-                    tray_list.append({
-                        'sno': rejected_count + 1,
-                        'tray_id': tray_id,
-                        'tray_qty': int(scan.rejected_tray_quantity) if scan.rejected_tray_quantity else 0,
-                        'is_rejected': True,
-                        'rejected_status': 'REJECTED',
-                        'ip_top_tray': False,
-                        'brass_top_tray': False,
-                        'top_tray': False,
-                    })
-                    added_tray_ids.add(tray_id)
-                    rejected_count += 1
-                    print(f"   ✅ Added rejected tray from Brass_QC_Rejected_TrayScan: {tray_id} (qty: {scan.rejected_tray_quantity})")
-            
-            # ✅ FIXED: For partial rejection (brass_qc_few_cases_accptance), also include accepted trays
-            # Check if this is a partial rejection case
-            is_partial_rejection = stock and stock.brass_qc_few_cases_accptance if stock else False
-            
-            if is_partial_rejection:
-                print(f"   🔄 [PARTIAL REJECTION] Including accepted trays for lot {lot_id}")
-                
-                # Get accepted trays from BrassTrayId (non-rejected, non-delinked)
-                accepted_trays_brass = BrassTrayId.objects.filter(
-                    lot_id=lot_id,
-                    rejected_tray=False,
-                    delink_tray=False
-                ).order_by('tray_id')
-                
-                accepted_count = len(tray_list)  # Start numbering after rejected trays
-                for tray in accepted_trays_brass:
-                    if tray.tray_id and tray.tray_id not in added_tray_ids:
-                        tray_list.append({
-                            'sno': accepted_count + 1,
-                            'tray_id': tray.tray_id,
-                            'tray_qty': tray.tray_quantity or 0,
-                            'is_rejected': False,
-                            'ip_top_tray': False,
-                            'brass_top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                            'top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                        })
-                        added_tray_ids.add(tray.tray_id)
-                        accepted_count += 1
-                        print(f"   ✅ Added accepted tray from BrassTrayId: {tray.tray_id} (qty: {tray.tray_quantity})")
-                
-                # Also check Brass_Qc_Accepted_TrayID_Store if no accepted trays found
-                if accepted_count == len(tray_list):
-                    accepted_store = Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).first()
-                    if accepted_store:
-                        # Add top tray
-                        if accepted_store.top_tray_id and accepted_store.top_tray_id not in added_tray_ids:
-                            tray_list.append({
-                                'sno': accepted_count + 1,
-                                'tray_id': accepted_store.top_tray_id,
-                                'tray_qty': accepted_store.top_tray_qty or 0,
-                                'is_rejected': False,
-                                'ip_top_tray': False,
-                                'brass_top_tray': True,
-                                'top_tray': True,
-                            })
-                            added_tray_ids.add(accepted_store.top_tray_id)
-                            accepted_count += 1
-                            print(f"   ✅ Added accepted top tray from store: {accepted_store.top_tray_id} (qty: {accepted_store.top_tray_qty})")
-            
-            # Return combined rejected + accepted trays
-            print(f"   📊 Total trays to return: {len(tray_list)} (rejected + accepted)")
-            return Response({
-                'success': True,
-                'brass_qc_accptance': brass_qc_accptance,
-                'batch_rejection': True,
-                'total_rejection_qty': 0,
-                'tray_capacity': tray_capacity,
-                'trays': sorted(tray_list, key=lambda x: (not x.get('top_tray', False), not x.get('brass_top_tray', False), not x.get('ip_top_tray', False), x.get('sno'))), # ✅ PRIORITIZE TOP TRAY
-                'is_brass_lot_rejection': True,
-                'is_partial_rejection': is_partial_rejection,
-            })
-
-        # Condition 1: If brass_qc_accptance is True, get from BrassTrayId table
-        # ✅ FIXED: Use duplicate prevention for brass_qc_accptance trays too
-        if brass_qc_accptance:
-            # ✅ NEW: Check if data is coming back from IQF with different quantity
-            brass_physical_qty = stock.brass_physical_qty if stock and stock.brass_physical_qty else 0
-            iqf_accepted_qty = stock.iqf_accepted_qty if stock and stock.iqf_accepted_qty else 0
-            
-            # If brass_physical_qty is set and differs from original acceptance, redistribute trays
-            if brass_physical_qty > 0 and iqf_accepted_qty > 0:
-                print(f"✅ [brass_view_tray_list] IQF accepted data returned to Brass QC")
-                print(f"   brass_physical_qty: {brass_physical_qty}, iqf_accepted_qty: {iqf_accepted_qty}")
-                
-                # Get all tray IDs for this lot (unique)
-                all_trays = BrassTrayId.objects.filter(lot_id=lot_id).order_by('id')
-                unique_tray_ids = []
-                seen = set()
-                for tray in all_trays:
-                    if tray.tray_id and tray.tray_id not in seen:
-                        unique_tray_ids.append(tray.tray_id)
-                        seen.add(tray.tray_id)
-                
-                print(f"   Unique tray IDs: {unique_tray_ids}")
-                
-                # Redistribute brass_physical_qty across trays
-                qty_left = brass_physical_qty
-                tray_idx = 0
-                
-                while qty_left > 0 and tray_idx < len(unique_tray_ids):
-                    tray_id = unique_tray_ids[tray_idx]
-                    qty = min(tray_capacity, qty_left) if tray_capacity > 0 else qty_left
-                    
-                    tray_list.append({
-                        'sno': rejected_count + len(tray_list) + 1,
-                        'tray_id': tray_id,
-                        'tray_qty': qty,
-                        'ip_top_tray': (tray_idx == 0),  # First tray is top tray
-                        'brass_top_tray': (tray_idx == 0),
-                        'top_tray': (tray_idx == 0),
-                    })
-                    
-                    print(f"   Redistributed tray {tray_id}: qty={qty}")
-                    qty_left -= qty
-                    tray_idx += 1
-                
-                print(f"✅ [brass_view_tray_list] Redistributed {brass_physical_qty} qty across {len(tray_list)} trays")
-                
-                return Response({
-                    'success': True,
-                    'brass_qc_accptance': True,
-                    'batch_rejection': False,
-                    'total_rejection_qty': 0,
-                    'tray_capacity': tray_capacity,
-                    'trays': tray_list,
-                })
-
-            # Original logic: Get unique tray records, order by id to maintain consistency
-            trays = BrassTrayId.objects.filter(lot_id=lot_id).order_by('tray_id', 'id')
-            
-            print(f"✅ [brass_view_tray_list] Found {trays.count()} BrassTrayId records for lot {lot_id}")
-            
-            # Track which tray_ids we've seen
-            seen_tray_count = {}
-            
-            # Use same duplicate prevention logic
-            for idx, tray_obj in enumerate(trays):
-                tray_id = tray_obj.tray_id
-                
-                # Count occurrences for debugging
-                if tray_id not in seen_tray_count:
-                    seen_tray_count[tray_id] = 0
-                seen_tray_count[tray_id] += 1
-                
-                if tray_id and tray_id not in added_tray_ids:
-                    tray_list.append({
-                        'sno': rejected_count + len(added_tray_ids) + 1,
-                        'tray_id': tray_id,
-                        'tray_qty': tray_obj.tray_quantity,
-                    })
-                    added_tray_ids.add(tray_id)
-                    print(f"   ✅ Added tray {tray_id} (qty: {tray_obj.tray_quantity})")
-                else:
-                    print(f"   ⚠️ Skipped duplicate tray {tray_id} (occurrence #{seen_tray_count[tray_id]})")
-            
-            # ✅ FIXED: If no BrassTrayId records found, fallback to Brass_Qc_Accepted_TrayID_Store
-            if not tray_list:
-                print(f"⚠️ [brass_view_tray_list] No BrassTrayId records found, checking Brass_Qc_Accepted_TrayID_Store")
-                accepted_trays = Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).order_by('id')
-                print(f"✅ [brass_view_tray_list] Found {accepted_trays.count()} Brass_Qc_Accepted_TrayID_Store records for lot {lot_id}")
-                for idx, tray_obj in enumerate(accepted_trays):
-                    tray_id = tray_obj.tray_id
-                    if tray_id and tray_id not in added_tray_ids:
-                        tray_list.append({
-                            'sno': rejected_count + len(added_tray_ids) + 1,
-                            'tray_id': tray_id,
-                            'tray_qty': tray_obj.tray_qty,
-                        })
-                        added_tray_ids.add(tray_id)
-                        print(f"   ✅ Added tray from Brass_Qc_Accepted_TrayID_Store {tray_id} (qty: {tray_obj.tray_qty})")
-            
-            print(f"✅ [brass_view_tray_list] Returned {len(tray_list)} unique trays for brass_qc_accptance")
-            print(f"   Duplicate summary: {seen_tray_count}")
-            
-            return Response({
-                'success': True,
-                'brass_qc_accptance': True,
-                'batch_rejection': False,
-                'total_rejection_qty': 0,
-                'tray_capacity': tray_capacity,
-                'trays': tray_list,
-            })
-
-        # Condition 2 & 3: Check rejection reason store (existing logic)
-        reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-        batch_rejection = False
-        total_rejection_qty = 0
-        
-        if reason_store:
-            batch_rejection = reason_store.batch_rejection
-            total_rejection_qty = reason_store.total_rejection_quantity
-
-        if batch_rejection and total_rejection_qty > 0:
-            # Batch rejection: get actual rejected quantities and tray IDs from Brass_QC_Rejected_TrayScan AND modelmasterapp.TrayId
-            rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
-            
-            if rejected_scans.exists():
-                for idx, scan in enumerate(rejected_scans):
-                    tray_id = scan.rejected_tray_id
-                    # ✅ If no tray_id in scan record, get from main TrayId table
-                    if not tray_id:
-                        main_tray = TrayId.objects.filter(lot_id=lot_id, brass_rejected_tray=True).first()
-                        if main_tray:
-                            tray_id = main_tray.tray_id
-                    
-                    tray_list.append({
-                        'sno': rejected_count + idx + 1,
-                        'tray_id': tray_id or '',
-                        'tray_qty': int(scan.rejected_tray_quantity) if scan.rejected_tray_quantity else 0,
-                    })
-            else:
-                # Fallback: get from main TrayId table or BrassTrayId table for lot rejections
-                main_trays = TrayId.objects.filter(lot_id=lot_id, brass_rejected_tray=True)
-                brass_trays = BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=True)
-                
-                if main_trays.exists():
-                    for idx, tray in enumerate(main_trays):
-                        tray_list.append({
-                            'sno': rejected_count + idx + 1,
-                            'tray_id': tray.tray_id,
-                            'tray_qty': tray.tray_quantity or 0,
-                        })
-                elif brass_trays.exists():
-                    for idx, tray in enumerate(brass_trays):
-                        tray_list.append({
-                            'sno': rejected_count + idx + 1,
-                            'tray_id': tray.tray_id,
-                            'tray_qty': tray.tray_quantity or 0,
-                        })
-                else:
-                    # Final fallback: split total_rejection_qty by tray_capacity if no records found
-                    tray_ids = list(BrassTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
-                    if tray_capacity > 0:
-                        num_trays = ceil(total_rejection_qty / tray_capacity)
-                        qty_left = total_rejection_qty
-                        
-                        for i in range(num_trays):
-                            qty = tray_capacity if qty_left > tray_capacity else qty_left
-                            tray_id = tray_ids[i] if i < len(tray_ids) else ""
-                            tray_list.append({
-                                'sno': rejected_count + i + 1,
-                                'tray_id': tray_id,
-                                'tray_qty': qty,
-                            })
-                            qty_left -= qty
-        else:
-            # Not batch rejection: get from Brass_Qc_Accepted_TrayID_Store
-            trays = Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).order_by('id')
-            for idx, obj in enumerate(trays):
-                tray_list.append({
-                    'sno': rejected_count + idx + 1,
-                    'tray_id': obj.tray_id,
-                    'tray_qty': obj.tray_qty,
-                })
 
         return Response({
             'success': True,
             'brass_qc_accptance': brass_qc_accptance,
-            'batch_rejection': batch_rejection,
-            'total_rejection_qty': total_rejection_qty,
+            'batch_rejection': False,
+            'total_rejection_qty': 0,
             'tray_capacity': tray_capacity,
             'trays': tray_list,
         })
-        
+
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
+
 
 @method_decorator(login_required, name='dispatch')
 @method_decorator(csrf_exempt, name='dispatch')
