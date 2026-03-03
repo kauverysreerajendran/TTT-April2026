@@ -3,6 +3,11 @@
 
 <style> 
 
+/* Modal visibility - hidden by default, controlled by JavaScript */
+#trayScanModal_DayPlanning {
+  display: none;
+}
+
 /* ===== SORTING STYLES ===== */
 .table th {
     position: relative;
@@ -556,7 +561,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 }
  
  
+.tray-scan-modal {
+  display: none;
+}
+
 .tray-scan-modal.open {
+  display: block !important;
   width:500px !important;
 }
 /* For the 4-column layout (with validation status) */
@@ -1176,7 +1186,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                     <div
   id="trayScanModal_DayPlanning"
   class="tray-scan-modal-DayPlanning"
-  style="display:none"
 >
   <div class="tray-scan-modal-DayPlanning-content">
     <span id="closeTrayScanModal_DayPlanning" class="tray-scan-close-readonly">&times;</span>
