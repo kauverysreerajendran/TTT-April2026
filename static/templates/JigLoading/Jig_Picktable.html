@@ -2215,50 +2215,25 @@ tr.row-inactive td:first-child {
 
                 <!-- FIX 2 & 6: Chat remark icon with working send, lock after send, persist via localStorage, info shows remark -->
                 <span style="display:inline-flex; align-items:center; gap:5px;">
-                  <!-- Chat icon trigger -->
+                  <!-- Audio remark -->
                   <a
                     href="#"
-                    title=""
-                    class="remark-chat-trigger"
-                    data-lot-id="{{ data.stock_lot_id }}"
-                    data-batch-id="{{ data.batch_id }}"
-
-                <a
-                  href="#"
-                  title="Add Audio Remark"
-                  class="remark-tooltip-trigger"
-                  data-remark-kind="audio"
-                  style="
-                    display: inline-flex;
-                    align-items: center;
-                    height: 28px;
-                    margin-left: 0;
-                    position: relative;
-                    cursor: pointer;
-                  "
-                >
-                  <img
-                    src="{% static 'assets/icons/rec.png' %}"
-                    alt="VoiceRec"
-                    style="width: 20px; height: 20px"
-                  />
-                  <div
-                    class="remark-tooltip"
-
+                    title="Add Audio Remark"
+                    class="remark-tooltip-trigger"
+                    data-remark-kind="audio"
                     style="
                       display: inline-flex;
                       align-items: center;
-                      height: 20px;
-                      margin-left: 5px;
+                      height: 28px;
+                      margin-left: 0;
                       position: relative;
                       cursor: pointer;
                     "
                   >
                     <img
-                      src="{% static 'assets/icons/chat_icon.png' %}"
-                      alt="Chat"
-                      class="chat-icon-img"
-                      style="width: 20px; height: 20px; opacity: 0.7"
+                      src="{% static 'assets/icons/rec.png' %}"
+                      alt="VoiceRec"
+                      style="width: 20px; height: 20px"
                     />
                     <!-- Chat tooltip popup -->
                     <div
@@ -2299,10 +2274,7 @@ tr.row-inactive td:first-child {
                         <button
                           type="button"
                           class="remark-send-btn"
-
-
                           data-remark-type="audio"
-
                           style="
                             background-color: #007bff;
                             color: #fff;
@@ -2318,7 +2290,6 @@ tr.row-inactive td:first-child {
                         </button>
                       </div>
                     </div>
-
                   </a>
                   <!-- FIX 6: Info icon showing entered remark on hover -->
                   <span class="remark-info-trigger" data-lot-id="{{ data.stock_lot_id }}" style="display:none;">
@@ -2326,9 +2297,7 @@ tr.row-inactive td:first-child {
                     <span class="remark-info-tooltip"></span>
                   </span>
                 </span>
-
-                  </div>
-                </a>
+                <!-- Text remark -->
                 <a
                   href="#"
                   title="Add Remark"
@@ -2402,7 +2371,7 @@ tr.row-inactive td:first-child {
                     </div>
                   </div>
                 </a>
->>>>>>> origin/Mugesh
+
               </td>
             </tr>
             {% endfor %}
