@@ -600,6 +600,7 @@ class BrassPickTableView(APIView):
                 'few_cases_accepted_Ip_stock': stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': stock_obj.accepted_tray_scan_status,
                 'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
+                'IP_pick_remarks': stock_obj.IP_pick_remarks,
                 'brass_qc_accptance': stock_obj.brass_qc_accptance,
                 'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
                 'brass_qc_rejection': stock_obj.brass_qc_rejection,

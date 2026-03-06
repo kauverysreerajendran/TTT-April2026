@@ -1236,21 +1236,6 @@
                   <a class="nav-link" href="{% url 'iqf_picktable' %}">IQF Pick Table</a>
                </li>
                {% endif %}
-               {% if is_admin or 'IQF Completed Table' in allowed_modules %}
-               <li class="nav-item"> 
-                  <a class="nav-link" href="{% url 'iqf_completed_table' %}">IQF Completed Table</a>
-               </li>
-               {% endif %}
-               {% if is_admin or 'IQF Accept Table' in allowed_modules %}
-               <li class="nav-item"> 
-                  <a class="nav-link" href="{% url 'iqf_accept_table' %}">IQF Accept Table</a>
-               </li>
-               {% endif %}
-               {% if is_admin or 'IQF Reject Table' in allowed_modules %}
-               <li class="nav-item">
-                  <a class="nav-link" href="{% url 'iqf_rejection_table' %}">IQF Reject Table</a>
-               </li>
-               {% endif %}
                {% if is_admin or 'Brass Audit Pick Table' in allowed_modules %}
                <li class="nav-item"> 
                   <a class="nav-link" href="{% url 'brass_audit_picktable' %}">Brass Audit Pick Table</a>                
