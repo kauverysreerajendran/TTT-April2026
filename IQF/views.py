@@ -6488,10 +6488,12 @@ def apply_iqf_auto_allocation_results(lot_id, batch_id, allocation_results, reje
             iqf_tray = IQFTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
             if iqf_tray:
                 if rejection['allocation_type'] == 'full_rejection':
+                    # Keep lot_id and batch_id intact so the completed table view can
+                    # find these trays via lot_id filter. Setting lot_id=None was
+                    # making the rejected trays invisible in IQFCompleteTableTrayIdListAPIView.
+                    # delink_tray stays False — these are rejected trays, not delinked trays.
                     iqf_tray.rejected_tray = True
-                    iqf_tray.delink_tray = True
-                    iqf_tray.lot_id = None  # Delink from lot
-                    iqf_tray.batch_id = None
+                    iqf_tray.tray_quantity = 0
                 else:
                     # Partial rejection - update remaining quantity
                     iqf_tray.tray_quantity = rejection['remaining_qty']

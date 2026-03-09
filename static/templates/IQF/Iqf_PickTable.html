@@ -1553,16 +1553,17 @@
                         {% endif %}
 
                       {% else %}
-                        <!-- Default state - Both buttons enabled -->
+                        <!-- Default state - Audit button enabled only after lot qty checkbox is verified -->
 
                         <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                style="background-color: #eaab36; color: #fff; border: 2px solid #b38f00; box-shadow: 0 2px 8px rgba(234,171,54,0.12);"
+                                style="background-color: #eaab36; color: #fff; border: 2px solid #b38f00; box-shadow: 0 2px 8px rgba(234,171,54,0.12);{% if not data.iqf_accepted_qty_verified %} opacity:0.5; cursor:not-allowed;{% endif %}"
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
                                 data-batch-id="{{ data.batch_id }}"
                                 data-model-no="{{ data.plating_stk_no }}"
                                 data-lot-qty="{{ data.brass_rejection_total_qty|default:'0' }}"
                                 data-missing-qty="{{ data.iqf_missing_qty|default:'0' }}"
                                 data-physical-qty="{{ data.iqf_physical_qty|default:'0' }}"
+                                {% if not data.iqf_accepted_qty_verified %}disabled title="Check the Lot Qty checkbox first to enable Audit"{% endif %}
                                 >
                           <i class="fa fa-check-circle" style="color: #fff; background: #b38f00; border-radius: 50%; padding: 2px;"></i>Audit
                         </button>
@@ -4530,10 +4531,18 @@ function validateSubmitRequirementsWithFeedback() {
   const delinkInputs = document.querySelectorAll('.delink-tray-id-input');
   let allDelinkFilled = true;
   let emptyDelinkInputs = [];
-  const availableDelinkTrays = (window.currentRemainingTrays || []).map(tray => tray.tray_id);
   delinkInputs.forEach((input, index) => {
     const trayId = input.value.trim();
-    const validation = trayId ? validateDelinkTray(trayId, availableDelinkTrays) : { isValid: false };
+    // ✅ FIX: Read available trays from data attribute set at render time (from iqf_get_delink_candidates)
+    // This is correct because window.currentRemainingTrays only contains trays from iqf_get_remaining_trays
+    // which may not include all delink candidates (e.g. trays not in IQF_Rejected_TrayScan scope).
+    let inputAvailableTrays;
+    try {
+      inputAvailableTrays = JSON.parse(input.getAttribute('data-available-trays') || '[]');
+    } catch (e) {
+      inputAvailableTrays = (window.currentRemainingTrays || []).map(tray => tray.tray_id);
+    }
+    const validation = trayId ? validateDelinkTray(trayId, inputAvailableTrays) : { isValid: false };
     if (!trayId || !validation.isValid) {
       allDelinkFilled = false;
       emptyDelinkInputs.push(index + 1);
@@ -5202,7 +5211,6 @@ function processAllTrayData(lotId, isDraft, successMessage) {
     delinkTrays,
     verifications,
     acceptedTrays,
-    rejectionTopTrays,
     isDraft
   });
 
@@ -5212,7 +5220,7 @@ function processAllTrayData(lotId, isDraft, successMessage) {
     delink_trays: delinkTrays,           // Array of strings
     verifications: verifications,         // Array of objects with {tray_id, verified, qty}
     accepted_trays: acceptedTrays,        // Array of objects with {tray_id, qty}
-    rejection_top_trays: rejectionTopTrays, // Array of objects with {tray_id, qty}
+    rejection_top_trays: [],             // Reserved for future use
     is_draft: isDraft
   };
 
