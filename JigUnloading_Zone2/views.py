@@ -93,7 +93,31 @@ class JU_Zone_MainTable(TemplateView):
         """Get lot-specific data from either TotalStockModel or RecoveryStockModel"""
         
         print(f"🔍 get_lot_specific_data called for lot_id: {lot_id}, model_no: {model_no}")
-        
+
+        # STEP 0: JigCompleted → batch_id → ModelMasterCreation (for Jig Loading lots not in TotalStockModel)
+        _jc = JigCompleted.objects.filter(lot_id=lot_id).only('batch_id').first()
+        if _jc and _jc.batch_id:
+            _mmc = ModelMasterCreation.objects.select_related(
+                'version', 'model_stock_no', 'model_stock_no__tray_type', 'location'
+            ).filter(batch_id=_jc.batch_id).first()
+            if _mmc:
+                _version_name = "No Version"
+                if hasattr(_mmc, 'version') and _mmc.version:
+                    _version_name = getattr(_mmc.version, 'version_internal', None) or getattr(_mmc.version, 'version_name', 'No Version')
+                _tray_type_str = _mmc.model_stock_no.tray_type.tray_type if _mmc.model_stock_no and _mmc.model_stock_no.tray_type else "No Tray Type"
+                print(f"✅ Zone 2 get_lot_specific_data via JigCompleted.batch_id={_jc.batch_id}: tray={_tray_type_str}")
+                return {
+                    'version': _version_name,
+                    'vendor': getattr(_mmc, 'vendor_internal', None) or "No Vendor",
+                    'location': _mmc.location.location_name if hasattr(_mmc, 'location') and _mmc.location else "No Location",
+                    'tray_type': _tray_type_str,
+                    'tray_capacity': self.get_dynamic_tray_capacity(_tray_type_str) if _tray_type_str != "No Tray Type" else 0,
+                    'plating_stk_no': getattr(_mmc, 'plating_stk_no', None) or "No Plating Stock No",
+                    'polishing_stk_no': getattr(_mmc, 'polishing_stk_no', None) or "No Polishing Stock No",
+                    'plating_color': getattr(_mmc, 'plating_color', None) or "N/A",
+                    'source': 'JigCompleted→ModelMasterCreation'
+                }
+
         # STEP 1: Get stock model data using the proven method
         stock_model, is_recovery, batch_model_class = self.get_stock_model_data(lot_id)
         
@@ -228,6 +252,23 @@ class JU_Zone_MainTable(TemplateView):
                     batch_ids.append(stock.batch_id.id)
                     batch_to_model_type[stock.batch_id.id] = 'RecoveryStockModel'
                 print(f"   ✅ RecoveryStock: {stock.lot_id} -> batch_id: {stock.batch_id.id}")
+        
+        # Fallback: JigCompleted → ModelMasterCreation (for Jig Loading lot IDs)
+        # These lot IDs are not in TotalStockModel/RecoveryStockModel because
+        # they are jig-level lot IDs generated during Jig Loading, not IS lot IDs.
+        missing_lot_ids = [lid for lid in new_lot_ids if lid not in lot_to_batch]
+        if missing_lot_ids:
+            from Jig_Loading.models import JigCompleted
+            jig_completed_recs = JigCompleted.objects.filter(lot_id__in=missing_lot_ids)
+            for jc in jig_completed_recs:
+                if jc.batch_id:
+                    mmc = ModelMasterCreation.objects.filter(batch_id=jc.batch_id).first()
+                    if mmc and jc.lot_id not in lot_to_batch:
+                        lot_to_batch[jc.lot_id] = mmc.id
+                        if mmc.id not in batch_ids:
+                            batch_ids.append(mmc.id)
+                            batch_to_model_type[mmc.id] = 'JigCompleted'
+                        print(f"   ✅ JigCompleted: {jc.lot_id} -> MMC batch={jc.batch_id} -> id={mmc.id}")
         
         print(f"   📋 Total unique batch_ids found: {len(batch_ids)}")
         
@@ -374,6 +415,21 @@ class JU_Zone_MainTable(TemplateView):
                     batch_ids.append(stock.batch_id.id)
                     batch_to_model_type[stock.batch_id.id] = 'RecoveryStockModel'
                 print(f"   ✅ RecoveryStock: {stock.lot_id} -> batch_id: {stock.batch_id.id}")
+        
+        # Fallback: JigCompleted → ModelMasterCreation (for Jig Loading lot IDs)
+        missing_lot_ids = [lid for lid in lot_ids if lid not in lot_to_batch]
+        if missing_lot_ids:
+            from Jig_Loading.models import JigCompleted
+            jig_completed_recs = JigCompleted.objects.filter(lot_id__in=missing_lot_ids)
+            for jc in jig_completed_recs:
+                if jc.batch_id:
+                    mmc = ModelMasterCreation.objects.filter(batch_id=jc.batch_id).first()
+                    if mmc and jc.lot_id not in lot_to_batch:
+                        lot_to_batch[jc.lot_id] = mmc.id
+                        if mmc.id not in batch_ids:
+                            batch_ids.append(mmc.id)
+                            batch_to_model_type[mmc.id] = 'JigCompleted'
+                        print(f"   ✅ JigCompleted: {jc.lot_id} -> MMC batch={jc.batch_id} -> id={mmc.id}")
         
         print(f"   📋 Total unique batch_ids found: {len(batch_ids)}")
         
@@ -536,7 +592,15 @@ class JU_Zone_MainTable(TemplateView):
                 print(f"   ✅ Parsed no_of_model_cases from draft_data: {parsed_models}")
             else:
                 jig_detail.no_of_model_cases = []
-        
+
+        # After parsing, if still empty (e.g. DB stored '[]'), fall back to plating_stock_num
+        if not jig_detail.no_of_model_cases:
+            _ddata = getattr(jig_detail, 'draft_data', {}) or {}
+            _psn2 = getattr(jig_detail, 'plating_stock_num', None) or (_ddata.get('plating_stock_num') if _ddata else None)
+            if _psn2:
+                jig_detail.no_of_model_cases = [str(_psn2).strip()]
+                print(f"   🔄 no_of_model_cases fallback to plating_stock_num: {jig_detail.no_of_model_cases}")
+
         # For single model jigs, set no_of_model_cases if model_no is available
         if not jig_detail.no_of_model_cases and hasattr(jig_detail, 'model_no') and jig_detail.model_no:
             jig_detail.no_of_model_cases = [jig_detail.model_no]
@@ -549,7 +613,9 @@ class JU_Zone_MainTable(TemplateView):
         # Parse draft_data for bath_type and tray info
         draft_data = jig_detail.draft_data or {}
         jig_detail.ep_bath_type = draft_data.get('nickel_bath_type', 'Bright')  # For Bath Type column
-        jig_detail.bath_number = draft_data.get('bath_number', 'N/A')  # For Bath No column
+        
+        # FIXED: Extract actual Bath No from ForeignKey since it's not always in draft_data
+        jig_detail.bath_number = getattr(jig_detail.bath_numbers, 'bath_number', None) or draft_data.get('bath_number', 'N/A')
         
         # Get tray info from draft_data first, fallback to model_cases_data if not available
         jig_detail.tray_type = draft_data.get('tray_type', None)
@@ -736,6 +802,8 @@ class JU_Zone_MainTable(TemplateView):
             polish_finish_name=Subquery(polish_finish_subquery)
         ).filter(
             plating_color_cast__in=plating_patterns
+        ).exclude(
+            last_process_module='Jig Unloading'
         ).order_by('-IP_loaded_date_time')
         
         # ENHANCED FILTER: Also get jigs where plating_color is not in draft_data 
@@ -798,12 +866,35 @@ class JU_Zone_MainTable(TemplateView):
         # Get all unique model numbers from all jig_unload for bulk processing
         all_model_numbers = set()
         all_lot_ids = set()
+        all_batch_ids = set()  # For Jig Loading batch_id → images fallback
         for jig_detail in jig_unload:
             if jig_detail.no_of_model_cases:
-                all_model_numbers.update(jig_detail.no_of_model_cases)
+                _raw_mc = jig_detail.no_of_model_cases
+                if isinstance(_raw_mc, str):
+                    try:
+                        import json
+                        _parsed = json.loads(_raw_mc)
+                        if isinstance(_parsed, list):
+                            _raw_mc = _parsed
+                    except Exception:
+                        pass
+
+                if isinstance(_raw_mc, list):
+                    all_model_numbers.update([str(m) for m in _raw_mc])
+                elif isinstance(_raw_mc, str):
+                    for _item in _raw_mc.split(','):
+                        _mn = _item.split(':')[0].strip()
+                        if _mn:
+                            all_model_numbers.add(_mn)
+            elif getattr(jig_detail, 'plating_stock_num', None):
+                all_model_numbers.add(str(jig_detail.plating_stock_num).strip())
             # 🔥 NEW: Collect all lot_ids for dual-table lookup
             if hasattr(jig_detail, 'lot_id_quantities') and jig_detail.lot_id_quantities:
                 all_lot_ids.update(jig_detail.lot_id_quantities.keys())
+            # Collect batch_ids for Jig Loading image fallback path
+            _jd_batch = getattr(jig_detail, 'batch_id', None)
+            if _jd_batch:
+                all_batch_ids.add(str(_jd_batch).strip())
                 
         # Define color palette for model circles
         color_palette = [
@@ -1000,38 +1091,101 @@ class JU_Zone_MainTable(TemplateView):
             
             model_masters = ModelMaster.objects.filter(
                 model_no__in=clean_model_numbers
-            ).prefetch_related('images')
-            
-            # Create lookup map for clean model numbers to images
+            ).prefetch_related('images').order_by('model_no', 'plating_stk_no')
+
+            # Create lookup maps: clean_model_images by numeric key, plating_stk_images by exact match
             clean_model_images = {}
+            plating_stk_images = {}
+            seen_clean = set()
             for model_master in model_masters:
                 images = list(model_master.images.all())
-                print(f"📸 DEBUG: Zone 2 Clean model {model_master.model_no} has {len(images)} images")
-                
-                if model_master.model_no == '1805' or '1805' in model_master.model_no:
-                    print(f"🎯 Zone 2 SPECIAL DEBUG for clean model {model_master.model_no}:")
-                    print(f"   Found {len(images)} images")
-                    for i, img in enumerate(images):
-                        print(f"   Image {i+1}: {img.master_image.url if img.master_image else 'NO IMAGE FILE'}")
-                
-                clean_model_images[model_master.model_no] = {
-                    'images': [img.master_image.url for img in images if img.master_image] if images else [],
-                    'first_image': images[0].master_image.url if images and images[0].master_image else None
-                }
-                
-                # Debug log for specific model
-                if model_master.model_no == '1805' or '1805' in model_master.model_no:
-                    print(f"🎯 Zone 2 Final structure for clean model {model_master.model_no}: {clean_model_images[model_master.model_no]}")
-            
+                img_urls_mm = [img.master_image.url for img in images if img.master_image]
+
+                # Always record by plating_stk_no (exact match for fallback)
+                if model_master.plating_stk_no and img_urls_mm:
+                    plating_stk_images[model_master.plating_stk_no] = {
+                        'images': img_urls_mm, 'first_image': img_urls_mm[0]
+                    }
+
+                # For clean model_no key: only store if has images, or first occurrence
+                mn = model_master.model_no
+                if mn not in clean_model_images:
+                    if img_urls_mm:
+                        clean_model_images[mn] = {'images': img_urls_mm, 'first_image': img_urls_mm[0]}
+                    seen_clean.add(mn)
+                elif not clean_model_images[mn]['images'] and img_urls_mm:
+                    clean_model_images[mn] = {'images': img_urls_mm, 'first_image': img_urls_mm[0]}
+
             # Map back to original model numbers
             for original_model, clean_model in clean_model_mapping.items():
-                if clean_model in clean_model_images:
+                # First: exact plating_stk_no match (most specific)
+                if original_model in plating_stk_images:
+                    model_images_map[original_model] = plating_stk_images[original_model]
+                    print(f"📸 Zone 2 Mapped {original_model} via exact plating_stk_no -> {len(plating_stk_images[original_model]['images'])} images")
+                elif clean_model in clean_model_images:
                     model_images_map[original_model] = clean_model_images[clean_model]
                     print(f"📸 Zone 2 Mapped {original_model} -> {clean_model} -> {len(clean_model_images[clean_model]['images'])} images")
                 else:
                     model_images_map[original_model] = {'images': [], 'first_image': None}
                     print(f"❌ Zone 2 No images found for {original_model} (clean: {clean_model})")
-        
+
+            # Fallback: for models still missing images, try ModelMasterCreation.images + plating_stk_no scan
+            missing_images = {m for m, v in model_images_map.items() if not v.get('images')}
+            if missing_images:
+                print(f"🔍 Zone 2: Searching plating_stk_no variants for models without images: {missing_images}")
+                for orig_no in list(missing_images):
+                    _mmc_direct = ModelMasterCreation.objects.filter(
+                        plating_stk_no=orig_no
+                    ).prefetch_related('images').first()
+                    if _mmc_direct and _mmc_direct.images.exists():
+                        _mmc_urls = [img.master_image.url for img in _mmc_direct.images.all() if img.master_image]
+                        if _mmc_urls:
+                            model_images_map[orig_no] = {'images': _mmc_urls, 'first_image': _mmc_urls[0]}
+                            missing_images.discard(orig_no)
+                            print(f"📸 Zone 2 MMC direct images: '{orig_no}' -> {len(_mmc_urls)} images")
+                if missing_images:
+                    plating_candidates = ModelMaster.objects.filter(
+                        plating_stk_no__isnull=False
+                    ).exclude(plating_stk_no='').prefetch_related('images')
+                    for mm in plating_candidates:
+                        if not mm.plating_stk_no:
+                            continue
+                        for orig_no in list(missing_images):
+                            _numeric = re.match(r'^(\d+)', str(orig_no))
+                            _numeric_no = _numeric.group(1) if _numeric else None
+                            if (mm.plating_stk_no == orig_no or
+                                    (_numeric_no and str(mm.plating_stk_no).startswith(_numeric_no))) and mm.images.exists():
+                                img_list = list(mm.images.all())
+                                img_urls_fb = [img.master_image.url for img in img_list if img.master_image]
+                                if img_urls_fb:
+                                    model_images_map[orig_no] = {'images': img_urls_fb, 'first_image': img_urls_fb[0]}
+                                    missing_images.discard(orig_no)
+                                    print(f"📸 Zone 2 Fallback: mapped '{orig_no}' via plating_stk_no '{mm.plating_stk_no}'")
+                                    break
+
+        # Build batch_id → ModelMasterCreation → images/tray/polish map for Jig Loading lots
+        batch_images_map = {}
+        batch_tray_map = {}          # batch_id → (tray_type_str, tray_capacity_int)
+        batch_polish_finish_map = {} # batch_id → polish_finish_str
+        if all_batch_ids:
+            for _bmmc in ModelMasterCreation.objects.filter(
+                batch_id__in=all_batch_ids
+            ).select_related('model_stock_no').prefetch_related('images', 'model_stock_no__images'):
+                if not _bmmc.batch_id:
+                    continue
+                # Capture tray and polish_finish (plain CharField/IntegerField on MMC)
+                if _bmmc.tray_type:
+                    _tc = _bmmc.tray_capacity if _bmmc.tray_capacity else self.get_dynamic_tray_capacity(_bmmc.tray_type)
+                    batch_tray_map[_bmmc.batch_id] = (_bmmc.tray_type, _tc)
+                if _bmmc.polish_finish:
+                    batch_polish_finish_map[_bmmc.batch_id] = _bmmc.polish_finish
+                _bimgs = [img.master_image.url for img in _bmmc.images.all() if img.master_image]
+                if not _bimgs and _bmmc.model_stock_no:
+                    _bimgs = [img.master_image.url for img in _bmmc.model_stock_no.images.all() if img.master_image]
+                if _bimgs:
+                    batch_images_map[_bmmc.batch_id] = {'images': _bimgs, 'first_image': _bimgs[0]}
+                    print(f"📦 Zone 2 batch_images: {_bmmc.batch_id} -> {len(_bimgs)} images")
+
         # 🚀 ENHANCED: Dual-table lot_id to model mapping (using full plating_stk_no)
         def build_lot_id_model_map(jig_detail):
             lot_id_model_map = {}
@@ -1070,6 +1224,15 @@ class JU_Zone_MainTable(TemplateView):
                             elif rsm and hasattr(rsm, 'model_stock_no') and rsm.model_stock_no:
                                 plating_stk_no = rsm.model_stock_no.model_no
                                 print(f"♻️ Found {lot_id} in RecoveryStockModel (fallback) -> {plating_stk_no}")
+                    
+                    if not plating_stk_no:
+                        # JigCompleted fallback (for Jig Loading lot IDs not in TotalStockModel)
+                        jc = JigCompleted.objects.filter(lot_id=lot_id).first()
+                        if jc and jc.batch_id:
+                            mmc = ModelMasterCreation.objects.filter(batch_id=jc.batch_id).select_related('model_stock_no').first()
+                            if mmc:
+                                plating_stk_no = getattr(mmc, 'plating_stk_no', None) or (mmc.model_stock_no.model_no if mmc.model_stock_no else None)
+                                print(f"🎯 Found {lot_id} in JigCompleted -> MMC -> {plating_stk_no}")
                     
                     lot_id_model_map[lot_id] = plating_stk_no
             
@@ -1114,12 +1277,170 @@ class JU_Zone_MainTable(TemplateView):
         
         # Replace the original jig_unload with processed_jig_details
         jig_unload = processed_jig_details
-        
+
+        # ── Second pass: fill gaps that create_enhanced_jig_detail may have left ──
+        for jig_detail in jig_unload:
+            draft_data = {}
+            if hasattr(jig_detail, 'draft_data') and jig_detail.draft_data:
+                if isinstance(jig_detail.draft_data, str):
+                    try:
+                        draft_data = json.loads(jig_detail.draft_data)
+                    except Exception:
+                        draft_data = {}
+                elif isinstance(jig_detail.draft_data, dict):
+                    draft_data = jig_detail.draft_data
+
+            # Ensure lot_id_quantities is set
+            lot_id_quantities = getattr(jig_detail, 'lot_id_quantities', None) or draft_data.get('lot_id_quantities', {})
+            if not lot_id_quantities:
+                delink_qty = getattr(jig_detail, 'delink_tray_qty', 0)
+                if delink_qty and delink_qty > 0:
+                    lot_id_quantities = {jig_detail.lot_id: delink_qty}
+                else:
+                    lot_id_quantities = {jig_detail.lot_id: getattr(jig_detail, 'updated_lot_qty', 0)}
+            jig_detail.lot_id_quantities = lot_id_quantities
+
+            # Rebuild lot_id_model_map from plating_stock_num if not already set
+            if not getattr(jig_detail, 'lot_id_model_map', None) and lot_id_quantities:
+                _psn = getattr(jig_detail, 'plating_stock_num', None) or draft_data.get('plating_stock_num')
+                if _psn:
+                    _rebuilt_map = {jig_detail.lot_id: str(_psn).strip()}
+                    for _k in lot_id_quantities.keys():
+                        _rebuilt_map.setdefault(_k, str(_psn).strip())
+                    jig_detail.lot_id_model_map = _rebuilt_map
+
+            # Ensure no_of_model_cases is a proper list (handle '', '[]', 'stk:qty,...')
+            model_cases = draft_data.get('no_of_model_cases', getattr(jig_detail, 'no_of_model_cases', None))
+            if not model_cases:
+                _plating_sn = getattr(jig_detail, 'plating_stock_num', None) or draft_data.get('plating_stock_num')
+                if _plating_sn:
+                    model_cases = [str(_plating_sn).strip()]
+                else:
+                    model_cases = []
+            if isinstance(model_cases, str):
+                try:
+                    _parsed = json.loads(model_cases)
+                    jig_detail.no_of_model_cases = _parsed if isinstance(_parsed, list) else ([str(_parsed)] if _parsed else [])
+                except Exception:
+                    _parsed_items = [_i.split(':')[0].strip() for _i in model_cases.split(',') if _i.split(':')[0].strip()]
+                    jig_detail.no_of_model_cases = _parsed_items if _parsed_items else []
+            elif isinstance(model_cases, list):
+                jig_detail.no_of_model_cases = model_cases
+            else:
+                jig_detail.no_of_model_cases = []
+
+            # After parsing, if still empty (e.g. DB stored '[]'), fall back to plating_stock_num
+            if not jig_detail.no_of_model_cases:
+                _psn2 = getattr(jig_detail, 'plating_stock_num', None) or draft_data.get('plating_stock_num')
+                if _psn2:
+                    jig_detail.no_of_model_cases = [str(_psn2).strip()]
+
+            # Set lot_plating_stk_nos for template (model widget + data-plating-stk-no attr)
+            if not getattr(jig_detail, 'lot_plating_stk_nos', None):
+                if jig_detail.no_of_model_cases:
+                    jig_detail.lot_plating_stk_nos = ', '.join(str(x) for x in jig_detail.no_of_model_cases)
+                else:
+                    _fb_psn = getattr(jig_detail, 'plating_stock_num', None) or draft_data.get('plating_stock_num', '')
+                    jig_detail.lot_plating_stk_nos = str(_fb_psn).strip() if _fb_psn else ''
+
+            # Re-populate model_images / model_colors if first pass left them empty
+            if jig_detail.no_of_model_cases and not getattr(jig_detail, 'model_images', None):
+                _model_imgs = {}
+                _model_clrs = {}
+                # Collect plating_stk_nos from lot_id_model_map (e.g. '1805NAK02')
+                _limp_sp = getattr(jig_detail, 'lot_id_model_map', {}) or {}
+                _psn_set_sp = set(v for v in _limp_sp.values() if v)
+                for _mn in jig_detail.no_of_model_cases:
+                    _mk = str(_mn)
+                    _model_clrs[_mk] = global_model_colors.get(_mk, '#cccccc')
+                    _img_data = model_images_map.get(_mk, {'images': [], 'first_image': None})
+                    if not _img_data.get('images'):
+                        # Try plating_stk_no from lot_id_model_map first (e.g. '1805NAK02')
+                        for _psn_sp in _psn_set_sp:
+                            _psn_img = model_images_map.get(_psn_sp)
+                            if _psn_img and _psn_img.get('images'):
+                                _img_data = _psn_img
+                                break
+                    if not _img_data.get('images'):
+                        # Numeric prefix match in model_images_map (e.g. '1805' matches '1805NAK02')
+                        for _map_k, _map_v in model_images_map.items():
+                            if str(_map_k).startswith(_mk) and _map_v.get('images'):
+                                _img_data = _map_v
+                                break
+                    if not _img_data.get('images'):
+                        _batch_img = batch_images_map.get(getattr(jig_detail, 'batch_id', None))
+                        if _batch_img:
+                            _img_data = _batch_img
+                    _model_imgs[_mk] = _img_data
+                # Also index by plating_stk_no so JS lookup via lot_id_model_map succeeds
+                for _psn_sp in _psn_set_sp:
+                    if _psn_sp not in _model_imgs:
+                        _psn_img = model_images_map.get(_psn_sp, {'images': [], 'first_image': None})
+                        if not _psn_img.get('images') and _model_imgs:
+                            _psn_img = list(_model_imgs.values())[0]
+                        _model_imgs[_psn_sp] = _psn_img
+                jig_detail.model_images = _model_imgs
+                jig_detail.model_colors = _model_clrs
+                # Fill model_data (versions/tray info) with numeric prefix fallback
+                _first_mk = str(jig_detail.no_of_model_cases[0])
+                _md = model_data_map.get(_first_mk)
+                if not _md:
+                    _nmp = re.match(r'^(\d+)', _first_mk)
+                    if _nmp:
+                        _md = model_data_map.get(_nmp.group(1))
+                if _md:
+                    if not getattr(jig_detail, 'unique_versions', None):
+                        jig_detail.unique_versions = [_md['version']]
+                    if not getattr(jig_detail, 'unique_vendors', None):
+                        jig_detail.unique_vendors = [_md['vendor']]
+                    if not getattr(jig_detail, 'unique_locations', None):
+                        jig_detail.unique_locations = [_md['location']]
+                    if not getattr(jig_detail, 'unique_tray_types', None):
+                        jig_detail.unique_tray_types = [_md['tray_type']]
+                    if not getattr(jig_detail, 'unique_plating_stk_nos', None):
+                        jig_detail.unique_plating_stk_nos = [_md['plating_stk_no']]
+                    if not getattr(jig_detail, 'unique_polishing_stk_nos', None):
+                        jig_detail.unique_polishing_stk_nos = [_md['polishing_stk_no']]
+
+            # Fix tray_type / tray_capacity if still missing or 'No Tray Type'
+            _jd_batch_sp = getattr(jig_detail, 'batch_id', None)
+            if not getattr(jig_detail, 'tray_type', None) or jig_detail.tray_type in (None, 'No Tray Type'):
+                if _jd_batch_sp and _jd_batch_sp in batch_tray_map:
+                    _tt_sp, _tc_sp = batch_tray_map[_jd_batch_sp]
+                    jig_detail.tray_type = _tt_sp
+                    jig_detail.tray_capacity = self.get_dynamic_tray_capacity(_tt_sp)
+            # Fix polish_finish_name if NULL (Jig Loading lots not in TotalStockModel)
+            if not getattr(jig_detail, 'polish_finish_name', None):
+                if _jd_batch_sp and _jd_batch_sp in batch_polish_finish_map:
+                    jig_detail.polish_finish_name = batch_polish_finish_map[_jd_batch_sp]
+
+            # Explicitly resolve bath_number string by FK ID (union() loses select_related)
+            _bath_fk_id_sp = getattr(jig_detail, 'bath_numbers_id', None)
+            if _bath_fk_id_sp:
+                _bn_row_sp = BathNumbers.objects.filter(id=_bath_fk_id_sp).values('bath_number').first()
+                jig_detail.bath_number = _bn_row_sp['bath_number'] if _bn_row_sp else None
+            elif not getattr(jig_detail, 'bath_number', None) or jig_detail.bath_number == 'N/A':
+                _dd_sp = getattr(jig_detail, 'draft_data', {}) or {}
+                _bn_sp = _dd_sp.get('bath_number') or _dd_sp.get('nickel_bath_number') or _dd_sp.get('bath_no')
+                jig_detail.bath_number = str(_bn_sp) if _bn_sp else None
+
+            # Ensure list fields exist
+            for _fld in ['all_versions', 'all_vendors', 'all_locations', 'all_plating_stk_nos', 'all_polishing_stk_nos', 'all_plating_colors']:
+                if not hasattr(jig_detail, _fld) or getattr(jig_detail, _fld) is None:
+                    setattr(jig_detail, _fld, [])
+
+            # Guarantee unique_* fields are always initialized (template requires them)
+            for _ufld in ['unique_versions', 'unique_vendors', 'unique_locations', 'unique_tray_types',
+                          'unique_plating_stk_nos', 'unique_polishing_stk_nos']:
+                if not getattr(jig_detail, _ufld, None):
+                    _all = getattr(jig_detail, _ufld.replace('unique_', 'all_', 1), [])
+                    setattr(jig_detail, _ufld, sorted(list(set(_all))) if _all else [])
+
         # This converts the QuerySet to a list, so it MUST be last
         jig_unload = self.check_draft_status_for_jigs(jig_unload)
         
         # Add pagination with consistent logic as Inprocess Inspection
-        page_number = self.request.GET.get('page', 1)
+        page_number = self.request
         paginator = Paginator(jig_unload, 10)  # 10 items per page like Inprocess Inspection
         page_obj = paginator.get_page(page_number)
         
@@ -1142,13 +1463,27 @@ class JU_Zone_MainTable(TemplateView):
             except:
                 return None, None
 
+        # ✅ FAST PATH: jigs flagged as fully unloaded — Zone 2's JigCompleted uses
+        # last_process_module='Jig Unloading' (it does NOT have an unload_over field).
+        completed_jig_ids = set(
+            JigCompleted.objects.filter(last_process_module='Jig Unloading')
+            .values_list('jig_id', flat=True)
+        )
+        completed_lot_ids = set(
+            JigCompleted.objects.filter(last_process_module='Jig Unloading')
+            .values_list('lot_id', flat=True)
+        )
+        print(f"[ZONE2 FILTER] Fast-path jig_ids with last_process_module='Jig Unloading': {len(completed_jig_ids)}")
+
         # Get all unload records once
         unload_records = JigUnloadAfterTable.objects.filter(
             combine_lot_ids__isnull=False
         ).exclude(combine_lot_ids__exact=[]).values('combine_lot_ids')
         
         # Build unload mapping: jig_lot_id -> set of unloaded lot_ids
+        # Also collect bare lot_ids (stored when jig_lot_id was empty: "-LIDxxx" or plain "LIDxxx")
         unload_map = {}
+        bare_unloaded_lot_ids = set()  # lot_ids with no valid jig_id prefix
         for record in unload_records:
             if record['combine_lot_ids']:
                 for combined_id in record['combine_lot_ids']:
@@ -1156,25 +1491,58 @@ class JU_Zone_MainTable(TemplateView):
                     if len(parts) == 2 and parts[0] and parts[1]:
                         jig_id, lot_id = parts[0], parts[1]
                         unload_map.setdefault(jig_id, set()).add(lot_id)
+                    elif len(parts) == 2 and parts[1]:
+                        # empty prefix (e.g. "-LIDxxx") — store bare lot_id
+                        bare_unloaded_lot_ids.add(parts[1])
+                    elif combined_id and '-' not in combined_id:
+                        # plain lot_id (no prefix at all)
+                        bare_unloaded_lot_ids.add(combined_id)
         
         # Also check direct unloads
         direct_unloads = set(JigUnload_TrayId.objects.values_list('lot_id', flat=True))
+        bare_unloaded_lot_ids |= direct_unloads
         
         # Filter jigs
         filtered_jigs = []
         for jig in queryset:
-            if not (hasattr(jig, 'lot_id_quantities') and jig.lot_id_quantities):
-                filtered_jigs.append(jig)
+            # lot_id_quantities may not be set yet (second-pass loop runs after this filter),
+            # so fall back to reading directly from draft_data on the ORM object.
+            _jfq = getattr(jig, 'lot_id_quantities', None) or {}
+            if not _jfq:
+                _dd_f = getattr(jig, 'draft_data', {}) or {}
+                _jfq = _dd_f.get('lot_id_quantities', {}) if isinstance(_dd_f, dict) else {}
+            if not _jfq:
+                # Fallback to base lot_id if lot_id_quantities isn't present in draft_data
+                if getattr(jig, 'lot_id', None):
+                    _jfq = {jig.lot_id: getattr(jig, 'updated_lot_qty', 1)}
+                else:
+                    # Truly no lot data — keep the jig visible
+                    filtered_jigs.append(jig)
+                    continue
+
+            jig_lot_ids = set(_jfq.keys())
+            _jig_id_z2 = getattr(jig, 'jig_id', None) or jig.lot_id
+
+            # ✅ FAST PATH: check unload_over flag first
+            if _jig_id_z2 in completed_jig_ids or jig.lot_id in completed_lot_ids:
+                print(f"🚫 [ZONE2 FAST PATH] Hiding (unload_over=True): {jig.lot_id}")
                 continue
-                
-            jig_lot_ids = set(jig.lot_id_quantities.keys())
-            unloaded_lot_ids = unload_map.get(jig.jig_id, set()) | (jig_lot_ids & direct_unloads)
+
+            if jig_lot_ids and jig_lot_ids.issubset(completed_lot_ids):
+                print(f"🚫 [ZONE2 FAST PATH] Hiding - all lot_ids unloaded: {jig.lot_id}")
+                continue
+
+            # Fallback: combine_lot_ids scan
+            unloaded_lot_ids = (
+                unload_map.get(jig.jig_id, set())
+                | (jig_lot_ids & bare_unloaded_lot_ids)
+            )
             
             # Keep jig if ANY lot_id is NOT unloaded
             if not jig_lot_ids.issubset(unloaded_lot_ids):
                 filtered_jigs.append(jig)
             else:
-                print(f"🚫 Hiding fully unloaded jig: {jig.jig_id}")
+                print(f"🚫 [ZONE2 MAP PATH] Hiding fully unloaded jig: {jig.jig_id}")
         
         return filtered_jigs
 
@@ -1252,13 +1620,65 @@ def JU_Zone_get_model_details(request):
         
         # Fetch model details from ModelMaster and related tables
         # FIXED: Search by plating_stk_no since frontend sends full plating stock number
+        import re as _re
+        # Fetch model details — try multiple strategies to find ModelMasterCreation
         model_master_creation = ModelMasterCreation.objects.filter(
             plating_stk_no=model_number
         ).select_related(
             'model_stock_no__tray_type',
             'model_stock_no'
         ).first()
-        
+
+        # Fallback 1: search by numeric model_no (handles '1805' or '1805SAD02' → '1805')
+        if not model_master_creation:
+            _m = _re.match(r'^(\d+)', str(model_number))
+            if _m:
+                model_master_creation = ModelMasterCreation.objects.filter(
+                    model_stock_no__model_no=_m.group(1)
+                ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+                if model_master_creation:
+                    print(f"[DEBUG] JU_Zone_get_model_details fallback 1: found via model_no={_m.group(1)}")
+
+        # Fallback 2: derive from lot_id via TotalStockModel → batch_id
+        if not model_master_creation and lot_id:
+            _tsm = TotalStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+            if _tsm and _tsm.batch_id:
+                model_master_creation = ModelMasterCreation.objects.filter(
+                    id=_tsm.batch_id.id
+                ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+                if model_master_creation:
+                    print(f"[DEBUG] JU_Zone_get_model_details fallback 2: found via TotalStockModel lot_id={lot_id}")
+
+        # Fallback 3: derive from lot_id via RecoveryStockModel → batch_id
+        if not model_master_creation and lot_id:
+            try:
+                _rsm = RecoveryStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+                if _rsm and _rsm.batch_id:
+                    from Recovery_DP.models import RecoveryMasterCreation
+                    _rmc = RecoveryMasterCreation.objects.filter(
+                        id=_rsm.batch_id.id
+                    ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+                    if _rmc:
+                        model_master_creation = _rmc
+                        print(f"[DEBUG] JU_Zone_get_model_details fallback 3: found via RecoveryStockModel lot_id={lot_id}")
+            except Exception as _e3:
+                print(f"[DEBUG] JU_Zone_get_model_details fallback 3 error: {_e3}")
+
+        # Fallback 4: JigCompleted (Zone 2 Jig Loading lot IDs not in TotalStock/RecoveryStock)
+        if not model_master_creation and lot_id:
+            try:
+                from Jig_Loading.models import JigCompleted as _JC4
+                _jc4 = _JC4.objects.filter(lot_id=lot_id).first()
+                if _jc4 and _jc4.batch_id:
+                    _mmc4 = ModelMasterCreation.objects.filter(
+                        batch_id=_jc4.batch_id
+                    ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+                    if _mmc4:
+                        model_master_creation = _mmc4
+                        print(f"[DEBUG] JU_Zone_get_model_details fallback 4: found via JigCompleted batch '{_jc4.batch_id}'")
+            except Exception as _e4:
+                print(f"[DEBUG] JU_Zone_get_model_details fallback 4 error: {_e4}")
+
         # Also try to get from TotalStockModel to get plating_color using lot_id
         total_stock_model = None
         if lot_id:
@@ -1267,17 +1687,16 @@ def JU_Zone_get_model_details(request):
             ).select_related(
                 'plating_color'
             ).first()
-        
+
         # Fallback to plating_stk_no search if lot_id not provided or not found
         if not total_stock_model:
-            # FIXED: Search by ModelMasterCreation instance, not batch_id string
             if model_master_creation:
                 total_stock_model = TotalStockModel.objects.filter(
                     batch_id=model_master_creation
                 ).select_related(
                     'plating_color'
                 ).first()
-        
+
         if not model_master_creation:
             return JsonResponse({
                 'success': False,
@@ -1465,6 +1884,17 @@ def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
             
             if not total_stock:
                 print(f"[SMART POPULATE Zone2] ❌ No TotalStockModel found for lot_id: {lot_id}")
+                # Set jig_qr_id from JigCompleted.jig_id even when TotalStockModel missing
+                if not jig_unload_instance.jig_qr_id:
+                    _jc_fb_z2 = JigCompleted.objects.filter(
+                        draft_data__lot_id_quantities__has_key=lot_id
+                    ).first()
+                    if _jc_fb_z2:
+                        _jid_fb_z2 = getattr(_jc_fb_z2, 'jig_id', None)
+                        if _jid_fb_z2:
+                            jig_unload_instance.jig_qr_id = _jid_fb_z2
+                            jig_unload_instance.save(update_fields=['jig_qr_id'])
+                            print(f"[SMART POPULATE Zone2] ✅ Fallback: saved jig_qr_id={_jid_fb_z2}")
                 continue
                 
             print(f"[SMART POPULATE Zone2] ✅ Found TotalStockModel for lot_id: {lot_id}")
@@ -1472,12 +1902,12 @@ def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
             # Get JigCompleted data - CRITICAL for plating color
             jig_detail = None
             if jig_lot_id:
-                # Try to find JigCompleted using jig_lot_id field
-                jig_detail = JigCompleted.objects.filter(jig_lot_id=jig_lot_id).first()
+                # Try to find JigCompleted using lot_id field
+                jig_detail = JigCompleted.objects.filter(lot_id=jig_lot_id).first()
                 if not jig_detail:
-                    # Fallback: try with lot_id_quantities
+                    # Fallback: try with lot_id_quantities (stored inside draft_data JSON)
                     jig_detail = JigCompleted.objects.filter(
-                        lot_id_quantities__has_key=lot_id
+                        draft_data__lot_id_quantities__has_key=lot_id
                     ).first()
             
             if not total_stock.batch_id:
@@ -1531,13 +1961,14 @@ def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
                     jig_unload_instance.tray_type = total_stock.model_stock_no.tray_type.tray_type
                     jig_unload_instance.tray_capacity = total_stock.model_stock_no.tray_capacity
             
-            # 🧠 SMART: Get jig_qr_id from JigCompleted
+            # 🧠 SMART: Get jig_qr_id from JigCompleted.jig_id
             if jig_detail:
-                if hasattr(jig_detail, 'jig_qr_id'):
-                    jig_unload_instance.jig_qr_id = jig_detail.jig_qr_id
-                    print(f"[SMART POPULATE Zone2] ✅ Got jig_qr_id: {jig_detail.jig_qr_id} from JigCompleted")
+                _jig_id_val = getattr(jig_detail, 'jig_id', None)
+                if _jig_id_val:
+                    jig_unload_instance.jig_qr_id = _jig_id_val
+                    print(f"[SMART POPULATE Zone2] ✅ Got jig_qr_id from jig_id: {_jig_id_val}")
                 else:
-                    print(f"[SMART POPULATE Zone2] ⚠️ JigCompleted found but no jig_qr_id field")
+                    print(f"[SMART POPULATE Zone2] ⚠️ JigCompleted found but jig_id is empty")
             else:
                 print(f"[SMART POPULATE Zone2] ⚠️ No JigCompleted found for jig_lot_id: {jig_lot_id}")
             
@@ -1755,12 +2186,13 @@ def JU_Zone_save_jig_unload_tray_ids(request):
         jig_detail = None
         if cleaned_combined_lot_ids:
             for lot_id in cleaned_combined_lot_ids:
-                jig_detail = JigCompleted.objects.filter(lot_id_quantities__has_key=lot_id).first()
+                jig_detail = JigCompleted.objects.filter(draft_data__lot_id_quantities__has_key=lot_id).first()
                 if jig_detail:
                     break
-            if jig_detail and jig_detail.lot_id_quantities:
+            lot_id_quantities = (jig_detail.draft_data or {}).get('lot_id_quantities', {}) if jig_detail else {}
+            if jig_detail and lot_id_quantities:
                 for lot_id in cleaned_combined_lot_ids:
-                    expected_qty += int(jig_detail.lot_id_quantities.get(lot_id, 0))
+                    expected_qty += int(lot_id_quantities.get(lot_id, 0))
             missing_qty = max(expected_qty - total_case_qty, 0)
 
         # ✅ COLLECT ALL VALUES FROM INDIVIDUAL LOT_IDS (corrected lot_id extraction)
@@ -1965,7 +2397,7 @@ def JU_Zone_save_jig_unload_tray_ids(request):
                     for lot_id in cleaned_combined_lot_ids:
                         try:
                             jig_detail = JigCompleted.objects.filter(
-                                lot_id_quantities__has_key=lot_id
+                                draft_data__lot_id_quantities__has_key=lot_id
                             ).first()
                             if jig_detail and jig_detail.draft_data.get('plating_color'):
                                 # Convert string to Plating_Color object
@@ -2046,7 +2478,7 @@ def JU_Zone_save_jig_unload_tray_ids(request):
                         for lot_id in cleaned_combined_lot_ids:
                             try:
                                 jig_detail = JigCompleted.objects.filter(
-                                    lot_id_quantities__has_key=lot_id
+                                    draft_data__lot_id_quantities__has_key=lot_id
                                 ).first()
                                 if jig_detail and jig_detail.draft_data.get('plating_color'):
                                     # Convert string to Plating_Color object
@@ -2079,6 +2511,26 @@ def JU_Zone_save_jig_unload_tray_ids(request):
                 except Exception as e:
                     logger.error(f"Error creating JigUnloadAfterTable: {str(e)}")
                     return JsonResponse({'success': False, 'error': f'Failed to create unload record: {str(e)}'})
+
+        # Fallback: if all IDs were duplicates (already in DB), find the existing record
+        if not unload_lot_id:
+            _search_lot_ids = [
+                fid.rsplit('-', 1)[-1] if '-' in fid else fid
+                for fid in (final_formatted_combined_lot_ids or list(all_lot_ids_from_trays))
+            ]
+            for _record in JigUnloadAfterTable.objects.filter(
+                combine_lot_ids__isnull=False
+            ).exclude(combine_lot_ids__exact=[]).order_by('-id'):
+                if _record.combine_lot_ids:
+                    _stored_lids = [
+                        cid.rsplit('-', 1)[-1] if '-' in cid else cid
+                        for cid in _record.combine_lot_ids
+                    ]
+                    if any(sl in _stored_lids for sl in _search_lot_ids):
+                        jig_unload_fter_instance = _record
+                        unload_lot_id = str(_record.lot_id)
+                        print(f"[SMART SAVE] ♻️ Re-using existing record id={_record.id} (all IDs already stored)")
+                        break
 
         if not unload_lot_id:
             return JsonResponse({'success': False, 'error': 'Failed to generate unload_lot_id'})
@@ -2125,7 +2577,7 @@ def JU_Zone_save_jig_unload_tray_ids(request):
             try:
                 jig_detail = None
                 for lot_id in cleaned_combined_lot_ids:
-                    potential_jig_details = JigCompleted.objects.filter(lot_id_quantities__has_key=lot_id)
+                    potential_jig_details = JigCompleted.objects.filter(draft_data__lot_id_quantities__has_key=lot_id)
                     if potential_jig_details.exists():
                         jig_detail = potential_jig_details.first()
                         break
@@ -2141,9 +2593,11 @@ def JU_Zone_save_jig_unload_tray_ids(request):
         # Update Inprocess Inspection completed table records
         if cleaned_combined_lot_ids:
             try:
+                from django.db.models import Q
                 # Find all JigCompleted records that contain any of the unloaded lot_ids
                 affected_jig_details = JigCompleted.objects.filter(
-                    lot_id_quantities__has_any_keys=cleaned_combined_lot_ids
+                    Q(draft_data__lot_id_quantities__has_any_keys=cleaned_combined_lot_ids) |
+                    Q(lot_id__in=cleaned_combined_lot_ids)
                 )
                 
                 # Update last_process_module to "Jig Unloading" for all affected records
@@ -2153,7 +2607,7 @@ def JU_Zone_save_jig_unload_tray_ids(request):
                 for jig_detail in affected_jig_details:
                     try:
                         # Get all remaining lot_ids in this jig after unloading
-                        remaining_lot_ids = list(jig_detail.lot_id_quantities.keys())
+                        remaining_lot_ids = list((jig_detail.draft_data or {}).get('lot_id_quantities', {}).keys())
                         
                         # Remove the unloaded lot_ids from remaining_lot_ids
                         remaining_lot_ids = [lot_id for lot_id in remaining_lot_ids if lot_id not in cleaned_combined_lot_ids]
@@ -2200,18 +2654,19 @@ def JU_Zone_save_jig_unload_tray_ids(request):
         # This implements the user's requirement: "unload func is to release the jig qr id and making it free to use for next cycle so once unloaded - is_loaded - will be unchecked"
         if jig_lot_id and jig_unload_fter_instance:
             try:
-                # Mark the corresponding JigCompleted record as unloaded (unload_over=True)
+                from django.db.models import Q
+                # Mark the corresponding JigCompleted record as unloaded
                 jig_details_to_release = JigCompleted.objects.filter(
-                    lot_id_quantities__has_any_keys=cleaned_combined_lot_ids,
-                    unload_over=False
-                )
+                    Q(draft_data__lot_id_quantities__has_any_keys=cleaned_combined_lot_ids) |
+                    Q(lot_id__in=cleaned_combined_lot_ids)
+                ).exclude(last_process_module='Jig Unloading')
                 
                 released_jig_details_count = 0
                 jig_qr_ids_to_release = set()  # Collect all jig QR IDs that need to be released
                 
                 for jig_detail in jig_details_to_release:
-                    jig_detail.unload_over = True
-                    jig_detail.save(update_fields=['unload_over'])
+                    jig_detail.last_process_module = 'Jig Unloading'
+                    jig_detail.save(update_fields=['last_process_module'])
                     released_jig_details_count += 1
                     
                     # Collect jig QR ID for release
@@ -2496,6 +2951,19 @@ def JU_Zone_validate_tray_id(request):
         elif tray.delink_tray:
             print(f"[DEBUG] ✅ Tray available: delinked and reusable")
             return JsonResponse({'success': True, 'message': 'Tray available - delinked'})
+        elif lot_id:
+            # For Jig Unloading: tray assigned to the current lot being unloaded is VALID
+            lot_ids_to_check = [lid.strip() for lid in lot_id.split(',')] if ',' in lot_id else [lot_id.strip()]
+            tray_lot_str = str(tray.lot_id).strip()
+            if tray_lot_str in lot_ids_to_check:
+                print(f"[DEBUG] ✅ Tray valid for unloading: assigned to current lot {tray.lot_id}")
+                return JsonResponse({'success': True, 'message': f'Tray valid - assigned to current lot {tray.lot_id}'})
+            else:
+                print(f"[DEBUG] ❌ Tray assigned to a different lot: {tray.lot_id}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Tray is already assigned to a different lot {tray.lot_id}.'
+                })
         else:
             print(f"[DEBUG] ❌ Tray not available: already assigned to lot_id {tray.lot_id}")
             return JsonResponse({
@@ -2562,7 +3030,7 @@ def JU_Zone_validate_tray_id_dynamic(request):
 
                     # 2) Try JigCompleted for tray_type or capacity
                     if not determined_tray_type:
-                        jd = JigCompleted.objects.filter(lot_id_quantities__has_key=lot_id_for_capacity).first()
+                        jd = JigCompleted.objects.filter(draft_data__lot_id_quantities__has_key=lot_id_for_capacity).first()
                         if jd:
                             if getattr(jd, 'tray_type', None):
                                 determined_tray_type = jd.tray_type
@@ -3036,25 +3504,99 @@ class JU_Zone_Completedtable(TemplateView):
 
         print(f"[DEBUG] Zone 2 Completed - Date filter: {from_date} to {to_date}")
 
-        # ✅ CHANGE: Fetch from JigCompleted instead of JigUnloadAfterTable
-        # Filter completed jigs with date filtering
-        completed_jigs = JigCompleted.objects.filter(
-            updated_at__date__gte=from_date,
-            updated_at__date__lte=to_date
-        ).select_related('user').order_by('-updated_at')
-        
-        print(f"[DEBUG] Filtered completed_jigs count: {completed_jigs.count()}")
+        # DEBUG: Check total records in JigUnloadAfterTable
+        total_unload_records = JigUnloadAfterTable.objects.all().count()
+        print(f"[DEBUG] Total JigUnloadAfterTable records: {total_unload_records}")
 
-        # ✅ ENHANCED: Get all model numbers from lot_ids for bulk processing
+        # Zone 2 = all non-IPS plating colors; also include null plating_color for records
+        # that failed FK population during save_jig_unload_tray_ids.
+        from django.db.models import Q
+        zone2_color_ids = list(Plating_Color.objects.exclude(plating_color='IPS').values_list('id', flat=True))
+        print(f"[DEBUG] Zone 2 Completed - Allowed color IDs (non-IPS): {zone2_color_ids}")
+
+        completed_unloads_qs = JigUnloadAfterTable.objects.filter(
+            Q(plating_color_id__in=zone2_color_ids) | Q(plating_color__isnull=True),
+            Un_loaded_date_time__date__gte=from_date,
+            Un_loaded_date_time__date__lte=to_date
+        ).select_related(
+            'plating_color', 'polish_finish', 'version'
+        ).prefetch_related('location').order_by('-Un_loaded_date_time')
+
+        # ✅ Post-filter: for null plating_color records, verify they are non-IPS
+        # by tracing combine_lot_ids → TotalStockModel → plating_color.
+        ips_color_ids = set(Plating_Color.objects.filter(plating_color='IPS').values_list('id', flat=True))
+
+        def _extract_lot_id_z2(combined):
+            if not combined:
+                return combined
+            s = combined.lstrip('-')
+            if s.startswith('JLOT-') and '-' in s[5:]:
+                return s.rsplit('-', 1)[1]
+            return s
+
+        def _is_zone2_record(rec):
+            """Return True if the record belongs to Zone 2 (non-IPS)."""
+            if rec.plating_color:
+                return rec.plating_color_id not in ips_color_ids
+            # plating_color is null — resolve from combine_lot_ids
+            if rec.combine_lot_ids:
+                for _cid in rec.combine_lot_ids:
+                    _lid = _extract_lot_id_z2(_cid)
+                    _tsm = TotalStockModel.objects.filter(lot_id=_lid).select_related('plating_color').first()
+                    if _tsm and _tsm.plating_color:
+                        if _tsm.plating_color.id not in ips_color_ids:
+                            # Backfill FK for faster future reads
+                            try:
+                                rec.plating_color = _tsm.plating_color
+                                rec.save(update_fields=['plating_color'])
+                                print(f"[ZONE2 FIX] ✅ Backfilled plating_color for record {rec.id} from lot {_lid}")
+                            except Exception as _bfe:
+                                print(f"[ZONE2 FIX] ⚠️ Backfill failed: {_bfe}")
+                            return True
+                        else:
+                            return False  # It's IPS — belongs to Zone 1
+                    # Try JigCompleted → batch_id → ModelMasterCreation.plating_color
+                    _jc = JigCompleted.objects.filter(
+                        draft_data__lot_id_quantities__has_key=_lid
+                    ).first()
+                    if _jc and _jc.batch_id:
+                        _mmc = ModelMasterCreation.objects.filter(
+                            batch_id=_jc.batch_id
+                        ).values('plating_color').first()
+                        if _mmc:
+                            _pc_name = _mmc.get('plating_color', '')
+                            return _pc_name != 'IPS'
+            # No color info — include by default (better to show than hide)
+            return True
+
+        completed_unloads = [rec for rec in completed_unloads_qs if _is_zone2_record(rec)]
+
+        print(f"[DEBUG] Filtered completed_unloads count: {len(completed_unloads)}")
+        for record in completed_unloads:
+            print(f"[DEBUG] Record {record.id}: plating_color={record.plating_color}, plating_color_id={record.plating_color_id}")
+
+        # ✅ ENHANCED: Get all model numbers from combine_lot_ids for bulk processing
         all_model_numbers = set()
         all_lot_ids = set()
-        
-        for jig in completed_jigs:
-            all_lot_ids.add(jig.lot_id)
-            # Get model number from TotalStockModel
-            stock_model, is_recovery, batch_model_class = self.get_stock_model_data(jig.lot_id)
-            if stock_model and hasattr(stock_model, 'model_stock_no') and stock_model.model_stock_no:
-                all_model_numbers.add(stock_model.model_stock_no.model_no)
+
+        def _extract_lot_id(combined):
+            """Normalise combine_lot_ids entry to a plain lot_id.
+            Handles: 'JLOT-xxx-LIDyyy' → 'LIDyyy', '-LIDyyy' → 'LIDyyy', 'LIDyyy' → 'LIDyyy'."""
+            if not combined:
+                return combined
+            s = combined.lstrip('-')
+            if s.startswith('JLOT-') and '-' in s[5:]:
+                return s.rsplit('-', 1)[1]
+            return s
+
+        for unload in completed_unloads:
+            if unload.combine_lot_ids:
+                all_lot_ids.update(unload.combine_lot_ids)
+                for _raw_cid in unload.combine_lot_ids:
+                    _actual_lid = _extract_lot_id(_raw_cid)
+                    stock_model, is_recovery, batch_model_class = self.get_stock_model_data(_actual_lid)
+                    if stock_model and hasattr(stock_model, 'model_stock_no') and stock_model.model_stock_no:
+                        all_model_numbers.add(stock_model.model_stock_no.model_no)
 
         print(f"[DEBUG] Found {len(all_model_numbers)} unique model numbers: {all_model_numbers}")
         print(f"[DEBUG] Found {len(all_lot_ids)} unique lot IDs")
@@ -3099,214 +3641,312 @@ class JU_Zone_Completedtable(TemplateView):
                             print(f"[DEBUG] Error processing image {img.id}: {img_err}")
                             continue
                 
-                model_images_map[model_master.model_no] = {
-                    'images': image_urls,
-                    'first_image': first_image
-                }
-                print(f"[DEBUG] Model {model_master.model_no}: {len(image_urls)} images, first: {first_image}")
+                # Only store if we have images (preserve empty until fallback below)
+                if image_urls:
+                    model_images_map[model_master.model_no] = {
+                        'images': image_urls,
+                        'first_image': first_image
+                    }
+                    print(f"[DEBUG] Model {model_master.model_no}: {len(image_urls)} images, first: {first_image}")
 
-        # ✅ ENHANCED: Process each jig record with comprehensive data
-        table_data = []
-        for idx, jig in enumerate(completed_jigs):
-            print(f"\n[DEBUG] ===== PROCESSING RECORD {idx + 1} =====")
-            print(f"[DEBUG] Jig lot_id: {jig.lot_id}")
-            print(f"[DEBUG] Jig ID: {jig.jig_id}")
-            
-            # Get stock model data for this jig
-            stock_model, is_recovery, batch_model_class = self.get_stock_model_data(jig.lot_id)
-            
-            if not stock_model:
-                print(f"[DEBUG] No stock model found for lot_id: {jig.lot_id}, skipping")
-                continue
-            
-            # Use jig data directly
-            jig_qr_id = jig.jig_id
-            unloading_remarks = getattr(jig, 'remarks', None) or getattr(jig, 'unloading_remarks', None)
-            
-            print(f"[DEBUG] Using jig_qr_id: {jig_qr_id}, remarks: {unloading_remarks}")
+            # Fallback: for numeric model_nos still missing images, scan ModelMaster variants by plating_stk_no
+            missing_images = all_model_numbers - set(model_images_map.keys())
+            if missing_images:
+                print(f"[DEBUG] Searching plating_stk_no variants for models without images: {missing_images}")
+                # Collect plating_stk_nos that share the numeric prefix
+                plating_candidates = ModelMaster.objects.filter(
+                    plating_stk_no__isnull=False
+                ).exclude(plating_stk_no='').prefetch_related('images')
+                for mm in plating_candidates:
+                    if not mm.plating_stk_no:
+                        continue
+                    # Check if this plating_stk_no starts with any missing numeric model_no
+                    for numeric_no in list(missing_images):
+                        if str(mm.plating_stk_no).startswith(numeric_no) and mm.images.exists():
+                            img_list = list(mm.images.all())
+                            image_urls = []
+                            first_image = "/static/assets/images/imagePlaceholder.png"
+                            for img in img_list:
+                                if img.master_image:
+                                    try:
+                                        img_url = img.master_image.url if hasattr(img.master_image, 'url') else str(img.master_image)
+                                        image_urls.append(img_url)
+                                        if first_image == "/static/assets/images/imagePlaceholder.png":
+                                            first_image = img_url
+                                    except Exception:
+                                        continue
+                            if image_urls:
+                                model_images_map[numeric_no] = {'images': image_urls, 'first_image': first_image}
+                                missing_images.discard(numeric_no)
+                                print(f"[DEBUG] Fallback: mapped numeric '{numeric_no}' via plating_stk_no '{mm.plating_stk_no}'")
+                                break  # Found images for this numeric_no
 
-            # Get location from stock model
-            location_display = "N/A"
-            location_names = []
-            
-            try:
-                if stock_model.location.exists():
-                    stock_locations = list(stock_model.location.all())
-                    location_names = [loc.location_name for loc in stock_locations if loc]
-                    location_display = ", ".join(location_names) if location_names else "N/A"
-                    print(f"[DEBUG] Found locations from TotalStockModel: {location_names}")
-                elif stock_model.batch_id and hasattr(stock_model.batch_id, 'location') and stock_model.batch_id.location:
-                    location_names = [stock_model.batch_id.location.location_name]
-                    location_display = stock_model.batch_id.location.location_name
-                    print(f"[DEBUG] Found location from batch: {location_display}")
-                            
-            except Exception as e:
-                print(f"[DEBUG] Error processing location: {e}")
-                location_display = "N/A"
-                location_names = ["N/A"]
-                
-            # Get tray info from stock model
-            tray_type_display = "N/A"
-            raw_tray_capacity = 0
-            
-            if stock_model.model_stock_no:
-                if stock_model.model_stock_no.tray_type:
-                    tray_type_display = stock_model.model_stock_no.tray_type.tray_type
-                    print(f"[DEBUG] Found tray_type from TotalStockModel: {tray_type_display}")
-                if stock_model.model_stock_no.tray_capacity:
-                    raw_tray_capacity = stock_model.model_stock_no.tray_capacity
-                    print(f"[DEBUG] Found raw tray_capacity from TotalStockModel: {raw_tray_capacity}")
-            
-            # Use get_dynamic_tray_capacity method for proper Normal tray handling
-            if tray_type_display != "N/A":
-                dynamic_tray_capacity = self.get_dynamic_tray_capacity(tray_type_display)
-                tray_capacity = dynamic_tray_capacity if dynamic_tray_capacity > 0 else (raw_tray_capacity if raw_tray_capacity > 0 else 1)
-                print(f"[DEBUG] Zone 2 - Dynamic tray capacity for '{tray_type_display}': {dynamic_tray_capacity} (was: {raw_tray_capacity})")
-            else:
-                tray_capacity = raw_tray_capacity if raw_tray_capacity > 0 else 1
-                print(f"[DEBUG] Zone 2 - Using raw tray capacity: {tray_capacity}")
-                
-            # Get total case quantity from jig data or stock model
-            total_case_qty = jig.updated_lot_qty or getattr(stock_model, 'total_stock', 0) or 0
-            no_of_trays = math.ceil(total_case_qty / tray_capacity) if tray_capacity > 0 else 0
-            
-            print(f"[DEBUG] Final tray info - type: {tray_type_display}, capacity: {tray_capacity}, total_qty: {total_case_qty}, no_of_trays: {no_of_trays}")
-
-            # Get stock numbers from batch model
-            all_plating_stk_nos = []
-            all_polish_stk_nos = []
-            all_versions = []
-            
-            if stock_model.batch_id:
-                batch = stock_model.batch_id
-                if hasattr(batch, 'plating_stk_no') and batch.plating_stk_no:
-                    all_plating_stk_nos = [batch.plating_stk_no]
-                if hasattr(batch, 'polishing_stk_no') and batch.polishing_stk_no:
-                    all_polish_stk_nos = [batch.polishing_stk_no]
-                if hasattr(batch, 'version') and batch.version:
-                    version_internal = getattr(batch.version, 'version_internal', str(batch.version))
-                    all_versions = [version_internal]
-            
-            # Unique versions for backward compatibility
-            unique_plating_stk_nos = list(set(all_plating_stk_nos)) if all_plating_stk_nos else []
-            unique_polish_stk_nos = list(set(all_polish_stk_nos)) if all_polish_stk_nos else []
-            unique_versions = list(set(all_versions)) if all_versions else []
-
-            # Model data processing
-            model_images = {}
-            model_colors = {}
-            no_of_model_cases = []
-            lot_id_quantities = {}
-            
-            if stock_model.model_stock_no:
-                model_no = stock_model.model_stock_no.model_no
-                no_of_model_cases.append(model_no)
-                lot_id_quantities[jig.lot_id] = total_case_qty
-                
-                # Use global color mapping
-                model_colors[model_no] = global_model_colors.get(model_no, "#cccccc")
-                
-                # Get model images from the pre-built map
-                if model_no in model_images_map:
-                    model_images[model_no] = model_images_map[model_no]
-                else:
-                    model_images[model_no] = {
+            # Ensure every model_no has an entry (even if empty)
+            for model_no in all_model_numbers:
+                if model_no not in model_images_map:
+                    model_images_map[model_no] = {
                         'images': [],
                         'first_image': "/static/assets/images/imagePlaceholder.png"
                     }
 
-            # Remove duplicates while preserving order
+        # ✅ ENHANCED: Process each unload record using saved list fields (mirroring Zone 1)
+        table_data = []
+        for idx, unload in enumerate(completed_unloads):
+            print(f"\n[DEBUG] ===== PROCESSING RECORD {idx + 1} =====")
+            print(f"[DEBUG] Unload lot_id: {unload.lot_id}")
+            print(f"[DEBUG] combine_lot_ids: {unload.combine_lot_ids}")
+
+            # Get jig_qr_id — use DB field, then parse from combine_lot_ids, then JigCompleted lookup
+            jig_qr_id = unload.jig_qr_id or ''
+            unloading_remarks = None
+            if not jig_qr_id and unload.combine_lot_ids:
+                for _cid_z2 in unload.combine_lot_ids:
+                    # combine_lot_ids format: "JLOT-xxx-LIDyyy" → rsplit gives ("JLOT-xxx", "LIDyyy")
+                    if _cid_z2 and '-' in _cid_z2:
+                        _parts_z2 = _cid_z2.rsplit('-', 1)
+                        _parsed_jig_id_z2 = _parts_z2[0] if len(_parts_z2) == 2 else None
+                        _parsed_lot_id_z2 = _parts_z2[1] if len(_parts_z2) == 2 else _cid_z2
+                        if _parsed_jig_id_z2 and _parsed_jig_id_z2.startswith('JLOT-'):
+                            jig_qr_id = _parsed_jig_id_z2
+                            # Also fetch remarks via parsed lot_id
+                            _jc_z2 = JigCompleted.objects.filter(
+                                draft_data__lot_id_quantities__has_key=_parsed_lot_id_z2
+                            ).first()
+                            if _jc_z2:
+                                unloading_remarks = getattr(_jc_z2, 'remarks', None) or getattr(_jc_z2, 'unloading_remarks', None)
+                            break
+                        elif _parsed_lot_id_z2:
+                            # Broken format '-LIDyyy': no JLOT prefix — look up JigCompleted via extracted lot_id
+                            _actual_lot_z2 = _extract_lot_id(_cid_z2)
+                            _jc_z2_fb = JigCompleted.objects.filter(
+                                draft_data__lot_id_quantities__has_key=_actual_lot_z2
+                            ).first()
+                            if _jc_z2_fb:
+                                jig_qr_id = getattr(_jc_z2_fb, 'jig_id', None) or ''
+                                unloading_remarks = getattr(_jc_z2_fb, 'remarks', None) or getattr(_jc_z2_fb, 'unloading_remarks', None)
+                            break
+
+            # ✅ FINAL FALLBACK: plain lot IDs (no dash) — query JigCompleted directly
+            if not jig_qr_id and unload.combine_lot_ids:
+                for _cid_plain_z2 in unload.combine_lot_ids:
+                    _lid_plain_z2 = _extract_lot_id(_cid_plain_z2) if _cid_plain_z2 else None
+                    if not _lid_plain_z2:
+                        continue
+                    _jc_plain_z2 = JigCompleted.objects.filter(
+                        draft_data__lot_id_quantities__has_key=_lid_plain_z2
+                    ).first()
+                    if not _jc_plain_z2:
+                        _jc_plain_z2 = JigCompleted.objects.filter(lot_id=_lid_plain_z2).first()
+                    if _jc_plain_z2:
+                        _jid_z2 = getattr(_jc_plain_z2, 'jig_id', None)
+                        if _jid_z2:
+                            jig_qr_id = _jid_z2
+                            unloading_remarks = (getattr(_jc_plain_z2, 'remarks', None)
+                                                 or getattr(_jc_plain_z2, 'unloading_remarks', None))
+                            print(f"[ZONE2 FIX] ✅ jig_qr_id resolved from JigCompleted: {jig_qr_id}")
+                            break
+                        if not unloading_remarks:
+                            unloading_remarks = (getattr(_jc_plain_z2, 'remarks', None)
+                                                 or getattr(_jc_plain_z2, 'unloading_remarks', None))
+
+            # Backfill jig_qr_id to DB so future renders skip the lookup
+            if jig_qr_id and not unload.jig_qr_id:
+                try:
+                    unload.jig_qr_id = jig_qr_id
+                    unload.save(update_fields=['jig_qr_id'])
+                    print(f"[ZONE2 FIX] ✅ Backfilled jig_qr_id={jig_qr_id} for record {unload.id}")
+                except Exception as _bjid_z2:
+                    print(f"[ZONE2 FIX] ⚠️ Backfill jig_qr_id failed: {_bjid_z2}")
+
+            if jig_qr_id and not unloading_remarks:
+                _jc_rem = JigCompleted.objects.filter(jig_id=jig_qr_id).first()
+                if _jc_rem:
+                    unloading_remarks = getattr(_jc_rem, 'remarks', None) or getattr(_jc_rem, 'unloading_remarks', None)
+
+            # Handle location (many-to-many) with fallback from TotalStockModel
+            try:
+                locations = unload.location.all()
+                location_names = [loc.location_name for loc in locations]
+                location_display = ", ".join(location_names) if location_names else "N/A"
+            except Exception as e:
+                print(f"[DEBUG] Error processing location: {e}")
+                location_display = "N/A"
+                location_names = []
+            # Fallback: look up location from TotalStockModel via combine_lot_ids
+            if not location_names and unload.combine_lot_ids:
+                for _cid_loc in unload.combine_lot_ids:
+                    _actual_loc = _extract_lot_id(_cid_loc)
+                    _tsm_loc = TotalStockModel.objects.filter(lot_id=_actual_loc).prefetch_related('location').first()
+                    if _tsm_loc and _tsm_loc.location.exists():
+                        location_names = [loc.location_name for loc in _tsm_loc.location.all()]
+                        location_display = ", ".join(location_names)
+                        break
+                    elif _tsm_loc and _tsm_loc.batch_id and getattr(_tsm_loc.batch_id, 'location', None):
+                        location_names = [_tsm_loc.batch_id.location.location_name]
+                        location_display = location_names[0]
+                        break
+
+            # ✅ NEW FALLBACK: JigCompleted → batch_id → ModelMasterCreation.location
+            if not location_names and unload.combine_lot_ids:
+                for _cid_loc2 in unload.combine_lot_ids:
+                    _actual_loc2 = _extract_lot_id(_cid_loc2)
+                    _jc_loc = JigCompleted.objects.filter(
+                        draft_data__lot_id_quantities__has_key=_actual_loc2
+                    ).first()
+                    if not _jc_loc:
+                        _jc_loc = JigCompleted.objects.filter(lot_id=_actual_loc2).first()
+                    if _jc_loc and _jc_loc.batch_id:
+                        _mmc_loc = ModelMasterCreation.objects.filter(
+                            batch_id=_jc_loc.batch_id
+                        ).select_related('location').first()
+                        if _mmc_loc and _mmc_loc.location:
+                            location_names = [_mmc_loc.location.location_name]
+                            location_display = location_names[0]
+                            print(f"[ZONE2 COMPLETED] ✅ Location via JigCompleted→MMC: {location_display}")
+                            break
+                    if jig_qr_id:
+                        _jc_jid = JigCompleted.objects.filter(jig_id=jig_qr_id).first()
+                        if _jc_jid and _jc_jid.batch_id:
+                            _mmc_jid = ModelMasterCreation.objects.filter(
+                                batch_id=_jc_jid.batch_id
+                            ).select_related('location').first()
+                            if _mmc_jid and _mmc_jid.location:
+                                location_names = [_mmc_jid.location.location_name]
+                                location_display = location_names[0]
+                                print(f"[ZONE2 COMPLETED] ✅ Location via jig_id→JigCompleted→MMC: {location_display}")
+                                break
+
+            # Tray info using dynamic capacity
+            tray_type_display = unload.tray_type or "N/A"
+            if tray_type_display != "N/A":
+                dynamic_tray_capacity = self.get_dynamic_tray_capacity(tray_type_display)
+                tray_capacity = dynamic_tray_capacity if dynamic_tray_capacity > 0 else (unload.tray_capacity if unload.tray_capacity else 1)
+            else:
+                tray_capacity = unload.tray_capacity if unload.tray_capacity else 1
+
+            total_case_qty = unload.total_case_qty if unload.total_case_qty else 0
+            no_of_trays = math.ceil(total_case_qty / tray_capacity) if tray_capacity > 0 else 0
+
+            # ✅ Use saved list fields directly from JigUnloadAfterTable
+            saved_plating_list = getattr(unload, 'plating_stk_no_list', []) or []
+            saved_polish_list = getattr(unload, 'polish_stk_no_list', []) or []
+            saved_version_list = getattr(unload, 'version_list', []) or []
+
+            all_plating_stk_nos = list(saved_plating_list) if saved_plating_list else []
+            all_polish_stk_nos = list(saved_polish_list) if saved_polish_list else []
+            all_versions = list(saved_version_list) if saved_version_list else []
+
+            # Fallback: use single field values if no saved lists
+            if not all_plating_stk_nos and unload.plating_stk_no:
+                all_plating_stk_nos = [unload.plating_stk_no]
+            if not all_polish_stk_nos and unload.polish_stk_no:
+                all_polish_stk_nos = [unload.polish_stk_no]
+            if not all_versions and unload.version:
+                version_val = getattr(unload.version, 'version_internal', str(unload.version))
+                all_versions = [version_val]
+
+            unique_plating_stk_nos = list(set(all_plating_stk_nos)) if all_plating_stk_nos else []
+            unique_polish_stk_nos = list(set(all_polish_stk_nos)) if all_polish_stk_nos else []
+            unique_versions = list(set(all_versions)) if all_versions else []
+
+            # ✅ Model data from combine_lot_ids (same as Zone 1)
+            model_images = {}
+            model_colors = {}
+            no_of_model_cases = []
+            lot_id_quantities = {}
+
+            if unload.combine_lot_ids:
+                for lot_id in unload.combine_lot_ids:
+                    lot_id = _extract_lot_id(lot_id)
+                    try:
+                        stock_model, is_recovery, batch_model_class = self.get_stock_model_data(lot_id)
+                        if stock_model and hasattr(stock_model, 'model_stock_no') and stock_model.model_stock_no:
+                            model_no = stock_model.model_stock_no.model_no
+                            no_of_model_cases.append(model_no)
+                            if hasattr(stock_model, 'total_stock'):
+                                lot_id_quantities[lot_id] = stock_model.total_stock
+                            elif hasattr(stock_model, 'stock_qty'):
+                                lot_id_quantities[lot_id] = stock_model.stock_qty
+                            else:
+                                lot_id_quantities[lot_id] = 0
+                            model_colors[model_no] = global_model_colors.get(model_no, '#cccccc')
+                            if model_no in model_images_map:
+                                model_images[model_no] = model_images_map[model_no]
+                            else:
+                                model_images[model_no] = {'images': [], 'first_image': "/static/assets/images/imagePlaceholder.png"}
+                    except Exception as e:
+                        print(f"[DEBUG] Error processing lot_id {lot_id}: {e}")
+                        continue
+
+            # If no model data from combine_lot_ids, fall back using plating_stk_no
+            if not no_of_model_cases and all_plating_stk_nos:
+                _mk_fb = all_plating_stk_nos[0]
+                no_of_model_cases = [_mk_fb]
+                lot_id_quantities = {unload.lot_id: total_case_qty}
+                model_colors[_mk_fb] = global_model_colors.get(_mk_fb, '#cccccc')
+                model_images[_mk_fb] = model_images_map.get(_mk_fb, {'images': [], 'first_image': "/static/assets/images/imagePlaceholder.png"})
+
             no_of_model_cases = list(dict.fromkeys(no_of_model_cases))
-            
+
             print(f"[DEBUG] ===== FINAL VALUES SUMMARY =====")
             print(f"[DEBUG] ALL plating_stk_nos ({len(all_plating_stk_nos)}): {all_plating_stk_nos}")
             print(f"[DEBUG] ALL polish_stk_nos ({len(all_polish_stk_nos)}): {all_polish_stk_nos}")
             print(f"[DEBUG] ALL versions ({len(all_versions)}): {all_versions}")
-            print(f"[DEBUG] UNIQUE plating_stk_nos ({len(unique_plating_stk_nos)}): {unique_plating_stk_nos}")
-            print(f"[DEBUG] UNIQUE polish_stk_nos ({len(unique_polish_stk_nos)}): {unique_polish_stk_nos}")
-            print(f"[DEBUG] UNIQUE versions ({len(unique_versions)}): {unique_versions}")
 
-            # Extract foreign key display values
+            # FK display values
             plating_color_display = "N/A"
-            if stock_model.plating_color:
-                plating_color_display = getattr(stock_model.plating_color, 'plating_color', str(stock_model.plating_color))
-            
-            # Get polish finish from stock model
+            if unload.plating_color:
+                plating_color_display = getattr(unload.plating_color, 'plating_color', str(unload.plating_color))
+
             polish_finish_display = "N/A"
-            if stock_model.model_stock_no and stock_model.model_stock_no.polish_finish:
-                polish_finish_display = stock_model.model_stock_no.polish_finish.polish_finish
-                print(f"[DEBUG] Found polish_finish from TotalStockModel: {polish_finish_display}")
-            
-            # Use the first version from all_versions or fallback
+            if unload.polish_finish:
+                polish_finish_display = getattr(unload.polish_finish, 'polish_finish', str(unload.polish_finish))
+
             version_display = all_versions[0] if all_versions else "N/A"
 
-            # Create comprehensive table data entry
             table_entry = {
-                # Basic fields
-                'id': jig.id,
-                'lot_id': jig.lot_id,
+                'id': unload.id,
+                'lot_id': unload.lot_id,
                 'jig_qr_id': jig_qr_id,
-                'combine_lot_ids': [jig.lot_id],  # Single lot for completed jigs
-                'total_case_qty': total_case_qty,
-                'missing_qty': 0,  # Default for completed
-                
-                # Stock numbers
-                'plating_stk_no': all_plating_stk_nos[0] if all_plating_stk_nos else "N/A",
-                'polish_stk_no': all_polish_stk_nos[0] if all_polish_stk_nos else "N/A",
-                
-                # All values
+                'combine_lot_ids': unload.combine_lot_ids,
+                'total_case_qty': unload.total_case_qty,
+                'missing_qty': unload.missing_qty,
+                'plating_stk_no': all_plating_stk_nos[0] if all_plating_stk_nos else (unload.plating_stk_no or "N/A"),
+                'polish_stk_no': all_polish_stk_nos[0] if all_polish_stk_nos else (unload.polish_stk_no or "N/A"),
                 'all_plating_stk_nos': all_plating_stk_nos,
                 'all_polishing_stk_nos': all_polish_stk_nos,
                 'all_versions': all_versions,
-                
-                # Unique values
                 'unique_plating_stk_nos': unique_plating_stk_nos,
                 'unique_polishing_stk_nos': unique_polish_stk_nos,
                 'unique_versions': unique_versions,
-                
-                # Foreign key displays
                 'plating_color': plating_color_display,
                 'polish_finish': polish_finish_display,
                 'polish_finish_name': polish_finish_display,
                 'version': version_display,
-                
-                # Location
                 'location': location_display,
                 'unique_locations': location_names if location_names else ["N/A"],
-                
-                # Tray information
                 'tray_type': tray_type_display,
                 'tray_capacity': tray_capacity,
                 'jig_type': tray_type_display,
                 'jig_capacity': tray_capacity,
                 'no_of_trays': no_of_trays,
                 'calculated_no_of_trays': no_of_trays,
-                'last_process_module': jig.last_process_module or "Jig Unloading",
-                
-                # Dates
-                'created_at': jig.updated_at,
-                'un_loaded_date_time': jig.updated_at,
-                'Un_loaded_date_time': jig.updated_at,
-                
-                # Status fields
+                'last_process_module': unload.last_process_module,
+                'created_at': unload.created_at,
+                'un_loaded_date_time': unload.Un_loaded_date_time,
+                'Un_loaded_date_time': unload.Un_loaded_date_time,
                 'jig_unload_draft': False,
                 'electroplating_only': False,
-                
-                # Model data
                 'no_of_model_cases': no_of_model_cases,
                 'model_images': model_images,
                 'model_colors': model_colors,
                 'lot_id_quantities': lot_id_quantities,
                 'lot_id_model_map': {},
-                
-                # Remarks
                 'unloading_remarks': unloading_remarks,
-                
-                # Bath numbers
-                'bath_numbers': {'bath_number': getattr(jig.bath_numbers, 'bath_number', 'N/A') if jig.bath_numbers else 'N/A'},
+                'bath_numbers': {'bath_number': 'N/A'},
             }
-            
-            print(f"[DEBUG] ✅ Created table entry for {jig.lot_id}")
+
+            print(f"[DEBUG] ✅ Created table entry for {unload.lot_id}")
             table_data.append(table_entry)
 
         print(f"\n[DEBUG] ===== FINAL SUMMARY =====")
@@ -3335,87 +3975,195 @@ class JU_Zone_Completedtable(TemplateView):
 @require_GET
 def JU_Zone_get_model_images(request):
     lot_id = request.GET.get('lot_id')
-    model_number = request.GET.get('model_number')  # Added optional model_number parameter
-    
+    model_number = request.GET.get('model_number')
+
     if not lot_id:
         return JsonResponse({'success': False, 'error': 'lot_id required'}, status=400)
-    
+
     try:
+        import re
         print(f"[DEBUG] JU_Zone_get_model_images called with lot_id: {lot_id}, model_number: {model_number}")
-        
-        # Method 1: Try to fetch polish_stk_no from JigUnloadAfterTable using lot_id
+
+        model = None
+        model_no = None
+
+        # Method 1: JigUnloadAfterTable (available post-submission)
         jig_unload = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
-        
         if jig_unload and jig_unload.polish_stk_no:
-            print(f"[DEBUG] Found JigUnloadAfterTable record with polish_stk_no: {jig_unload.polish_stk_no}")
-            # Extract model_no before 'X'
-            model_no = jig_unload.polish_stk_no.split('X')[0] if 'X' in jig_unload.polish_stk_no else jig_unload.polish_stk_no
-            print(f"[DEBUG] Extracted model_no from polish_stk_no: {model_no}")
-        elif model_number:
-            # Method 2: Use provided model_number as fallback
-            print(f"[DEBUG] Zone 2 No JigUnloadAfterTable record found, using provided model_number: {model_number}")
-            
-            # 🎯 ZONE 2 ENHANCEMENT: Extract numeric part for Zone 2 consistency (same as Zone 1)
-            # Zone 2 extracts numeric part like Zone 1 for consistent behavior
-            import re
-            match = re.match(r'^(\d+)', str(model_number))
-            if match:
-                model_no = match.group(1)
-                print(f"[DEBUG] Zone 2 - Extracted numeric part from model_number {model_number} -> {model_no}")
+            raw_no = jig_unload.polish_stk_no.split('X')[0] if 'X' in jig_unload.polish_stk_no else jig_unload.polish_stk_no
+            candidate = ModelMaster.objects.prefetch_related('images').filter(model_no=raw_no).first()
+            if candidate:
+                model = candidate
+                model_no = raw_no
+                print(f"[DEBUG] Method 1 success: model_no={model_no}")
+
+        # Method 2: model_number param — try plating_stk_no first, then numeric prefix fallback
+        if not model and model_number:
+            # Method 2a: exact plating_stk_no match (model_number may be a full plating stk no like '1805NAK02')
+            candidate = ModelMaster.objects.prefetch_related('images').filter(plating_stk_no=str(model_number)).first()
+            if candidate:
+                model = candidate
+                model_no = candidate.plating_stk_no or candidate.model_no
+                print(f"[DEBUG] Method 2a success via plating_stk_no='{model_number}'")
             else:
-                model_no = model_number
-                print(f"[DEBUG] Zone 2 - Using full model_number as-is: {model_no}")
-        else:
-            # Method 3: Try to extract from TotalStockModel
-            total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            if total_stock and total_stock.model_stock_no:
-                model_no = total_stock.model_stock_no.model_no
-                print(f"[DEBUG] Found model_no from TotalStockModel: {model_no}")
-            else:
-                print(f"[DEBUG] No JigUnloadAfterTable, model_number, or TotalStockModel record found for lot_id: {lot_id}")
-                return JsonResponse({
-                    'success': False, 
-                    'image': None,
-                    'error': f'No model data found for lot_id: {lot_id}',
-                    'debug_info': {
-                        'jig_unload_found': jig_unload is not None,
-                        'polish_stk_no': jig_unload.polish_stk_no if jig_unload else None,
-                        'model_number_provided': model_number,
-                        'total_stock_found': False
-                    }
-                })
-        
-        # Find the model in ModelMaster
-        print(f"[DEBUG] Looking for ModelMaster with model_no: {model_no}")
-        model = ModelMaster.objects.prefetch_related('images').filter(model_no=model_no).first()
-        
+                # Method 2b: extract numeric prefix and look up ModelMaster
+                match = re.match(r'^(\d+)', str(model_number))
+                search_no = match.group(1) if match else str(model_number)
+                candidate = ModelMaster.objects.prefetch_related('images').filter(model_no=search_no).first()
+                if candidate:
+                    model = candidate
+                    model_no = search_no
+                    print(f"[DEBUG] Method 2b success: numeric model_no='{model_no}' from '{model_number}'")
+
+        # Method 3: TotalStockModel → model_stock_no FK → ModelMaster
         if not model:
-            print(f"[DEBUG] No ModelMaster found for model_no: {model_no}")
+            total_stock = TotalStockModel.objects.filter(lot_id=lot_id).select_related('model_stock_no').first()
+            if total_stock and total_stock.model_stock_no:
+                candidate = ModelMaster.objects.prefetch_related('images').filter(pk=total_stock.model_stock_no.pk).first()
+                if candidate:
+                    model = candidate
+                    model_no = candidate.model_no
+                    print(f"[DEBUG] Method 3 success via TotalStockModel: model_no={model_no}")
+
+        # Method 4: RecoveryStockModel → model_stock_no FK → ModelMaster
+        if not model:
+            try:
+                rsm = RecoveryStockModel.objects.filter(lot_id=lot_id).select_related('model_stock_no').first()
+                if rsm and rsm.model_stock_no:
+                    candidate = ModelMaster.objects.prefetch_related('images').filter(pk=rsm.model_stock_no.pk).first()
+                    if candidate:
+                        model = candidate
+                        model_no = candidate.model_no
+                        print(f"[DEBUG] Method 4 success via RecoveryStockModel: model_no={model_no}")
+            except Exception as e4:
+                print(f"[DEBUG] Method 4 error: {e4}")
+
+        # Method 5: JigCompleted (Zone 2 Jig Loading lot IDs not in TotalStock/RecoveryStock)
+        # JigCompleted.batch_id is a string → ModelMasterCreation.batch_id → model_stock_no (ModelMaster FK)
+        if not model:
+            try:
+                from Jig_Loading.models import JigCompleted as _JC5
+                jc5 = _JC5.objects.filter(lot_id=lot_id).first()
+                if jc5 and jc5.batch_id:
+                    mmc5 = ModelMasterCreation.objects.filter(
+                        batch_id=jc5.batch_id
+                    ).select_related('model_stock_no').prefetch_related('model_stock_no__images').first()
+                    if mmc5 and mmc5.model_stock_no:
+                        # Use model_stock_no directly (it's the ModelMaster FK — preserves plating_stk_no)
+                        candidate = mmc5.model_stock_no
+                        model = candidate
+                        model_no = candidate.plating_stk_no or candidate.model_no
+                        print(f"[DEBUG] Method 5 success via JigCompleted batch '{jc5.batch_id}': model_no={model_no}")
+                        # If model_stock_no has no images, try lookup by ModelMasterCreation.plating_stk_no
+                        if not candidate.images.exists() and mmc5.plating_stk_no:
+                            ps5 = ModelMaster.objects.prefetch_related('images').filter(
+                                plating_stk_no=mmc5.plating_stk_no
+                            ).first()
+                            if ps5 and ps5.images.exists():
+                                model = ps5
+                                model_no = ps5.plating_stk_no or ps5.model_no
+                                print(f"[DEBUG] Method 5b: via MMC.plating_stk_no='{mmc5.plating_stk_no}': model_no={model_no}")
+            except Exception as e5:
+                print(f"[DEBUG] Method 5 error: {e5}")
+
+        if not model:
+            print(f"[DEBUG] All methods failed for lot_id={lot_id}, model_number={model_number}")
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'image': None,
-                'error': f'Model {model_no} not found in ModelMaster',
+                'error': f'No model data found for lot_id: {lot_id}',
                 'debug_info': {
-                    'model_no_searched': model_no,
-                    'extracted_from': 'polish_stk_no' if jig_unload and jig_unload.polish_stk_no else 'model_number_param'
+                    'lot_id': lot_id,
+                    'model_number_provided': model_number,
                 }
             })
-        
+
+        # Image fallback: if found model has no images, search for a ModelMaster variant that does
+        if not model.images.exists():
+            print(f"[DEBUG] Model {model_no} (pk={model.pk}) has no images — searching for variant with images")
+            try:
+                # FIRST: JigCompleted → batch_id → ModelMasterCreation.images (direct, most reliable for Jig Loading lots)
+                if lot_id:
+                    _jc_fb2 = JigCompleted.objects.filter(lot_id=lot_id).only('batch_id').first()
+                    if _jc_fb2 and _jc_fb2.batch_id:
+                        _mmc_fb2 = ModelMasterCreation.objects.filter(
+                            batch_id=_jc_fb2.batch_id
+                        ).select_related('model_stock_no').prefetch_related(
+                            'images', 'model_stock_no__images'
+                        ).first()
+                        if _mmc_fb2:
+                            if _mmc_fb2.images.exists():
+                                _mmc_imgs2 = [img.master_image.url for img in _mmc_fb2.images.all() if img.master_image]
+                                if _mmc_imgs2:
+                                    print(f"[DEBUG] Zone 2 Image fallback (MMC direct): batch={_jc_fb2.batch_id} -> {len(_mmc_imgs2)} images")
+                                    return JsonResponse({
+                                        'success': True,
+                                        'image': _mmc_imgs2[0],
+                                        'total_images': len(_mmc_imgs2),
+                                        'all_images': _mmc_imgs2,
+                                        'model_no': model_no
+                                    })
+                            if _mmc_fb2.model_stock_no and _mmc_fb2.model_stock_no.images.exists():
+                                model = _mmc_fb2.model_stock_no
+                                model_no = model.plating_stk_no or model.model_no
+                                print(f"[DEBUG] Zone 2 Image fallback (MMC→ModelMaster): batch={_jc_fb2.batch_id}, model_no={model_no}")
+
+                # Try by plating_stk_no from TotalStockModel.batch_id (most accurate)
+                if lot_id:
+                    _tsm_fb = TotalStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+                    if _tsm_fb and _tsm_fb.batch_id and _tsm_fb.batch_id.plating_stk_no:
+                        _ps_fb = ModelMaster.objects.prefetch_related('images').filter(
+                            plating_stk_no=_tsm_fb.batch_id.plating_stk_no
+                        ).first()
+                        if _ps_fb and _ps_fb.images.exists():
+                            model = _ps_fb
+                            model_no = _ps_fb.plating_stk_no or _ps_fb.model_no
+                            print(f"[DEBUG] Image fallback (TotalStock): plating_stk_no='{model_no}'")
+
+                # If still no images, try RecoveryStockModel
+                if not model.images.exists() and lot_id:
+                    try:
+                        _rsm_fb = RecoveryStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+                        if _rsm_fb and _rsm_fb.batch_id and _rsm_fb.batch_id.plating_stk_no:
+                            _ps_fb2 = ModelMaster.objects.prefetch_related('images').filter(
+                                plating_stk_no=_rsm_fb.batch_id.plating_stk_no
+                            ).first()
+                            if _ps_fb2 and _ps_fb2.images.exists():
+                                model = _ps_fb2
+                                model_no = _ps_fb2.plating_stk_no or _ps_fb2.model_no
+                                print(f"[DEBUG] Image fallback (Recovery): plating_stk_no='{model_no}'")
+                    except Exception:
+                        pass
+
+                # Last resort: find any ModelMaster with same numeric model_no that has images
+                if not model.images.exists():
+                    _m_prefix = re.match(r'^(\d+)', model.model_no or '')
+                    _numeric = _m_prefix.group(1) if _m_prefix else None
+                    if _numeric:
+                        for _variant in ModelMaster.objects.filter(model_no=_numeric).prefetch_related('images'):
+                            if _variant.images.exists():
+                                model = _variant
+                                model_no = _variant.plating_stk_no or _variant.model_no
+                                print(f"[DEBUG] Image fallback (numeric scan): model_no={_variant.model_no}, plating_stk_no={_variant.plating_stk_no}")
+                                break
+            except Exception as _efb:
+                print(f"[DEBUG] Image fallback error: {_efb}")
+
         # Get all images for this model
         images = [img.master_image.url for img in model.images.all()]
-        print(f"[DEBUG] Found {len(images)} images for model_no {model_no}: {images}")
-        
+        print(f"[DEBUG] Found {len(images)} images for model_no {model_no}")
+
         if images:
             return JsonResponse({
-                'success': True, 
-                'image': images[0],  # Return first image
+                'success': True,
+                'image': images[0],
                 'total_images': len(images),
-                'all_images': images,  # Return all images for future multi-image support
+                'all_images': images,
                 'model_no': model_no
             })
         else:
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'image': None,
                 'error': f'Model {model_no} found but has no images',
                 'debug_info': {
@@ -3424,12 +4172,12 @@ def JU_Zone_get_model_images(request):
                     'images_count': 0
                 }
             })
-            
+
     except Exception as e:
         print(f"[DEBUG] Error in JU_Zone_get_model_images: {str(e)}")
         return JsonResponse({
-            'success': False, 
-            'error': str(e), 
+            'success': False,
+            'error': str(e),
             'image': None,
             'debug_info': {
                 'exception_type': type(e).__name__,
@@ -3575,7 +4323,7 @@ def JU_Zone_fix_missing_plating_colors(request):
                     
                     # Find JigCompleted with this lot_id
                     jig_detail = JigCompleted.objects.filter(
-                        lot_id_quantities__has_key=actual_lot_id
+                        draft_data__lot_id_quantities__has_key=actual_lot_id
                     ).first()
                     
                     if jig_detail and jig_detail.draft_data.get('plating_color'):
@@ -4062,7 +4810,7 @@ def JU_Zone_get_jig_for_tray(request):
     try:
         # First, try to find JigCompleted that contain this tray_id in their lot_id_quantities
         jig_detail = JigCompleted.objects.filter(
-            lot_id_quantities__has_key=tray_id
+            draft_data__lot_id_quantities__has_key=tray_id
         ).first()
 
         if jig_detail:
