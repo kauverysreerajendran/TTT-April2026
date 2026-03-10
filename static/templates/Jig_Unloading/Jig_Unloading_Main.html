@@ -1672,8 +1672,8 @@ body.add-model-mode #selectAllCheckbox {
                     </td>
                     <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur"  {% endif %}>{{ jig_detail.jig_qr_id }}</td>
                     <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
-                      {{ jig_detail.IP_loaded_date_time|date:"d-M-y" }}<br>
-                      <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ jig_detail.IP_loaded_date_time|date:"h:i A" }}</span>
+                      {{ jig_detail.jig_loaded_date_time|date:"d-M-y" }}<br>
+                      <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ jig_detail.jig_loaded_date_time|date:"h:i A" }}</span>
                     </td>                      
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %} class="model-stock-no-cell" 
                           data-images='{{ jig_detail.model_images|json_encode }}'
@@ -1791,7 +1791,7 @@ body.add-model-mode #selectAllCheckbox {
 
                       
                       <!-- Bath No -->
-                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>{{ jig_detail.bath_numbers.bath_number|default:"N/A" }}</td>
+                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>{% firstof jig_detail.bath_numbers.bath_number jig_detail.bath_number "N/A" %}</td>
 
                       <!-- Process Status column -->
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
