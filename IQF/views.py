@@ -4139,17 +4139,35 @@ def iqf_get_delink_candidates(request):
                     reason.append("qty=0")
                 print(f"  ❌ Not delink: {tray_id} (qty {tray_qty}) - {', '.join(reason)}")
         
-        print(f"  Total delink candidates: {len(delink_candidates)}")
+        print(f"  Total delink candidates (raw): {len(delink_candidates)}")
+
+        # ✅ DELINK COUNT FIX: Delink count = number of NEW acceptance trays (not from original lot).
+        # Each new acceptance tray displaces exactly 1 original lot tray (the delinked tray).
+        # Existing lot trays reused for acceptance do NOT require a delink.
+        new_acceptance_count = sum(1 for tid in accepted_tray_ids if tid not in all_trays_dict)
+
+        # Sort candidates by qty descending (largest first) to match STEP-2b delink priority
+        delink_candidates = sorted(
+            delink_candidates,
+            key=lambda x: all_trays_dict.get(x['tray_id'], 0),
+            reverse=True
+        )
+        # Limit to only the required number of delinks
+        delink_candidates = delink_candidates[:new_acceptance_count]
+
+        print(f"  New acceptance trays (non-lot): {new_acceptance_count}")
+        print(f"  Total delink candidates (after limit): {len(delink_candidates)}")
         
         return Response({
             'success': True,
             'delink_candidates': delink_candidates,
-            'new_tray_used': False,
+            'new_tray_used': new_acceptance_count > 0,
             'debug': {
                 'all_trays': all_trays_dict,
                 'rejected_tray_ids': rejected_tray_ids,
                 'accepted_tray_ids': accepted_tray_ids,
-                'delink_candidates': delink_candidates
+                'delink_candidates': delink_candidates,
+                'new_acceptance_count': new_acceptance_count
             }
         })
         
@@ -6060,7 +6078,7 @@ def iqf_get_available_new_tray(request):
 
 def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
     """
-    Auto-allocate rejection quantity across available trays irrespective of tray categories.
+    Auto-allocate rejection quantity across available trays with consolidation and delink calculation.
     
     Args:
         lot_id: The lot ID
@@ -6082,14 +6100,17 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
         total_available = sum(int(tray.get('tray_quantity', 0)) for tray in available_trays)
         tray_capacity = max((int(tray.get('tray_capacity', 12)) for tray in available_trays), default=12)
         
-        # Sort trays by quantity ascending (smallest first) for optimal allocation
+        # Calculate total accepted
+        total_accepted = total_available - total_rejection_qty
+        
+        # Sort trays by quantity ascending (smallest first) for allocation
         sorted_trays = sorted(available_trays, key=lambda x: x.get('tray_quantity', 0))
         
         rejection_distribution = []
-        delink_trays = []
-        acceptance_trays = []
-        
+        acceptance_trays = []  # Initialize before loop (fixes UnboundLocalError)
         remaining_rejection_qty = total_rejection_qty
+        
+        # Allocate rejection starting from smallest trays
         for tray in sorted_trays:
             if remaining_rejection_qty <= 0:
                 break
@@ -6136,8 +6157,42 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
                 remaining_rejection_qty = 0
                 print(f"      → Partial: reject={rejected_qty}, accept={accepted_qty}")
         
-        # Calculate total accepted
-        total_accepted = total_available - total_rejection_qty
+        # If rejection not fully allocated, allocate to remaining trays
+        if remaining_rejection_qty > 0:
+            for tray in sorted_trays:
+                tray_id = tray.get('tray_id')
+                if any(r['tray_id'] == tray_id for r in rejection_distribution):
+                    continue
+                tray_qty = int(tray.get('tray_quantity', 0))
+                rejected = min(remaining_rejection_qty, tray_qty)
+                remaining = tray_qty - rejected
+                rejection_distribution.append({
+                    'tray_id': tray_id,
+                    'rejected_qty': rejected,
+                    'remaining_qty': remaining,
+                    'status': 'Rejection: Additional allocation',
+                    'allocation_type': 'additional_rejection'
+                })
+                remaining_rejection_qty -= rejected
+                if remaining_rejection_qty <= 0:
+                    break
+        
+        # Collect acceptance trays from remaining quantities
+        acceptance_trays = []  # Reset and rebuild from remaining quantities
+        for tray in available_trays:
+            tray_id = tray.get('tray_id')
+            rej_entry = next((r for r in rejection_distribution if r['tray_id'] == tray_id), None)
+            if rej_entry:
+                remaining_qty = rej_entry['remaining_qty']
+            else:
+                remaining_qty = int(tray.get('tray_quantity', 0))
+            if remaining_qty > 0:
+                acceptance_trays.append({
+                    'tray_id': tray_id,
+                    'accepted_qty': remaining_qty,
+                    'status': 'Accepted',
+                    'allocation_type': 'remaining_acceptance'
+                })
         
         # Consolidate acceptance trays
         if total_accepted > 0:
@@ -6146,6 +6201,13 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
             new_trays_needed = consolidated['new_trays_needed']
         else:
             new_trays_needed = []
+        
+        # Compute delink trays: available trays not consumed by rejection or acceptance
+        allocated_tray_ids = (
+            set(r['tray_id'] for r in rejection_distribution) |
+            set(a['tray_id'] for a in acceptance_trays)
+        )
+        delink_trays = [t['tray_id'] for t in available_trays if t['tray_id'] not in allocated_tray_ids]
         
         result = {
             'rejection_distribution': rejection_distribution,
@@ -6157,7 +6219,7 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
             'unallocated_qty': 0
         }
         
-        print(f"✅ [AUTO-ALLOCATE] Completed: rejected={result['total_rejected']}, accepted={result['total_accepted']}")
+        print(f"✅ [AUTO-ALLOCATE] Completed: rejected={result['total_rejected']}, accepted={result['total_accepted']}, delinked={len(delink_trays)}")
         return result
         
     except Exception as e:
