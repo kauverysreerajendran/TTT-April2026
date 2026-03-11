@@ -64,28 +64,28 @@
     font-size: var(--app-font-size) !important;
   }  
 
-  /* Reserve space for filter icons in header cells */
-#order-listing th {
-  position: relative;
-  overflow: visible !important;
-  white-space: normal !important; /* allow wrapping */
-}
-
-/* Ensure filter icons always stay to the right */
-#order-listing th .fa-filter {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 10px !important;
-  opacity: 0.8;
-  cursor: pointer;
-}
-
   /* Column 1 */
   #order-listing th:nth-child(1),
   #order-listing td:nth-child(1) {
     position: sticky;
+    left: 0 !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+    background: #f7fafd;
+    z-index: 30;
+  }
+
+  /* Column 2 */
+  #order-listing th:nth-child(2),
+  #order-listing td:nth-child(2) {
+    position: sticky;
+    left: 90px !important;   /* = width of col1 */
+    min-width: 125px !important;
+    max-width: 125px !important;
+    background: #f7fafd;
+    z-index: 25;
+  }
+
     left: 0 !important;
     min-width: 90px !important;
     max-width: 90px !important;
@@ -441,30 +441,33 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
   left: 0 !important;
   z-index: 12; /* Above header */
   background: #f7fafd;
-  min-width: 75px;
-  max-width: 75px;
+  min-width: 75px !important;
+  max-width: 75px !important;
+  width: 75px !important;
 }
 
-/* Freeze 2nd column - Last Updated*/
+/* Freeze 2nd column - Lot ID */
 #order-listing th:nth-child(2),
 #order-listing td:nth-child(2) {
   position: sticky;
-  left: 75px; /* Match min-width of 1st col */
+  left: 75px !important; /* Match min-width of 1st col */
   z-index: 12;
   background: #f7fafd;
-  min-width: 180px; /* Increased width */
-  max-width: 180px; /* Increased width */
+  min-width: 180px !important;
+  max-width: 180px !important;
+  width: 180px !important;
 }
 
-/* Freeze 3rd column */
+/* Freeze 3rd column - JIG ID */
 #order-listing th:nth-child(3),
 #order-listing td:nth-child(3) {
   position: sticky;
-  left: 255px; /* 100px (1st) + 90px (2nd) */
+  left: 255px !important; /* 75px (1st) + 180px (2nd) */
   z-index: 12;
   background: #f7fafd;
-  min-width: 100px; /* Increased width 100 - old value*/
-  max-width: 100px; /* Increased width  110 - old value*/
+  min-width: 120px !important; /* Increased width */
+  max-width: 120px !important; /* Increased width */
+  width: 120px !important;
 }
 
 /* Prevent sticky columns from overlapping sticky header */
@@ -1627,7 +1630,6 @@ body.add-model-mode #selectAllCheckbox {
                     <th>Plating Color <i class="fa fa-filter" aria-hidden="true"></i></th>
                     <th>Polish Finish <i class="fa fa-filter" aria-hidden="true"></i></th>
                     <th style="display: none;">Version <i class="fa fa-filter" aria-hidden="true"></i></th>
-                    <!--<th>Source-Location <i class="fa fa-filter" aria-hidden="true"></i></th>-->
                     <th>Tray Cate - Capacity <i class="fa fa-filter" aria-hidden="true"></i></th>
                     <th>Lot Qty <i class="fa fa-filter" aria-hidden="true"></i></th>
                       <!--<th>No of Trays <i class="fa fa-filter" aria-hidden="true"></i></th>-->
@@ -1688,8 +1690,8 @@ body.add-model-mode #selectAllCheckbox {
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %} style="padding: 8px 4px; text-align: center; font-weight: 500; color: #2c3e50; font-size: 0.9em;">{{ jig_detail.lot_id }}</td>
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur"  {% endif %}>{{ jig_detail.jig_qr_id }}</td>
                     <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
-                    {{ jig_detail.IP_loaded_date_time|date:"d-M-y" }}<br>
-                    <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ jig_detail.IP_loaded_date_time|date:"h:i A" }}</span>
+                    {{ jig_detail.jig_loaded_date_time|date:"d-M-y" }}<br>
+                    <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ jig_detail.jig_loaded_date_time|date:"h:i A" }}</span>
                     </td>
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %} class="model-stock-no-cell" 
                           data-images='{{ jig_detail.model_images|json_encode }}'
@@ -1708,12 +1710,6 @@ body.add-model-mode #selectAllCheckbox {
                     <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %} style="display: none;">
                       {{ jig_detail.all_versions|join:", " }}
                     </td>
-                    <!--
-                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        {% for location in jig_detail.unique_locations %}
-                          {{ location }}{% if not forloop.last %}, {% endif %}
-                        {% endfor %}
-                      </td>-->
                       <!-- Tray Cate - Capacity (now uses tray_type and tray_capacity) -->
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
                         {% if jig_detail.tray_type and jig_detail.tray_capacity %}
@@ -1757,7 +1753,7 @@ body.add-model-mode #selectAllCheckbox {
 
                       
                       <!-- Bath No -->
-                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>{{ jig_detail.bath_numbers.bath_number|default:"N/A" }}</td>
+                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>{% firstof jig_detail.bath_numbers.bath_number jig_detail.bath_number "N/A" %}</td>
 
                       <!-- Process Status column -->
                       <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>

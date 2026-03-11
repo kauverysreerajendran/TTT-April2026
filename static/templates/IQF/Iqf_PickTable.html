@@ -5056,7 +5056,7 @@ function addNormalModeEventListeners(lotId) {
             top_tray_id: top_tray_id,
             delink_trays: delink_trays,
             accepted_trays: accepted_trays,
-            draft_save: true  // This is manual draft
+            is_draft: true  // This is manual draft
           })
         });
         
@@ -12342,6 +12342,18 @@ function collectAcceptedTrays() {
 
   return trays;
 }
+</script>
+
+<script nonce="{{ csp_nonce }}">
+// Reload the page after clicking the draft button to update the Lot Status
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('iqf-modal-btn') && e.target.classList.contains('draft')) {
+    // Wait for the API to complete, then reload
+    setTimeout(function() {
+      window.location.reload();
+    }, 1500);
+  }
+});
 </script>
 
 {% endblock %} {% endblock content %}
