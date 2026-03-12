@@ -3535,8 +3535,13 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
             continue
         
         # Check if NEW tray was used for non-SHORTAGE rejections
-        is_new_tray = is_new_tray_by_id(tray_id)
-        print(f"DEBUG: is_new_tray_by_id('{tray_id}') = {is_new_tray}")
+        # ✅ FIX: Query IPTrayId with both tray_id AND lot_id, then read new_tray field directly.
+        # new_tray=True  → new rejection container (empty tray brought for collection) → free_up_space → delink
+        # new_tray=False → existing lot tray being rejected → remove from distribution → no delink
+        # Not found      → tray not tracked in IP for this lot → treat as existing removal → no delink
+        ip_tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
+        is_new_tray = (ip_tray_obj is not None and bool(ip_tray_obj.new_tray))
+        print(f"DEBUG: IPTrayId lookup '{tray_id}' lot '{lot_id}' → found={ip_tray_obj is not None}, new_tray={getattr(ip_tray_obj, 'new_tray', 'N/A')}, is_new_tray={is_new_tray}")
         
         if is_new_tray:
             print(f"DEBUG: ✅ NEW tray used - freeing up {rejected_qty} space in existing trays")
