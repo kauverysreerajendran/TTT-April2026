@@ -280,7 +280,9 @@ html.pick-table-only {
 }
 /* Zoom animation for modal user profile image */
 .modal-top-header img {
-  transition: transform 0.3s cubic-bezier(0.4, 2, 0.3, 1), box-shadow 0.3s;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 2, 0.3, 1),
+    box-shadow 0.3s;
   will-change: transform;
   cursor: pointer;
 }
@@ -782,7 +784,10 @@ td:first-child * {
   font-weight: 600;
   font-size: 15px;
   border: 2px solid transparent;
-  transition: background 0.2s, color 0.2s, border 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border 0.2s;
   text-decoration: none;
   box-shadow: 0 2px 8px rgba(2, 128, 132, 0.06);
   margin: 0 2px;
@@ -1483,7 +1488,9 @@ footer {
 
 /* Zoom animation for modal user profile image */
 .modal-top-header img {
-  transition: transform 0.3s cubic-bezier(0.4, 2, 0.3, 1), box-shadow 0.3s;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 2, 0.3, 1),
+    box-shadow 0.3s;
   will-change: transform;
   cursor: pointer;
 }
@@ -1976,7 +1983,9 @@ footer {
   object-fit: cover !important;
 
   box-shadow: 0 2px 8px rgba(2, 128, 132, 0.3) !important;
-  transition: transform 0.3s cubic-bezier(0.4, 2, 0.3, 1), box-shadow 0.3s;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 2, 0.3, 1),
+    box-shadow 0.3s;
   will-change: transform;
   cursor: pointer;
 }
@@ -2803,7 +2812,10 @@ html {
   height: 100%;
   background: white;
   overflow-y: auto;
-  transition: right 0.3s ease, width 0.3s ease, padding 0.3s ease;
+  transition:
+    right 0.3s ease,
+    width 0.3s ease,
+    padding 0.3s ease;
   padding: 10px;
   font-family: Arial, sans-serif;
 }
@@ -2828,7 +2840,9 @@ html {
   z-index: 10001;
   padding: 0;
   display: none;
-  transition: width 0.3s, right 0.3s;
+  transition:
+    width 0.3s,
+    right 0.3s;
 }
 .new-popup-modal.open {
   display: block;
@@ -3246,4 +3260,224 @@ h4,
 label.hold-toggle-disabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* ========== Navbar Items Styling ========== */
+.navbar-nav-right {
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.navbar-nav-right .nav-item {
+  margin: 0 !important;
+}
+
+.navbar-nav-right .nav-link,
+.navbar-nav-right .dropdown-toggle {
+  padding: 4px 6px !important;
+  transition: all 0.3s ease;
+  border-radius: 6px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.navbar-nav-right .nav-link:hover,
+.navbar-nav-right .dropdown-toggle:hover {
+  background-color: rgba(2, 128, 132, 0.08) !important;
+  transform: translateY(-2px);
+}
+
+/* Tighten spacing between adjacent header items (e.g., Settings and Tray Scan) */
+.navbar-nav-right .nav-item {
+  margin: 0 4px !important; /* small even spacing on both sides */
+}
+
+.navbar-nav-right .dropdown-toggle {
+  min-width: auto !important;
+  white-space: nowrap !important;
+}
+
+.navbar-nav-right .nav-link,
+.navbar-nav-right .dropdown-toggle {
+  white-space: nowrap !important; /* prevent unexpected wrapping/gaps */
+}
+
+.navbar-nav-right i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.navbar-nav-right .nav-link:hover i,
+.navbar-nav-right .dropdown-toggle:hover i {
+  color: #026b70 !important;
+}
+
+/* Icon styling */
+.navbar-nav-right .ti-text,
+.navbar-nav-right .ti-file,
+.navbar-nav-right .ti-settings,
+.navbar-nav-right .ti-bell,
+.navbar-nav-right .ti-user {
+  font-size: 1.5rem;
+  color: #028084;
+}
+
+/* Label styling */
+.navbar-nav-right small {
+  font-size: 0.65rem !important;
+  color: #333 !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.3px;
+  text-transform: capitalize;
+  margin-top: 2px;
+}
+
+/* Button-like appearance for header items to match Bulk Upload's Upload button */
+.navbar-nav-right .btn.btn-outline {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 184, 166, 0.06),
+    rgba(20, 184, 166, 0.02)
+  );
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  color: #0d9488;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(2, 128, 132, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navbar-nav-right .btn.btn-outline:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 184, 166, 0.12),
+    rgba(20, 184, 166, 0.04)
+  );
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(2, 128, 132, 0.12);
+}
+
+.navbar-nav-right .btn.btn-outline i,
+.navbar-nav-right .btn.btn-outline img {
+  display: block;
+}
+
+/* Dropdown menu styling */
+.navbar-dropdown.dropdown-menu {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(2, 128, 132, 0.1);
+}
+
+.navbar-dropdown .dropdown-item {
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 10px 16px;
+  transition: background-color 0.2s ease;
+}
+
+.navbar-dropdown .dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.navbar-dropdown .dropdown-item:hover {
+  background-color: #f5f9f9;
+  color: #028084;
+}
+
+.navbar-dropdown .dropdown-item i {
+  color: #028084;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .navbar-nav-right {
+    gap: 4px !important;
+  }
+
+  .navbar-nav-right .nav-link,
+  .navbar-nav-right .dropdown-toggle {
+    min-width: 40px;
+    padding: 2px 4px !important;
+  }
+
+  .navbar-nav-right i {
+    font-size: 1.2rem !important;
+  }
+
+  .navbar-nav-right small {
+    font-size: 0.55rem !important;
+  }
+}
+
+/* ========== Navbar uniformity overrides ========== */
+/* Ensure Reports / Settings / Tray Scan / User are visually identical */
+.navbar-nav-right .nav-link,
+.navbar-nav-right .dropdown-toggle {
+  padding: 6px 10px !important;
+  gap: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: auto !important;
+}
+
+.navbar-nav-right .nav-link i,
+.navbar-nav-right .dropdown-toggle i,
+.navbar-nav-right .nav-link img,
+.navbar-nav-right .dropdown-toggle img {
+  font-size: 1.25rem !important;
+  height: 1.25rem !important;
+  width: auto !important;
+  line-height: 1 !important;
+  color: #028084 !important;
+}
+
+.navbar-nav-right .nav-link .barcode-icon,
+.navbar-nav-right .dropdown-toggle .barcode-icon {
+  height: 1.25rem !important;
+  width: auto !important;
+}
+
+.navbar-nav-right .nav-link small,
+.navbar-nav-right .dropdown-toggle small {
+  font-size: 0.85rem !important;
+  color: #333 !important;
+  font-weight: 600 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  display: inline-block !important;
+  padding-left: 4px !important;
+  text-transform: none !important;
+}
+
+/* Slight visual lift on hover kept consistent */
+.navbar-nav-right .nav-link:hover,
+.navbar-nav-right .dropdown-toggle:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Ensure Themify icon font renders correctly inside navbar (fix invisible icons) */
+.navbar-nav-right i[class^="ti-"],
+.navbar-nav-right i[class*=" ti-"] {
+  font-family: "themify" !important;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: inline-block !important;
+  color: #028084 !important;
+}
+
+.navbar-nav-right i[class^="ti-"]:before,
+.navbar-nav-right i[class*=" ti-"]:before {
+  display: inline-block !important;
 }
