@@ -1201,7 +1201,7 @@
 <!-- Plating Stock No - WITH tooltip (matching your desired format) -->
 <td>
   {% if jig.lot_plating_stk_nos and jig.lot_plating_stk_nos != 'No Plating Stock No' %}
-    <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
+    <span class="model-hover-trigger" data-plating-stk-no="{{ jig.lot_plating_stk_nos }}" style="cursor: pointer; word-break: break-all;">
       {{ jig.lot_plating_stk_nos|highlight_plating_color|safe_html }}
       <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
         
@@ -1580,7 +1580,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Function to load images for plating stock numbers
   function loadPlatingImages(trigger) {
-    const platingStk = trigger.textContent.trim();
+    const platingStk = (trigger.getAttribute('data-plating-stk-no') || '').trim();
     const tooltip = trigger.querySelector('.model-image-tooltip');
     
     if (!platingStk || !tooltip) return;

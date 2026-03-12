@@ -207,7 +207,7 @@ class NQ_Zone_PickTableView(APIView):
 
 
 
-        nq_rejection_reasons = Nickel_QC_Rejection_Table.objects.all()
+        nq_rejection_reasons = Nickel_QC_Rejection_Table.objects.all().order_by('rejection_reason_id')
 
 
 
