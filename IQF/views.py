@@ -914,34 +914,35 @@ class IQFAcceptCompleteTableTrayIdListAPIView(APIView):
             return Response({"success": False, "error": "Lot ID is required"}, status=400)
 
         try:
-            # Get TotalStockModel for this lot
-            total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            # Read accepted trays from IQF_Accepted_TrayID_Store (same source as IQFCompleteTableTrayIdListAPIView)
+            accepted_store_trays = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id)
 
-            # Decide tray source
-            if total_stock and getattr(total_stock, 'send_brass_audit_to_iqf', False):
-                trays = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
-            else:
-                trays = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
+            # Build top_tray lookup from IQFTrayId for accurate top-tray flagging
+            top_tray_map = {
+                t.tray_id: t.top_tray
+                for t in IQFTrayId.objects.filter(lot_id=lot_id).only('tray_id', 'top_tray')
+            }
 
-            # Build tray list
             all_trays = []
-            for tray in trays:
-                tray_data = {
-                    "tray_id": tray.tray_id,
-                    "tray_quantity": tray.tray_quantity,
-                    "rejected_tray": tray.rejected_tray,
-                    "is_top_tray": getattr(tray, 'top_tray', False),  # ✅ FIXED: Include top_tray field
-                    "delink_tray": getattr(tray, 'delink_tray', False),
-                    "iqf_reject_verify": getattr(tray, 'iqf_reject_verify', False),
-                    "new_tray": getattr(tray, 'new_tray', False),
-                    "IP_tray_verified": getattr(tray, 'IP_tray_verified', False)
-                }
-                all_trays.append(tray_data)
+            for store_tray in accepted_store_trays:
+                all_trays.append({
+                    "tray_id": store_tray.tray_id,
+                    "tray_quantity": store_tray.tray_qty or 0,
+                    "rejected_tray": False,
+                    "delink_tray": False,
+                    "iqf_reject_verify": False,
+                    "new_tray": False,
+                    "IP_tray_verified": True,
+                    "top_tray": top_tray_map.get(store_tray.tray_id, False),
+                    "ip_top_tray": False,
+                    "ip_top_tray_qty": None,
+                })
 
             return Response({
                 "success": True,
                 "trays": all_trays,
-                "total_trays": len(all_trays)
+                "total_trays": len(all_trays),
+                "rejection_summary": {}
             })
 
         except Exception as e:
@@ -958,7 +959,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
             return Response({"success": False, "error": "Lot ID is required"}, status=400)
 
         try:
-            print(f"🔍 [IQFRejectTableTrayIdListAPIView] Fetching rejected trays for lot_id: {lot_id}")
+            print(f"[IQFRejectTableTrayIdListAPIView] Fetching rejected trays for lot_id: {lot_id}")
             
             rejected_trays = []
             delinked_trays = []
@@ -987,7 +988,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 lot_id=lot_id
             ).select_related('rejection_reason').order_by('-top_tray', 'id')
             
-            print(f"   📦 Found {iqf_rejection_records.count()} IQF rejection records")
+            print(f"   Found {iqf_rejection_records.count()} IQF rejection records")
             
             # Collect rejection quantity information (some may have tray_id, some may not)
             rejection_quantities = []
@@ -1000,7 +1001,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     'rejection_reason_id': rec.rejection_reason.rejection_reason_id if rec.rejection_reason else ""
                 })
             
-            print(f"   📊 Collected {len(rejection_quantities)} rejection quantities")
+            print(f"   Collected {len(rejection_quantities)} rejection quantities")
             for rq in rejection_quantities:
                 print(f"      - Tray ID: {rq['tray_id']}, Qty: {rq['qty']}, Top: {rq['top_tray']}")
             
@@ -1013,7 +1014,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 delink_tray=False
             ).order_by('-top_tray', 'id')
             
-            print(f"   🆔 Found {rejected_iqf_trays.count()} rejected tray IDs (excluding delinked)")
+            print(f"   Found {rejected_iqf_trays.count()} rejected tray IDs (excluding delinked)")
             for tray in rejected_iqf_trays:
                 print(f"      - Tray ID: {tray.tray_id}, Qty in IQFTrayId: {tray.tray_quantity}, Top: {tray.top_tray}")
             
@@ -1030,7 +1031,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 else:
                     unassigned_quantities.append(rej_qty_info)
             
-            print(f"   📊 Explicit mappings: {len(explicit_mappings)}, Unassigned quantities: {len(unassigned_quantities)}")
+            print(f"   Explicit mappings: {len(explicit_mappings)}, Unassigned quantities: {len(unassigned_quantities)}")
             
             # Get list of available tray IDs that don't have explicit mappings
             available_tray_ids = [tray.tray_id for tray in rejected_iqf_trays if tray.tray_id not in explicit_mappings]
@@ -1040,14 +1041,14 @@ class IQFRejectTableTrayIdListAPIView(APIView):
             for tray_id in available_tray_ids:
                 if unassigned_idx < len(unassigned_quantities):
                     explicit_mappings[tray_id] = unassigned_quantities[unassigned_idx]
-                    print(f"   🔗 Auto-assigned: {tray_id} -> Qty: {unassigned_quantities[unassigned_idx]['qty']}")
+                    print(f"   Auto-assigned: {tray_id} -> Qty: {unassigned_quantities[unassigned_idx]['qty']}")
                     unassigned_idx += 1
             
             # ============================
             # STEP 3.5: Assign remaining unassigned to lot trays
             # ============================
             all_lot_trays = list(IQFTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
-            print(f"   🗂️ Found {len(all_lot_trays)} lot trays: {all_lot_trays}")
+            print(f"   Found {len(all_lot_trays)} lot trays: {all_lot_trays}")
             
             # ============================
             
@@ -1062,14 +1063,14 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     top_tray = rejection_info['top_tray'] if rejection_info['top_tray'] else rej_tray.top_tray
                     rejection_reason = rejection_info.get('rejection_reason', 'N/A')
                     rejection_reason_id = rejection_info.get('rejection_reason_id', '')
-                    print(f"   ✅ Rejected Tray: ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
+                    print(f"   Rejected Tray: ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
                 else:
                     # Fallback: use tray_quantity from IQFTrayId if no mapping found
                     tray_qty = resolve_qty(rej_tray.tray_id, rej_tray.tray_quantity)
                     top_tray = rej_tray.top_tray
                     rejection_reason = "N/A"
                     rejection_reason_id = ""
-                    print(f"   ⚠️ Rejected Tray (no explicit quantity found, using IQFTrayId qty): ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
+                    print(f"   Rejected Tray (no explicit quantity found, using IQFTrayId qty): ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
                 
                 rejected_trays.append({
                     "tray_id": rej_tray.tray_id,
@@ -1085,9 +1086,26 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     "rejection_reason_id": rejection_reason_id
                 })
             
-            # ✅ All rejections should now be assigned to specific trays via explicit_mappings
-            # No need to add unassigned entries - all rejections come with tray IDs from IQF_Rejected_TrayScan
-            
+            # ✅ Fallback: add scan records with tray_ids that are NOT covered by IQFTrayId rejected records.
+            # This handles cases where IQFTrayId has no rejected_tray=True rows but IQF_Rejected_TrayScan does.
+            covered_tray_ids = {tray["tray_id"] for tray in rejected_trays}
+            for tray_id, rej_info in explicit_mappings.items():
+                if tray_id not in covered_tray_ids:
+                    mapped_qty = int(rej_info.get('qty') or 0)
+                    rejected_trays.append({
+                        "tray_id": tray_id,
+                        "tray_quantity": mapped_qty,
+                        "rejected_tray": True,
+                        "delink_tray": False,
+                        "iqf_reject_verify": False,
+                        "new_tray": False,
+                        "IP_tray_verified": False,
+                        "top_tray": bool(rej_info.get('top_tray', False)),
+                        "is_top_tray": bool(rej_info.get('top_tray', False)),
+                        "rejection_reason": rej_info.get('rejection_reason', 'N/A'),
+                        "rejection_reason_id": rej_info.get('rejection_reason_id', '')
+                    })
+
             # ============================
             # STEP 5: Get delinked trays
             # ============================
@@ -1096,7 +1114,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 delink_tray=True
             ).order_by('id')
             
-            print(f"   🔄 Found {delinked_iqf_trays.count()} delinked trays")
+            print(f"   Found {delinked_iqf_trays.count()} delinked trays")
             
             for delink_tray in delinked_iqf_trays:
                 delinked_trays.append({
@@ -1111,7 +1129,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     "is_top_tray": False
                 })
             
-            print(f"🔍 [IQFRejectTableTrayIdListAPIView] Returning {len(rejected_trays)} rejected trays and {len(delinked_trays)} delinked trays")
+            print(f"[IQFRejectTableTrayIdListAPIView] Returning {len(rejected_trays)} rejected trays and {len(delinked_trays)} delinked trays")
             
             return Response({
                 "success": True,
@@ -1941,6 +1959,32 @@ class IQFTrayRejectionAPIView(APIView):
 
     def post(self, request):
         try:
+            def _build_zero_rejection_acceptance_rows(current_lot_id, use_audit_scope):
+                tray_qty_map = {}
+
+                iqf_trays = IQFTrayId.objects.filter(lot_id=current_lot_id).exclude(tray_quantity__lte=0)
+                if iqf_trays.exists():
+                    for tray in iqf_trays:
+                        if tray.tray_id:
+                            tray_qty_map[tray.tray_id] = tray_qty_map.get(tray.tray_id, 0) + int(tray.tray_quantity or 0)
+                    return tray_qty_map
+
+                iqf_rejected_scans = IQF_Rejected_TrayScan.objects.filter(lot_id=current_lot_id).exclude(tray_id='')
+                if iqf_rejected_scans.exists():
+                    for tray in iqf_rejected_scans:
+                        tray_qty_map[tray.tray_id] = tray_qty_map.get(tray.tray_id, 0) + int(tray.rejected_tray_quantity or 0)
+                    return tray_qty_map
+
+                if use_audit_scope:
+                    upstream_scans = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=current_lot_id).exclude(rejected_tray_id='')
+                else:
+                    upstream_scans = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=current_lot_id).exclude(rejected_tray_id='')
+
+                for tray in upstream_scans:
+                    tray_qty_map[tray.rejected_tray_id] = tray_qty_map.get(tray.rejected_tray_id, 0) + int(tray.rejected_tray_quantity or 0)
+
+                return tray_qty_map
+
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             lot_id = data.get('lot_id')
             batch_id = data.get('batch_id')
@@ -1968,6 +2012,61 @@ class IQFTrayRejectionAPIView(APIView):
             # Step 1: Calculate total rejection quantity
             total_rejection_qty = sum(int(item['quantity']) for item in tray_rejections if int(item['quantity']) > 0)
             print(f"📊 Total rejection quantity: {total_rejection_qty}")
+
+            # Step 1a: Zero rejection means accept the current IQF lot quantity as-is.
+            if total_rejection_qty == 0:
+                stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                use_audit = bool(getattr(stock, 'send_brass_audit_to_iqf', False)) if stock else False
+                accepted_qty_map = _build_zero_rejection_acceptance_rows(lot_id, use_audit)
+
+                if not accepted_qty_map:
+                    return Response({
+                        'success': False,
+                        'error': f'No current tray quantities found for lot {lot_id}'
+                    }, status=400)
+
+                IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+                for tray_id, tray_qty in accepted_qty_map.items():
+                    IQF_Accepted_TrayID_Store.objects.create(
+                        lot_id=lot_id,
+                        tray_id=tray_id,
+                        tray_qty=tray_qty,
+                        user=request.user,
+                        accepted_comment=acceptance_remarks,
+                        is_save=True
+                    )
+                    print(f"   ✅ Zero rejection acceptance tray saved: {tray_id} qty={tray_qty}")
+
+                total_accepted_qty = sum(accepted_qty_map.values())
+                if stock:
+                    stock.iqf_acceptance = True
+                    stock.iqf_few_cases_acceptance = False
+                    stock.iqf_onhold_picking = False
+                    stock.iqf_rejection = False
+                    stock.iqf_accepted_qty = total_accepted_qty
+                    stock.total_IP_accpeted_quantity = total_accepted_qty
+                    stock.send_brass_qc = True
+                    stock.last_process_module = "IQF"
+                    stock.iqf_last_process_date_time = timezone.now()
+                    stock.save(update_fields=[
+                        'iqf_acceptance', 'iqf_few_cases_acceptance', 'iqf_onhold_picking',
+                        'iqf_rejection', 'iqf_accepted_qty', 'total_IP_accpeted_quantity',
+                        'send_brass_qc', 'last_process_module', 'iqf_last_process_date_time'
+                    ])
+                    print(f"   ✅ Zero rejection acceptance completed for lot {lot_id}: qty={total_accepted_qty}")
+
+                IQF_Draft_Store.objects.filter(
+                    lot_id=lot_id,
+                    draft_type__in=['lot_rejection', 'tray_rejection', 'accepted_tray']
+                ).delete()
+
+                return Response({
+                    'success': True,
+                    'message': 'Current lot quantity accepted as-is',
+                    'allocation_type': 'direct_acceptance',
+                    'no_verification_required': True,
+                    'total_accepted': total_accepted_qty
+                })
 
             # Step 2: Get original available trays BEFORE saving frontend accepted trays
             # Use fallback logic to get all eligible trays
@@ -2243,6 +2342,25 @@ class IQFTrayRejectionAPIView(APIView):
             print(f"   Accepted: {allocation_results['total_accepted']}")
             print(f"   Delinked trays: {len(allocation_results['delink_trays'])}")
             print(f"   New trays needed: {len(allocation_results['new_trays_needed'])}")
+
+            # Step 6.5: Pre-seed IQF_Accepted_TrayID_Store for trays the user accepted via the UI.
+            # apply_iqf_auto_allocation_results Step 3.5 will mark these is_save=True so that
+            # BrassPickTableView and create_brass_tray_instances can read the correct accepted qty/trays.
+            for _acc in accepted_trays:
+                _tid = _acc.get('tray_id')
+                _tqty = _acc.get('qty', 0)
+                if _tid:
+                    IQF_Accepted_TrayID_Store.objects.update_or_create(
+                        lot_id=lot_id,
+                        tray_id=_tid,
+                        defaults={
+                            'tray_qty': _tqty,
+                            'user': request.user,
+                            'accepted_comment': acceptance_remarks,
+                            'is_save': False
+                        }
+                    )
+            print(f"   ✅ Step 6.5: Pre-seeded IQF_Accepted_TrayID_Store with {len(accepted_trays)} accepted tray(s)")
 
             # Step 7: Apply allocation results to database
             apply_result = apply_iqf_auto_allocation_results(
@@ -3029,7 +3147,7 @@ def iqf_get_rejected_tray_scan_data(request):
             for idx, rec in enumerate(brass_rejected_trays, 1):
                 qty_val = int(rec.rejected_tray_quantity) if rec.rejected_tray_quantity else 0
                 reason_text = rec.rejection_reason.rejection_reason if rec.rejection_reason else 'N/A'
-                print(f"      Record {idx}: tray_id='{rec.rejected_tray_id}', qty={qty_val}, reason='{reason_text}', top_tray={rec.top_tray}")
+                print(f"      Record {idx}: tray_id='{rec.rejected_tray_id}', qty={qty_val}, reason='{reason_text}', top_tray={getattr(rec, 'top_tray', False)}")
             
             for tray_obj in brass_rejected_trays:
                 tray_key = tray_obj.rejected_tray_id or 'NO_TRAY'  # Use 'NO_TRAY' as key if tray_id is None
@@ -3042,9 +3160,11 @@ def iqf_get_rejected_tray_scan_data(request):
                 iqf_tray_id_obj = IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_obj.rejected_tray_id).first()
                 
                 # Use top_tray from any of these sources (priority: Brass_QC_Rejected_TrayScan > BrassTrayId > IQFTrayId)
-                is_top_tray = (tray_obj.top_tray or 
-                              (brass_tray_id_obj and brass_tray_id_obj.top_tray) or 
-                              (iqf_tray_id_obj and iqf_tray_id_obj.top_tray))
+                is_top_tray = bool(
+                    getattr(tray_obj, 'top_tray', False) or
+                    (brass_tray_id_obj and brass_tray_id_obj.top_tray) or
+                    (iqf_tray_id_obj and iqf_tray_id_obj.top_tray)
+                )
                 
                 # Aggregate by tray_id
                 if tray_key not in tray_aggregation:
@@ -3991,31 +4111,61 @@ def iqf_get_delink_candidates(request):
         return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
     
     try:
-        # 1. Get ALL trays from multiple sources (they might be in different tables)
+        # 1. Get IQF-scope trays ONLY (trays visible in IQF pick table view icon)
+        #    Must match the same source as IQFPickCompleteTableTrayIdListAPIView
         all_trays_dict = {}
         
-        # From TrayId (modelmasterapp - authoritative master tray table, checked FIRST for correct quantities)
-        for tray in TrayId.objects.filter(lot_id=lot_id).values('tray_id', 'tray_quantity'):
-            if tray['tray_id']:
-                all_trays_dict[tray['tray_id']] = tray['tray_quantity'] or 0
+        # Determine lot source from TotalStockModel
+        total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        came_from_brass_audit = total_stock and getattr(total_stock, 'send_brass_audit_to_iqf', False)
+        came_from_brass_qc = total_stock and (
+            getattr(total_stock, 'brass_qc_rejection', False) or
+            getattr(total_stock, 'brass_qc_few_cases_accptance', False)
+        )
         
-        # From IQFTrayId (derived/processed trays - only add if not already found in TrayId)
-        for tray in IQFTrayId.objects.filter(lot_id=lot_id).values('tray_id', 'tray_quantity'):
-            if tray['tray_id'] and tray['tray_id'] not in all_trays_dict:
-                all_trays_dict[tray['tray_id']] = tray['tray_quantity'] or 0
+        if came_from_brass_audit:
+            print(f"  📊 Lot came from Brass Audit")
+            # Tray-wise rejections from Brass Audit
+            for rec in Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(rejected_tray_id__isnull=True).exclude(rejected_tray_id=''):
+                tid = rec.rejected_tray_id
+                try:
+                    qty = int(rec.rejected_tray_quantity) if rec.rejected_tray_quantity else 0
+                except (ValueError, TypeError):
+                    qty = 0
+                all_trays_dict[tid] = all_trays_dict.get(tid, 0) + qty
+                print(f"  ✅ Brass Audit rejected tray: {tid} (qty {qty})")
+            # Batch-rejected trays from BrassAuditTrayId
+            for tray in BrassAuditTrayId.objects.filter(lot_id=lot_id, rejected_tray=True):
+                if tray.tray_id and tray.tray_id not in all_trays_dict:
+                    all_trays_dict[tray.tray_id] = tray.tray_quantity or 0
+                    print(f"  ✅ Brass Audit batch rejected tray: {tray.tray_id} (qty {tray.tray_quantity})")
+        elif came_from_brass_qc:
+            print(f"  📊 Lot came from Brass QC")
+            # Tray-wise rejections from Brass QC
+            for rec in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(rejected_tray_id__isnull=True).exclude(rejected_tray_id=''):
+                tid = rec.rejected_tray_id
+                try:
+                    qty = int(rec.rejected_tray_quantity) if rec.rejected_tray_quantity else 0
+                except (ValueError, TypeError):
+                    qty = 0
+                all_trays_dict[tid] = all_trays_dict.get(tid, 0) + qty
+                print(f"  ✅ Brass QC rejected tray: {tid} (qty {qty})")
+            # Batch-rejected trays from BrassTrayId
+            for tray in BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=True):
+                if tray.tray_id and tray.tray_id not in all_trays_dict:
+                    all_trays_dict[tray.tray_id] = tray.tray_quantity or 0
+                    print(f"  ✅ Brass QC batch rejected tray: {tray.tray_id} (qty {tray.tray_quantity})")
+        else:
+            print(f"  📊 Lot is direct IQF (no Brass QC/Audit source)")
+            # Direct IQF: use TrayId master table + IQFTrayId
+            for tray in TrayId.objects.filter(lot_id=lot_id).values('tray_id', 'tray_quantity'):
+                if tray['tray_id']:
+                    all_trays_dict[tray['tray_id']] = tray['tray_quantity'] or 0
+            for tray in IQFTrayId.objects.filter(lot_id=lot_id).values('tray_id', 'tray_quantity'):
+                if tray['tray_id'] and tray['tray_id'] not in all_trays_dict:
+                    all_trays_dict[tray['tray_id']] = tray['tray_quantity'] or 0
         
-        # From BrassTrayId (if from Brass QC)
-        for tray in BrassTrayId.objects.filter(lot_id=lot_id).values('tray_id', 'tray_quantity'):
-            if tray['tray_id'] and tray['tray_id'] not in all_trays_dict:
-                all_trays_dict[tray['tray_id']] = tray['tray_quantity']
-        
-        # From BrassAuditTrayId (if from Brass Audit)
-        for tray in BrassAuditTrayId.objects.filter(lot_id=lot_id).values('tray_id', 'tray_quantity'):
-            if tray['tray_id'] and tray['tray_id'] not in all_trays_dict:
-                all_trays_dict[tray['tray_id']] = tray['tray_quantity']
-        
-        # Also add trays from IQF_Rejected_TrayScan if they exist (they might have been moved)
-        # Note: rejected_tray_quantity is a CharField, so sum manually in Python
+        # Also add trays from IQF_Rejected_TrayScan if they exist and not already found
         for rejection in IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).values('tray_id', 'rejected_tray_quantity').distinct():
             tid = rejection['tray_id']
             if tid and tid not in all_trays_dict:
@@ -4139,17 +4289,35 @@ def iqf_get_delink_candidates(request):
                     reason.append("qty=0")
                 print(f"  ❌ Not delink: {tray_id} (qty {tray_qty}) - {', '.join(reason)}")
         
-        print(f"  Total delink candidates: {len(delink_candidates)}")
+        print(f"  Total delink candidates (raw): {len(delink_candidates)}")
+
+        # ✅ DELINK COUNT FIX: Delink count = number of NEW acceptance trays (not from original lot).
+        # Each new acceptance tray displaces exactly 1 original lot tray (the delinked tray).
+        # Existing lot trays reused for acceptance do NOT require a delink.
+        new_acceptance_count = sum(1 for tid in accepted_tray_ids if tid not in all_trays_dict)
+
+        # Sort candidates by qty descending (largest first) to match STEP-2b delink priority
+        delink_candidates = sorted(
+            delink_candidates,
+            key=lambda x: all_trays_dict.get(x['tray_id'], 0),
+            reverse=True
+        )
+        # Limit to only the required number of delinks
+        delink_candidates = delink_candidates[:new_acceptance_count]
+
+        print(f"  New acceptance trays (non-lot): {new_acceptance_count}")
+        print(f"  Total delink candidates (after limit): {len(delink_candidates)}")
         
         return Response({
             'success': True,
             'delink_candidates': delink_candidates,
-            'new_tray_used': False,
+            'new_tray_used': new_acceptance_count > 0,
             'debug': {
                 'all_trays': all_trays_dict,
                 'rejected_tray_ids': rejected_tray_ids,
                 'accepted_tray_ids': accepted_tray_ids,
-                'delink_candidates': delink_candidates
+                'delink_candidates': delink_candidates,
+                'new_acceptance_count': new_acceptance_count
             }
         })
         
@@ -4557,11 +4725,13 @@ def iqf_validate_delink_tray(request):
         return Response({'success': False, 'error': 'Missing tray_id or lot_id'}, status=400)
     
     try:
-        # Check if tray exists in this lot
-        tray_exists = IQFTrayId.objects.filter(
-            lot_id=lot_id,
-            tray_id=tray_id
-        ).exists()
+        # Check if tray exists in this lot (across all relevant tables)
+        tray_exists = (
+            IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists() or
+            TrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists() or
+            BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists() or
+            BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists()
+        )
         
         if not tray_exists:
             return Response({
@@ -4571,10 +4741,11 @@ def iqf_validate_delink_tray(request):
             }, status=400)
 
         # Check if tray is already delinked (delink_tray=True)
-        already_delinked = IQFTrayId.objects.filter(
-            tray_id=tray_id,
-            delink_tray=True
-        ).exists()
+        already_delinked = (
+            IQFTrayId.objects.filter(tray_id=tray_id, delink_tray=True).exists() or
+            TrayId.objects.filter(tray_id=tray_id, delink_tray=True).exists() or
+            BrassTrayId.objects.filter(tray_id=tray_id, delink_tray=True).exists()
+        )
 
         if already_delinked:
             return Response({
@@ -4765,23 +4936,30 @@ def iqf_process_all_tray_data(request):
         # ✅ Process delink trays
         for tray_id in delink_trays:
             try:
-                tray_obj = IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).first()
-                if tray_obj:
-                    # Update all delink fields
-                    tray_obj.lot_id = None
-                    tray_obj.delink_tray = True
-                    tray_obj.new_tray = False
-                    tray_obj.batch_id = None
-                    tray_obj.tray_quantity = 0
-                    tray_obj.IP_tray_verified = False
-                    tray_obj.rejected_tray = False
-                    tray_obj.iqf_reject_verify = False
-                    tray_obj.top_tray = False
-                    
-                    tray_obj.save(update_fields=[
-                        'lot_id', 'delink_tray', 'new_tray', 'batch_id', 'tray_quantity',
-                        'IP_tray_verified', 'rejected_tray', 'iqf_reject_verify', 'top_tray'
-                    ])
+                # Check if tray exists in ANY relevant table for this lot
+                tray_in_iqf = IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).first()
+                tray_in_master = TrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists()
+                tray_in_brass = BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists()
+                tray_in_brass_audit = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists()
+                tray_found = tray_in_iqf or tray_in_master or tray_in_brass or tray_in_brass_audit
+                
+                if tray_found:
+                    # Update IQFTrayId if it exists there
+                    if tray_in_iqf:
+                        tray_in_iqf.lot_id = None
+                        tray_in_iqf.delink_tray = True
+                        tray_in_iqf.new_tray = False
+                        tray_in_iqf.batch_id = None
+                        tray_in_iqf.tray_quantity = 0
+                        tray_in_iqf.IP_tray_verified = False
+                        tray_in_iqf.rejected_tray = False
+                        tray_in_iqf.iqf_reject_verify = False
+                        tray_in_iqf.top_tray = False
+                        
+                        tray_in_iqf.save(update_fields=[
+                            'lot_id', 'delink_tray', 'new_tray', 'batch_id', 'tray_quantity',
+                            'IP_tray_verified', 'rejected_tray', 'iqf_reject_verify', 'top_tray'
+                        ])
                     
                     IPTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).update(delink_tray=True)
                     results['processed_delinks'] += 1
@@ -4865,7 +5043,20 @@ def iqf_process_all_tray_data(request):
                     results['processed_verifications'] += 1
                     print(f"✅ Verified tray: {tray_id} = {verified}, qty = {qty}")
                 else:
-                    results['errors'].append(f"Verification tray {tray_id} not found")
+                    # Tray not in IQFTrayId but may exist in TrayId/BrassTrayId (Brass QC lots)
+                    tray_in_lot = (
+                        TrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists() or
+                        BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists() or
+                        BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists() or
+                        IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id, tray_id=tray_id).exists()
+                    )
+                    if tray_in_lot:
+                        if verified:
+                            remove_tray_from_acceptance(tray_id, lot_id)
+                        results['processed_verifications'] += 1
+                        print(f"✅ Verified tray: {tray_id} = {verified}, qty = {qty} (not in IQFTrayId, processed via upstream tables)")
+                    else:
+                        results['errors'].append(f"Verification tray {tray_id} not found")
                     
             except Exception as e:
                 results['errors'].append(f"Error processing verification for {verification.get('tray_id', 'unknown')}: {str(e)}")
@@ -6060,7 +6251,7 @@ def iqf_get_available_new_tray(request):
 
 def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
     """
-    Auto-allocate rejection quantity across available trays irrespective of tray categories.
+    Auto-allocate rejection quantity across available trays with consolidation and delink calculation.
     
     Args:
         lot_id: The lot ID
@@ -6082,14 +6273,17 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
         total_available = sum(int(tray.get('tray_quantity', 0)) for tray in available_trays)
         tray_capacity = max((int(tray.get('tray_capacity', 12)) for tray in available_trays), default=12)
         
-        # Sort trays by quantity ascending (smallest first) for optimal allocation
+        # Calculate total accepted
+        total_accepted = total_available - total_rejection_qty
+        
+        # Sort trays by quantity ascending (smallest first) for allocation
         sorted_trays = sorted(available_trays, key=lambda x: x.get('tray_quantity', 0))
         
         rejection_distribution = []
-        delink_trays = []
-        acceptance_trays = []
-        
+        acceptance_trays = []  # Initialize before loop (fixes UnboundLocalError)
         remaining_rejection_qty = total_rejection_qty
+        
+        # Allocate rejection starting from smallest trays
         for tray in sorted_trays:
             if remaining_rejection_qty <= 0:
                 break
@@ -6136,8 +6330,42 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
                 remaining_rejection_qty = 0
                 print(f"      → Partial: reject={rejected_qty}, accept={accepted_qty}")
         
-        # Calculate total accepted
-        total_accepted = total_available - total_rejection_qty
+        # If rejection not fully allocated, allocate to remaining trays
+        if remaining_rejection_qty > 0:
+            for tray in sorted_trays:
+                tray_id = tray.get('tray_id')
+                if any(r['tray_id'] == tray_id for r in rejection_distribution):
+                    continue
+                tray_qty = int(tray.get('tray_quantity', 0))
+                rejected = min(remaining_rejection_qty, tray_qty)
+                remaining = tray_qty - rejected
+                rejection_distribution.append({
+                    'tray_id': tray_id,
+                    'rejected_qty': rejected,
+                    'remaining_qty': remaining,
+                    'status': 'Rejection: Additional allocation',
+                    'allocation_type': 'additional_rejection'
+                })
+                remaining_rejection_qty -= rejected
+                if remaining_rejection_qty <= 0:
+                    break
+        
+        # Collect acceptance trays from remaining quantities
+        acceptance_trays = []  # Reset and rebuild from remaining quantities
+        for tray in available_trays:
+            tray_id = tray.get('tray_id')
+            rej_entry = next((r for r in rejection_distribution if r['tray_id'] == tray_id), None)
+            if rej_entry:
+                remaining_qty = rej_entry['remaining_qty']
+            else:
+                remaining_qty = int(tray.get('tray_quantity', 0))
+            if remaining_qty > 0:
+                acceptance_trays.append({
+                    'tray_id': tray_id,
+                    'accepted_qty': remaining_qty,
+                    'status': 'Accepted',
+                    'allocation_type': 'remaining_acceptance'
+                })
         
         # Consolidate acceptance trays
         if total_accepted > 0:
@@ -6146,6 +6374,13 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
             new_trays_needed = consolidated['new_trays_needed']
         else:
             new_trays_needed = []
+        
+        # Compute delink trays: available trays not consumed by rejection or acceptance
+        allocated_tray_ids = (
+            set(r['tray_id'] for r in rejection_distribution) |
+            set(a['tray_id'] for a in acceptance_trays)
+        )
+        delink_trays = [t['tray_id'] for t in available_trays if t['tray_id'] not in allocated_tray_ids]
         
         result = {
             'rejection_distribution': rejection_distribution,
@@ -6157,7 +6392,7 @@ def auto_allocate_iqf_rejection(lot_id, total_rejection_qty, available_trays):
             'unallocated_qty': 0
         }
         
-        print(f"✅ [AUTO-ALLOCATE] Completed: rejected={result['total_rejected']}, accepted={result['total_accepted']}")
+        print(f"✅ [AUTO-ALLOCATE] Completed: rejected={result['total_rejected']}, accepted={result['total_accepted']}, delinked={len(delink_trays)}")
         return result
         
     except Exception as e:
@@ -6537,7 +6772,17 @@ def apply_iqf_auto_allocation_results(lot_id, batch_id, allocation_results, reje
                     if iqf_tray:
                         iqf_tray.tray_quantity = acceptance['accepted_qty']
                         iqf_tray.save()
-        
+
+        # Step 3.5: Mark frontend draft accepted trays as saved (is_save=True)
+        # These are the user-scanned trays that will be picked up by Brass QC
+        # via create_brass_tray_instances when brass_save_ip_checkbox is clicked.
+        auto_tray_ids = {a['tray_id'] for a in allocation_results.get('acceptance_trays', [])}
+        IQF_Accepted_TrayID_Store.objects.filter(
+            lot_id=lot_id,
+            is_save=False
+        ).exclude(tray_id__in=auto_tray_ids).update(is_save=True)
+        print(f"   ✅ Marked draft accepted trays as is_save=True (source for Brass QC)")
+
         # Step 4: Create new trays for acceptance
         batch_obj = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
         for new_tray in allocation_results['new_trays_needed']:
@@ -6576,7 +6821,15 @@ def apply_iqf_auto_allocation_results(lot_id, batch_id, allocation_results, reje
                 # Few cases acceptance
                 total_stock.iqf_few_cases_acceptance = True
                 total_stock.iqf_onhold_picking = True
-                total_stock.iqf_accepted_qty = total_accepted_qty
+                # Compute actual accepted qty from IQF_Accepted_TrayID_Store (Step 3.5 already marked them is_save=True)
+                # auto-allocator returns 0 when all available trays were rejected and only frontend trays accepted
+                _store_qty = IQF_Accepted_TrayID_Store.objects.filter(
+                    lot_id=lot_id, is_save=True
+                ).aggregate(total=Sum('tray_qty'))['total'] or 0
+                effective_accepted_qty = _store_qty if _store_qty > 0 else total_accepted_qty
+                total_stock.iqf_accepted_qty = effective_accepted_qty
+                total_stock.total_IP_accpeted_quantity = effective_accepted_qty  # Fix Brass QC display qty
+                total_stock.send_brass_qc = True  # send accepted pieces to Brass QC pick table
             
             total_stock.last_process_module = "IQF"
             total_stock.iqf_last_process_date_time = timezone.now()

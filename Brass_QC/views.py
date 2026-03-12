@@ -668,6 +668,12 @@ class BrassPickTableView(APIView):
             # ✅ FIX: For lots returning from IQF, count actual IQFTrayId records
             #    since rejected trays that were reused should also be counted
             if data.get('send_brass_qc'):
+                # This is a fresh Brass QC cycle from IQF. Any brass_qc_rejection=True
+                # on the lot belongs to a PRIOR cycle. Reset it so the template renders
+                # data-brass-batch-rejection="False" and the tray-scan click handler
+                # routes to the rejection form instead of the stale delink-only path.
+                data['brass_qc_rejection'] = False
+
                 actual_tray_count = IQFTrayId.objects.filter(
                     lot_id=lot_id,
                     IP_tray_verified=True,
@@ -677,6 +683,12 @@ class BrassPickTableView(APIView):
                 if actual_tray_count > 0:
                     data['no_of_trays'] = actual_tray_count
                     print(f"✅ [BrassPickTable] Overrode no_of_trays for IQF lot {lot_id}: {actual_tray_count} (from IQFTrayId count)")
+                else:
+                    # Fall back to IQF_Accepted_TrayID_Store: new-tray acceptances don't appear in IQFTrayId
+                    store_count = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_save=True).count()
+                    if store_count > 0:
+                        data['no_of_trays'] = store_count
+                        print(f"✅ [BrassPickTable] Overrode no_of_trays for IQF lot {lot_id}: {store_count} (from IQF_Accepted_TrayID_Store count)")
         
             # Get model images
             batch_obj = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
@@ -843,14 +855,22 @@ class BrassSaveIPCheckboxView(APIView):
                 )
                 print(f"Using BrassAuditTrayId for tray creation (send_brass_audit_to_qc=True)")
             elif send_brass_qc:
-                # ✅ FIX: Use IQFTrayId for ALL non-delinked trays (including reused rejected trays)
-                verified_trays = IQFTrayId.objects.filter(
-                    lot_id=lot_id,
-                    IP_tray_verified=True,
-                    rejected_tray=False,
-                    delink_tray=False
-                )
-                print(f"Using IQFTrayId for tray creation (send_brass_qc=True) - including reused rejected trays, count={verified_trays.count()}")
+                # Use IQF_Accepted_TrayID_Store (correct accepted quantities) for IQF->Brass QC flow
+                from IQF.models import IQF_Accepted_TrayID_Store as _IQFAcceptedStore
+                from collections import namedtuple
+                _TrayInfo = namedtuple('TrayInfo', ['tray_id', 'tray_quantity', 'top_tray', 'tray_type', 'tray_capacity'])
+                _accepted_records = _IQFAcceptedStore.objects.filter(lot_id=lot_id, is_save=True)
+                verified_trays = [
+                    _TrayInfo(
+                        tray_id=t.tray_id,
+                        tray_quantity=t.tray_qty or 0,
+                        top_tray=False,
+                        tray_type=None,
+                        tray_capacity=None,
+                    )
+                    for t in _accepted_records
+                ]
+                print(f"Using IQF_Accepted_TrayID_Store for tray creation (send_brass_qc=True), count={len(verified_trays)}")
             else:
                 # Use IPTrayId for accepted trays
                 verified_trays = IPTrayId.objects.filter(
@@ -2468,22 +2488,28 @@ def brass_reject_check_tray_id_simple(request):
     # NOT the sum of BrassTrayId quantities which may include missing items.
     # -----------------------------------------------------------------
 
-    # 5a. Get tray capacity
-    tray_capacity = get_brass_tray_capacity_for_lot(current_lot_id)
-    if not tray_capacity or tray_capacity <= 0:
-        tray_capacity = 12  # safe fallback
+    # 5a. Get original distribution first (more reliable than master capacity)
+    original_tray_quantities = get_brass_original_tray_distribution(current_lot_id)
 
-    # 5b. Get brass_physical_qty from TotalStockModel
+    # 5b. Get brass_physical_qty from TotalStockModel (also used for capacity)
     total_stock = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
     physical_qty = 0
     if total_stock and hasattr(total_stock, 'brass_physical_qty') and total_stock.brass_physical_qty:
         physical_qty = int(total_stock.brass_physical_qty)
 
-    # 5c. Get original distribution from BrassTrayId (may include missing items)
-    original_tray_quantities = get_brass_original_tray_distribution(current_lot_id)
+    # 5c. Derive tray capacity (prefer batch master, then actual tray quantities)
+    tray_capacity = None
+    if total_stock and getattr(total_stock, 'batch_id', None):
+        tray_capacity = getattr(total_stock.batch_id, 'tray_capacity', None)
+    if not tray_capacity or tray_capacity <= 0:
+        tray_capacity = max(original_tray_quantities) if original_tray_quantities else get_brass_tray_capacity_for_lot(current_lot_id)
+    if not tray_capacity or tray_capacity <= 0:
+        tray_capacity = 12  # safe fallback
+
+    # 5d. Get original distribution from BrassTrayId (may include missing items)
     original_total = sum(original_tray_quantities)
 
-    # 5d. Calculate missing qty and reduce from original distribution (smallest first)
+    # 5e. Calculate missing qty and reduce from original distribution (smallest first)
     missing_qty = max(0, original_total - physical_qty) if physical_qty > 0 else 0
 
     # Build the physical distribution by subtracting missing from smallest trays first
@@ -2503,7 +2529,7 @@ def brass_reject_check_tray_id_simple(request):
     physical_trays = len(active_tray_quantities)
     delink_count = len(original_tray_quantities) - physical_trays
 
-    # 5e. Get total rejection qty from all sources
+    # 5f. Get total rejection qty from all sources
     saved_rejections = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=current_lot_id)
     total_saved_rejection = sum(int(r.rejected_tray_quantity or 0) for r in saved_rejections)
 
@@ -2517,11 +2543,19 @@ def brass_reject_check_tray_id_simple(request):
     if total_rejection_qty == 0:
         total_rejection_qty = rejection_qty
 
-    # 5f. Calculate max_reusable_trays from PHYSICAL qty
+    # 5g. Calculate max_reusable_trays from PHYSICAL qty
     import math
     accepted_qty = max(0, physical_qty - total_rejection_qty)
     trays_needed_for_accepted = math.ceil(accepted_qty / tray_capacity) if accepted_qty > 0 else 0
-    max_reusable_trays = max(0, physical_trays - trays_needed_for_accepted)
+
+    # Clamp tray count to master no_of_trays if available to avoid over-allocating reuse
+    total_trays_for_calc = physical_trays
+    if total_stock and getattr(total_stock, 'batch_id', None):
+        master_trays = getattr(total_stock.batch_id, 'no_of_trays', None)
+        if master_trays and int(master_trays) > 0:
+            total_trays_for_calc = min(physical_trays, int(master_trays))
+
+    max_reusable_trays = max(0, total_trays_for_calc - trays_needed_for_accepted)
     sufficient_capacity = total_rejection_qty <= physical_qty
 
     print(f"[BRASS_REUSE] physical_qty={physical_qty}, original_total={original_total}, "
@@ -5700,7 +5734,43 @@ class PickTrayIdList_Complete_APIView(APIView):
             )
             tray_model_used = 'IQFTrayId'
 
-            # Fallback: If no trays found in IQFTrayId, use BrassTrayId
+            # Primary fallback: IQF_Accepted_TrayID_Store (show only trays accepted in IQF)
+            if base_queryset.count() == 0:
+                from IQF.models import IQF_Accepted_TrayID_Store as _IQFAcceptedStore
+                _accepted_store_qs = _IQFAcceptedStore.objects.filter(lot_id=lot_id, is_save=True)
+                if _accepted_store_qs.exists():
+                    _sorted_recs = sorted(_accepted_store_qs, key=lambda r: (r.tray_qty or 0))
+                    _fallback_data = []
+                    for _i, _r in enumerate(_sorted_recs):
+                        _fallback_data.append({
+                            's_no': _i + 1,
+                            'tray_id': _r.tray_id,
+                            'tray_quantity': _r.tray_qty or 0,
+                            'position': _i,
+                            'is_top_tray': _i == 0,
+                            'rejected_tray': False,
+                            'delink_tray': False,
+                            'rejection_details': [],
+                            'top_tray': _i == 0,
+                            'model_used': 'IQF_Accepted_TrayID_Store'
+                        })
+                    print(f"✅ [PickTrayIdList] IQF_Accepted_TrayID_Store fallback: {len(_fallback_data)} tray(s) for lot {lot_id}")
+                    return JsonResponse({
+                        'success': True,
+                        'trays': _fallback_data,
+                        'rejection_summary': {
+                            'total_accepted_trays': len(_fallback_data),
+                            'accepted_tray_ids': [r.tray_id for r in _sorted_recs],
+                            'total_rejected_trays': 0,
+                            'rejected_tray_ids': [],
+                            'shortage_rejections': 0,
+                            'filter_applied': 'accepted_only',
+                            'tray_model_used': 'IQF_Accepted_TrayID_Store',
+                            'flags': {'send_brass_qc': send_brass_qc, 'send_brass_audit_to_qc': send_brass_audit_to_qc}
+                        }
+                    })
+
+            # Final fallback: If IQF_Accepted_TrayID_Store is also empty, use BrassTrayId
             if base_queryset.count() == 0:
                 base_queryset = BrassTrayId.objects.filter(
                     batch_id__batch_id=batch_id,
@@ -6007,6 +6077,7 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
         def create_tray_data(tray_obj, category, is_top=False, rejection_qty=None):
             nonlocal row_counter
             rejection_details = []
+            display_quantity = 0
             
             # Calculate display quantity based on category and context
             if category == 'rejected':
@@ -6029,6 +6100,37 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                             'rejection_reason_id': scan.rejection_reason.rejection_reason_id if scan.rejection_reason else None,
                             'user': scan.user.username if scan.user else None
                         })
+                    
+                    # ✅ FIXED: Handle partial rejection without missing qty - If no scan records found, check BrassTrayId
+                    if display_quantity == 0:
+                        print(f"⚠️ [create_tray_data] WARNING - {tray_obj.tray_id}: No Brass_QC_Rejected_TrayScan records found (partial reject without missing qty?)")
+                        
+                        # Fallback: Check if this tray is marked as rejected in BrassTrayId
+                        brass_tray = BrassTrayId.objects.filter(
+                            tray_id=tray_obj.tray_id,
+                            lot_id=lot_id,
+                            rejected_tray=True
+                        ).first()
+                        
+                        if brass_tray:
+                            # Use the BrassTrayId quantity as the rejected quantity
+                            display_quantity = brass_tray.tray_quantity or tray_obj.tray_quantity or 0
+                            print(f"✅ [create_tray_data] FALLBACK - {tray_obj.tray_id}: Using BrassTrayId quantity={display_quantity}")
+                            
+                            # Try to get rejection reason from Brass_QC_Rejection_ReasonStore
+                            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                            if reason_store and reason_store.batch_rejection_reason:
+                                rejection_details.append({
+                                    'rejected_quantity': display_quantity,
+                                    'rejection_reason': reason_store.batch_rejection_reason,
+                                    'rejection_reason_id': None,
+                                    'user': reason_store.user.username if reason_store.user else 'System'
+                                })
+                        else:
+                            # Last resort: Use the tray's current quantity
+                            display_quantity = tray_obj.tray_quantity or 0
+                            print(f"⚠️ [create_tray_data] LAST RESORT - {tray_obj.tray_id}: Using tray_obj quantity={display_quantity}")
+                    
                     print(f"🔍 [create_tray_data] TRAY REJECTION - {tray_obj.tray_id}: REJECTED with quantity={display_quantity}")
             else:
                 display_quantity = tray_obj.tray_quantity or 0
