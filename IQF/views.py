@@ -914,34 +914,35 @@ class IQFAcceptCompleteTableTrayIdListAPIView(APIView):
             return Response({"success": False, "error": "Lot ID is required"}, status=400)
 
         try:
-            # Get TotalStockModel for this lot
-            total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            # Read accepted trays from IQF_Accepted_TrayID_Store (same source as IQFCompleteTableTrayIdListAPIView)
+            accepted_store_trays = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id)
 
-            # Decide tray source
-            if total_stock and getattr(total_stock, 'send_brass_audit_to_iqf', False):
-                trays = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
-            else:
-                trays = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
+            # Build top_tray lookup from IQFTrayId for accurate top-tray flagging
+            top_tray_map = {
+                t.tray_id: t.top_tray
+                for t in IQFTrayId.objects.filter(lot_id=lot_id).only('tray_id', 'top_tray')
+            }
 
-            # Build tray list
             all_trays = []
-            for tray in trays:
-                tray_data = {
-                    "tray_id": tray.tray_id,
-                    "tray_quantity": tray.tray_quantity,
-                    "rejected_tray": tray.rejected_tray,
-                    "is_top_tray": getattr(tray, 'top_tray', False),  # ✅ FIXED: Include top_tray field
-                    "delink_tray": getattr(tray, 'delink_tray', False),
-                    "iqf_reject_verify": getattr(tray, 'iqf_reject_verify', False),
-                    "new_tray": getattr(tray, 'new_tray', False),
-                    "IP_tray_verified": getattr(tray, 'IP_tray_verified', False)
-                }
-                all_trays.append(tray_data)
+            for store_tray in accepted_store_trays:
+                all_trays.append({
+                    "tray_id": store_tray.tray_id,
+                    "tray_quantity": store_tray.tray_qty or 0,
+                    "rejected_tray": False,
+                    "delink_tray": False,
+                    "iqf_reject_verify": False,
+                    "new_tray": False,
+                    "IP_tray_verified": True,
+                    "top_tray": top_tray_map.get(store_tray.tray_id, False),
+                    "ip_top_tray": False,
+                    "ip_top_tray_qty": None,
+                })
 
             return Response({
                 "success": True,
                 "trays": all_trays,
-                "total_trays": len(all_trays)
+                "total_trays": len(all_trays),
+                "rejection_summary": {}
             })
 
         except Exception as e:
@@ -958,7 +959,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
             return Response({"success": False, "error": "Lot ID is required"}, status=400)
 
         try:
-            print(f"🔍 [IQFRejectTableTrayIdListAPIView] Fetching rejected trays for lot_id: {lot_id}")
+            print(f"[IQFRejectTableTrayIdListAPIView] Fetching rejected trays for lot_id: {lot_id}")
             
             rejected_trays = []
             delinked_trays = []
@@ -987,7 +988,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 lot_id=lot_id
             ).select_related('rejection_reason').order_by('-top_tray', 'id')
             
-            print(f"   📦 Found {iqf_rejection_records.count()} IQF rejection records")
+            print(f"   Found {iqf_rejection_records.count()} IQF rejection records")
             
             # Collect rejection quantity information (some may have tray_id, some may not)
             rejection_quantities = []
@@ -1000,7 +1001,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     'rejection_reason_id': rec.rejection_reason.rejection_reason_id if rec.rejection_reason else ""
                 })
             
-            print(f"   📊 Collected {len(rejection_quantities)} rejection quantities")
+            print(f"   Collected {len(rejection_quantities)} rejection quantities")
             for rq in rejection_quantities:
                 print(f"      - Tray ID: {rq['tray_id']}, Qty: {rq['qty']}, Top: {rq['top_tray']}")
             
@@ -1013,7 +1014,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 delink_tray=False
             ).order_by('-top_tray', 'id')
             
-            print(f"   🆔 Found {rejected_iqf_trays.count()} rejected tray IDs (excluding delinked)")
+            print(f"   Found {rejected_iqf_trays.count()} rejected tray IDs (excluding delinked)")
             for tray in rejected_iqf_trays:
                 print(f"      - Tray ID: {tray.tray_id}, Qty in IQFTrayId: {tray.tray_quantity}, Top: {tray.top_tray}")
             
@@ -1030,7 +1031,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 else:
                     unassigned_quantities.append(rej_qty_info)
             
-            print(f"   📊 Explicit mappings: {len(explicit_mappings)}, Unassigned quantities: {len(unassigned_quantities)}")
+            print(f"   Explicit mappings: {len(explicit_mappings)}, Unassigned quantities: {len(unassigned_quantities)}")
             
             # Get list of available tray IDs that don't have explicit mappings
             available_tray_ids = [tray.tray_id for tray in rejected_iqf_trays if tray.tray_id not in explicit_mappings]
@@ -1040,14 +1041,14 @@ class IQFRejectTableTrayIdListAPIView(APIView):
             for tray_id in available_tray_ids:
                 if unassigned_idx < len(unassigned_quantities):
                     explicit_mappings[tray_id] = unassigned_quantities[unassigned_idx]
-                    print(f"   🔗 Auto-assigned: {tray_id} -> Qty: {unassigned_quantities[unassigned_idx]['qty']}")
+                    print(f"   Auto-assigned: {tray_id} -> Qty: {unassigned_quantities[unassigned_idx]['qty']}")
                     unassigned_idx += 1
             
             # ============================
             # STEP 3.5: Assign remaining unassigned to lot trays
             # ============================
             all_lot_trays = list(IQFTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
-            print(f"   🗂️ Found {len(all_lot_trays)} lot trays: {all_lot_trays}")
+            print(f"   Found {len(all_lot_trays)} lot trays: {all_lot_trays}")
             
             # ============================
             
@@ -1062,14 +1063,14 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     top_tray = rejection_info['top_tray'] if rejection_info['top_tray'] else rej_tray.top_tray
                     rejection_reason = rejection_info.get('rejection_reason', 'N/A')
                     rejection_reason_id = rejection_info.get('rejection_reason_id', '')
-                    print(f"   ✅ Rejected Tray: ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
+                    print(f"   Rejected Tray: ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
                 else:
                     # Fallback: use tray_quantity from IQFTrayId if no mapping found
                     tray_qty = resolve_qty(rej_tray.tray_id, rej_tray.tray_quantity)
                     top_tray = rej_tray.top_tray
                     rejection_reason = "N/A"
                     rejection_reason_id = ""
-                    print(f"   ⚠️ Rejected Tray (no explicit quantity found, using IQFTrayId qty): ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
+                    print(f"   Rejected Tray (no explicit quantity found, using IQFTrayId qty): ID={rej_tray.tray_id}, Qty={tray_qty}, Top={top_tray}")
                 
                 rejected_trays.append({
                     "tray_id": rej_tray.tray_id,
@@ -1085,9 +1086,26 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     "rejection_reason_id": rejection_reason_id
                 })
             
-            # ✅ All rejections should now be assigned to specific trays via explicit_mappings
-            # No need to add unassigned entries - all rejections come with tray IDs from IQF_Rejected_TrayScan
-            
+            # ✅ Fallback: add scan records with tray_ids that are NOT covered by IQFTrayId rejected records.
+            # This handles cases where IQFTrayId has no rejected_tray=True rows but IQF_Rejected_TrayScan does.
+            covered_tray_ids = {tray["tray_id"] for tray in rejected_trays}
+            for tray_id, rej_info in explicit_mappings.items():
+                if tray_id not in covered_tray_ids:
+                    mapped_qty = int(rej_info.get('qty') or 0)
+                    rejected_trays.append({
+                        "tray_id": tray_id,
+                        "tray_quantity": mapped_qty,
+                        "rejected_tray": True,
+                        "delink_tray": False,
+                        "iqf_reject_verify": False,
+                        "new_tray": False,
+                        "IP_tray_verified": False,
+                        "top_tray": bool(rej_info.get('top_tray', False)),
+                        "is_top_tray": bool(rej_info.get('top_tray', False)),
+                        "rejection_reason": rej_info.get('rejection_reason', 'N/A'),
+                        "rejection_reason_id": rej_info.get('rejection_reason_id', '')
+                    })
+
             # ============================
             # STEP 5: Get delinked trays
             # ============================
@@ -1096,7 +1114,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 delink_tray=True
             ).order_by('id')
             
-            print(f"   🔄 Found {delinked_iqf_trays.count()} delinked trays")
+            print(f"   Found {delinked_iqf_trays.count()} delinked trays")
             
             for delink_tray in delinked_iqf_trays:
                 delinked_trays.append({
@@ -1111,7 +1129,7 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     "is_top_tray": False
                 })
             
-            print(f"🔍 [IQFRejectTableTrayIdListAPIView] Returning {len(rejected_trays)} rejected trays and {len(delinked_trays)} delinked trays")
+            print(f"[IQFRejectTableTrayIdListAPIView] Returning {len(rejected_trays)} rejected trays and {len(delinked_trays)} delinked trays")
             
             return Response({
                 "success": True,

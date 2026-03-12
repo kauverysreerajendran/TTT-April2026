@@ -3520,20 +3520,29 @@ async function renderOptimalRejectionTable(allRemainingTrays, lotId) {
   
   if (!distribution.success) {
     console.error('❌ Distribution calculation failed:', distribution.error);
-    return `
-      <tr>
-        <td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">
-          <div style="border: 2px solid #f44336; border-radius: 8px; background-color: #ffebee; padding: 15px;">
-            <i class="fa fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px;"></i><br>
-            <strong>Distribution Error:</strong><br>
-            ${distribution.error}
-          </div>
-        </td>
-      </tr>
-    `;
+    // ✅ FIXED: Return both HTML AND rejection tray IDs (empty list on error)
+    window.rejectionAllocatedTrayIds = [];
+    return {
+      html: `
+        <tr>
+          <td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">
+            <div style="border: 2px solid #f44336; border-radius: 8px; background-color: #ffebee; padding: 15px;">
+              <i class="fa fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px;"></i><br>
+              <strong>Distribution Error:</strong><br>
+              ${distribution.error}
+            </div>
+          </td>
+        </tr>
+      `,
+      rejectionTrayIds: []
+    };
   }
   
   const { distributedTrays, iqfRejectionQty, totalDistributed } = distribution;
+  
+  // ✅ FIXED: Extract rejection tray IDs for delink exclusion
+  const rejectionTrayIds = distributedTrays.map(t => t.tray_id);
+  console.log('🎯 Rejection allocation - Tray IDs:', rejectionTrayIds);
   
   // ✅ Build table rows with FIXED quantities and shuffled tray IDs
   let tableRows = '';
@@ -3579,7 +3588,12 @@ async function renderOptimalRejectionTable(allRemainingTrays, lotId) {
   }
   
   console.log(`✅ Rejection table rendered: ${distributedTrays.length} trays, total ${totalDistributed} (fixed quantities)`);
-  return tableRows;
+  
+  // ✅ FIXED: Return both HTML AND rejection tray IDs
+  return {
+    html: tableRows,
+    rejectionTrayIds: rejectionTrayIds
+  };
 }
 
 // ✅ Enhanced error handling for tray capacity failures
@@ -4285,10 +4299,14 @@ async function calculateDelinkAndRejectionCounts(allRemainingTrays, lotId, total
   };
 }
 
-// ✅ UPDATED: Enhanced delink scan handlers - ALLOW ANY AVAILABLE TRAY
+// ✅ UPDATED: Enhanced delink scan handlers - ALLOW ANY AVAILABLE TRAY (excluding rejection)
 function addDelinkScanHandlers(availableTrays, allRemainingTrays, lotId) {
   console.log('🎯 Adding delink scan handlers for ANY AVAILABLE TRAY...');
   console.log('🎯 Available trays for scanning:', availableTrays);
+  
+  // ✅ NEW: Store original availableTrays for later filtering
+  window.currentAvailableTrays = availableTrays;
+  window.currentValidationAvailableTrays = availableTrays; // Will be updated by refreshRejectionTable
   
   // Store globally for validation
   window.currentRemainingTrays = allRemainingTrays;
@@ -4310,7 +4328,8 @@ function addDelinkScanHandlers(availableTrays, allRemainingTrays, lotId) {
       
       // When 9 characters reached, validate instantly
       if (scannedTrayId.length === 9) {
-        const validation = validateDelinkTray(scannedTrayId, availableTrays);
+        // ✅ FIXED: Use currentValidationAvailableTrays (excludes rejection trays)
+        const validation = validateDelinkTray(scannedTrayId, window.currentValidationAvailableTrays || availableTrays);
         
         if (validation.isValid) {
           input.style.borderColor = '#28a745';
@@ -4347,7 +4366,8 @@ function addDelinkScanHandlers(availableTrays, allRemainingTrays, lotId) {
         return;
       }
 
-      const validation = validateDelinkTray(scannedTrayId, availableTrays);
+      // ✅ FIXED: Use currentValidationAvailableTrays (excludes rejection trays)
+      const validation = validateDelinkTray(scannedTrayId, window.currentValidationAvailableTrays || availableTrays);
 
       if (validation.isValid) {
         input.style.borderColor = '#28a745';
@@ -4394,7 +4414,7 @@ function addDelinkScanHandlers(availableTrays, allRemainingTrays, lotId) {
 }
 
 
-// ✅ NEW: Helper function to refresh rejection table
+// ✅ UPDATED: Helper function to refresh rejection table AND exclude rejection trays from delink
 async function refreshRejectionTable(allRemainingTrays, lotId) {
   const rejectionTableBody = document.getElementById('rejection-table-body');
   if (rejectionTableBody) {
@@ -4406,8 +4426,36 @@ async function refreshRejectionTable(allRemainingTrays, lotId) {
       </tr>
     `;
     
-    const tableRows = await renderOptimalRejectionTable(allRemainingTrays, lotId);
-    rejectionTableBody.innerHTML = tableRows;
+    // ✅ FIXED: Get both HTML and rejection tray IDs
+    const result = await renderOptimalRejectionTable(allRemainingTrays, lotId);
+    rejectionTableBody.innerHTML = result.html;
+    
+    // ✅ NEW: Exclude rejection-allocated trays from delink candidates
+    const rejectionTrayIds = result.rejectionTrayIds || [];
+    console.log('🔄 [DELINK-UNIQUENESS] Rejection tray IDs:', rejectionTrayIds);
+    
+    // Get all delink inputs
+    const delinkInputs = document.querySelectorAll('.delink-tray-id-input');
+    
+    // ✅ Filter availableTrays to exclude rejection-allocated trays
+    let currentAvailableTrays = window.currentAvailableTrays || [];
+    const updatedAvailableTrays = currentAvailableTrays.filter(tray => !rejectionTrayIds.includes(tray));
+    
+    console.log('🔄 [DELINK-UNIQUENESS] Original availableTrays:', currentAvailableTrays);
+    console.log('🔄 [DELINK-UNIQUENESS] Updated availableTrays (excluding rejection):', updatedAvailableTrays);
+    
+    // ✅ Update all delink input placeholders and data attributes
+    delinkInputs.forEach((input, idx) => {
+      const placeholder = `Available: ${updatedAvailableTrays.slice(0, 5).join(', ')}${updatedAvailableTrays.length > 5 ? '...' : ''}`;
+      input.placeholder = placeholder;
+      input.title = `Available trays: ${updatedAvailableTrays.join(', ')}`;
+      input.setAttribute('data-available-trays', JSON.stringify(updatedAvailableTrays));
+      console.log('🔄 [DELINK-UNIQUENESS] Updated input', idx, 'placeholder:', placeholder);
+    });
+    
+    // ✅ Store updated available trays in validation function scope
+    window.currentValidationAvailableTrays = updatedAvailableTrays;
+    console.log('🔄 [DELINK-UNIQUENESS] Stored validation available trays:', updatedAvailableTrays);
   }
 }
 
@@ -8054,11 +8102,11 @@ function handleTrayWiseRejectionWithAcceptance(batchId, stockLotId, msgDiv, proc
         }
       }, 1000);
     } else if (data.delink_required) {
-      // Show delink confirmation
+      // Show delink confirmation in modal popup
       const delinkText = 'Delink required for new tray usage. Confirm to proceed?';
       
-      if (confirm(delinkText)) {
-        // Call again with delink_confirmed
+      showConfirm('Delink Confirmation', delinkText, function() {
+        // User confirmed - call again with delink_confirmed
         fetch('/iqf/iqf_tray_rejection/', {
           method: 'POST',
           headers: {
@@ -8123,14 +8171,10 @@ function handleTrayWiseRejectionWithAcceptance(batchId, stockLotId, msgDiv, proc
           }
           proceedButton.disabled = false;
         });
-      } else {
-        // User cancelled delink
-        proceedButton.disabled = false;
-        if (msgDiv) {
-          msgDiv.style.color = "#d32f2f";
-          msgDiv.textContent = "Delink cancelled. Please try again.";
-        }
-      }
+      });
+      
+      // Note: Cancel handling is done internally by showConfirm()
+      // If user cancels, the callback is not executed
     } else {
       if (msgDiv) {
         msgDiv.style.color = "#d32f2f";
