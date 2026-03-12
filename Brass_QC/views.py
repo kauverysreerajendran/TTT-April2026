@@ -673,6 +673,10 @@ class BrassPickTableView(APIView):
                 # data-brass-batch-rejection="False" and the tray-scan click handler
                 # routes to the rejection form instead of the stale delink-only path.
                 data['brass_qc_rejection'] = False
+                # IQF lots are treated as fresh — clear stale Physical Qty and Reject Qty
+                data['brass_physical_qty'] = 0
+                data['brass_rejection_total_qty'] = 0
+                data['brass_qc_accepted_qty'] = 0
 
                 actual_tray_count = IQFTrayId.objects.filter(
                     lot_id=lot_id,
