@@ -543,6 +543,8 @@ class BrassPickTableView(APIView):
             Q(brass_qc_rejection=True, brass_onhold_picking=True)
             |
             Q(send_brass_audit_to_qc=True)
+            |
+            Q(next_process_module='Brass QC')  # ✅ FIX: Lots re-routed to Brass QC (e.g. from IQF) but send_brass_qc not set
         ).exclude(
             # ✅ FIX: Only exclude rejected Audit lots that are NOT being sent back to Brass QC
             Q(brass_audit_rejection=True) & ~Q(send_brass_audit_to_qc=True)
