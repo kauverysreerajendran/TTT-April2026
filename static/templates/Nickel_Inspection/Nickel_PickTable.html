@@ -609,13 +609,14 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       Polish Finish
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                    <th style="display:none;">
-                      Version <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                     <th>
+                    <th>
                       Tray Cate- <br> Capacity
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
+                    <th style="display:none;">
+                      Version <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+
                     <th>
                       Input Source
                       <i class="fa fa-filter" aria-hidden="true"></i>
@@ -757,7 +758,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
                     <!--<td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>-->
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
-                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
                       {% if data.tray_type and data.tray_capacity %}
                         {% if data.tray_capacity == 20 %}
@@ -769,7 +769,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         {% elif data.tray_capacity == 12 %}
                           <div class="tray-capacity-badge jumbo-tray"
                                style="background: #28a745; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
-                               title="Jumbo Tray - 12 Capacity (RED, DARK GREEN & LITE GREEN)">
+                               title="Jumbo Tray - 12 Capacity (RED, DARK GREEN &amp; LITE GREEN)">
                             Jumbo - 12
                           </div>
                         {% else %}
@@ -783,6 +783,8 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <span style="color: #6c757d; font-style: italic; font-size: 12px;">No Tray Info</span>
                       {% endif %}
                     </td>
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
+
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
                     
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
@@ -1795,6 +1797,7 @@ validateInput.addEventListener("keydown", function (e) {
 <!-- ✅ FIXED: JavaScript to prevent dual endpoint calls -->
 <script nonce="{{ csp_nonce }}">
 // Enhanced JavaScript section for modal population with dynamic Lot Qty/Physical Qty
+let isLoadingRejectionDraft = false; // Flag to prevent tray table overwrite during draft loading
 document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll('.tray-scan-btn-Jig').forEach(function(link) {
     link.addEventListener('click', async function (e) {
@@ -1881,7 +1884,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // Get Brass QC status from row data attributes
         apiParams = {
           lot_id: stockLotId,
-
+          include_drafts: false, // 🔥 FIX: Exclude drafts in View mode
         };
         
         console.log(`✅ [AFTER CHECK MODE] Using: ${trayListEndpoint}`);
@@ -1894,6 +1897,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         apiParams = {
           lot_id: stockLotId,
+          include_drafts: false, // 🔥 FIX: Exclude drafts in View mode
         };
         
         console.log(`✅ [PICK MODE] Using: ${trayListEndpoint}`);
@@ -1946,62 +1950,11 @@ document.addEventListener("DOMContentLoaded", function () {
           const acceptedTrays = traysData;
           
           console.log(`📊 [Table Building] Processing ${traysData.length} total trays, ${acceptedTrays.length} accepted`);
-          
-          // Find top tray
-          const topTray = acceptedTrays.find(tray => {
-            return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
-          });
-          
-          if (topTray) {
-            let displayQuantity = topTray.tray_quantity;
-            if (topTray.ip_top_tray_qty !== null && topTray.ip_top_tray_qty !== undefined) {
-              displayQuantity = topTray.ip_top_tray_qty;
-            } else if (topTray.brass_top_tray_qty !== null && topTray.brass_top_tray_qty !== undefined) {
-              displayQuantity = topTray.brass_top_tray_qty;
-            }
-            
-            console.log(`🔝 [Top Tray] Found: ${topTray.tray_id}, Qty: ${displayQuantity}`);
-      
-            html += `
-              <tr class="top-tray-row">
-                <td>1 (Top Tray)</td>
-                <td>
-                  <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
-                </td>
-                <td>
-                  <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
-                </td>
-                ${showValidationColumn ? `
-                  <td>
-                    <div class="validation-status">
-                      <div class="status-icon fail">
-                        <img src="/static/assets/icons/fail.png" alt="Fail" style="width:18px; height:18px;" />
-                      </div>
-                      <div class="status-icon pass">
-                        <img src="/static/assets/icons/pass.png" alt="Pass" style="width:18px; height:18px;" />
-                      </div>
-                    </div>
-                  </td>
-                ` : ''}
-              </tr>
-            `;
-            rowCounter = 2;
-          }
-          
-          // Add regular trays
-          const regularTrays = acceptedTrays.filter(tray => {
-            return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
-          });
-          
-          regularTrays.sort((a, b) => {
-            const trayIdA = a.tray_id || '';
-            const trayIdB = b.tray_id || '';
-            return trayIdA.localeCompare(trayIdB);
-          });
-          
-          regularTrays.forEach((tray) => {
+
+          // Render all trays in their natural DB order (no reordering)
+          acceptedTrays.forEach((tray) => {
             let displayQuantity = tray.tray_quantity;
-      
+
             html += `
               <tr>
                 <td>${rowCounter}</td>
@@ -2027,7 +1980,7 @@ document.addEventListener("DOMContentLoaded", function () {
             `;
             rowCounter++;
           });
-          
+
           console.log(`📊 [Table Complete] Built table with ${rowCounter - 1} rows from ${dataSource}`);
         }
         
@@ -2376,8 +2329,8 @@ if (isBatchRejection) {
               modalHeader.innerHTML = `Nickel QC / <span id="trayScanModalHeaderModelNo" style="font-weight:bold; color:#028084;"></span> / Rejection Window`;
             }
             // Extract quantities from the row data
-            const lotQtyCell = row.cells[11]; // Lot Qty column (index 11)
-            const physicalQtyCell = row.cells[12]; // Physical Qty column (index 12)
+            const lotQtyCell = row.cells[10]; // Lot Qty column (index 10 after removal)
+            const physicalQtyCell = row.cells[11]; // Physical Qty column (index 11 after removal)
             const missingQtyAttr = row.getAttribute('data-brass-missing-qty');
 
             const lotQty = lotQtyCell ? lotQtyCell.textContent.trim() : '0';
@@ -2998,8 +2951,8 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
         </div>
       </div>
         
-      <!-- ✅ UPDATED: Premium Top Tray Scan Section styling from attachment 1 -->
-      <div id="topTrayScanSection" style="display: ${isDelinkOnly ? 'none' : 'block'};">
+      <!-- ✅ UPDATED: Top Tray Scan Section - visible if top tray exists -->
+      <div id="topTrayScanSection" style="display: block;">
         <div class="d-flex justify-content-between align-items-center mb-2" style="padding: 6px 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 6px; border-left: 3px solid #028084; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <h5 class="mb-0" style="font-size: 16px; font-weight: 600; color: #2c3e50; display: flex; align-items: center; gap: 6px;">
             Accepted - Top Tray Scan${draftIndicator}
@@ -3362,10 +3315,14 @@ function saveDelinkOnlyData(lotId, isDraft) {
     return;
   }
   
+  const topTrayInput = document.getElementById('topTrayIdInput');
+  const topTrayId = topTrayInput ? topTrayInput.value.trim() : '';
+  const topTrayQty = topTrayInput ? parseInt(topTrayInput.getAttribute('data-expected-qty')) || 0 : 0;
+
   const payload = {
     lot_id: lotId,
-    tray_id: '', // No top tray in delink-only mode
-    tray_qty: 0, // No top tray quantity
+    tray_id: topTrayId, 
+    tray_qty: topTrayQty, 
     draft_save: isDraft,
     delink_trays: delinkTrays,
     delink_only_mode: true // Flag to indicate delink-only mode
@@ -4271,8 +4228,8 @@ function showEditableRejectionForm(stockLotId, batchId, detailsDiv, row) {
   }
 
   // ✅ NEW: Extract quantities from the row data
-  const lotQtyCell = row.cells[11]; // Lot Qty column (adjust index if needed)
-  const physicalQtyCell = row.cells[12]; // Physical Qty column
+  const lotQtyCell = row.cells[10]; // Lot Qty column (adjust index if needed)
+  const physicalQtyCell = row.cells[11]; // Physical Qty column
   const missingQtyAttr = row.getAttribute('data-brass-missing-qty');
   
   const lotQty = lotQtyCell ? lotQtyCell.textContent.trim() : '0';
@@ -4557,6 +4514,7 @@ function loadBatchRejectionDraft(draftData) {
 // ✅ FIXED: Enhanced tray rejection draft loading
 function loadTrayRejectionDraft(draftData) {
   console.log('📝 Loading tray rejection draft data');
+  isLoadingRejectionDraft = true; // ✅ START LOADING
   
   // ✅ STEP 1: ENSURE Lot Rejection checkbox is UNCHECKED
   const batchRejectionCheckbox = document.getElementById("batchRejection");
@@ -4587,14 +4545,14 @@ function loadTrayRejectionDraft(draftData) {
         qtyInput.value = reasonQuantities[reasonId];
         qtyInput.style.borderColor = '#6f42c1';
         qtyInput.style.backgroundColor = '#faf8ff';
-        qtyInput.dispatchEvent(new Event('input'));
+        // Do NOT dispatch input event during draft loading to prevent slot recalculation
       }
     });
     
     // Calculate total quantity and update tray table
     const totalQty = Object.values(reasonQuantities).reduce((sum, qty) => sum + qty, 0);
     
-    console.log('🔍 Draft loading debug:', {
+    console.log('🔍 Zone 1 Draft loading debug:', {
       totalQty,
       trayRejections,
       trays,
@@ -4606,20 +4564,34 @@ function loadTrayRejectionDraft(draftData) {
       console.log('📄 Using saved tray structure');
       setTimeout(() => {
         loadDraftTrayStructure(trays);
+        // ✅ FINISHED LOADING
+        setTimeout(() => {
+          isLoadingRejectionDraft = false;
+          console.log('✅ isLoadingRejectionDraft set to false (Zone 1)');
+        }, 500);
       }, 500);
     } else {
       console.log('📊 Calculating tray distribution for total qty:', totalQty);
       // Calculate proper tray distribution based on total quantity
       setTimeout(() => {
-        updateRejectionTrayTable(totalQty).then(() => {
-          // After creating the proper tray table, load any saved tray IDs
-          console.log('✅ Tray table created, loading draft tray IDs');
-          loadDraftTrayIds(trayRejections);
-        }).catch(error => {
-          console.error('❌ Error updating tray table:', error);
-          // Fallback: just load tray IDs without table update
-          loadDraftTrayIds(trayRejections);
-        });
+        updateRejectionTrayTable(totalQty)
+          .then(() => {
+            // After creating the proper tray table, load any saved tray IDs
+            console.log('✅ Tray table created, loading draft tray IDs');
+            loadDraftTrayIds(trayRejections);
+          })
+          .catch(error => {
+            console.error('❌ Error updating tray table:', error);
+            // Fallback: just load tray IDs without table update
+            loadDraftTrayIds(trayRejections);
+          })
+          .finally(() => {
+            // ✅ FINISHED LOADING
+            setTimeout(() => {
+              isLoadingRejectionDraft = false;
+              console.log('✅ isLoadingRejectionDraft set to false (Zone 1)');
+            }, 500);
+          });
       }, 500);
     }
     
@@ -4851,7 +4823,7 @@ async function updateRejectionTrayTable(totalQty) {
     
     // ✅ Method 2: Fallback - Get from "Tray Cate-Capacity" column (column 8)
     if (!trayCapacity || isNaN(trayCapacity)) {
-      const trayCapacityCell = currentRow.cells[8]; // "Tray Cate-Capacity" column
+      const trayCapacityCell = currentRow.cells[7]; // "Tray Cate-Capacity" column (now index 7)
       if (trayCapacityCell) {
         const trayCapacityText = trayCapacityCell.textContent.trim();
         console.log('🔍 Tray capacity cell text:', trayCapacityText);
@@ -5666,9 +5638,14 @@ function getCurrentLotId() {
             document.getElementById('rejection-total-qty').textContent = total;
           
             // Update rejection tray table based on total quantity
-            updateRejectionTrayTable(total).catch(error => {
-              console.error('Error updating rejection tray table:', error);
-            });
+            // ✅ GUARD: Don't overwrite tray table if we are currently loading a draft
+            if (!isLoadingRejectionDraft) {
+              updateRejectionTrayTable(total).catch(error => {
+                console.error('Error updating rejection tray table:', error);
+              });
+            } else {
+              console.log('⏳ Skipping updateRejectionTrayTable - Draft is loading (Zone 1)');
+            }
           
             // Show error below the input if exceeded
             if (errorInput) {
@@ -5919,7 +5896,7 @@ function handleTrayWiseRejectionDraft(batchId, stockLotId, msgDiv, draftButton) 
   let trayCapacity = 12; // Default fallback
   const currentRow = document.querySelector(`tr[data-stock-lot-id="${stockLotId}"]`);
   if (currentRow) {
-    const trayCapacityCell = currentRow.cells[8]; // "Tray Cate-Capacity" column
+    const trayCapacityCell = currentRow.cells[7]; // "Tray Cate-Capacity" column (now index 7)
     if (trayCapacityCell) {
       const trayCapacityText = trayCapacityCell.textContent.trim();
       if (trayCapacityText.includes('-')) {
@@ -7635,15 +7612,23 @@ function populateDelinkTables(data) {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td style="padding: 4px;">
-                <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+                <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" data-expected-qty="${data.top_tray.qty}" />
                 <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
             </td>
             <td style="font-weight: 600; color: #2e7d32; padding: 4px; font-size: 12px; text-align: center; width: 60px;">${data.top_tray.qty}</td>
         `;
+        if (topTrayTableBody) topTrayTableBody.innerHTML = ''; // Clear first
         if (topTrayTableBody) topTrayTableBody.appendChild(row);
         if (topTraySection) topTraySection.style.display = 'block';
+        
+        // Also ensure the container section is visible (in case it was hidden by isDelinkOnly)
+        const outerSection = document.getElementById('topTrayScanSection');
+        if (outerSection) outerSection.style.display = 'block';
     } else {
         if (topTraySection) topTraySection.style.display = 'none';
+        // If no top tray, hide the outer section too
+        const outerSection = document.getElementById('topTrayScanSection');
+        if (outerSection) outerSection.style.display = 'none';
     }
 
     setTimeout(() => {

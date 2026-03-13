@@ -43,6 +43,31 @@ from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 
 
+def _get_input_source(jig_unload_obj):
+    """Return location names with fallback chain: M2M → TotalStockModel → TrayId → ModelMasterCreation."""
+    names = [loc.location_name for loc in jig_unload_obj.location.all()]
+    if not names:
+        for raw_cid in (jig_unload_obj.combine_lot_ids or []):
+            # combine_lot_ids entries are formatted "-LIDxxx" or "JLOT-xxx-LIDxxx" — extract plain lot_id
+            cid = raw_cid.rsplit('-', 1)[-1] if raw_cid and '-' in raw_cid else raw_cid
+            if not cid:
+                continue
+            # Try TotalStockModel first
+            tsm = TotalStockModel.objects.filter(lot_id=cid).prefetch_related('location').select_related('batch_id__location').first()
+            if tsm and tsm.location.exists():
+                names = [loc.location_name for loc in tsm.location.all()]
+                break
+            if tsm and tsm.batch_id and tsm.batch_id.location:
+                names = [tsm.batch_id.location.location_name]
+                break
+            # Fallback: LID... lot_ids belong to TrayId — trace TrayId.batch_id.location
+            tray = TrayId.objects.filter(lot_id=cid).select_related('batch_id__location').first()
+            if tray and tray.batch_id and tray.batch_id.location:
+                names = [tray.batch_id.location.location_name]
+                break
+    return ', '.join(names)
+
+
 import traceback
 
 
@@ -207,7 +232,7 @@ class NQ_Zone_PickTableView(APIView):
 
 
 
-        nq_rejection_reasons = Nickel_QC_Rejection_Table.objects.all().order_by('rejection_reason_id')
+        nq_rejection_reasons = Nickel_QC_Rejection_Table.objects.all().order_by('id')
 
 
 
@@ -456,7 +481,7 @@ class NQ_Zone_PickTableView(APIView):
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
 
 
-                'location__location_name': ', '.join([loc.location_name for loc in jig_unload_obj.location.all()]),
+                'location__location_name': _get_input_source(jig_unload_obj),
 
 
                 'tray_type': jig_unload_obj.tray_type or '',
@@ -1236,7 +1261,7 @@ class NQ_Zone_RejectTableView(APIView):
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
 
 
-                'location__location_name': ', '.join([loc.location_name for loc in obj.location.all()]),
+                'location__location_name': _get_input_source(obj),
 
 
                 'tray_type': obj.tray_type or '',
@@ -2235,7 +2260,12 @@ class NQ_Zone_HoldUnholdReasonAPIView(APIView):
 
 
 
-            obj.save(update_fields=['nq_holding_reason', 'nq_release_reason', 'nq_hold_lot', 'nq_release_lot'])
+            if action == 'hold':
+                obj.last_process_module = 'On Hold'
+            elif action == 'unhold':
+                obj.last_process_module = 'Nickel QC'
+
+            obj.save(update_fields=['nq_holding_reason', 'nq_release_reason', 'nq_hold_lot', 'nq_release_lot', 'last_process_module'])
 
 
             return JsonResponse({'success': True, 'message': 'Reason saved.'})
@@ -3423,9 +3453,7 @@ class NQ_Zone_TrayDelinkTopTrayCalcAPIView(APIView):
 
 
 
-            # Sort tray_list by tray_quantity ascending (smallest first)
-
-
+            # Sort tray_list by tray_quantity ascending (smallest first) to delink smallest trays first
             tray_list_sorted = sorted(tray_list, key=lambda x: x['tray_quantity'])
 
 
@@ -9465,6 +9493,18 @@ def nq_zone_delink_check_tray_id(request):
         if not tray_obj:
 
 
+            # Check if the tray_id exists in a different lot (wrong tray type scanned)
+            tray_exists_elsewhere = NickelQcTrayId.objects.filter(tray_id=tray_id).exists()
+
+            if tray_exists_elsewhere:
+                return JsonResponse({
+                    'exists': False,
+                    'valid_for_rejection': False,
+                    'error': 'Tray ID mismatch',
+                    'status_message': 'Tray ID Mismatch'
+                })
+
+
             return JsonResponse({
 
 
@@ -10411,6 +10451,15 @@ def nq_zone_save_single_top_tray_scan(request):
 
 
                     if not delink_tray_obj:
+
+
+                        # Check if tray_id exists in any lot (wrong tray type scanned)
+                        tray_exists_elsewhere = NickelQcTrayId.objects.filter(tray_id=delink_tray_id).exists()
+                        if tray_exists_elsewhere:
+                            return Response({
+                                'success': False,
+                                'error': f'Tray ID mismatch: "{delink_tray_id}" does not belong to this lot.'
+                            }, status=400)
 
 
                         return Response({
@@ -12657,9 +12706,6 @@ class NQ_Zone_CompletedView(APIView):
             plating_color_id__in=allowed_color_ids,  # ✅ CHANGED: Only show records for zone 1
 
 
-            created_at__range=(from_datetime, to_datetime)  # ✅ UPDATED: Date filtering using created_at
-
-
         ).annotate(
 
 
@@ -12681,7 +12727,11 @@ class NQ_Zone_CompletedView(APIView):
             Q(nq_qc_few_cases_accptance=True, nq_onhold_picking=False)
 
 
-        ).order_by('-created_at', '-lot_id')
+        ).filter(
+
+            nq_last_process_date_time__range=(from_datetime, to_datetime)  # Filter by NQ process date, not creation date
+
+        ).order_by('-nq_last_process_date_time', '-lot_id')
 
 
 
@@ -12750,7 +12800,7 @@ class NQ_Zone_CompletedView(APIView):
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
 
 
-                'location__location_name': ', '.join([loc.location_name for loc in jig_unload_obj.location.all()]),
+                'location__location_name': _get_input_source(jig_unload_obj),
 
 
                 'tray_type': jig_unload_obj.tray_type or '',
@@ -14641,125 +14691,99 @@ class NQ_Zone_PickTrayIdList_Complete_APIView(APIView):
 
 
         lot_id = request.GET.get('lot_id')
-
+        include_drafts = request.GET.get('include_drafts', 'true').lower() == 'true'
 
         if not lot_id:
-
-
             return JsonResponse({'success': False, 'error': 'Missing lot_id'}, status=400)
 
-
-
-
-
-        print(f"🔍 [NQ_Zone_PickTrayIdList_Complete_APIView] Received lot_id: {lot_id}")
-
-
-
+        print(f"🔍 [NQ_Zone_PickTrayIdList_Complete_APIView] Received lot_id: {lot_id}, include_drafts: {include_drafts}")
 
 
         # Fetch ALL trays for lot_id from NickelQcTrayId
-
-
         trays = NickelQcTrayId.objects.filter(lot_id=lot_id).order_by('id')
-
-
         tray_source = "NickelQcTrayId"
 
 
-
-
-
         # If not found, fallback to JigUnload_TrayId
-
-
         if trays.count() == 0:
-
-
             print(f"⚠️ No NickelQcTrayId records found for lot_id: {lot_id}, checking JigUnload_TrayId...")
-
-
             trays = JigUnload_TrayId.objects.filter(lot_id=lot_id).order_by('id')
-
-
             tray_source = "JigUnload_TrayId"
 
 
-
-
-
         if trays.count() == 0:
-
-
             return JsonResponse({
-
-
                 'success': False,
-
-
                 'error': f'No tray records found for lot_id: {lot_id}'
-
-
             }, status=404)
 
 
-
-
-
         # Build response data: include delink_tray and rejected_tray status for each tray
-
-
         data = []
-
-
         for index, tray in enumerate(trays, 1):
-
-
             tray_data = {
-
-
                 's_no': index,
-
-
                 'tray_id': tray.tray_id,
-
-
                 'tray_quantity': getattr(tray, 'tray_quantity', getattr(tray, 'tray_qty', 0)),
-
-
                 'top_tray': getattr(tray, 'top_tray', False),
-
-
                 'delink_tray': getattr(tray, 'delink_tray', False),
-
-
                 'rejected_tray': getattr(tray, 'rejected_tray', False),
-
-
             }
-
-
             data.append(tray_data)
-
-
             print(f"    - Tray {index}: {tray.tray_id} (qty: {tray_data['tray_quantity']}) top={tray_data['top_tray']} delink={tray_data['delink_tray']} rejected={tray_data['rejected_tray']}")
 
 
+        # Merge draft rejection into tray_data
+        if include_drafts:
+            # 🔥 NEW: Find the unload_lot_id for draft lookup
+            unload_lot_id = lot_id
+            jig_unload_record = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
+            if not jig_unload_record:
+                # Try combine_lot_ids
+                for record in JigUnloadAfterTable.objects.filter(combine_lot_ids__isnull=False):
+                    if record.combine_lot_ids and isinstance(record.combine_lot_ids, list):
+                        if lot_id in record.combine_lot_ids:
+                            unload_lot_id = str(record.lot_id)
+                            break
 
+            tray_draft = Nickel_QC_Draft_Store.objects.filter(
+                lot_id=unload_lot_id, 
+                draft_type='tray_rejection'
+            ).first()
 
+            if tray_draft and tray_draft.draft_data:
+                draft_tray_rejections = tray_draft.draft_data.get('tray_rejections', [])
+                print(f"📝 [NQ_Zone_PickTrayIdList_Complete_APIView] Found {len(draft_tray_rejections)} draft rejections to merge for {unload_lot_id}")
+
+                for draft in draft_tray_rejections:
+                    tray_id = draft.get('tray_id')
+                    rejection_qty = draft.get('rejection_qty', 0)
+
+                    # Update existing tray or add new rejected tray
+                    found = False
+                    for tray_item in data:
+                        if tray_item['tray_id'] == tray_id:
+                            tray_item['rejected_tray'] = True
+                            # If it's a draft rejection, we might want to show the draft qty? 
+                            # But usually rejected_tray=True is enough for the View UI
+                            found = True
+                            break
+                    
+                    if not found:
+                        data.append({
+                            's_no': len(data) + 1,
+                            'tray_id': tray_id,
+                            'tray_quantity': rejection_qty,
+                            'top_tray': False,
+                            'delink_tray': False,
+                            'rejected_tray': True,
+                            'is_draft': True
+                        })
 
         return JsonResponse({
-
-
             'success': True,
-
-
             'trays': data,
-
-
             'tray_source': tray_source
-
-
         })
 
 
@@ -14938,18 +14962,12 @@ class NQ_Zone_TrayIdList_Complete_APIView(APIView):
 
 
         if trays.count() == 0:
+            print(f"no NickelQcTrayId records, checking JigUnload_TrayId...")
+            trays = JigUnload_TrayId.objects.filter(lot_id=lot_id).order_by('id')
+            tray_source = "JigUnload_TrayId"
 
-
-            return JsonResponse({
-
-
-                'success': False,
-
-
-                'error': f'No tray records found for lot_id: {lot_id}'
-
-
-            }, status=404)
+        if trays.count() == 0:
+            return JsonResponse({'success': False, 'error': f'No tray records found for lot_id: {lot_id}'}, status=404)
 
 
 
