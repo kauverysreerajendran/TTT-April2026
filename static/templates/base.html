@@ -219,9 +219,14 @@
          top: 2px;
          } */ 
          .navbar-brand-wrapper {
-         background: #fff !important; /* or your header bg color */
+         background: linear-gradient(90deg,#e6f7f6,#f7fffe) !important; /* light teal gradient */
          z-index: 120 !important;
          position: relative;
+         }
+         /* Header bar background and subtle shadow */
+         .navbar {
+         background: linear-gradient(90deg,#e6f7f6,#f7fffe) !important;
+         box-shadow: 0 1px 6px rgba(2,128,132,0.06) !important;
          }
          /* Start of global font handling for tablet device */
          @media (min-width: 800px) and (max-width: 1300px) and (min-height: 600px) and (max-height: 900px) and (orientation: landscape) {
@@ -899,6 +904,7 @@
          left: 80px; /* match your sticky left for 2nd column */
          }
       </style>
+
       <!-- Required meta tags -->
       <meta charset="utf-8">
 
@@ -946,13 +952,13 @@
          </div>
       </div>
       <div class="container-scroller">
-      <!-- partial:partials/_navbar.html -->
-      <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
+      <!-- Header Options -->
+      <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row" style="font-size:12px;">
          <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-start">
             <div class="navbar-brand-wrapper d-flex align-items-center justify-content-start position-relative" style="min-width: 140px; margin-top: 0px;">
                <div class="d-flex align-items-center" style="margin-left: -35px; margin-top: 18px;">
                   <a class="navbar-brand brand-logo me-2" href="{% url 'index' %}">
-                  <img src="{% static 'assets/logo/t_t.png' %}" class="me-1" alt="logo" style="height:53px; width:auto; margin-top: -15px; margin-right: -20px;"/>
+                  <img src="{% static 'assets/logo/t_t.png' %}" class="me-1" alt="logo" style="height:53px; width:auto; margin-top: -15px;"/>
                   </a>
                   <a class="navbar-brand brand-logo me-2" href="{% url 'index' %}">
                   <img src="{% static 'assets/logo/beta.png' %}" class="me-1" alt="logo" style="height:10px; width:auto;margin-top: 10px"/>
@@ -967,48 +973,18 @@
             <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
             <span class="icon-menu"></span>
             </button>
-            <!-- Search bar moved here -->
-            <!-- <li class="nav-item nav-search d-none d-lg-block" style="margin-left: 10px;">
-               <div class="input-group">
-                 <div class="input-group-prepend hover-cursor" id="navbar-search-icon">
-                   <span class="input-group-text" id="search">
-                     <i class="icon-search"></i>
-                   </span>
-                 </div>
-                 <input type="text" class="form-control" id="navbar-search-input" placeholder="Search now" aria-label="search"
-                   aria-describedby="search">
-               </div>
-               </li> -->
-            <ul class="navbar-nav navbar-nav-right">
-                              <li class="nav-item d-flex align-items-center ms-2">
-                  <a class="nav-link p-0" href="{% url 'reports_module:reports' %}" tabindex="-1" aria-disabled="false" style="background: none; border: none;" data-tooltip="Reports">
-                     <div style="display: flex; flex-direction: column; align-items: center;">
-                        <img src="{% static 'assets/gif/rprt.gif' %}" alt="Reports" title="Reports" style="height: 1.9rem; vertical-align: middle;"> <!-- Reports icon -->
-                        <small style="font-size: 0.7rem; color: #666; margin-top: 0px;">Report</small>
-                     </div>
+
+            <ul class="navbar-nav navbar-nav-right" style="gap: 0px; align-items: center;">
+               <li class="nav-item">
+                  <a class="nav-link btn btn-outline d-flex flex-row align-items-center" href="{% url 'reports_module:reports' %}" data-tooltip="Reports" style="gap:8px;padding:7px 12px;">
+                     <i class="ti-file" style="font-size:1.25rem;color:#028084;"></i>
+                     <small style="font-size:12px;color:#333;font-weight:600;margin:0;">Reports</small>
                   </a>
                </li>
                <li class="nav-item dropdown">
-                  <a
-                     class="nav-link count-indicator dropdown-toggle ms-2"
-                     id="settingsDropdown"
-                     href="#"
-                     data-bs-toggle="dropdown"
-                     aria-expanded="false"
-                     >
-                  <a
-                     class="nav-link count-indicator dropdown-toggle ms-2"
-                     id="settingsDropdown"
-                     href="#"
-                     data-bs-toggle="dropdown"
-                     aria-expanded="false"
-                     style="border-radius: 50%; padding: 7px; display: flex; align-items: center; justify-content: center;"
-                     >
-                  <div style="display: flex; flex-direction: column; align-items: center;">
-                     <img src="{% static 'assets/gif/settings.gif' %}" alt="Settings" style="height: 1.9rem; vertical-align: middle;">
-                     <small style="font-size: 0.7rem; color: #666; margin-top: 2px;">Setitngs</small>
-                  </div>
-                  </a>
+                  <a class="nav-link btn btn-outline dropdown-toggle d-flex flex-row align-items-center" id="settingsDropdown" href="#" data-bs-toggle="dropdown" aria-expanded="false" style="gap:8px;padding:7px 10px;">
+                     <i class="ti-settings" style="font-size:1.25rem;color:#028084;"></i>
+                     <small style="font-size:12px;color:#333;font-weight:600;margin:0;">Settings</small>
                   </a>
                   <div
                      class="dropdown-menu dropdown-menu-right navbar-dropdown"
@@ -1026,74 +1002,19 @@
                      Model Master
                      </a>
                   </div>
-                  <a
-                     class="nav-link count-indicator ms-2"
-                     id="viewStatus"
-                     href="#"
-                     style="padding-right: 0.2rem;"
-                     >
-
-                  </a>
-                  <a
-                     class="nav-link count-indicator ms-2"
-                     id="barcodeStatus"
-                     href="#"
-                     >
-                  <div style="display: flex; flex-direction: column; align-items: center;">
-                     <img
-                        src="{% static 'assets/gif/barcode.gif' %}"
-                        alt="Barcode"
-                        class="barcode-icon"
-                        />
-                     <small style="font-size: 0.7rem; color: #666; margin-top: 2px;">Tray Scan</small>
-                  </div>
-                  </a>
-                  <span style="display: inline-block; width: 4px"></span>
-                  <a
-                     class="nav-link count-indicator dropdown-toggle ms-2"
-                     id="notificationDropdown"
-                     href="#"
-                     data-bs-toggle="dropdown"
-                     >
-                  <a
-                     class="nav-link count-indicator dropdown-toggle ms-2"
-                     id="notificationDropdown"
-                     href="#"
-                     data-bs-toggle="dropdown"
-                     aria-expanded="false"
-                     style="border-radius: 50%; padding: 7px; display: flex; align-items: center; justify-content: center;"
-                     >
-                  <i class="ti-bell" style="font-size: 1.3rem; color: #028084;"></i>
-                  <span class="count"></span>
-                  </a>
-                  <span class="count"></span>
-                  </a>
-                  <div
-                     class="dropdown-menu dropdown-menu-right navbar-dropdown preview-list"
-                     aria-labelledby="notificationDropdown"
-                     >
-                     <p class="mb-0 font-weight-normal float-left dropdown-header">
-                        Notifications
-                     </p>
-                  </div>
                </li>
+               <li class="nav-item">
+                  <a class="nav-link btn btn-outline d-flex flex-row align-items-center" id="barcodeStatus" href="#" style="gap:8px;padding:6px 10px;margin-right: 0px;">
+                     <img src="{% static 'assets/gif/barcode.gif' %}" alt="Barcode" class="barcode-icon" style="height:1.4rem;width:auto;" />
+                     <small style="font-size:12px;color:#333;font-weight:600;margin:0;">Tray Scan</small>
+                  </a>
+               </li>
+               
 
                <li class="nav-item nav-profile dropdown">
-                  <!-- Find this block in your navbar profile dropdown: -->
-                  <a
-                     class="nav-link count-indicator dropdown-toggle ms-2"
-                     href="#"
-                     data-bs-toggle="dropdown"
-                     id="profileDropdown"
-                     aria-expanded="false"
-                     style="border-radius: 50%; width: 38px; height: 38px; padding: 7px; display: flex; align-items: center; justify-content: center;"
-                     >
-                     <div style="display: flex; flex-direction: column; align-items: center;">
-                        <i class="ti-user" style="font-size: 1.3rem; color: #028084; display: flex; align-items: center; justify-content: center; line-height: 1;"></i>
-                        <span style="font-size: 0.85rem; color: #101010; font-weight: 600; margin-top: 2px; line-height: 1;">
-                        {{ request.user.username }}
-                        </span>
-                     </div>
+                  <a class="nav-link btn btn-outline dropdown-toggle d-flex flex-row align-items-center" href="#" data-bs-toggle="dropdown" id="profileDropdown" aria-expanded="false" style="gap:8px;padding:7px 10px;">
+                     <i class="ti-user" style="font-size:1.25rem;color:#028084;"></i>
+                     <small style="font-size:12px;color:#333;font-weight:600;margin:0;">{{ request.user.username }}</small>
                   </a>
                   <div
                      class="dropdown-menu dropdown-menu-right navbar-dropdown"
@@ -1117,14 +1038,14 @@
                </li>
                <!-- Place this after the user/profile icon dropdown in your navbar-nav navbar-nav-right list -->
                <li class="nav-item d-flex align-items-center ms-2">
-                  <a class="navbar-brand brand-logo me-2" href="{% url 'index' %}">
-                  <img src="{% static 'assets/logo/flagGrp.png' %}" class="me-1" alt="logo" style="height:45px; width:auto;margin-top: -30px;"/>
+                  <a id="flagGalleryBtn" class="navbar-brand brand-logo me-2" href="{% url 'index' %}">
+                  <img src="{% static 'assets/logo/flagGrp.png' %}" class="me-1" alt="logo" style="height:45px; width:auto;margin-top: -30px; cursor:pointer;margin-right: -25px;"/>
                   </a>
                   <a class="nav-link p-0" href="{% url 'index' %}" tabindex="-1" aria-disabled="true" style="background: none; border: none;">
                   <img
                      src="{% static 'assets/logo/TitanLogo.png' %}"
                      alt="Titan Logo"
-                     style="height: 32px; width: auto; display: block;"
+                     style="height: 40px !important; width: auto; display: block;"
                      />
                   </a>
                </li>
@@ -1135,7 +1056,388 @@
             </button>
          </div>
       </nav>
-      <!-- partial -->
+         
+         <!-- Flag Gallery Modal with Vector Graphics & Innovative UI -->
+         <style>
+         /* Advanced animations */
+         @keyframes modalSlideIn {
+            from { opacity: 0; transform: scale(0.92) translateY(-20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+         }
+         @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+         }
+         @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+         }
+         @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+         }
+         @keyframes glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(13,148,136,0.2); }
+            50% { box-shadow: 0 0 25px rgba(13,148,136,0.4); }
+         }
+         
+         .flag-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at 30% 50%, rgba(13,148,136,0.15) 0%, rgba(0,0,0,0.15) 100%);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 210000;
+            padding: 24px;
+            backdrop-filter: blur(8px);
+         }
+         
+         .flag-modal {
+            width: 100%;
+            max-width: 1020px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5fbfa 50%, #f0f9f8 100%);
+            border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.15), 0 10px 30px rgba(13,148,136,0.1), inset 0 1px 0 rgba(255,255,255,0.8);
+            overflow: hidden;
+            transform: scale(1);
+            animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border: 1.5px solid rgba(13,148,136,0.12);
+            position: relative;
+         }
+         
+         .flag-modal::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 50%, rgba(6,182,212,0.08) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+         }
+         
+         .flag-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 36px 32px;
+            background: linear-gradient(135deg, rgba(13,148,136,0.06) 0%, rgba(6,182,212,0.04) 100%);
+            border-bottom: 1px solid rgba(13,148,136,0.08);
+            position: relative;
+            z-index: 1;
+         }
+         
+         .flag-modal-title {
+            font-weight: 800;
+            color: #0c4f4a;
+            font-size: 1.5rem;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, #0d9488 0%, #0c6e66 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+         }
+         
+         .flag-modal-subtitle {
+            font-size: 0.72rem;
+            color: #6b8a88;
+            margin-top: 8px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            opacity: 0.7;
+         }
+         
+         .flag-modal-body {
+            padding: 40px 32px;
+            background: #ffffff;
+            position: relative;
+            z-index: 1;
+         }
+         
+         .flag-modal-body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(13,148,136,0.1), transparent);
+            pointer-events: none;
+         }
+         
+         .flag-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 28px;
+         }
+         
+         .flag-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 24px 18px;
+            background: linear-gradient(135deg, #ffffff 0%, #fafbfb 100%);
+            border-radius: 16px;
+            border: 1.5px solid #e5ebe9;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            group: true;
+         }
+         
+         .flag-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(13,148,136,0.04) 0%, rgba(6,182,212,0.04) 100%);
+            opacity: 0;
+            transition: opacity 0.35s ease;
+            pointer-events: none;
+            z-index: 0;
+         }
+         
+         .flag-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 30% 30%, rgba(13,148,136,0.08) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.35s ease;
+            pointer-events: none;
+            z-index: 0;
+         }
+         
+         .flag-card:hover::before {
+            opacity: 1;
+         }
+         
+         .flag-card:hover::after {
+            opacity: 1;
+         }
+         
+         .flag-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 16px 32px rgba(13,148,136,0.18), 0 8px 16px rgba(6,182,212,0.12);
+            border-color: rgba(13,148,136,0.25);
+            background: linear-gradient(135deg, #ffffff 0%, #f5fbfa 100%);
+         }
+         
+         .flag-avatar {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #fff;
+            background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%);
+            font-size: 24px;
+            margin-bottom: 16px;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 8px 18px rgba(13,148,136,0.3), inset 0 -2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 2;
+            animation: float 3s ease-in-out infinite;
+         }
+         
+         .flag-avatar::before {
+            content: '';
+            position: absolute;
+            inset: 100%;
+            border: 2px solid rgba(13,148,136,0.2);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+         }
+         
+         .flag-card:hover .flag-avatar {
+            transform: scale(1.15) rotate(8deg);
+            box-shadow: 0 14px 28px rgba(13,148,136,0.4), inset 0 -2px 4px rgba(0,0,0,0.1);
+            animation: glow 1.5s ease-in-out infinite;
+         }
+         
+         .flag-name {
+            font-size: 0.98rem;
+            color: #0c4f4a;
+            font-weight: 800;
+            line-height: 1.6;
+            position: relative;
+            z-index: 2;
+            letter-spacing: -0.2px;
+         }
+         
+         .flag-modal-close {
+            background: transparent;
+            border: 1.5px solid #d5dede;
+            color: #6b8a88;
+            font-weight: 700;
+            cursor: pointer;
+            padding: 10px 22px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            letter-spacing: 0.4px;
+            position: relative;
+            overflow: hidden;
+         }
+         
+         .flag-modal-close::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(13,148,136,0.1), transparent);
+            transition: left 0.4s ease;
+         }
+         
+         .flag-modal-close:hover::before {
+            left: 100%;
+         }
+         
+         .flag-modal-close:hover {
+            background: linear-gradient(135deg, rgba(13,148,136,0.1) 0%, rgba(6,182,212,0.08) 100%);
+            border-color: #0d9488;
+            color: #0d9488;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13,148,136,0.15);
+         }
+         
+         @media (max-width: 480px) {
+            .flag-modal { max-width: 94vw; border-radius: 20px; }
+            .flag-avatar { width: 75px; height: 75px; font-size: 20px; }
+            .flag-grid { gap: 20px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+            .flag-modal-header { padding: 28px 20px; }
+            .flag-modal-body { padding: 28px 20px; }
+            .flag-modal-title { font-size: 1.3rem; }
+         }
+         </style>
+
+         <div id="flagGalleryBackdrop" class="flag-modal-backdrop" aria-hidden="true">
+            <div class="flag-modal" role="dialog" aria-modal="true" aria-labelledby="flagGalleryTitle">
+               <!-- Decorative Vector Background -->
+               <svg class="modal-bg-vectors" style="position: absolute; top: 0; right: 0; width: 300px; height: 300px; opacity: 0.08; z-index: 0;" viewBox="0 0 200 200">
+                  <circle cx="100" cy="100" r="80" fill="none" stroke="#0d9488" stroke-width="1"/>
+                  <circle cx="100" cy="100" r="60" fill="none" stroke="#06b6d4" stroke-width="0.5"/>
+                  <path d="M100,20 L150,180 L50,180 Z" fill="none" stroke="#0d9488" stroke-width="0.5"/>
+               </svg>
+               
+               <div class="flag-modal-header">
+                  <div>
+                     <div id="flagGalleryTitle" class="flag-modal-title">✨ Team Gallery</div>
+                     <div class="flag-modal-subtitle">— Meet the Team Members —</div>
+                  </div>
+                  <div>
+                     <button id="flagModalClose" class="flag-modal-close">✕ Close</button>
+                  </div>
+               </div>
+               <div class="flag-modal-body">
+                  <div class="flag-grid" id="flagGrid">
+                     <!-- JS will populate member cards -->
+                  </div>
+               </div>
+            </div>
+         </div>
+
+         <script nonce="{{ csp_nonce }}">
+         (function(){
+            const btn = document.getElementById('flagGalleryBtn');
+            const backdrop = document.getElementById('flagGalleryBackdrop');
+            const closeBtn = document.getElementById('flagModalClose');
+            const flagGrid = document.getElementById('flagGrid');
+
+            const members = [
+               {name: 'User 1', color: '#0d9488'},
+               {name: 'User 2', color: '#06b6d4'},
+               {name: 'User 3', color: '#0891b2'},
+               {name: 'User 4', color: '#2dd4bf'},
+               {name: 'User 5', color: '#14b8a6'},
+               {name: 'User 6', color: '#08a88a'}
+            ];
+
+            function initials(name){return name.split(' ').map(s=>s[0]||'').slice(0,2).join('').toUpperCase()}
+            
+            function adjustBrightness(color, percent) {
+               const num = parseInt(color.replace('#',''), 16);
+               const amt = Math.round(2.55 * percent);
+               const R = Math.min(255, (num >> 16) + amt);
+               const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
+               const B = Math.min(255, (num & 0x0000FF) + amt);
+               return '#' + (0x1000000 + R*0x10000 + G*0x100 + B).toString(16).slice(1);
+            }
+
+            function buildGrid(){
+               flagGrid.innerHTML = '';
+               members.forEach((m, idx) => {
+                  const card = document.createElement('div');
+                  card.className='flag-card';
+                  card.style.animationDelay = (idx * 0.05) + 's';
+                  
+                  const avatar = document.createElement('div');
+                  avatar.className='flag-avatar';
+                  avatar.textContent = initials(m.name);
+                  avatar.style.backgroundImage = `linear-gradient(135deg, ${m.color} 0%, ${adjustBrightness(m.color, 40)} 100%)`;
+                  
+                  // Add SVG vector badge
+                  const svgBadge = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                  svgBadge.setAttribute('viewBox', '0 0 100 100');
+                  svgBadge.setAttribute('style', 'position: absolute; width: 22px; height: 22px; bottom: -2px; right: -2px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));');
+                  
+                  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                  circle.setAttribute('cx', '50');
+                  circle.setAttribute('cy', '50');
+                  circle.setAttribute('r', '48');
+                  circle.setAttribute('fill', m.color);
+                  
+                  const checkmark = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                  checkmark.setAttribute('d', 'M35,50 L45,60 L65,40');
+                  checkmark.setAttribute('stroke', 'white');
+                  checkmark.setAttribute('stroke-width', '8');
+                  checkmark.setAttribute('fill', 'none');
+                  checkmark.setAttribute('stroke-linecap', 'round');
+                  checkmark.setAttribute('stroke-linejoin', 'round');
+                  
+                  svgBadge.appendChild(circle);
+                  svgBadge.appendChild(checkmark);
+                  avatar.appendChild(svgBadge);
+                  
+                  const nm = document.createElement('div');
+                  nm.className='flag-name';
+                  nm.textContent = m.name;
+                  
+                  card.appendChild(avatar);
+                  card.appendChild(nm);
+                  flagGrid.appendChild(card);
+               })
+            }
+
+            function openModal(e){
+               if(e) e.preventDefault();
+               buildGrid();
+               backdrop.style.display = 'flex';
+               backdrop.setAttribute('aria-hidden','false');
+               setTimeout(()=>closeBtn.focus(),80);
+            }
+            function closeModal(){
+               backdrop.style.display='none';
+               backdrop.setAttribute('aria-hidden','true');
+            }
+
+            if(btn) btn.addEventListener('click', function(e){ e.preventDefault(); openModal(e); });
+            if(closeBtn) closeBtn.addEventListener('click', closeModal);
+            backdrop.addEventListener('click', function(e){ if(e.target === backdrop) closeModal(); });
+            document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && backdrop.style.display === 'flex') closeModal(); });
+         })();
+         </script>
       <div class="container-fluid page-body-wrapper" style="overflow: hidden;">
 
       <!-- Menu Panels -->
@@ -2102,7 +2404,6 @@
              { selector: '#settingsDropdown i.ti-settings', text: 'Settings - User Creation & Model Master' },
              { selector: '#reportStatus i.ti-eye', text: 'Visual Aid - View Reports & Analytics' },
              { selector: '.barcode-icon', text: 'Tray Identification - Scan Barcode' },
-             { selector: '#notificationDropdown i.ti-bell', text: 'Notifications - System Alerts' },
              { selector: '#profileDropdown i.ti-user', text: 'User Profile - Account Settings' },
              { selector: '.nav-item i.ti-file', text: 'Documents - File Management' }
            ];

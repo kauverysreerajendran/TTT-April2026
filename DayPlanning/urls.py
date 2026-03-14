@@ -4,6 +4,7 @@ from .views import *
 urlpatterns = [
     path('bulk_upload/', DPBulkUploadView.as_view(), name='bulk_upload'),
     path('bulk_upload/preview/', DPBulkUploadPreviewView.as_view(), name='bulk_upload_preview'),
+    path('download_excel_template/', DownloadExcelTemplateAPIView.as_view(), name='download_excel_template'),
     
     # Auto-fetch APIs for Single Upload
     path('get_plating_colour/', GetPlatingColourAPIView.as_view(), name='get_plating_colour'),

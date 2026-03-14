@@ -1,48 +1,24 @@
-from django.shortcuts import render
 from django.shortcuts import render, redirect, get_object_or_404
-from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from modelmasterapp.models import *  # Import the TrayId model
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from modelmasterapp.models import *
-from modelmasterapp.models import *
-from django.contrib import messages
-from datetime import timedelta
-import datetime
-from django.utils.safestring import mark_safe
-import re
-import openpyxl
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.renderers import TemplateHTMLRenderer
-from rest_framework.parsers import MultiPartParser
-from rest_framework import status
-import openpyxl
-import re
-import datetime
 from django.contrib import messages
 from django.utils.safestring import mark_safe
 from django.db.models import OuterRef, Subquery, Q
-import json
-from django.http import JsonResponse
-from rest_framework.views import APIView
-from rest_framework.renderers import TemplateHTMLRenderer
-from rest_framework.parsers import MultiPartParser, JSONParser
-import math
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from django.db import transaction, IntegrityError
 from django.utils.timezone import now
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from datetime import timedelta, datetime
+import datetime as _dt
+import json
+import re
+import math
+import openpyxl
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.renderers import TemplateHTMLRenderer
+from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from .models import *
@@ -523,7 +499,8 @@ class DPBulkUploadView(APIView):
             objects_to_create = []
 
             # Single timestamp prefix for all batch IDs in this upload
-            upload_ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
+            import datetime as dt
+            upload_ts = dt.datetime.now().strftime('%Y%m%d%H%M%S%f')
 
             # Per-upload cache: avoid re-running validate_codes for duplicate stock pairs
             _codes_cache = {}
@@ -762,7 +739,8 @@ class DPBulkUploadView(APIView):
             _loc_hint = ", ".join(list(locations.keys())[:5])
 
             # Single timestamp prefix for all batch IDs in this upload
-            upload_ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
+            import datetime as dt
+            upload_ts = dt.datetime.now().strftime('%Y%m%d%H%M%S%f')
 
             # Per-upload cache: avoid re-running validate_codes for duplicate stock pairs
             _codes_cache = {}
@@ -1686,12 +1664,14 @@ class TrayIdScanAPIView(APIView):
                 if not tray_id:
                     continue
                 
-                # Check if tray ID starts with JB or NB
-                if not (tray_id.startswith('JB-') or tray_id.startswith('NB-')):
+                # Allow partial typing: only show error when first two chars are present and not JB/NB
+                prefix = tray_id.upper()
+                first2 = prefix[:2]
+                if len(first2) == 2 and first2 not in ('JB', 'NB'):
                     tray_not_in_system_errors.append({
                         'tray_id': tray_id,
                         'position': i + 1,
-                        'error': f'Tray ID "{tray_id}" is not allowed. Only JB and NB trays are permitted.'
+                        'prefix_error': True,
                     })
                     continue
                 
@@ -1954,7 +1934,7 @@ class TrayIdScanAPIView(APIView):
             return JsonResponse({'success': False, 'error': 'Unexpected error: ' + str(e)}, status=500)
 
     def generate_new_lot_id(self):
-        timestamp = datetime.datetime.now().strftime("%d%m%Y%H%M%S")
+        timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
         last_lot = TotalStockModel.objects.order_by('-id').first()
         if last_lot and last_lot.lot_id and last_lot.lot_id.startswith("LID"):
             last_seq_no = int(last_lot.lot_id[-4:])
@@ -2015,12 +1995,14 @@ class ValidateTopTrayAPIView(APIView):
                     'error': f'Tray ID "{tray_id}" not found in system. Only pre-configured trays are allowed.'
                 })
 
-            # Check if tray ID starts with JB or NB
-            if not (tray_id.startswith('JB-') or tray_id.startswith('NB-')):
+            # Allow partial typing: only error when first two chars are present and not JB/NB
+            prefix = tray_id.upper()
+            first2 = prefix[:2]
+            if len(first2) == 2 and first2 not in ('JB', 'NB'):
                 return JsonResponse({
                     'success': True,
                     'valid': False,
-                    'error': f'Tray ID "{tray_id}" is not allowed. Only JB and NB trays are permitted.'
+                    'prefix_error': True,
                 })
 
             # Check if tray exists in this specific batch (TrayId or DraftTrayId)
@@ -2113,8 +2095,10 @@ class TopTrayScanAPIView(APIView):
                     'error': 'Missing batch ID or tray ID.'
                 }, status=400)
 
-            # Check if tray ID starts with JB or NB
-            if not (scanned_tray_id.startswith('JB-') or scanned_tray_id.startswith('NB-')):
+            # Allow partial typing: only error when first two chars are present and not JB/NB
+            prefix = scanned_tray_id.upper()
+            first2 = prefix[:2]
+            if len(first2) == 2 and first2 not in ('JB', 'NB'):
                 return JsonResponse({
                     'success': False,
                     'error': f'Tray ID "{scanned_tray_id}" is not allowed. Only JB and NB trays are permitted.'
@@ -2484,8 +2468,10 @@ class TrayIdUniqueCheckAPIView(APIView):
         if not tray_id:
             return JsonResponse({'exists': False, 'error': 'Missing tray_id'})
 
-        # Check if tray ID starts with JB or NB
-        if not (tray_id.startswith('JB-') or tray_id.startswith('NB-')):
+        # Allow partial typing: only error when first two chars are present and not JB/NB
+        prefix = tray_id.upper()
+        first2 = prefix[:2]
+        if len(first2) == 2 and first2 not in ('JB', 'NB'):
             return JsonResponse({
                 'exists': False,
                 'available': False,
@@ -2857,8 +2843,8 @@ class DPCompletedTableView(APIView):
         # Calculate date range
         if from_date_str and to_date_str:
             try:
-                from_date = datetime.datetime.strptime(from_date_str, '%Y-%m-%d').date()
-                to_date = datetime.datetime.strptime(to_date_str, '%Y-%m-%d').date()
+                from_date = _dt.datetime.strptime(from_date_str, '%Y-%m-%d').date()
+                to_date = _dt.datetime.strptime(to_date_str, '%Y-%m-%d').date()
             except ValueError:
                 from_date = yesterday
                 to_date = today
@@ -2867,8 +2853,8 @@ class DPCompletedTableView(APIView):
             to_date = today
 
         # Convert dates to datetime objects for filtering (include full day)
-        from_datetime = timezone.make_aware(datetime.datetime.combine(from_date, datetime.datetime.min.time()))
-        to_datetime = timezone.make_aware(datetime.datetime.combine(to_date, datetime.datetime.max.time()))
+        from_datetime = timezone.make_aware(_dt.datetime.combine(from_date, _dt.datetime.min.time()))
+        to_datetime = timezone.make_aware(_dt.datetime.combine(to_date, _dt.datetime.max.time()))
         # Subqueries for annotations
         last_process_module_subquery = TotalStockModel.objects.filter(
             batch_id=OuterRef('pk')
@@ -3465,3 +3451,80 @@ class ValidatePlatingStockNoAPIView(APIView):
                 'message': f'Error validating plating stock number: {str(e)}'
             }
             return JsonResponse(result)
+
+from django.http import HttpResponse
+from io import BytesIO
+from datetime import datetime
+
+class DownloadExcelTemplateAPIView(APIView):
+    """
+    API endpoint to download Excel template for Day Planning bulk upload
+    
+    Template structure:
+    - Headers: S.No, Plating Stk No, Polishing Stk No, Plating Colour, Category, Input Qty, Source
+    - Sample row with example data
+    - Formatted with headers styling
+    - No data rows - user fills their own data
+    
+    Performance:
+    - Uses BytesIO for in-memory buffer (no disk I/O)
+    - Single-pass row creation
+    - Cached in response headers for browser
+    """
+    
+    def get(self, request):
+        """Generate and return Excel template"""
+        try:
+            # Create a new workbook and worksheet
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Bulk Upload"
+            
+            # Define columns (matching the data table structure)
+            columns = ['S.No', 'Plating Stk No', 'Polishing Stk No', 'Plating Colour', 'Category', 'Input Qty', 'Source']
+            
+            # Add header row
+            for col_num, column_title in enumerate(columns, 1):
+                cell = ws.cell(row=1, column=col_num)
+                cell.value = column_title
+                # Style header: bold, light blue background, centered
+                from openpyxl.styles import Font, PatternFill, Alignment
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="126A83", end_color="126A83", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            
+            # Set column widths for better readability
+            ws.column_dimensions['A'].width = 8     # S.No
+            ws.column_dimensions['B'].width = 15    # Plating Stk No
+            ws.column_dimensions['C'].width = 15    # Polishing Stk No
+            ws.column_dimensions['D'].width = 15    # Plating Colour
+            ws.column_dimensions['E'].width = 15    # Category
+            ws.column_dimensions['F'].width = 12    # Input Qty
+            ws.column_dimensions['G'].width = 15    # Source
+            
+            # Freeze the header row
+            ws.freeze_panes = "A2"
+            
+            # Create BytesIO object to hold Excel file in memory
+            output = BytesIO()
+            wb.save(output)
+            output.seek(0)
+            
+            # Create HTTP response with proper headers
+            response = HttpResponse(
+                output.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            
+            # File name with timestamp
+            timestamp = datetime.now().strftime('%d%b%Y')
+            response['Content-Disposition'] = f'attachment; filename="DayPlanning_Bulk_Upload_Template_{timestamp}.xlsx"'
+            
+            return response
+            
+        except Exception as e:
+            print(f"❌ Error generating Excel template: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Error generating template: {str(e)}'
+            }, status=500)

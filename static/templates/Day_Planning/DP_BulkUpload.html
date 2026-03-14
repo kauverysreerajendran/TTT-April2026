@@ -3,11 +3,26 @@
 {% block content %}
 
 <style nonce="{{ csp_nonce }}">
+    :root {
+      --clr-primary: #14b8a6;        /* Light Teal */
+      --clr-primary-light: #6ee7de;  /* Lighter Teal */
+      --clr-secondary: #5eead4;      /* Soft Cyan */
+      --clr-accent: #2dd4bf;         /* Soft Teal Accent */
+      --clr-success: #34d399;        /* Soft Emerald */
+      --clr-warning: #fcd34d;        /* Soft Amber */
+      --clr-danger: #f87171;         /* Soft Red */
+      --clr-bg: #f0fdf9;             /* Very Light Bg */
+      --clr-surface: #ffffff;        /* White */
+      --clr-text: #0d9488;           /* Soft Teal Text */
+      --clr-muted: #94a3b8;          /* Light Gray */
+      --clr-border: #ccfbf1;         /* Very Light Teal Border */
+    }
+
     .data-table th {
-    background: #e6f7fa;        /* Light blue background */
-    color: #126a83;             /* Teal text */
+    background: linear-gradient(135deg, var(--clr-primary) 0%, var(--clr-primary-light) 100%);
+    color: #ffffff;
     font-weight: 700;
-    border-bottom: 2px solid #b2e0ea;
+    border-bottom: 3px solid var(--clr-accent);
     text-align: left;
     letter-spacing: 0.5px;
     /* Optional: rounded top corners for thead */
@@ -91,47 +106,7 @@
   left: auto;
   transform: none;
 }
-  /* Count display styling for submit button area */
-  .table-actions .data-count {
-    position: absolute;
-    top: -35px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--clr-primary);
-    color: white;
-    padding: 10px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(18, 106, 131, 0.3);
-    border: 2px solid white;
-  }
-  
-  .table-actions .data-count::before {
-    content: '';
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 6px solid var(--clr-primary);
-  }
-  
-  /* Responsive count display */
-  @media (max-width: 768px) {
-    .table-actions .data-count {
-      font-size: 0.5rem;
-      padding: 5px 10px;
-      top: -32px;
-    }
-    .table-actions{
-      left: 30% !important;
-    }
-  }
+  /* Count display styling - no longer needed at bottom */
   
   @media (max-width: 480px) {
     .table-actions .data-count {
@@ -146,110 +121,97 @@
     }
   }
     
-      /* Sticky submit/cancel buttons at bottom */
+      /* Sticky submit/cancel buttons - moved to table header */
     .table-actions {
-      position: fixed !important;
-    bottom: 45px !important;
-    left: 45% !important;
-    transform: translateX(-50%) !important;
-    z-index: 1000 !important;
-    border-radius: 12px !important;
-    padding: 1rem 2rem !important;
-    margin: 0 !important;
-    display: flex !important;
-    justify-content: center !important;
-    gap: 1rem !important;
-    min-width: 300px !important;
-    pointer-events: auto !important;
-    transform: translateY(30%) !important;
-  
+      position: relative !important;
+      bottom: auto !important;
+      left: auto !important;
+      right: auto !important;
+      top: auto !important;
+      transform: none !important;
+      z-index: auto !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      margin-left: auto !important;
+      display: flex !important;
+      justify-content: flex-end !important;
+      gap: 0.5rem !important;
+      min-width: auto !important;
+      pointer-events: auto !important;
     }
     
-    /* Adjust for sidebar when expanded */
-    body:not(.sidebar-icon-only) {
-      left: calc(50% + 112px) !important; /* Center with sidebar offset */
+    /* Make table-header sticky to freeze during scroll */
+    #data-table-section .table-header {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 10 !important;
+      background: var(--clr-surface) !important;
     }
     
-    /* Adjust for collapsed sidebar */
-    .sidebar-icon-only {
-      left: calc(50% + 27px) !important; /* Center with collapsed sidebar offset */
-    }
+    /* Adjust for sidebar - no longer needed */
     
-    /* Enhanced button styling for sticky position */
     .table-actions .btn {
-      min-width: 120px !important;
-      padding: 10px !important;
-      font-weight: 700 !important;
-      text-transform: uppercase !important;
-      letter-spacing: 0.5px !important;
-      border-radius: 8px !important;
+      min-width: auto !important;
+      padding: 0.5rem 0.8rem !important;
+      font-weight: 600 !important;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+      border-radius: 6px !important;
       transition: all 0.3s ease !important;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-      background-color: #fff;
-    }
-    
-    /* Enhanced hover effects for sticky buttons */
-    .table-actions .btn:hover {
-      transform: translateY(-2px) !important;
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
+      box-shadow: none !important;
+      font-size: 0.75rem !important;
+      background-color: transparent !important;
     }
     
     /* Submit button specific styling */
     .table-actions .btn:first-child {
-      background: var(--clr-primary) !important;
-      color: white !important;
-      border: 2px solid var(--clr-primary) !important;
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.3), rgba(52, 211, 153, 0.2)) !important;
+      color: var(--clr-text) !important;
+      border: 1px solid rgba(52, 211, 153, 0.4) !important;
+      box-shadow: none !important;
     }
     
     .table-actions .btn:first-child:hover {
-      background: var(--clr-secondary) !important;
-      border-color: var(--clr-secondary) !important;
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.5), rgba(52, 211, 153, 0.4)) !important;
+      box-shadow: none !important;
+      transform: none !important;
     }
     
-    /* Cancel button specific styling (red) */
+    /* Cancel button specific styling */
     .table-actions .btn:last-child {
-      background: #fff !important;
-      color: #dc3545 !important;
-      border: 2px solid #dc3545 !important;
+      background: linear-gradient(135deg, rgba(248, 113, 113, 0.3), rgba(248, 113, 113, 0.2)) !important;
+      color: var(--clr-text) !important;
+      border: 1px solid rgba(248, 113, 113, 0.4) !important;
+      box-shadow: none !important;
     }
     
     .table-actions .btn:last-child:hover {
-      background: #dc3545 !important;
-      color: white !important;
+      background: linear-gradient(135deg, rgba(248, 113, 113, 0.5), rgba(248, 113, 113, 0.4)) !important;
+      box-shadow: none !important;
+      transform: none !important;
     }
     
-   
-    /* Responsive adjustments for sticky buttons */
+    
+    /* Responsive adjustments - no longer needed for header buttons */
     @media (max-width: 768px) {
-      .table-actions {
-        left: 30% !important;
-        min-width: 280px !important;
-        padding: 0.75rem 1.5rem !important;
-        bottom: 35px !important;
-      }
-      
-      body:not(.sidebar-icon-only),
-      .sidebar-icon-only {
-        left: 50% !important; /* Full center on mobile */
-      }
-      
       .table-actions .btn {
-        min-width: 100px !important;
-        padding: 0.75rem 1.5rem !important;
-        font-size: 0.9rem !important;
+        padding: 0.4rem 0.7rem !important;
+        font-size: 0.7rem !important;
       }
     }
     
     @media (max-width: 480px) {
       .table-actions {
-        flex-direction: column !important;
-        gap: 0.5rem !important;
-        min-width: 250px !important;
+        flex-direction: row !important;
+        gap: 0.3rem !important;
       }
       
       .table-actions .btn {
-        width: 100% !important;
+        width: auto !important;
         min-width: auto !important;
+        padding: 0.4rem 0.6rem !important;
+        font-size: 0.65rem !important;
       }
     }
     :root {
@@ -351,63 +313,188 @@
     }
     .btn {
       border: none;
-      border-radius: 6px;
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
+      border-radius: 10px;
+      padding: 0.875rem 1.75rem;
+      font-size: 0.95rem;
       font-weight: 600;
       cursor: pointer;
-      transition: transform 0.3s, box-shadow 0.3s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 0.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.15);
+      transition: left 0.3s ease;
+    }
+    .btn:hover::before {
+      left: 100%;
     }
     .btn-outline {
-      background: transparent;
-      border: 2px solid var(--clr-primary);
-      color: var(--clr-primary);
+      background: linear-gradient(135deg, rgba(20, 184, 166, 0.25), rgba(20, 184, 166, 0.15));
+      border: 1px solid rgba(20, 184, 166, 0.3);
+      color: var(--clr-text);
     }
     .btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(20, 184, 166, 0.15);
     }
     .btn svg.icon {
       margin-right: 0.5rem;
     }
+    /* Header section with Records, buttons, files, and drag-drop inline */
+    .dp-header-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 1rem;
+      padding: 1rem 24px;
+      background: linear-gradient(135deg, rgba(32, 201, 189, 0.03) 0%, rgba(94, 234, 212, 0.03) 100%);
+      border-bottom: 1px solid var(--clr-border);
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+    
+    .dp-records-badge {
+      background: transparent;
+      color: var(--clr-text);
+      padding: 0.5rem 0.8rem;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      border: 1px solid rgba(45, 212, 191, 0.4);
+      box-shadow: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    
+    .dp-button-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      min-width: max-content;
+    }
+    
+    .dp-files-chips {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .dp-file-chip {
+      background: rgba(20, 184, 166, 0.08);
+      border: 1px solid var(--clr-border);
+      border-radius: 16px;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+      color: var(--clr-text);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+      min-width: max-content;
+    }
+    
+    .dp-file-chip button {
+      background: none;
+      border: none;
+      color: var(--clr-danger);
+      cursor: pointer;
+      padding: 0;
+      font-size: 1.1rem;
+      line-height: 1;
+      transition: all 0.2s ease;
+    }
+    
+    .dp-file-chip button:hover {
+      color: #dc2626;
+      transform: scale(1.2);
+    }
+    
     /* Split area: Upload area & File list */
     .upload-file-area {
       display: flex;
       flex-wrap: wrap;
       gap: 2rem;
-      padding-bottom: 20px;
+      padding: 20px 30px;
+      position: relative;
     }
         
-       .file-upload-area {
-    flex: -1 -1 200px;
-    border: 1px dashed;
-    border-color: #9e9e9e;
-    border-radius: 3px;
-    padding: 15px;
-    text-align: center;
-    cursor: pointer;
-    transition: background 0.3s, border-color 0.3s;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 56px;
-}
+    .file-upload-area {
+      flex-shrink: 0;
+      border: 2px dashed rgba(45, 212, 191, 0.4);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      background: rgba(32, 201, 189, 0.03);
+      min-width: max-content;
+    }
     .file-upload-area:hover {
-      background: rgba(18,106,131,0.05);
+      background: rgba(32, 201, 189, 0.08);
+      border-color: var(--clr-accent);
+      box-shadow: 0 2px 8px rgba(20, 184, 166, 0.1);
     }
     .file-upload-area p {
       margin: 0;
-      font-size: 1rem;
-      color: #171717;
+      font-size: 0.8rem;
+      color: var(--clr-text);
+      font-weight: 500;
+      white-space: nowrap;
     }
     .upload-link {
-      color: #2547f2 !important; /* Example: orange, change to any color you want */
+      color: var(--clr-accent) !important;
+      font-weight: 700;
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--clr-primary) 0%, var(--clr-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      cursor: pointer;
+    }
+    
+    /* Hide old file list since we show chips in header */
+    .file-list {
+      display: none !important;
+    }
+    
+    /* Data Table styling */
+    .data-table-card {
+      background: var(--clr-surface);
+      border-radius: 12px;
+      margin: 20px 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .data-table-card .table-header {
+      padding: 20px 24px;
+      margin-bottom: 0;
+      border-bottom: 2px solid var(--clr-border);
+    }
+    
+    .data-table-card .table-header h4 {
+      margin: 0;
+      color: var(--clr-text);
       font-weight: 600;
-      text-decoration: underline;
+      font-size: 1.1rem;
     }
    /*  .lottie-upload {
       width: 80px;
@@ -424,42 +511,51 @@
       gap: 1rem;
     }
        .file-card {
-      background: var(--clr-surface);
-      border: 1px solid var(--clr-muted);
-      border-radius: 8px;
-      padding: 7px !important;
+      background: linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(248, 250, 252, 0.5) 100%);
+      border: 1.5px solid var(--clr-border);
+      border-radius: 10px;
+      padding: 12px !important;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: box-shadow 0.3s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       animation: fadeIn 0.5s ease-in;
-      max-width: 350px !important; /* Reduced width to prevent overlap */
+      max-width: 350px !important;
       min-width: 0;
       word-break: break-all;
+      box-shadow: 0 2px 8px rgba(30, 58, 138, 0.06);
     }
     .file-name {
-      max-width: 170px; /* Reduce max width for file name text */
+      max-width: 170px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      color: var(--clr-text);
+      font-weight: 500;
     }
     .file-card:hover {
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      border-color: var(--clr-secondary);
+      box-shadow: 0 8px 20px rgba(14, 165, 233, 0.12);
+      transform: translateY(-2px);
+      background: linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(229, 245, 255, 0.3) 100%);
     }
     .file-info {
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      flex: 1;
     }
     .file-icon {
-      width: 36px;
-      height: 36px;
-      background: var(--clr-bg);
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, rgba(30, 58, 138, 0.1), rgba(14, 165, 233, 0.05));
       color: var(--clr-primary);
-      border-radius: 6px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
+      border: 1.5px solid rgba(30, 58, 138, 0.08);
+      font-weight: 600;
     }
     .file-details {
       overflow: hidden;
@@ -471,27 +567,38 @@
       margin-top: 2px;
     }
     .remove-file {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border: none;
-      background: var(--clr-bg);
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
       color: var(--clr-text);
-      border-radius: 50%;
+      border-radius: 8px;
+      border: 1.5px solid rgba(239, 68, 68, 0.15);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background 0.3s, color 0.3s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-shrink: 0;
     }
     .remove-file:hover {
-      background: var(--clr-tertiary);
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       color: var(--clr-surface);
+      border-color: #ef4444;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+      transform: scale(1.05);
+    }
+    .remove-file:active {
+      transform: scale(0.95);
     }
     /* Data Table Section */
     .data-table-card {
-      margin: 0rem 5px 0.5rem 3px;
+      margin: 20px 0;
       animation: slideIn 0.8s ease-out;
-      margin-top: 15px !important; /* Gap above the Data Table section */
+      background: var(--clr-surface);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--clr-border);
     }
     .table-header {
       display: flex;
@@ -512,69 +619,83 @@
     }
    .table-container {
   overflow-x: auto;
-  max-height: 200px;
-  margin-bottom: 35px !important;
-  padding: 16px 24px!important; /* Add space inside the container */
+  overflow-y: auto;
+  max-height: 450px;
+  margin-bottom: 50px !important;
+  padding: 0 !important;
   position: relative !important;
   z-index: 1 !important;
-  max-width: 100%; /* Add this */
+  max-width: 100%;
+  background: var(--clr-surface);
 }
   
-  /* Ensure table scroll track is visible above buttons */
+  /* Ensure table scroll track is visible */
   .table-container::-webkit-scrollbar {
     width: 8px !important;
-    height: 1px !important; /* Add this for horizontal scrollbar */
+    height: 6px !important;
     z-index: 999 !important;
   }
   
-  .table-container::-webkit-scrollbar:horizontal {
-    height: 3px !important;
-  }
-  
   .table-container::-webkit-scrollbar-track {
-    background: #f1f1f1 !important;
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.05), rgba(20, 184, 166, 0.05)) !important;
     border-radius: 6px !important;
     z-index: 999 !important;
   }
   
   .table-container::-webkit-scrollbar-thumb {
-    background: #888 !important;
+    background: linear-gradient(135deg, var(--clr-primary), var(--clr-accent)) !important;
     border-radius: 6px !important;
     z-index: 999 !important;
   }
   
   .table-container::-webkit-scrollbar-thumb:hover {
-    background: #555 !important;
+    background: linear-gradient(135deg, #0d5c5b, #0f766e) !important;
   }
   
   /* Responsive table heights for different screen sizes */
-@media (min-width: 2200px) {
-  .table-container {
-       max-height: 650px; 
+  @media (min-width: 2200px) {
+    .table-container {
+      max-height: 650px; 
+    }
   }
-}
     .data-table {
       width: 100%;
-      min-width: 600px; /* Reduced minimum width since we removed one column */
-      padding: 5px;
+      min-width: 600px;
+      padding: 0;
       border-spacing: 0 !important;
-      background: var(--clr-bg);
+      background: var(--clr-surface);
       border-radius: 0 !important;
       overflow: hidden;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      margin-bottom: 30px !important;
-      
+      margin-bottom: 0 !important;
+      border: 1px solid var(--clr-border);
     }
         #data-table-section .card-body {
-      padding-left: 0 !important;
-      padding-right: 0 !important;
+      padding: 0 !important;
     }
       
-    .data-table th,
+    .data-table th {
+      background: rgba(32, 201, 189, 0.08);
+      border: 1px solid var(--clr-border);
+      color: var(--clr-text);
+      font-weight: 600;
+      padding: 0.875rem 1rem;
+      text-align: left;
+    }
+    
     .data-table td {
       padding: 0.75rem 1rem;
       text-align: left;
-      border: 1px solid var(--clr-muted);  /* Grid lines for rows and columns */
+      border-bottom: 1px solid rgba(205, 250, 245, 0.5);
+      border-right: 1px solid rgba(205, 250, 245, 0.3);
+      color: var(--clr-text);
+    }
+    
+    .data-table tbody tr {
+      transition: background 0.2s ease;
+    }
+    
+    .data-table tbody tr:hover {
+      background: rgba(32, 201, 189, 0.05);
     }
   
     /* Action Column */
@@ -584,67 +705,82 @@
     }
     /* Redesigned Delete Button */
     .btn-delete {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border: none;
-      background: var(--clr-bg);
-      border-radius: 50%;
+      background: rgba(248, 113, 113, 0.1);
+      border-radius: 8px;
+      border: 1px solid rgba(248, 113, 113, 0.2);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background 0.3s, transform 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .btn-delete:hover {
-      background: var(--clr-tertiary);
-      transform: scale(1.1);
+      background: rgba(248, 113, 113, 0.25);
+      border-color: rgba(248, 113, 113, 0.5);
+      transform: scale(1.08);
+      box-shadow: 0 2px 8px rgba(248, 113, 113, 0.2);
     }
     .btn-delete .icon {
-      width: 18px;
-      height: 18px;
-      stroke: var(--clr-text);
+      width: 16px;
+      height: 16px;
+      stroke: rgba(248, 113, 113, 0.7);
       stroke-width: 2;
+      transition: all 0.3s;
+    }
+    .btn-delete:hover .icon {
+      stroke: rgba(248, 113, 113, 1);
     }
     .cell-input {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid var(--clr-primary);
-      border-radius: 6px;
-      min-width: 100px; /* Ensure minimum input width */
-      font-family: inherit;
-      font-size: 0.9rem;
-    }
+      width: 100%;\n      padding: 0.625rem 0.75rem;\n      border: 1.5px solid var(--clr-border);\n      border-radius: 8px;\n      min-width: 100px;\n      font-family: inherit;\n      font-size: 0.9rem;\n      background: linear-gradient(to bottom, rgba(30, 58, 138, 0.02), rgba(255,255,255,0));\n      transition: all 0.3s ease;\n    }
     .cell-input:focus { 
       outline: none; 
-      border-color: var(--clr-secondary);
-      box-shadow: 0 0 0 2px rgba(18, 106, 131, 0.2);
-    }
+      border-color: var(--clr-secondary);\n      background: var(--clr-surface);\n      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1), inset 0 2px 4px rgba(30, 58, 138, 0.05);\n    }
     
     /* Simple dropdown styling - no conflicts */
     .simple-dropdown {
       appearance: none;
-      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      width: 100%;
+      padding: 0.625rem 0.75rem;
+      border: 1.5px solid var(--clr-border);
+      border-radius: 8px;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%233b82f6' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
       background-position: right 10px center;
       background-repeat: no-repeat;
       background-size: 16px;
       padding-right: 40px !important;
+      background-color: linear-gradient(to bottom, rgba(30, 58, 138, 0.02), rgba(255,255,255,0));
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .simple-dropdown:hover {
+      border-color: var(--clr-secondary);
+      box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
     }
     
     .simple-dropdown:focus {
+      outline: none;
       border-color: var(--clr-secondary) !important;
-      box-shadow: 0 0 0 2px rgba(18, 106, 131, 0.2) !important;
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1) !important;
     }
     
     .simple-dropdown option {
       padding: 8px;
       background: white;
-      color: #333;
+      color: var(--clr-text);
+      font-weight: 500;
     }
     
     /* Auto-filled field styling */
     .auto-filled {
-      background-color: #e8f5e8 !important;
-      border-left: 3px solid #28a745 !important;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05)) !important;
+      border-left: 4px solid var(--clr-success) !important;
+      border-color: var(--clr-success) !important;
     }
     
     /* Read-only auto-filled cells */
@@ -710,11 +846,7 @@
   
   @media screen and (min-width: 770px) and (max-width: 1024px) {
     .table-container {
-      padding-bottom: 120px !important; /* Add space for sticky buttons */
-    }
-    .table-actions {
-      bottom: 40px !important;
-      /* Remove margin-top, as it has no effect on fixed elements */
+      padding-bottom: 0 !important;
     }
   }
 
@@ -729,79 +861,111 @@
     box-sizing: border-box !important;
     
 }
+
+/* Empty State Styling */
+#empty-state-section {
+  background: var(--clr-surface);
+  border-radius: 12px;
+  margin: 20px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 40px 20px;
+  text-align: center;
+  display: none;
+}
+
+#empty-state-section.show {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 350px;
+}
+
+#empty-state-section img {
+  max-width: 200px;
+  height: auto;
+  margin-bottom: 20px;
+  opacity: 0.8;
+}
+
+#empty-state-section h3 {
+  color: var(--clr-text);
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+}
+
+#empty-state-section p {
+  color: var(--clr-muted);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 400px;
+}
 </style>
 
 <div>
-    <h4 style="padding-left: 20px; display: flex; align-items: center;">
-      Day Planning - Data Upload
-      <span class="data-count" style="margin-left: 18px; font-size: 1rem;">
+    <!-- Header with Records, Buttons, Files, and Upload Area All in One Line -->
+    <div class="dp-header-controls">
+      <h7 style="font-weight: 500">Day Planning - Data Upload</h7>
+      <div class="dp-records-badge">
         Records: <span id="top-record-count">0</span>
-      </span>
-    </h4>
-  
-    <!--  <div class="card-header" style="
-      background-size: cover;
-      color: #fff;
-      position: relative;
-      overflow: hidden;
-      border-top-left-radius: 12px;
-      border-top-right-radius: 12px;
+      </div>
       
-      ">  
-    </div> -->
-  <!-- Card Body content follows -->
-  <div class="card-body">
-        <!-- ...existing code... -->
-    <div class="upload-file-area" style="padding-left: 30px;">
-      <div class="upload-controls-wrapper" style="width:100%;display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;justify-content:space-between;position:relative;">
-        <div class="file-upload-area" id="file-upload-area">
-          <p>Drag and drop Excel files here or <span class="upload-link">Click to Select</span></p>
-          <div class="lottie-upload" style="flex-shrink:0;">
-            <!-- ...existing code for lottie or image... -->
-            <!-- <img src="{% static 'assets/gif/upload.gif' %}" alt="Upload Logo" style="width:60px; height:auto; object-fit:contain; margin-top: 10px;"> -->
-          </div>
-          <input type="file" id="file-upload" accept=".xlsx,.xls" hidden>
-        </div>
-        <div id="file-list" class="file-list"></div>
-        <button id="add-model-btn" class="btn btn-outline" style="
-                    position: absolute;
-          bottom: 5px;
-          right: 20px;
-          z-index: 2;
-          padding: 15px;
-          font-size: 13px;
-          font-weight: 600;
-          border: 1.5px solid var(--clr-primary);
-          background: var(--clr-primary);   /* <-- updated */
-          color: #fff;                      /* <-- updated */
-          border-radius: 30px;
-          cursor: pointer;
-          transition: transform 0.3s,
-        ">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <line x1="3" y1="9" x2="21" y2="9"/>
-            <line x1="3" y1="15" x2="21" y2="15"/>
-            <line x1="9" y1="3" x2="9" y2="21"/>
-            <line x1="15" y1="3" x2="15" y2="21"/>
+      <div class="dp-button-group">
+        <button id="download-template-btn" class="btn btn-outline" style="background: linear-gradient(135deg, rgba(52, 211, 153, 0.4), rgba(52, 211, 153, 0.3)); border: 1px solid rgba(52, 211, 153, 0.3); padding: 0.5rem 0.85rem; font-size: 0.8rem; color: var(--clr-text); gap: 0.4rem;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Single Upload
+          Template
+        </button>
+        <button id="add-model-btn" class="btn btn-outline" style="font-size: 0.8rem !important; background: linear-gradient(135deg, rgba(20, 184, 166, 0.4), rgba(20, 184, 166, 0.3)); border: 1px solid rgba(20, 184, 166, 0.3); padding: 0.5rem 0.85rem!important; font-size: 0.8rem; color: var(--clr-text); gap: 0.4rem;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          Upload
         </button>
       </div>
+      
+      <!-- Drag and Drop Zone in Header -->
+      <div class="file-upload-area" id="file-upload-area" style="padding: 0.5rem 0.8rem;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--clr-primary);">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p style="margin: 0; font-size: 0.8rem; white-space: nowrap;">Drop files or browse</p>
+        <input type="file" id="file-upload" accept=".xlsx,.xls" hidden>
+      </div>
+      
+      <div class="dp-files-chips" id="dp-files-chips-container"></div>
     </div>
-    <!-- ...existing code... -->
+    
+
+</div>
+
+<!-- Download Progress Overlay (hidden by default) -->
+<div id="downloadProgressOverlay" style="display:none; position:fixed; inset:0; z-index:220000; align-items:center; justify-content:center;">
+  <div style="background:rgba(255,255,255,0.98); padding:18px 18px; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,0.12); min-width:300px; max-width:90vw; text-align:center;">
+    <div id="downloadProgressLabel" style="font-weight:700;color:#0f766e;margin-bottom:10px;font-size:1rem">Preparing download...</div>
+    <div style="background:#eef8f7;border-radius:8px;height:12px;overflow:hidden;">
+      <div id="downloadProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#14b8a6,#06b6d4); transition:width 140ms linear;"></div>
+    </div>
+    <div id="downloadProgressPct" style="margin-top:10px;color:#3f6b68;font-weight:600;">0%</div>
   </div>
 </div>
 
-<div id="data-table-section" class="data-table-card" style="display:none;">
-  <div class="card-body">
-    <div class="table-header">
-            <h4 style = "margin-bottom: -12px">
-       
-        Data Table
-      </h4>
+<!-- Empty State Section - shown when no data uploaded -->
+<div id="empty-state-section" class="show">
+  <img src="{% static 'assets/images/notfound.jpg' %}" alt="No Data">
+  <h3>No Data Uploaded Yet</h3>
+  <p>Upload an Excel file to see your data here. Click "Upload" or drag files to get started.</p>
+</div>
+
+<div id="data-table-section" class="data-table-card" style="display:none; background: var(--clr-surface); border-radius: 12px; margin: 20px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+  <div class="card-body" style="padding: 0;">
+    <div class="table-header" style="padding: 1px 24px; margin-bottom: 0; border-bottom: 1px solid var(--clr-border); display: flex; justify-content: space-between; align-items: center;">
+      <h4 style="margin: 0; color: var(--clr-text); font-weight: 600;">Data Table</h4>
+      <div class="table-actions"></div>
     </div>
-    <div class="table-container" id="data-table-container"></div>
+    <div class="table-container" id="data-table-container" style="max-height: 400px; overflow-y: auto;"></div>
   </div>
 </div>
 </div>
@@ -937,7 +1101,7 @@
       // Update the upload area text to indicate it's disabled
       const uploadText = fileUploadArea.querySelector('p');
       if (uploadText) {
-        uploadText.innerHTML = 'Upload disabled - Clear table to upload new files';
+        uploadText.innerHTML = 'Upload disabled';
         uploadText.style.color = '#6C757D';
       }
     }
@@ -1392,6 +1556,102 @@ function createSimpleDropdown(td, row, column, currentValue) {
     addModelButton.addEventListener('click', handleAddModel);
     fileUploadInput.addEventListener('change', handleFileSelect);
 
+        // Handle Download Template button click
+    const downloadTemplateBtn = document.getElementById('download-template-btn');
+    const downloadOverlay = document.getElementById('downloadProgressOverlay');
+    const downloadBar = document.getElementById('downloadProgressBar');
+    const downloadPct = document.getElementById('downloadProgressPct');
+    const downloadLabel = document.getElementById('downloadProgressLabel');
+    if (downloadTemplateBtn) {
+      downloadTemplateBtn.addEventListener('click', async function(e) {
+        e.preventDefault();
+        const endpoint = '/dayplanning/download_excel_template/';
+        const prevDisabled = downloadTemplateBtn.disabled;
+        downloadTemplateBtn.disabled = true;
+        try {
+          // show overlay
+          if (downloadOverlay) { downloadOverlay.style.display = 'flex'; }
+          downloadLabel.textContent = 'Starting download...';
+          downloadBar.style.width = '0%'; downloadPct.textContent = '0%';
+
+          const resp = await fetch(endpoint, { credentials: 'same-origin' });
+          if (!resp.ok) throw new Error('Server returned ' + resp.status);
+
+          // get content-length if provided
+          const contentLength = resp.headers.get('Content-Length');
+          const total = contentLength ? parseInt(contentLength, 10) : null;
+
+          if (!resp.body) {
+            // fallback: read blob at once
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const disp = resp.headers.get('Content-Disposition');
+            let filename = 'DayPlanning_Template.xlsx';
+            if (disp) {
+              const m = disp.match(/filename\*=UTF-8''([^;\n]+)/i) || disp.match(/filename="?([^;\n"]+)"?/i);
+              if (m && m[1]) filename = decodeURIComponent(m[1].replace(/\"/g, ''));
+            }
+            const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+            if (downloadOverlay) downloadLabel.textContent = 'Download complete';
+            if (typeof showToast === 'function') showToast('Download Complete','Template downloaded successfully to your local','success');
+            showDownloadSuccessVisual('Template downloaded successfully to your local');
+            setTimeout(()=>{ if (downloadOverlay) downloadOverlay.style.display='none'; downloadTemplateBtn.disabled = prevDisabled; },900);
+            return;
+          }
+
+          const reader = resp.body.getReader();
+          const chunks = [];
+          let received = 0;
+          while(true){
+            const {done, value} = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            if (total) {
+              const pct = Math.round((received/total)*100);
+              downloadBar.style.width = pct + '%';
+              downloadPct.textContent = pct + '%';
+              downloadLabel.textContent = 'Downloading...';
+            } else {
+              // indeterminate progress animation
+              const approx = Math.min(98, Math.round((received/1024)/50));
+              downloadBar.style.width = approx + '%';
+              downloadPct.textContent = approx + '%';
+              downloadLabel.textContent = 'Downloading...';
+            }
+          }
+
+          // combine chunks
+          const blob = new Blob(chunks);
+          const url = window.URL.createObjectURL(blob);
+          const disp = resp.headers.get('Content-Disposition');
+          let filename = 'DayPlanning_Template.xlsx';
+          if (disp) {
+            const m = disp.match(/filename\*=UTF-8''([^;\n]+)/i) || disp.match(/filename="?([^;\n"]+)"?/i);
+            if (m && m[1]) filename = decodeURIComponent(m[1].replace(/\"/g, ''));
+          }
+          const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+
+          // success UI
+          downloadBar.style.width = '100%'; downloadPct.textContent = '100%'; downloadLabel.textContent = 'Download complete';
+          if (typeof showToast === 'function') showToast('Download Complete','Template downloaded successfully to your local','success');
+          showDownloadSuccessVisual('Template downloaded successfully to your local');
+          setTimeout(()=>{ if (downloadOverlay) downloadOverlay.style.display='none'; downloadTemplateBtn.disabled = prevDisabled; },900);
+
+        } catch (err) {
+          if (downloadOverlay) downloadOverlay.style.display='none';
+          downloadTemplateBtn.disabled = prevDisabled;
+          const msg = err && err.message ? err.message : 'Download failed';
+          if (typeof showToast === 'function') {
+            showToast('Download Failed', msg, 'error');
+          } else {
+            alert('Download failed: ' + msg);
+          }
+        }
+      });
+    }
+
+
     function createEmptyRow() {
       return {
         'S.NO': String(tableData.length + 1),
@@ -1601,54 +1861,44 @@ function handleFileSelect(e) {
     }
 
     function renderFileList() {
-      fileListContainer.innerHTML = '';
-      if (!files.length) return;
-      files.forEach((file, index) => {
-        const fileCard = document.createElement('div');
-        fileCard.className = 'file-card';
-        fileCard.innerHTML = `
-          <div class="file-info">
-            <div class="file-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--clr-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
-                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                <polyline points="14 2 14 8 20 8"/>
-              </svg>
-            </div>
-            <div class="file-details">
-              <div class="file-name" title="${file.name}">${file.name}</div>
-              <div class="file-size">${formatFileSize(file.size)}</div>
-            </div>
-          </div>
-          <button class="remove-file" data-index="${index}" aria-label="Remove file">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--clr-text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        `;
-        fileListContainer.appendChild(fileCard);
-        fileCard.querySelector('.remove-file').addEventListener('click', () => {
-          Swal.fire({
-            title: 'Are you sure?',
-            text: "Do you really want to remove this file? All data will be cleared.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, delete it!',
-            cancelButtonText: 'Cancel'
-          }).then((result) => {
-            if (result.isConfirmed) {
-              handleRemoveFile(index);
-              Swal.fire({
-                icon: 'success',
-                title: 'Deleted!',
-                text: 'File has been removed successfully.',
-                showConfirmButton: false,
-                timer: 2000
-              });
-            }
+      // Update file chips in header
+      const chipsContainer = document.getElementById('dp-files-chips-container');
+      chipsContainer.innerHTML = '';
+      
+      if (files.length) {
+        files.forEach((file, index) => {
+          const chip = document.createElement('div');
+          chip.className = 'dp-file-chip';
+          chip.innerHTML = `
+            <span>${file.name} (${formatFileSize(file.size)})</span>
+            <button data-index="${index}" aria-label="Remove file" style="background: none; border: none; color: var(--clr-danger); cursor: pointer; padding: 0; font-size: 1.1rem; line-height: 1; transition: all 0.2s ease;">×</button>
+          `;
+          chipsContainer.appendChild(chip);
+          
+          chip.querySelector('button').addEventListener('click', (e) => {
+            e.stopPropagation();
+            Swal.fire({
+              title: 'Are you sure?',
+              text: "Do you really want to remove this file? All data will be cleared.",
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonText: 'Yes, delete it!',
+              cancelButtonText: 'Cancel'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                handleRemoveFile(index);
+                Swal.fire({
+                  icon: 'success',
+                  title: 'Deleted!',
+                  text: 'File has been removed successfully.',
+                  showConfirmButton: false,
+                  timer: 2000
+                });
+              }
+            });
           });
         });
-      });
+      }
     }
 
     // ========== BUG FIX: MODIFIED handleRemoveFile FUNCTION ==========
@@ -1660,10 +1910,7 @@ function handleFileSelect(e) {
       
       // Update displays
       renderFileList();
-      renderTable();
-      
-      // Hide table since no data remains
-      dataTableSection.style.display = 'none';
+      renderTable();  // This will show/hide empty state and table automatically
       
       // ENABLE UPLOAD CONTROLS WHEN FILE IS REMOVED
       enableUploadControls();
@@ -1672,16 +1919,19 @@ function handleFileSelect(e) {
 // Replace the renderTable function with this version that removes sorting:
 
 function renderTable() {
+  const emptyStateSection = document.getElementById('empty-state-section');
+  
   if (!tableData.length) {
-    dataTableContainer.innerHTML = `
-      <div class="empty-table">
-        <p>No data available</p>
-        <p>Upload an Excel file or click "Add Model (Table)" to start</p>
-      </div>
-    `;
+    // Show empty state, hide table
+    emptyStateSection.classList.add('show');
+    dataTableSection.style.display = 'none';
     updateTopRecordCount();
     return;
   }
+
+  // Data exists: hide empty state, show table
+  emptyStateSection.classList.remove('show');
+  dataTableSection.style.display = 'block';
 
   // Remove sorting logic - use original tableData order
   const sortedData = [...tableData]; // No sorting, just use original order
@@ -1946,48 +2196,11 @@ function renderTable() {
   dataTableContainer.innerHTML = '';
   dataTableContainer.appendChild(table);
 
-  // Add Submit and Cancel buttons below the table
-  const tableActionsContainer = document.createElement('div');
-    // Add count display above submit/cancel buttons
- /*  const dataCount = document.createElement('div');
-  dataCount.className = 'data-count';
-  const validRowCount = tableData.filter(row => {
-    const hasData = Object.keys(row).some(key => {
-      if (key === 'S.NO' || key === '_fileSource' || key === '_autoFilled') return false;
-      return row[key] && row[key].toString().trim() !== '';
-    });
-    return hasData;
-  }).length;
-  dataCount.textContent = `${validRowCount} ${validRowCount === 1 ? 'Record' : 'Records'} Exists`; */
-
-/*   / --- Add this block to show count next to "Data Table" title --- */
-const validRowCount = tableData.filter(row => {
-  const hasData = Object.keys(row).some(key => {
-    if (key === 'S.NO' || key === '_fileSource' || key === '_autoFilled') return false;
-    return row[key] && row[key].toString().trim() !== '';
-  });
-  return hasData;
-}).length;
-const tableHeader = document.querySelector('#data-table-section .table-header');
-const h2 = tableHeader && tableHeader.querySelector('h2');
-if (h2) {
-  // Remove any old .data-count in header
-  const oldCount = tableHeader.querySelector('.data-count');
-  if (oldCount) oldCount.remove();
-  // Create a new .data-count for the header
-  const headerCount = document.createElement('span');
-  headerCount.className = 'data-count';
-  headerCount.textContent = `${validRowCount} ${validRowCount === 1 ? 'Record' : 'Records'} Exists`;
-  h2.appendChild(headerCount);
-}
-
-  tableActionsContainer.style.position = 'fixed !important';
-  /* tableActionsContainer.appendChild(dataCount); */
-  tableActionsContainer.className = 'table-actions';
-  tableActionsContainer.style.display = 'flex !important';
-  tableActionsContainer.style.justifyContent = 'center !important';
-  tableActionsContainer.style.gap = '1rem';
-  tableActionsContainer.style.marginTop = '1rem';
+  // Get the existing table-actions div in the table-header
+  const tableActionsContainer = document.querySelector('#data-table-section .table-actions');
+  
+  // Clear any existing content
+  tableActionsContainer.innerHTML = '';
   
   const submitButton = document.createElement('button');
   submitButton.className = 'btn btn-outline';
@@ -2134,9 +2347,8 @@ if (h2) {
               tableData = [];
               files = [];
               fileDataMap.clear();
-              renderTable();
+              renderTable();  // This will show/hide empty state and table automatically
               renderFileList();
-              dataTableSection.style.display = 'none';
               
               // ENABLE UPLOAD CONTROLS AFTER SUCCESSFUL SUBMISSION
               enableUploadControls();
@@ -2211,9 +2423,8 @@ cancelButton.addEventListener('click', () => {
       tableData = [];
       files = [];
       fileDataMap.clear();
-      renderTable();
+      renderTable();  // This will show/hide empty state and table automatically
       renderFileList();
-      dataTableSection.style.display = 'none';
       
       // ENABLE UPLOAD CONTROLS WHEN CANCELLED
       enableUploadControls();
@@ -2232,7 +2443,6 @@ cancelButton.addEventListener('click', () => {
   
   tableActionsContainer.appendChild(submitButton);
   tableActionsContainer.appendChild(cancelButton);
-  dataTableContainer.appendChild(tableActionsContainer);
   updateTopRecordCount();
 }
 
@@ -2271,7 +2481,7 @@ cancelButton.addEventListener('click', () => {
         files = [];
         fileDataMap.clear();
         renderFileList();
-        dataTableSection.style.display = 'none';
+        renderTable();  // This will show/hide empty state and table automatically
         
         // ENABLE UPLOAD CONTROLS WHEN TABLE IS EMPTY
         enableUploadControls();
@@ -2328,6 +2538,24 @@ cancelButton.addEventListener('click', () => {
           setTimeout(() => { if (toast.parentNode) toastContainer.removeChild(toast); }, 300);
         }
       }, 5000);
+    }
+    
+    // Visual success card specifically for downloads (in case toast is missed)
+    function showDownloadSuccessVisual(message = 'Template downloaded successfully to your local') {
+      const id = 'downloadSuccessCard';
+      let card = document.getElementById(id);
+      if (card) {
+        card.parentNode.removeChild(card);
+      }
+      card = document.createElement('div');
+      card.id = id;
+      card.style.cssText = `position:fixed; right:20px; bottom:22px; z-index:230000; background:#e6fffa; border-left:6px solid #10b981; color:#064e3b; padding:12px 16px; border-radius:10px; box-shadow:0 8px 28px rgba(4,22,22,0.12); font-weight:700; display:flex; align-items:center; gap:10px;`;
+      card.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 6L9 17l-5-5" stroke="#065f46" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div style="font-size:0.95rem">${message}</div>
+      `;
+      document.body.appendChild(card);
+      setTimeout(()=>{ if (card && card.parentNode) card.style.opacity='0'; setTimeout(()=>{ if (card && card.parentNode) card.parentNode.removeChild(card); },300); }, 3600);
     }
     function updateTopRecordCount() {
   const countSpan = document.getElementById('top-record-count');
