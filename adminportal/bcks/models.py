@@ -24,10 +24,6 @@ class Module(models.Model):
     parent = models.ForeignKey(
         'self', on_delete=models.CASCADE, null=True, blank=True, related_name='submenus'
     )
-    groups = models.ManyToManyField(
-        'auth.Group', blank=True, related_name='modules',
-        help_text="User groups (User Categories) that have access to this module."
-    )
 
     def __str__(self):
         return self.name
@@ -145,3 +141,5 @@ from django.dispatch import receiver
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.create(user=instance)
+        
+        

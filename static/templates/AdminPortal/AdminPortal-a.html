@@ -1233,10 +1233,6 @@
                id="module-provision-content"
                style="padding: 0.75rem 1rem"
                >
-               <!-- Auto-assignment info banner for fixed User Categories -->
-               <div id="category-auto-info" style="display:none; padding:0.75rem 1rem;
-                    margin-bottom:0.9rem; background:#f0fffe; border:1px solid #b2dfdb;
-                    border-radius:6px; font-size:0.95rem;"></div>
                <div class="module-provision-grid">
                   <div>
                      <div class="module-provision-title">Select Modules</div>
@@ -3824,38 +3820,18 @@ document.getElementById("btn-module-save-next").onclick = async function () {
    
    document.getElementById("userCategorySelect").addEventListener("change", function() {
      const groupId = this.value;
-     const groupName = this.options[this.selectedIndex].text.trim();
      if (!groupId) return;
-
-     // These five categories have modules auto-provisioned by the backend
-     const FIXED_CATEGORIES = ["DP User", "IS User", "BQC User", "IQF User", "BA User"];
-     const isFixed = FIXED_CATEGORIES.includes(groupName);
-
      fetch(`/adminportal/api/group-modules/${groupId}/`)
        .then(res => res.json())
        .then(data => {
          if (data.success) {
-           droppedModules = data.modules.map(m => ({ name: m.name, headings: m.headings }));
+           // Set droppedModules to the modules of this group
+           droppedModules = data.modules.map(m => ({
+             name: m.name,
+             headings: m.headings
+           }));
            renderModuleBtnGrid();
            renderSelectedModulesContainer();
-
-           const infoBox = document.getElementById("category-auto-info");
-           const provisionGrid = document.querySelector(".module-provision-grid");
-
-           if (isFixed) {
-             // Show info banner; make drag-drop tiles non-interactive
-             if (infoBox) {
-               infoBox.style.display = "";
-               infoBox.innerHTML =
-                 `<span style="color:#008080;font-weight:600;">✔ Modules auto-assigned for <em>${groupName}</em>.</span>
-                  <span style="color:#555;margin-left:0.5rem;">Access is restricted to the mapped module only. No manual selection required — just click <strong>Save & Next</strong>.</span>`;
-             }
-             if (provisionGrid) provisionGrid.style.pointerEvents = "none";
-           } else {
-             // Non-fixed category: allow full manual drag-drop
-             if (infoBox) infoBox.style.display = "none";
-             if (provisionGrid) provisionGrid.style.pointerEvents = "";
-           }
          }
        });
    });

@@ -38,6 +38,44 @@ from .models import Module, UserModuleProvision
 from Recovery_DP.models import *
 
 
+# ---------------------------------------------------------------------------
+# Module-wise access control for fixed User Categories
+# Maps group name → list of menu_title values whose modules they can access
+# ---------------------------------------------------------------------------
+USER_CATEGORY_MODULE_MAP = {
+    "DP User":  ["Day Planning"],
+    "IS User":  ["Input Screening"],
+    "BQC User": ["Brass QC"],
+    "IQF User": ["IQF"],
+    "BA User":  ["Brass Audit"],
+}
+
+
+def auto_provision_modules_for_group(user, group):
+    """
+    If `group` is one of the five fixed User Categories, wipe the user's
+    existing UserModuleProvision records and create new ones for every
+    Module whose menu_title matches the category's mapped list.
+
+    Returns True  → modules were auto-provisioned (skip manual step).
+    Returns False → not a fixed category; caller handles manually.
+    """
+    menu_titles = USER_CATEGORY_MODULE_MAP.get(group.name)
+    if menu_titles is None:
+        return False
+
+    UserModuleProvision.objects.filter(user=user).delete()
+    modules = Module.objects.filter(menu_title__in=menu_titles)
+    for mod in modules:
+        UserModuleProvision.objects.create(
+            user=user,
+            module_name=mod.name,
+            headings=mod.headings or [],
+            file_name=mod.html_file or '',
+        )
+    return True
+
+
 def get_allowed_modules_for_user(user):
     if not user.is_authenticated:
         return []
@@ -85,223 +123,108 @@ class IndexView(APIView):
         return response
     
     def get_dashboard_stats(self, allowed_modules):
-        """Compute dashboard stats for all modules unconditionally."""
-        from modelmasterapp.models import ModelMasterCreation, TotalStockModel
-        from Brass_QC.models import BrassTrayId as BQ_TrayId, Brass_Qc_Accepted_TrayScan, Brass_Qc_Accepted_TrayID_Store
-        from Jig_Loading.models import JigCompleted, JigLoadingManualDraft
-        from Jig_Unloading.models import JigUnloadAfterTable, JigUnloadDraft
-        from Spider_Spindle.models import SpiderJigDetails
-
+        """Fetch statistics for Day Planning module"""
         stats = []
-
-        # ── Day Planning ──────────────────────────────────────────────────────
-        yet_to_start   = ModelMasterCreation.objects.filter(Draft_Saved=False).count()
-        jumbo_count    = ModelMasterCreation.objects.filter(Draft_Saved=False, tray_type__icontains='Jumbo').count()
-        normal_count   = ModelMasterCreation.objects.filter(Draft_Saved=False, tray_type__icontains='Normal').count()
-        dp_processed   = TotalStockModel.objects.filter(
-            Q(ip_person_qty_verified=True) | Q(draft_tray_verify=True) |
-            Q(accepted_Ip_stock=True) | Q(few_cases_accepted_Ip_stock=True) |
-            Q(rejected_ip_stock=True)
-        ).count()
-        dp_total       = yet_to_start + dp_processed
-        dp_progress    = int((dp_processed / max(dp_total, 1)) * 100)
-        stats.append({
-            'label': 'Day Planning',
-            'total_lot': dp_total,
-            'yet_to_start': yet_to_start,
-            'yet_to_start_percent': int((yet_to_start / max(dp_total, 1)) * 100),
-            'drafted': normal_count,
-            'drafted_percent': int((normal_count / max(dp_total, 1)) * 100),
-            'processed': dp_processed,
-            'processed_percent': dp_progress,
-            'in_progress': jumbo_count,
-            'in_progress_percent': int((jumbo_count / max(dp_total, 1)) * 100),
-            'progress': dp_progress,
-            'completed_percent': dp_progress,
-            'moved_to_next_percent': int((jumbo_count / max(dp_total, 1)) * 100),
-            'color': '#008080',
-            'icon': 'mdi-package-variant-closed',
-            'labels': {
-                'total_lots': 'Total Rows (Yet to Start)',
-                'progress': 'Total Processed in Complete Table',
-                'in_progress': 'Jumbo Tray Count',
-                'status_overview': 'Status Overview',
-            },
-        })
-
-        # ── Brass QC ──────────────────────────────────────────────────────────
-        # Total = unique lots that entered Brass QC (Pick Table)
-        bq_total = BQ_TrayId.objects.values('lot_id').distinct().count()
-        # Accepted = lots that completed acceptance tray scan (written by brass_save_accepted_tray_scan)
-        bq_acc   = Brass_Qc_Accepted_TrayScan.objects.values('lot_id').distinct().count()
-        # Rejected = lots where brass_qc_rejection flag is set (covers both batch & tray rejection)
-        bq_rej   = TotalStockModel.objects.filter(brass_qc_rejection=True).count()
-        # Completed = lots whose tray IDs are finalized (is_save=True)
-        bq_comp  = Brass_Qc_Accepted_TrayID_Store.objects.filter(is_save=True).values('lot_id').distinct().count()
-        stats.append({
-            'label': 'Brass QC', 'color': '#00796b', 'icon': 'mdi-shield-check',
-            'total_qty': bq_total, 'accepted_qty': bq_acc, 'rejected_qty': bq_rej, 'completed_qty': bq_comp,
-            'display_stats': [
-                {'label': 'Total Lots',  'value': bq_total, 'icon': 'mdi-table'},
-                {'label': 'Accepted',    'value': bq_acc,   'icon': 'mdi-check-circle'},
-                {'label': 'Rejected',    'value': bq_rej,   'icon': 'mdi-close-circle'},
-                {'label': 'Completed',   'value': bq_comp,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── Brass Audit ───────────────────────────────────────────────────────
-        ba_total = TotalStockModel.objects.filter(brass_qc_accptance=True).count()
-        ba_acc   = TotalStockModel.objects.filter(
-                       Q(brass_audit_accptance=True) | Q(brass_audit_few_cases_accptance=True)
-                   ).count()
-        ba_rej   = TotalStockModel.objects.filter(brass_audit_rejection=True).count()
-        ba_comp  = TotalStockModel.objects.filter(
-                       Q(brass_audit_accptance=True) | Q(brass_audit_few_cases_accptance=True) | Q(brass_audit_rejection=True)
-                   ).count()
-        stats.append({
-            'label': 'Brass Audit', 'color': '#00695c', 'icon': 'mdi-clipboard-check',
-            'total_qty': ba_total, 'accepted_qty': ba_acc, 'rejected_qty': ba_rej, 'completed_qty': ba_comp,
-            'display_stats': [
-                {'label': 'Total Lots', 'value': ba_total, 'icon': 'mdi-table'},
-                {'label': 'Accepted',   'value': ba_acc,   'icon': 'mdi-check-circle'},
-                {'label': 'Rejected',   'value': ba_rej,   'icon': 'mdi-close-circle'},
-                {'label': 'Completed',  'value': ba_comp,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── IQF ───────────────────────────────────────────────────────────────
-        iq_total = TotalStockModel.objects.filter(
-                       Q(brass_qc_rejection=True) | Q(send_brass_audit_to_iqf=True) | Q(brass_qc_few_cases_accptance=True)
-                   ).count()
-        iq_acc   = TotalStockModel.objects.filter(
-                       Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True)
-                   ).count()
-        iq_rej   = TotalStockModel.objects.filter(iqf_rejection=True).count()
-        iq_comp  = TotalStockModel.objects.filter(
-                       Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True) | Q(iqf_rejection=True)
-                   ).count()
-        stats.append({
-            'label': 'IQF', 'color': '#00897b', 'icon': 'mdi-filter-check',
-            'total_qty': iq_total, 'accepted_qty': iq_acc, 'rejected_qty': iq_rej, 'completed_qty': iq_comp,
-            'display_stats': [
-                {'label': 'Total Lots', 'value': iq_total, 'icon': 'mdi-table'},
-                {'label': 'Accepted',   'value': iq_acc,   'icon': 'mdi-check-circle'},
-                {'label': 'Rejected',   'value': iq_rej,   'icon': 'mdi-close-circle'},
-                {'label': 'Completed',  'value': iq_comp,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── Jig Loading ───────────────────────────────────────────────────────
-        jl_total    = TotalStockModel.objects.filter(
-                          Q(brass_audit_accptance=True, Jig_Load_completed=False) |
-                          Q(brass_audit_few_cases_accptance=True, Jig_Load_completed=False)
-                      ).count()
-        jl_loaded   = JigCompleted.objects.count()
-        jl_draft    = JigLoadingManualDraft.objects.count()
-        jl_remain   = max(jl_total - jl_loaded, 0)
-        stats.append({
-            'label': 'Jig Loading', 'color': '#0097a7', 'icon': 'mdi-upload',
-            'total_qty': jl_total, 'loaded_qty': jl_loaded, 'draft_qty': jl_draft, 'remaining_qty': jl_remain,
-            'display_stats': [
-                {'label': 'Total Lots',  'value': jl_total,  'icon': 'mdi-table'},
-                {'label': 'Jig Loaded',  'value': jl_loaded, 'icon': 'mdi-check-circle'},
-                {'label': 'In Draft',    'value': jl_draft,  'icon': 'mdi-pencil-box'},
-                {'label': 'Remaining',   'value': jl_remain, 'icon': 'mdi-clock-outline'},
-            ],
-        })
-
-        # ── Jig Unloading ─────────────────────────────────────────────────────
-        ju_total    = JigCompleted.objects.count()
-        ju_unloaded = JigUnloadAfterTable.objects.count()
-        ju_draft    = JigUnloadDraft.objects.count()
-        ju_remain   = max(ju_total - ju_unloaded, 0)
-        stats.append({
-            'label': 'Jig Unloading', 'color': '#00838f', 'icon': 'mdi-download',
-            'total_qty': ju_total, 'unloaded_qty': ju_unloaded, 'draft_qty': ju_draft, 'remaining_qty': ju_remain,
-            'display_stats': [
-                {'label': 'Total Jigs',  'value': ju_total,    'icon': 'mdi-table'},
-                {'label': 'Unloaded',    'value': ju_unloaded, 'icon': 'mdi-check-circle'},
-                {'label': 'In Draft',    'value': ju_draft,    'icon': 'mdi-pencil-box'},
-                {'label': 'Remaining',   'value': ju_remain,   'icon': 'mdi-clock-outline'},
-            ],
-        })
-
-        # ── Inprocess Inspection ──────────────────────────────────────────────
-        ip_total     = JigCompleted.objects.count()
-        ip_inspected = JigCompleted.objects.filter(jig_position__isnull=False).count()
-        ip_pending   = JigCompleted.objects.filter(jig_position__isnull=True).count()
-        ip_unloaded  = JigCompleted.objects.filter(last_process_module='Jig Unloading').count()
-        stats.append({
-            'label': 'Inprocess Inspection', 'color': '#006064', 'icon': 'mdi-eye-check',
-            'total_qty': ip_total, 'inspected_qty': ip_inspected, 'pending_qty': ip_pending, 'unloaded_qty': ip_unloaded,
-            'display_stats': [
-                {'label': 'Total Jigs',  'value': ip_total,     'icon': 'mdi-table'},
-                {'label': 'Inspected',   'value': ip_inspected, 'icon': 'mdi-eye-check'},
-                {'label': 'Pending',     'value': ip_pending,   'icon': 'mdi-clock-outline'},
-                {'label': 'Unloaded',    'value': ip_unloaded,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── Nickel Inspection ─────────────────────────────────────────────────
-        ni_total = JigUnloadAfterTable.objects.filter(total_case_qty__gt=0).count()
-        ni_acc   = JigUnloadAfterTable.objects.filter(
-                       Q(nq_qc_accptance=True) | Q(nq_qc_few_cases_accptance=True)
-                   ).count()
-        ni_rej   = JigUnloadAfterTable.objects.filter(nq_qc_rejection=True).count()
-        ni_comp  = JigUnloadAfterTable.objects.filter(
-                       Q(nq_qc_accptance=True) | Q(nq_qc_few_cases_accptance=True) | Q(nq_qc_rejection=True)
-                   ).count()
-        stats.append({
-            'label': 'Nickel Inspection', 'color': '#00838f', 'icon': 'mdi-microscope',
-            'total_qty': ni_total, 'accepted_qty': ni_acc, 'rejected_qty': ni_rej, 'completed_qty': ni_comp,
-            'display_stats': [
-                {'label': 'Total Lots', 'value': ni_total, 'icon': 'mdi-table'},
-                {'label': 'Accepted',   'value': ni_acc,   'icon': 'mdi-check-circle'},
-                {'label': 'Rejected',   'value': ni_rej,   'icon': 'mdi-close-circle'},
-                {'label': 'Completed',  'value': ni_comp,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── Nickel Audit ──────────────────────────────────────────────────────
-        na_total = JigUnloadAfterTable.objects.filter(
-                       Q(nq_qc_accptance=True) | Q(nq_qc_few_cases_accptance=True)
-                   ).count()
-        na_acc   = JigUnloadAfterTable.objects.filter(
-                       Q(na_qc_accptance=True) | Q(na_qc_few_cases_accptance=True)
-                   ).count()
-        na_rej   = JigUnloadAfterTable.objects.filter(na_qc_rejection=True).count()
-        na_comp  = JigUnloadAfterTable.objects.filter(
-                       Q(na_qc_accptance=True) | Q(na_qc_few_cases_accptance=True) | Q(na_qc_rejection=True)
-                   ).count()
-        stats.append({
-            'label': 'Nickel Audit', 'color': '#00695c', 'icon': 'mdi-clipboard-search',
-            'total_qty': na_total, 'accepted_qty': na_acc, 'rejected_qty': na_rej, 'completed_qty': na_comp,
-            'display_stats': [
-                {'label': 'Total Lots', 'value': na_total, 'icon': 'mdi-table'},
-                {'label': 'Accepted',   'value': na_acc,   'icon': 'mdi-check-circle'},
-                {'label': 'Rejected',   'value': na_rej,   'icon': 'mdi-close-circle'},
-                {'label': 'Completed',  'value': na_comp,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── Spider Spindle ────────────────────────────────────────────────────
-        sp_total    = JigUnloadAfterTable.objects.filter(
-                          Q(na_qc_accptance=True) | Q(na_qc_few_cases_accptance=True)
-                      ).count()
-        sp_released = JigUnloadAfterTable.objects.filter(spider_release_lot=True).count()
-        sp_hold     = JigUnloadAfterTable.objects.filter(spider_hold_lot=True).count()
-        sp_comp     = SpiderJigDetails.objects.filter(unload_over=True).count()
-        stats.append({
-            'label': 'Spider Spindle', 'color': '#004d40', 'icon': 'mdi-spider-thread',
-            'total_qty': sp_total, 'released_qty': sp_released, 'hold_qty': sp_hold, 'completed_qty': sp_comp,
-            'display_stats': [
-                {'label': 'Total Lots', 'value': sp_total,    'icon': 'mdi-table'},
-                {'label': 'Released',   'value': sp_released, 'icon': 'mdi-check-circle'},
-                {'label': 'On Hold',    'value': sp_hold,     'icon': 'mdi-pause-circle'},
-                {'label': 'Completed',  'value': sp_comp,     'icon': 'mdi-check-all'},
-            ],
-        })
-
+        
+        for module_name in allowed_modules:
+            if 'DAYPLANNING' in module_name.upper().replace(' ', '') or 'DP' in module_name.upper():
+                from modelmasterapp.models import ModelMasterCreation
+                
+                # Total lots = total batches with Draft_Saved=False
+                total_lots = ModelMasterCreation.objects.filter(Draft_Saved=False).count()
+                
+                # Yet to Start = Draft_Saved=False
+                yet_to_start = ModelMasterCreation.objects.filter(Draft_Saved=False).count()
+                
+                # Jumbo tray count
+                jumbo_count = ModelMasterCreation.objects.filter(Draft_Saved=False, tray_type__icontains='Jumbo').count()
+                
+                # Normal tray count
+                normal_count = ModelMasterCreation.objects.filter(Draft_Saved=False, tray_type__icontains='Normal').count()
+                
+                # Processed/Released = count of batches with "Released" status from completed table
+                # "Released" if ip_person_qty_verified or draft_tray_verify or accepted_Ip_stock or few_cases_accepted_Ip_stock or rejected_ip_stock
+                from modelmasterapp.models import TotalStockModel
+                processed = TotalStockModel.objects.filter(
+                    Q(ip_person_qty_verified=True) |
+                    Q(draft_tray_verify=True) |
+                    Q(accepted_Ip_stock=True) |
+                    Q(few_cases_accepted_Ip_stock=True) |
+                    Q(rejected_ip_stock=True)
+                ).count()
+                
+                # In Progress = Jumbo count
+                in_progress = jumbo_count
+                
+                # Drafted = Normal count
+                drafted = normal_count
+                
+                # Calculate total lots as yet_to_start + processed
+                total_lots = yet_to_start + processed
+                
+                # Calculate progress percentage
+                progress_percent = int((processed / max(total_lots, 1)) * 100) if total_lots > 0 else 0
+                yet_to_start_percent = int((yet_to_start / max(total_lots, 1)) * 100) if total_lots > 0 else 0
+                drafted_percent = int((drafted / max(total_lots, 1)) * 100) if total_lots > 0 else 0
+                in_progress_percent = int((in_progress / max(total_lots, 1)) * 100) if total_lots > 0 else 0
+                
+                labels = {
+                    'total_lots': 'Total Rows (Yet to Start)',
+                    'progress': 'Total Processed in Complete Table',
+                    'in_progress': 'Jumbo Tray Count',
+                    'status_overview': 'Status Overview'
+                }
+                
+                stats.append({
+                    'module': module_name,
+                    'label': 'Day Planning',
+                    'total_lot': total_lots,
+                    'yet_to_start': yet_to_start,
+                    'yet_to_start_percent': yet_to_start_percent,
+                    'drafted': drafted,
+                    'drafted_percent': drafted_percent,
+                    'processed': processed,
+                    'processed_percent': progress_percent,
+                    'in_progress': in_progress,
+                    'in_progress_percent': in_progress_percent,
+                    'progress': progress_percent,
+                    'completed_percent': progress_percent,
+                    'moved_to_next_percent': in_progress_percent,
+                    'color': '#008080',
+                    'icon': 'mdi-package-variant-closed',
+                    'labels': labels,
+                })
+                break  # Only add once
+        
+        for module_name in allowed_modules:
+            if 'INPUTSCREENING' in module_name.upper().replace(' ', '') or 'IS' in module_name.upper():
+                from modelmasterapp.models import ModelMasterCreation
+                from InputScreening.models import IP_Accepted_TrayScan, IP_Rejected_TrayScan, IP_Accepted_TrayID_Store
+                
+                # Total rows in pick table = count of batches moved to D Picker
+                total_input_qty = ModelMasterCreation.objects.filter(Moved_to_D_Picker=True).count()
+                
+                # Accepted count from accept table
+                accepted_qty = IP_Accepted_TrayScan.objects.count()
+                
+                # Rejected count from reject table
+                rejected_qty = IP_Rejected_TrayScan.objects.count()
+                
+                # Completed data from complete table
+                completed_qty = IP_Accepted_TrayID_Store.objects.filter(is_save=True).count()
+                
+                stats.append({
+                    'module': module_name,
+                    'label': 'Input Screening',
+                    'total_input_qty': total_input_qty,
+                    'accepted_qty': accepted_qty,
+                    'rejected_qty': rejected_qty,
+                    'completed_qty': completed_qty,
+                    'color': '#20b2aa',
+                    'icon': 'mdi-magnify',
+                })
+                break  # Only add once
+        
         return stats
     
 @method_decorator(login_required(login_url='login-api'), name='dispatch')
@@ -2169,12 +2092,13 @@ class UserCreateAPIView(APIView):
                         user.set_password(password)
                     user.save()
 
-                    # Update group if provided
+                    # Update group + auto-provision modules for fixed User Categories
                     if group_id:
                         try:
                             grp = Group.objects.get(id=group_id)
                             user.groups.clear()
                             user.groups.add(grp)
+                            auto_provision_modules_for_group(user, grp)
                         except Group.DoesNotExist:
                             pass
 
@@ -2208,7 +2132,7 @@ class UserCreateAPIView(APIView):
                 user.first_name = first_name or ""
                 user.last_name = last_name or ""
 
-                # Attach group and preserve original Admin flag behaviour on creation
+                # Attach group + auto-provision modules for fixed User Categories
                 if group_id:
                     try:
                         group = Group.objects.get(id=group_id)
@@ -2217,6 +2141,7 @@ class UserCreateAPIView(APIView):
                             user.is_active = True
                             user.is_staff = True
                             user.is_superuser = True
+                        auto_provision_modules_for_group(user, group)
                     except Group.DoesNotExist:
                         pass
 
@@ -2528,11 +2453,11 @@ class UserDetailAPIView(APIView):
 
             group_id = data.get('group')
             if group_id:
-
                 group = Group.objects.filter(id=group_id).first()
                 if group:
                     user.groups.clear()
                     user.groups.add(group)
+                    auto_provision_modules_for_group(user, group)
 
             return Response({'success': True, 'message': 'User updated successfully.'})
         except User.DoesNotExist:
