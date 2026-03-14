@@ -625,6 +625,222 @@
               <div class="stat-unit">Count</div>
             </div>
           </div>
+          {% elif stat.label == "Brass QC" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-value">{{ stat.accepted_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-value">{{ stat.rejected_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-value">{{ stat.completed_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Brass Audit" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-value">{{ stat.accepted_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-value">{{ stat.rejected_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-value">{{ stat.completed_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "IQF" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-value">{{ stat.accepted_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-value">{{ stat.rejected_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-value">{{ stat.completed_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Jig Loading" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Jig Loaded</div>
+              <div class="stat-value">{{ stat.loaded_qty }}</div>
+              <div class="stat-unit">Completed</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-pencil-box"></i> In Draft</div>
+              <div class="stat-value">{{ stat.draft_qty }}</div>
+              <div class="stat-unit">In Progress</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-clock-outline"></i> Remaining</div>
+              <div class="stat-value">{{ stat.remaining_qty }}</div>
+              <div class="stat-unit">Yet to Load</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Jig Unloading" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Jigs Loaded</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Unloaded</div>
+              <div class="stat-value">{{ stat.unloaded_qty }}</div>
+              <div class="stat-unit">Processed</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-pencil-box"></i> In Draft</div>
+              <div class="stat-value">{{ stat.draft_qty }}</div>
+              <div class="stat-unit">In Progress</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-clock-outline"></i> Remaining</div>
+              <div class="stat-value">{{ stat.remaining_qty }}</div>
+              <div class="stat-unit">Yet to Unload</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Inprocess Inspection" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Jigs</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-eye-check"></i> Inspected</div>
+              <div class="stat-value">{{ stat.inspected_qty }}</div>
+              <div class="stat-unit">Assigned</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-clock-outline"></i> Pending</div>
+              <div class="stat-value">{{ stat.pending_qty }}</div>
+              <div class="stat-unit">In Pick Table</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Unloaded</div>
+              <div class="stat-value">{{ stat.unloaded_qty }}</div>
+              <div class="stat-unit">Completed</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Nickel Inspection" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-value">{{ stat.accepted_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-value">{{ stat.rejected_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-value">{{ stat.completed_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Nickel Audit" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-value">{{ stat.accepted_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-value">{{ stat.rejected_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-value">{{ stat.completed_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+          </div>
+
+          {% elif stat.label == "Spider Spindle" %}
+          <div class="stat-cards-container">
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-value">{{ stat.total_qty }}</div>
+              <div class="stat-unit">Lots</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Released</div>
+              <div class="stat-value">{{ stat.released_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-pause-circle"></i> On Hold</div>
+              <div class="stat-value">{{ stat.hold_qty }}</div>
+              <div class="stat-unit">Count</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed</div>
+              <div class="stat-value">{{ stat.completed_qty }}</div>
+              <div class="stat-unit">Unloaded</div>
+            </div>
+          </div>
+
           {% else %}
           <div class="stat-cards-container">
             <!-- Total Lot Card -->
