@@ -32,6 +32,28 @@ from Spider_Spindle.models import *
 from Jig_Unloading.models import *
 from django.contrib.auth.decorators import login_required
 
+
+def _get_input_source(jig_unload_obj):
+    """Return location names with fallback chain: M2M → TotalStockModel → TrayId → ModelMasterCreation."""
+    names = [loc.location_name for loc in jig_unload_obj.location.all()]
+    if not names:
+        for raw_cid in (jig_unload_obj.combine_lot_ids or []):
+            cid = raw_cid.rsplit('-', 1)[-1] if raw_cid and '-' in raw_cid else raw_cid
+            if not cid:
+                continue
+            tsm = TotalStockModel.objects.filter(lot_id=cid).prefetch_related('location').select_related('batch_id__location').first()
+            if tsm and tsm.location.exists():
+                names = [loc.location_name for loc in tsm.location.all()]
+                break
+            if tsm and tsm.batch_id and tsm.batch_id.location:
+                names = [tsm.batch_id.location.location_name]
+                break
+            tray = TrayId.objects.filter(lot_id=cid).select_related('batch_id__location').first()
+            if tray and tray.batch_id and tray.batch_id.location:
+                names = [tray.batch_id.location.location_name]
+                break
+    return ', '.join(names)
+
 @method_decorator(login_required, name='dispatch')
 class NA_Zone_PickTableView(APIView):
     renderer_classes = [TemplateHTMLRenderer]
@@ -122,13 +144,11 @@ class NA_Zone_PickTableView(APIView):
                 'polish_finish': jig_unload_obj.polish_finish.polish_finish if jig_unload_obj.polish_finish else '',
                 'version__version_name': jig_unload_obj.version.version_name if jig_unload_obj.version else '',
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
-                'location__location_name': ', '.join([loc.location_name for loc in jig_unload_obj.location.all()]),
+                'location__location_name': _get_input_source(jig_unload_obj),
                 'tray_type': jig_unload_obj.tray_type or '',
                 'tray_capacity': jig_unload_obj.tray_capacity or 0,
                 'wiping_required': False,  # Default value, can be enhanced later
                 'brass_audit_rejection': False,  # Not applicable for nickel IP
-                
-                # ✅ Stock-related fields from JigUnloadAfterTable
                 'stock_lot_id': jig_unload_obj.lot_id,
                 'total_IP_accpeted_quantity': jig_unload_obj.total_case_qty,
                 'na_ac_accepted_qty_verified': False,  # Not applicable
@@ -142,8 +162,8 @@ class NA_Zone_PickTableView(APIView):
                 'na_pick_remarks': jig_unload_obj.na_pick_remarks,
                 'nq_qc_accptance': False,  # Not applicable
                 'na_accepted_tray_scan_status': False,  # Not applicable
-                'na_qc_rejection': False,  # Not applicable
-                'na_qc_few_cases_accptance': False,  # Not applicable
+                'na_qc_rejection': jig_unload_obj.na_qc_rejection,
+                'na_qc_few_cases_accptance': jig_unload_obj.na_qc_few_cases_accptance,
                 'na_onhold_picking': jig_unload_obj.na_onhold_picking,
                 'nq_draft': False,  # Not applicable
                 'send_to_nickel_brass': jig_unload_obj.send_to_nickel_brass,
@@ -166,6 +186,7 @@ class NA_Zone_PickTableView(APIView):
                 'unload_lot_id': jig_unload_obj.unload_lot_id,  # Additional identifier
                 # Nickel-specific fields
                 'na_ac_accepted_qty_verified': jig_unload_obj.na_ac_accepted_qty_verified,
+                'na_qc_acceptance': jig_unload_obj.na_qc_accptance,  # template uses na_qc_acceptance key
                 'audit_check': jig_unload_obj.audit_check,
             }
 
@@ -730,7 +751,7 @@ class NA_Zone_BatchRejectionAPIView(APIView):
             # Set rejection status
             jig_unload_record.na_qc_rejection = True
             jig_unload_record.last_process_module = "Nickel Audit"
-            jig_unload_record.next_process_module = "Spider spindle"
+            jig_unload_record.next_process_module = "Nickel Wiping"
             jig_unload_record.na_last_process_date_time = timezone.now()
             jig_unload_record.save(update_fields=[
                 'na_qc_rejection', 'last_process_module', 'next_process_module', 'na_last_process_date_time'
@@ -772,8 +793,8 @@ class NA_Zone_BatchRejectionAPIView(APIView):
                 combine_lot_ids=jig_unload_record.combine_lot_ids,
                 created_at=timezone.now(),
                 last_process_module="Nickel Audit",
-                next_process_module="Spider spindle",
-                send_to_nickel_brass=True,
+                next_process_module="Nickel Wiping",
+                send_to_nickel_brass=False,
                 na_last_process_date_time=timezone.now(),
                 selected_user=request.user,
                 plating_stk_no_list=jig_unload_record.plating_stk_no_list,
@@ -781,7 +802,7 @@ class NA_Zone_BatchRejectionAPIView(APIView):
                 version_list=jig_unload_record.version_list,
             )
             new_jig_unload.location.set(jig_unload_record.location.all())
-            
+
             print(f"✅ Created new JigUnloadAfterTable for next process: {new_lot_id}")
             print(f"✅ Created new JigUnloadAfterTable for next process: {new_lot_id}")
 
@@ -1100,8 +1121,8 @@ class NA_Zone_TrayRejectionAPIView(APIView):
                 combine_lot_ids=jig_unload_record.combine_lot_ids,
                 created_at=timezone.now(),
                 last_process_module="Nickel Audit",
-                next_process_module="Spider spindle",
-                send_to_nickel_brass=True,
+                next_process_module="Nickel Wiping",
+                send_to_nickel_brass=False,
                 na_last_process_date_time=timezone.now(),
                 selected_user=request.user,
                 plating_stk_no_list=jig_unload_record.plating_stk_no_list,
@@ -1109,9 +1130,9 @@ class NA_Zone_TrayRejectionAPIView(APIView):
                 version_list=jig_unload_record.version_list,
             )
             new_jig_unload.location.set(jig_unload_record.location.all())
-            
+
             print(f"✅ Created new JigUnloadAfterTable for next process: {new_lot_id}")
-            
+
             # ✅ Copy rejected trays to new JigUnloadAfterTable lot
             rejected_trays = Nickel_AuditTrayId.objects.filter(lot_id=lot_id, rejected_tray=True)
             for tray in rejected_trays:
@@ -1249,8 +1270,9 @@ def na_zone_reject_check_tray_id(request):
                 'status_message': 'Not Found'
             })
 
-        # ✅ CHECK 1: For new trays without lot_id, show "New Tray Available"
-        is_new_tray = getattr(tray_obj, 'new_tray', False) or not tray_obj.lot_id or tray_obj.lot_id == '' or tray_obj.lot_id is None
+        # ✅ CHECK 1: For new trays without lot_id AND valid NB/JB type, show "New Tray Available"
+        is_new_tray = (getattr(tray_obj, 'new_tray', False) or not tray_obj.lot_id or tray_obj.lot_id == '' or tray_obj.lot_id is None) \
+                      and str(tray_obj.tray_type or '').strip().upper() in ('NB', 'JB')
         
         if is_new_tray:
             return JsonResponse({
@@ -1462,8 +1484,9 @@ def na_zone_reject_check_tray_id_simple(request):
                 'expected_tray_capacity': tray_capacity_validation['expected_tray_capacity']
             })
         
-        # ✅ Check if it's a new tray (no lot_id or empty lot_id)
-        is_new_tray = (not tray_obj.lot_id or str(tray_obj.lot_id).strip() == '')
+        # ✅ Check if it's a new tray (no lot_id or empty lot_id) AND valid NB/JB type
+        is_new_tray = (not tray_obj.lot_id or str(tray_obj.lot_id).strip() == '') \
+                      and str(tray_obj.tray_type or '').strip().upper() in ('NB', 'JB')
         
         print(f"🔍 [Nickel QC Simple] TrayId analysis:")
         print(f"  - lot_id: '{tray_obj.lot_id}'")
@@ -1969,13 +1992,16 @@ def nickel_qc_calculate_distribution_after_rejections_enhanced(unload_lot_id, or
 
 def is_new_tray_by_id(tray_id):
     """
-    Returns True ONLY if the tray_id refers to a tray that has no lot_id assigned (lot_id is None or empty).
-    Even if new_tray=True, do NOT allow unless lot_id is empty.
+    Returns True ONLY if the tray_id refers to a tray that has no lot_id assigned (lot_id is None or empty)
+    AND tray_type is NB (Normal Brass) or JB (Jumbo Brass) as required for reject tray scanning.
     """
     tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
     if tray_obj:
         # Only allow if lot_id is None or empty string
-        return not tray_obj.lot_id or str(tray_obj.lot_id).strip() == ''
+        has_no_lot = not tray_obj.lot_id or str(tray_obj.lot_id).strip() == ''
+        # Enforce NB or JB tray type for reject tray scan (SRS requirement)
+        is_valid_type = str(tray_obj.tray_type or '').strip().upper() in ('NB', 'JB')
+        return has_no_lot and is_valid_type
     return False
 
 
@@ -3378,10 +3404,10 @@ class NA_Zone_CompletedView(APIView):
                 from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
                 to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
             except ValueError:
-                from_date = yesterday
+                from_date = today - timedelta(days=30)
                 to_date = today
         else:
-            from_date = yesterday
+            from_date = today - timedelta(days=30)
             to_date = today
 
         from_datetime = timezone.make_aware(datetime.combine(from_date, datetime.min.time()))
@@ -3406,7 +3432,7 @@ class NA_Zone_CompletedView(APIView):
         ).filter(
             total_case_qty__gt=0,  # Only show records with quantity > 0
             plating_color_id__in=allowed_color_ids,  # ✅ CHANGED: Only show records for zone 1
-            created_at__range=(from_datetime, to_datetime)  # ✅ UPDATED: Date filtering using created_at
+            na_last_process_date_time__range=(from_datetime, to_datetime)  # ✅ Filter by audit completion date
         ).annotate(
             nq_rejection_qty=nq_rejection_qty_subquery,
         ).filter(
@@ -3414,7 +3440,7 @@ class NA_Zone_CompletedView(APIView):
             Q(na_qc_accptance=True) |
             Q(na_qc_rejection=True) |
             Q(na_qc_few_cases_accptance=True, na_onhold_picking=False)
-        ).order_by('-created_at', '-lot_id')
+        ).order_by('-na_last_process_date_time', '-lot_id')
 
         print(f"📊 Found {queryset.count()} nickel records in date range {from_date} to {to_date}")
         print("All lot_ids in completed queryset:", list(queryset.values_list('lot_id', flat=True)))
@@ -3437,7 +3463,7 @@ class NA_Zone_CompletedView(APIView):
                 'polish_finish': jig_unload_obj.polish_finish.polish_finish if jig_unload_obj.polish_finish else '',
                 'version__version_name': jig_unload_obj.version.version_name if jig_unload_obj.version else '',
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
-                'location__location_name': ', '.join([loc.location_name for loc in jig_unload_obj.location.all()]),
+                'location__location_name': _get_input_source(jig_unload_obj),
                 'tray_type': jig_unload_obj.tray_type or '',
                 'tray_capacity': jig_unload_obj.tray_capacity or 0,
                 'Moved_to_D_Picker': False,  # Not applicable for JigUnloadAfterTable
