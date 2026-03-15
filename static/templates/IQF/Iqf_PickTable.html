@@ -2715,13 +2715,22 @@ document.addEventListener("DOMContentLoaded", function () {
                 <tbody>
             `;
           
-            // ✅ Sort traysData by tray_quantity ascending
-            const sortedTrays = traysData.slice().sort((a, b) => (a.tray_quantity || 0) - (b.tray_quantity || 0));
-          
+            // Sort: top tray first, then by tray_quantity asc, then by tray_id for stability
+            const topTray = traysData.find(t => t.is_top_tray || t.ip_top_tray || t.top_tray);
+            const otherTrays = traysData.filter(t => !(t.is_top_tray || t.ip_top_tray || t.top_tray));
+            otherTrays.sort((a, b) => {
+              const qtyDiff = (a.tray_quantity || 0) - (b.tray_quantity || 0);
+              if (qtyDiff !== 0) return qtyDiff;
+              return (a.tray_id || '').localeCompare(b.tray_id || '');
+            });
+            const sortedTrays = topTray ? [topTray, ...otherTrays] : otherTrays;
+
             sortedTrays.forEach((tray, idx) => {
+              const isTop = tray.is_top_tray || tray.ip_top_tray || tray.top_tray;
+              const displaySno = isTop ? '1 (Top Tray)' : (idx + 1);
               html += `
-                <tr>
-                  <td>${idx + 1}</td>
+                <tr${isTop ? ' class="top-tray-row"' : ''}>
+                  <td>${displaySno}</td>
                   <td>
                     <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
                   </td>

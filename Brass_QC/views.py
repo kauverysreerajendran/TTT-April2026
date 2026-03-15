@@ -5116,17 +5116,15 @@ class BrassTrayIdList_Complete_APIView(APIView):
         if not lot_id:
             return JsonResponse({'success': False, 'error': 'Missing lot_id or stock_lot_id'}, status=400)
         
-        # ✅ UPDATED: Base queryset - exclude trays rejected in Input Screening
+        # Base queryset - all trays for this lot with positive quantity
         base_queryset = BrassTrayId.objects.filter(
             tray_quantity__gt=0,
             lot_id=lot_id
-        ).exclude(
-            rejected_tray=True  # ✅ EXCLUDE trays rejected in Input Screening
         )
-        
+
         # Get rejected and accepted trays directly from BrassTrayId table
-        rejected_trays = base_queryset.filter(rejected_tray=True)
-        accepted_trays = base_queryset.filter(rejected_tray=False)
+        rejected_trays = base_queryset.filter(rejected_tray=True).order_by('id')
+        accepted_trays = base_queryset.filter(rejected_tray=False, delink_tray=False)
         
         print(f"Total trays in lot (excluding Input Screening rejected): {base_queryset.count()}")
         print(f"Rejected trays (Brass QC): {rejected_trays.count()}")

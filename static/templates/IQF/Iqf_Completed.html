@@ -2038,8 +2038,8 @@ document.addEventListener("DOMContentLoaded", function () {
         rowCounter++;
       }
       
-      // Render other accepted trays (excluding top tray)
-      acceptedTrays.filter(tray => !(tray.ip_top_tray || tray.top_tray)).forEach((tray) => {
+      // Render other accepted trays (excluding top tray), sorted by tray_id
+      acceptedTrays.filter(tray => !(tray.ip_top_tray || tray.top_tray)).sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || '')).forEach((tray) => {
         let displayQuantity;
         if (brassQcAccptance && tray.top_tray) {
           displayQuantity = tray.tray_quantity;
@@ -2078,15 +2078,16 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ✅ SECTION 2: REJECTED TRAYS (without delinked)
-    // Sort rejected trays by tray quantity ascending
+    // Sort rejected trays by tray quantity ascending, then tray_id for stability
     const rejectedTrays = traysData
       .filter(tray => tray.rejected_tray && !tray.delink_tray)
       .sort((a, b) => {
         // Use ip_top_tray_qty if present, else tray_quantity
         const qtyA = a.ip_top_tray && a.ip_top_tray_qty !== null ? a.ip_top_tray_qty : a.tray_quantity;
         const qtyB = b.ip_top_tray && b.ip_top_tray_qty !== null ? b.ip_top_tray_qty : b.tray_quantity;
-        return (qtyA || 0) - (qtyB || 0);
-      });              
+        if ((qtyA || 0) !== (qtyB || 0)) return (qtyA || 0) - (qtyB || 0);
+        return (a.tray_id || '').localeCompare(b.tray_id || '');
+      });
     const delinkOnlyTrays = (delinkedTraysData || []).filter(tray => tray.delink_tray);
     const hasShortage = rejectionSummary.shortage_rejections > 0;
     
@@ -2219,6 +2220,7 @@ document.addEventListener("DOMContentLoaded", function () {
           </tr>
         `;
 
+        delinkOnlyTrays.sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || ''));
         delinkOnlyTrays.forEach((tray) => {
           html += `
             <tr>

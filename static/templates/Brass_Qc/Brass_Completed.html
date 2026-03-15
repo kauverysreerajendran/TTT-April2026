@@ -2446,7 +2446,7 @@
      rowCounter++;
    }
    
-   acceptedTrays.filter(tray => !(tray.is_top_tray || tray.ip_top_tray || tray.top_tray)).forEach(tray => {
+   acceptedTrays.filter(tray => !(tray.is_top_tray || tray.ip_top_tray || tray.top_tray)).sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || '')).forEach(tray => {
      let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
      html += `
        <tr>
@@ -2468,11 +2468,12 @@
    // --- REJECTED TRAYS ---
    const rejectedTrays = traysData.filter(tray => tray.rejected_tray && !tray.delink_tray);
 
-   // ✅ Sort by tray quantity ascending
+   // Sort by tray quantity ascending, then by tray_id for stability
    const sortedRejectedTrays = rejectedTrays.slice().sort((a, b) => {
    const qtyA = a.ip_top_tray_qty ?? a.tray_quantity ?? 0;
    const qtyB = b.ip_top_tray_qty ?? b.tray_quantity ?? 0;
-   return qtyA - qtyB;
+   if (qtyA !== qtyB) return qtyA - qtyB;
+   return (a.tray_id || '').localeCompare(b.tray_id || '');
    });
 
    if (sortedRejectedTrays.length > 0) {
@@ -2534,6 +2535,7 @@
        </td>
      </tr>
    `;
+   delinkedTrays.sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || ''));
    delinkedTrays.forEach(tray => {
      let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
      html += `

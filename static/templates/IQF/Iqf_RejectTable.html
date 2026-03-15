@@ -1555,20 +1555,27 @@ document.addEventListener("DOMContentLoaded", function () {
                   <tbody>
               `;
               
-              // Sort rejected trays by tray_id alphabetically ASC
-              const sortedRejectedTrays = rejectedTraysData.slice().sort((a, b) => (a.tray_id || "").localeCompare(b.tray_id || ""));
-              
+              // Sort: top tray first, then alphabetically by tray_id
+              const sortedRejectedTrays = rejectedTraysData.slice().sort((a, b) => {
+                const aIsTop = a.top_tray || a.is_top_tray || false;
+                const bIsTop = b.top_tray || b.is_top_tray || false;
+                if (aIsTop && !bIsTop) return -1;
+                if (!aIsTop && bIsTop) return 1;
+                return (a.tray_id || '').localeCompare(b.tray_id || '');
+              });
+
               sortedRejectedTrays.forEach((tray, idx) => {
                 const isTopTray = tray.top_tray || tray.is_top_tray || false;
                 const displaySno = isTopTray ? `${idx + 1} (Top Tray)` : `${idx + 1}`;
                 const isNewTray = tray.new_tray || false;
                 const newTrayBadge = isNewTray ? '🆕' : '';
-                
+
                 html += `
-                  <tr>
+                  <tr${isTopTray ? ' class="top-tray-row"' : ''}>
                     <td>${displaySno} ${newTrayBadge}</td>
                     <td>
                       <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                      <span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>
                     </td>
                     <td>
                       <input type="number" class="form-control" value="${tray.tray_quantity || ''}" readonly style="width: 100%;" />
@@ -1602,19 +1609,38 @@ document.addEventListener("DOMContentLoaded", function () {
                   <thead>
                     <tr>
                       <th style="width:50px;">S.no</th>
-                      <th>Available Tray ID</th>
+                      <th>Tray ID</th>
+                      <th>Tray Qty</th>
+                      ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
                     </tr>
                   </thead>
                   <tbody>
               `;
-              
-              delinkedTraysData.forEach((tray, idx) => {
+
+              const sortedDelinkedTrays = delinkedTraysData.slice().sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || ''));
+              sortedDelinkedTrays.forEach((tray, idx) => {
                 html += `
                   <tr>
                     <td>${idx + 1}</td>
                     <td>
                       <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                      <span style="background: #9e9e9e; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>
                     </td>
+                    <td>
+                      <input type="number" class="form-control" value="${tray.tray_quantity || ''}" readonly style="width: 100%;" />
+                    </td>
+                    ${showValidationColumn ? `
+                      <td>
+                        <div class="validation-status">
+                          <div class="status-icon fail">
+                            <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                          </div>
+                          <div class="status-icon pass">
+                            <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                          </div>
+                        </div>
+                      </td>
+                    ` : ''}
                   </tr>
                 `;
               });
