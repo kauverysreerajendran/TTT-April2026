@@ -9,6 +9,8 @@
 <style>
 .tray-id-input.model-bg-1 { background: #e0f7fa !important; }   /* Primary model */
 .tray-id-input.model-bg-2 { background: #fce4ec !important; }   /* Secondary model */
+/* Action handlers attached via script (kept out of CSS block) */
+
 .tray-id-input.model-bg-3 { background: #fff9c4 !important; }   /* Third model */
 .tray-id-input.model-bg-4 { background: #e1bee7 !important; }   /* Fourth model */
 .tray-id-input.model-bg-5 { background: #c8e6c9 !important; }   /* Fifth model */
@@ -1834,9 +1836,8 @@
   transform: translateX(0);
 }
 /* Ensure sticky columns also get highlighted */
-.jig-row-action-highlight td:nth-child(1),
-.jig-row-action-highlight td:nth-child(2),
-.jig-row-action-highlight td:nth-child(3) {
+.jig-row-action-highlight,
+.jig-row-action-highlight td {
   background-color: #fff5bd !important;
 }
 
@@ -3385,6 +3386,15 @@ if (data.valid === true) {
         const detailsDiv = document.getElementById("trayScanDetails_Jig");
         const batchId = link.getAttribute("data-batch-id");
         const lotId = link.getAttribute("data-stock-lot-id");
+        // Highlight the row and move it to top (same behaviour as IS_PickTable)
+        try {
+          const row = link.closest('tr');
+          if (row && typeof window.highlightAndMoveRowToTop === 'function') {
+            window.highlightAndMoveRowToTop(row, lotId);
+          }
+        } catch (err) {
+          console.warn('Error while highlighting row:', err);
+        }
         const modelNo = link.getAttribute("data-model-no") || "";
         const platingStkNo = link.getAttribute("data-plating-stk-no") || "";
         const lotQty = link.getAttribute("data-total-batch-quantity") || "0";
@@ -6977,6 +6987,76 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     window.location.href = baseUrl;
+  });
+});
+</script>
+<script nonce="{{ csp_nonce }}">
+// Delete lot (bin icon) handler with confirmation
+document.addEventListener('DOMContentLoaded', function () {
+  function getCsrf() {
+    const m = document.cookie.match('(^|;)\\s*' + 'csrftoken' + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  async function handleDeleteClick(e) {
+    e.preventDefault();
+    const el = e.currentTarget;
+    const stockLotId = el.getAttribute('data-stock-lot-id');
+    if (!stockLotId) return;
+
+    // Confirmation (SweetAlert2 if available)
+    let confirmed = false;
+    if (window.Swal) {
+      const res = await Swal.fire({
+        title: 'Delete lot permanently?',
+        text: 'This will permanently delete the lot and its records. This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Delete',
+        cancelButtonText: 'Cancel'
+      });
+      confirmed = !!res.isConfirmed;
+    } else {
+      confirmed = confirm('This will permanently delete the lot. Continue?');
+    }
+
+    if (!confirmed) return;
+    el.style.pointerEvents = 'none';
+
+    try {
+      const resp = await fetch('/jig_loading/delete-lot/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrf()
+        },
+        body: JSON.stringify({ stock_lot_id: stockLotId })
+      });
+      let data = {};
+      try { data = await resp.json(); } catch (err) { /* ignore parse errors */ }
+
+      if (resp.ok) {
+        const row = el.closest('tr');
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+        if (window.Swal) Swal.fire({ icon: 'success', title: data.message || 'Deleted', timer: 1100, showConfirmButton: false });
+        else alert(data.message || 'Deleted');
+      } else {
+        if (window.Swal) Swal.fire({ icon: 'error', title: data.message || 'Delete failed' });
+        else alert(data.message || 'Delete failed');
+        el.style.pointerEvents = '';
+      }
+    } catch (err) {
+      console.error('Delete request failed', err);
+      if (window.Swal) Swal.fire({ icon: 'error', title: 'Request failed' });
+      else alert('Request failed');
+      el.style.pointerEvents = '';
+    }
+  }
+
+  document.querySelectorAll('.jig-delete-batch-btn').forEach(function (btn) {
+    try { btn.removeEventListener('click', handleDeleteClick); } catch (e) {}
+    btn.addEventListener('click', handleDeleteClick);
   });
 });
 </script>
