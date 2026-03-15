@@ -2019,7 +2019,7 @@ document.addEventListener("DOMContentLoaded", function () {
               <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
             </td>
             <td>
-              <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
             </td>
             ${showValidationColumn ? `
               <td>
@@ -2057,7 +2057,7 @@ document.addEventListener("DOMContentLoaded", function () {
               <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
             </td>
             <td>
-              <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
             </td>
             ${showValidationColumn ? `
               <td>
@@ -2151,7 +2151,7 @@ document.addEventListener("DOMContentLoaded", function () {
               ${statusTag}
             </td>
             <td>
-              <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
             </td>
             ${showValidationColumn ? `
               <td>
@@ -2191,7 +2191,7 @@ document.addEventListener("DOMContentLoaded", function () {
               ${statusTag}
             </td>
             <td>
-              <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
             </td>
             ${showValidationColumn ? `
               <td>

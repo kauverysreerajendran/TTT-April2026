@@ -213,10 +213,14 @@ class BrassAuditPickTableView(APIView):
             brass_qc_accepted_qty = data.get('brass_qc_accepted_qty', 0)
             tray_capacity = data.get('tray_capacity', 0)
             data['vendor_location'] = f"{data.get('vendor_internal', '')}_{data.get('location__location_name', '')}"
-            
+
             lot_id = data.get('stock_lot_id')
-            
-            if brass_qc_accepted_qty and brass_qc_accepted_qty > 0:
+
+            brass_audit_accepted_qty = data.get('brass_audit_accepted_qty')
+            if brass_audit_accepted_qty is not None and brass_audit_accepted_qty >= 0:
+                # Use brass_audit_accepted_qty (net qty after Brass Audit rejections)
+                data['display_accepted_qty'] = brass_audit_accepted_qty
+            elif brass_qc_accepted_qty and brass_qc_accepted_qty > 0:
                 data['display_accepted_qty'] = brass_qc_accepted_qty
             else:
                 total_rejection_qty = 0
@@ -3919,10 +3923,14 @@ class BrassAuditCompletedView(APIView):
             brass_qc_accepted_qty = data.get('brass_qc_accepted_qty', 0)
             tray_capacity = data.get('tray_capacity', 0)
             data['vendor_location'] = f"{data.get('vendor_internal', '')}_{data.get('location__location_name', '')}"
-            
+
             lot_id = data.get('stock_lot_id')
-            
-            if brass_qc_accepted_qty and brass_qc_accepted_qty > 0:
+
+            brass_audit_accepted_qty = data.get('brass_audit_accepted_qty')
+            if brass_audit_accepted_qty is not None and brass_audit_accepted_qty >= 0:
+                # Use brass_audit_accepted_qty (net qty after Brass Audit rejections)
+                data['display_accepted_qty'] = brass_audit_accepted_qty
+            elif brass_qc_accepted_qty and brass_qc_accepted_qty > 0:
                 data['display_accepted_qty'] = brass_qc_accepted_qty
             else:
                 total_rejection_qty = 0
@@ -5951,10 +5959,23 @@ class RejectTableTrayIdListAPIView(APIView):
                     }
                     all_trays.append(tray_data)
 
+            # If no trays found, check for batch (lot) rejection
+            is_lot_rejection = False
+            lot_rejection_comment = ''
+            if not all_trays:
+                batch_rejection_store = Brass_Audit_Rejection_ReasonStore.objects.filter(
+                    lot_id=lot_id, batch_rejection=True
+                ).first()
+                if batch_rejection_store:
+                    is_lot_rejection = True
+                    lot_rejection_comment = batch_rejection_store.lot_rejected_comment or ''
+
             return Response({
                 "success": True,
                 "trays": all_trays,
-                "total_trays": len(all_trays)
+                "total_trays": len(all_trays),
+                "is_lot_rejection": is_lot_rejection,
+                "lot_rejection_comment": lot_rejection_comment
             })
         except Exception as e:
             import traceback

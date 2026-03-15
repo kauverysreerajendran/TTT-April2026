@@ -665,6 +665,24 @@ class IQFCompleteTableTrayIdListAPIView(APIView):
                     "top_tray": top_tray
                 })
 
+            # Fallback: if no IQFTrayId rejected trays and no accepted trays found,
+            # use BrassTrayId rejected trays (handles Brass QC lot rejection case)
+            if not rejected_iqf_trays.exists() and not accepted_store_trays.exists():
+                brass_rejected_fallback = BrassTrayId.objects.filter(
+                    lot_id=lot_id, rejected_tray=True
+                ).order_by('-top_tray', 'id')
+                for b_tray in brass_rejected_fallback:
+                    all_trays.append({
+                        "tray_id": b_tray.tray_id,
+                        "tray_quantity": 0,
+                        "rejected_tray": True,
+                        "delink_tray": False,
+                        "iqf_reject_verify": False,
+                        "new_tray": False,
+                        "IP_tray_verified": False,
+                        "top_tray": bool(getattr(b_tray, 'top_tray', False))
+                    })
+
             # Delinked trays: persisted flags only (no inferred candidates)
             delinked_ids = set(
                 IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=True).values_list('tray_id', flat=True)
@@ -1104,6 +1122,27 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                         "is_top_tray": bool(rej_info.get('top_tray', False)),
                         "rejection_reason": rej_info.get('rejection_reason', 'N/A'),
                         "rejection_reason_id": rej_info.get('rejection_reason_id', '')
+                    })
+
+            # Fallback: if still no rejected trays, use BrassTrayId rejected trays
+            # (handles Brass QC lot rejection transferred to IQF with no IQFTrayId records)
+            if not rejected_trays:
+                brass_rejected_fallback = BrassTrayId.objects.filter(
+                    lot_id=lot_id, rejected_tray=True
+                ).order_by('-top_tray', 'id')
+                for b_tray in brass_rejected_fallback:
+                    rejected_trays.append({
+                        "tray_id": b_tray.tray_id,
+                        "tray_quantity": 0,
+                        "rejected_tray": True,
+                        "delink_tray": False,
+                        "iqf_reject_verify": False,
+                        "new_tray": False,
+                        "IP_tray_verified": False,
+                        "top_tray": bool(getattr(b_tray, 'top_tray', False)),
+                        "is_top_tray": bool(getattr(b_tray, 'top_tray', False)),
+                        "rejection_reason": "Brass QC Lot Rejection",
+                        "rejection_reason_id": ""
                     })
 
             # ============================
@@ -3041,6 +3080,24 @@ def iqf_get_rejected_tray_scan_data(request):
                 print(f"✅ [REJECTION SUMMARY] Fallback from Brass_QC_Rejected_TrayScan:")
                 print(f"   - Total Qty: {total_qty}")
                 print(f"   - Reasons: {reason_texts}")
+
+        # Second fallback: Brass QC lot rejection (batch_rejection=True)
+        # Full lot rejections write Brass_QC_Rejection_ReasonStore, NOT Brass_QC_Rejected_TrayScan
+        if not rejection_rows:
+            batch_rej_store = Brass_QC_Rejection_ReasonStore.objects.filter(
+                lot_id=lot_id, batch_rejection=True
+            ).first()
+            if batch_rej_store:
+                total_qty = int(batch_rej_store.total_rejection_quantity or 0)
+                rejection_rows.append({
+                    'tray_id': '',
+                    'qty': total_qty,
+                    'reason': 'Lot Rejection',
+                    'reason_id': '',
+                    'brass_rejection_qty': total_qty
+                })
+                print(f"✅ [REJECTION SUMMARY] Fallback from Brass_QC_Rejection_ReasonStore (Lot Rejection):")
+                print(f"   - Total Qty: {total_qty}")
 
         # Accepted trays (unchanged)
         accepted_trays = []

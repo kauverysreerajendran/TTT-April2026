@@ -734,9 +734,9 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       data-stock-lot-id="{{ data.stock_lot_id }}"
                       data-available-qty="{{ data.available_qty }}" 
                       data-brass-onhold-picking="{{ data.brass_onhold_picking }}"
-                      data-brass-qc-accptance="{{ data.brass_audit_accptance|default:'false' }}"
-                      data-brass-qc-rejection="{{ data.brass_audit_rejection|default:'false' }}"
-                      data-brass-qc-few-cases-accptance="{{ data.brass_audit_few_cases_accptance|default:'false' }}">
+                      data-brass-qc-accptance="{{ data.brass_audit_accptance|yesno:'true,false' }}"
+                      data-brass-qc-rejection="{{ data.brass_audit_rejection|yesno:'true,false' }}"
+                      data-brass-qc-few-cases-accptance="{{ data.brass_audit_few_cases_accptance|yesno:'true,false' }}">
                       <td {% if data.brass_hold_lot %} class="row-inactive-blur"{% endif %}>
                     <span style="display:flex; align-items:center; gap:3px;">
                      
@@ -918,9 +918,9 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                              data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
                              data-model-image="{{ data.model_images.0|default:'' }}"
                              data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-                             data-brass-qc-accptance="{{ data.brass_audit_accptance|default:'false' }}"
-                             data-brass-qc-rejection="{{ data.brass_audit_rejection|default:'false' }}"
-                             data-brass-qc-few-cases-accptance="{{ data.brass_audit_few_cases_accptance|default:'false' }}"
+                             data-brass-qc-accptance="{{ data.brass_audit_accptance|yesno:'true,false' }}"
+                             data-brass-qc-rejection="{{ data.brass_audit_rejection|yesno:'true,false' }}"
+                             data-brass-qc-few-cases-accptance="{{ data.brass_audit_few_cases_accptance|yesno:'true,false' }}"
                                 data-total-batch-quantity="{{ data.brass_audit_physical_qty }}"
                                 data-missing-qty="{{ data.brass_audit_missing_qty|default:'' }}"
                                 data-physical-qty="{{ data.brass_audit_physical_qty|default:'' }}">
@@ -1843,6 +1843,8 @@ document.addEventListener("DOMContentLoaded", function () {
           // ✅ UPDATED: Fetch tray data with rejection information using correct endpoint
           let traysData = [];
           let rejectionSummary = {};
+          let isLotRejection = false;
+          let lotRejectionComment = '';
           try {
             // ✅ FIX: Use RejectTable endpoint for rejected lots
             let endpoint;
@@ -1869,6 +1871,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (result.success) {
               traysData = result.trays || [];
               rejectionSummary = result.rejection_summary || {};
+              isLotRejection = result.is_lot_rejection || false;
+              lotRejectionComment = result.lot_rejection_comment || '';
               console.log('✅ Fetched trays with rejection data:', traysData);
               console.log('📊 Rejection summary:', rejectionSummary);
             }
@@ -2128,12 +2132,21 @@ document.addEventListener("DOMContentLoaded", function () {
                     html += '</tbody></table>';
                     detailsDiv.innerHTML = html;
                   });
-                
+
                 // Return early since we're handling async update
                 return html;
               }
+            } else if (isLotRejection) {
+              html += `
+                <tr style="background-color: #ffebee;">
+                  <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; padding: 16px;">
+                    <div style="color: #c62828; font-weight: bold; font-size: 14px; margin-bottom: 6px;">❌ LOT REJECTION</div>
+                    ${lotRejectionComment ? `<div style="color: #555; font-size: 12px;">${lotRejectionComment}</div>` : ''}
+                  </td>
+                </tr>
+              `;
             }
-            
+
             html += '</tbody></table>';
             return html;
           }

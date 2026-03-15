@@ -5445,7 +5445,8 @@ function handleTrayWiseRejection() {
             msgDiv.style.color = "#007bff";
             msgDiv.textContent = `Please wait, validating tray "${trayId}" in row ${index + 1}...`;
           }
-          document.getElementById("proceedButton").disabled = false;
+          // Retry automatically once validation completes
+          setTimeout(() => handleTrayWiseRejection(), 600);
           return;
         }
         
