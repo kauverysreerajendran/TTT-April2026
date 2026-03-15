@@ -3628,14 +3628,14 @@ class JU_Zone_Completedtable(TemplateView):
             for model_master in model_masters:
                 images = list(model_master.images.all())
                 image_urls = []
-                first_image = "/static/assets/images/imagePlaceholder.png"
+                first_image = "/static/assets/images/imagePlaceholder.jpg"
                 
                 for img in images:
                     if img.master_image:
                         try:
                             img_url = img.master_image.url if hasattr(img.master_image, 'url') else str(img.master_image)
                             image_urls.append(img_url)
-                            if first_image == "/static/assets/images/imagePlaceholder.png":
+                            if first_image == "/static/assets/images/imagePlaceholder.jpg":
                                 first_image = img_url
                         except Exception as img_err:
                             print(f"[DEBUG] Error processing image {img.id}: {img_err}")
@@ -3665,13 +3665,13 @@ class JU_Zone_Completedtable(TemplateView):
                         if str(mm.plating_stk_no).startswith(numeric_no) and mm.images.exists():
                             img_list = list(mm.images.all())
                             image_urls = []
-                            first_image = "/static/assets/images/imagePlaceholder.png"
+                            first_image = "/static/assets/images/imagePlaceholder.jpg"
                             for img in img_list:
                                 if img.master_image:
                                     try:
                                         img_url = img.master_image.url if hasattr(img.master_image, 'url') else str(img.master_image)
                                         image_urls.append(img_url)
-                                        if first_image == "/static/assets/images/imagePlaceholder.png":
+                                        if first_image == "/static/assets/images/imagePlaceholder.jpg":
                                             first_image = img_url
                                     except Exception:
                                         continue
@@ -3686,7 +3686,7 @@ class JU_Zone_Completedtable(TemplateView):
                 if model_no not in model_images_map:
                     model_images_map[model_no] = {
                         'images': [],
-                        'first_image': "/static/assets/images/imagePlaceholder.png"
+                        'first_image': "/static/assets/images/imagePlaceholder.jpg"
                     }
 
         # ✅ ENHANCED: Process each unload record using saved list fields (mirroring Zone 1)
@@ -3873,7 +3873,7 @@ class JU_Zone_Completedtable(TemplateView):
                             if model_no in model_images_map:
                                 model_images[model_no] = model_images_map[model_no]
                             else:
-                                model_images[model_no] = {'images': [], 'first_image': "/static/assets/images/imagePlaceholder.png"}
+                                model_images[model_no] = {'images': [], 'first_image': "/static/assets/images/imagePlaceholder.jpg"}
                     except Exception as e:
                         print(f"[DEBUG] Error processing lot_id {lot_id}: {e}")
                         continue
@@ -3884,7 +3884,7 @@ class JU_Zone_Completedtable(TemplateView):
                 no_of_model_cases = [_mk_fb]
                 lot_id_quantities = {unload.lot_id: total_case_qty}
                 model_colors[_mk_fb] = global_model_colors.get(_mk_fb, '#cccccc')
-                model_images[_mk_fb] = model_images_map.get(_mk_fb, {'images': [], 'first_image': "/static/assets/images/imagePlaceholder.png"})
+                model_images[_mk_fb] = model_images_map.get(_mk_fb, {'images': [], 'first_image': "/static/assets/images/imagePlaceholder.jpg"})
 
             no_of_model_cases = list(dict.fromkeys(no_of_model_cases))
 

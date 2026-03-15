@@ -1068,6 +1068,36 @@
       flex: 1 1 100%;
     }
   }
+
+  /* Multi-model circles styling */
+  .model-circles {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .model-circle {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  .model-circle:hover {
+    transform: scale(1.2);
+  }
+
+  /* Circle colors */
+  .model-circle:nth-child(1) { background-color: #007bff; } /* Blue */
+  .model-circle:nth-child(2) { background-color: #28a745; } /* Green */
+  .model-circle:nth-child(3) { background-color: #ffc107; } /* Yellow */
+  .model-circle:nth-child(4) { background-color: #6f42c1; } /* Purple */
+  .model-circle:nth-child(5) { background-color: #dc3545; } /* Red */
+  .model-circle:nth-child(6) { background-color: #17a2b8; } /* Cyan */
+  .model-circle:nth-child(7) { background-color: #fd7e14; } /* Orange */
+  .model-circle:nth-child(8) { background-color: #e83e8c; } /* Pink */
 </style>
 
 <div class="content-wrapper">
@@ -1200,32 +1230,40 @@
                   </td>
 <!-- Plating Stock No - WITH tooltip (matching your desired format) -->
 <td>
-  {% if jig.lot_plating_stk_nos and jig.lot_plating_stk_nos != 'No Plating Stock No' %}
-    <span class="model-hover-trigger" data-plating-stk-no="{{ jig.lot_plating_stk_nos }}" style="cursor: pointer; word-break: break-all;">
-      {{ jig.lot_plating_stk_nos|highlight_plating_color|safe_html }}
-      <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
-        
-        <!-- Header with Info and Close buttons -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <button class="info-btn" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
-            Info
-          </button>
-          <button class="close-btn" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
-            Close
-          </button>
-        </div>
-        
-        <!-- Image gallery section -->
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <!-- Hide scroll buttons since only one image is shown -->
-          <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-            <img src="{{ jig.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+  {% if jig.lot_plating_stk_nos %}
+    {% if jig.lot_plating_stk_nos|length > 1 %}
+      <div class="model-circles">
+        {% for model in jig.lot_plating_stk_nos %}
+          <span class="model-circle" title="Model No: {{ model }}"></span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <span class="model-hover-trigger" data-plating-stk-no="{{ jig.lot_plating_stk_nos.0 }}" style="cursor: pointer; word-break: break-all;">
+        {{ jig.lot_plating_stk_nos.0|highlight_plating_color|safe_html }}
+        <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
+          
+          <!-- Header with Info and Close buttons -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <button class="info-btn" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
+              Info
+            </button>
+            <button class="close-btn" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
+              Close
+            </button>
+          </div>
+          
+          <!-- Image gallery section -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- Hide scroll buttons since only one image is shown -->
+            <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
+              <img src="{{ jig.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+            </div>
           </div>
         </div>
-      </div>
-    </span>
+      </span>
+    {% endif %}
   {% else %}
-    N/A
+    No Plating Stock No
   {% endif %}
 </td>
 

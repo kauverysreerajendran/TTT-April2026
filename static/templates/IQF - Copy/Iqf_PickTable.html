@@ -1007,7 +1007,7 @@
                           <div style="display: flex; align-items: center; gap: 8px;">
                             <!-- Hide scroll buttons since only one image is shown -->
                             <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-                              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
                             </div>
                           </div>
                         </div>
@@ -1506,7 +1506,7 @@
     
     <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
       <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
-        <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+        <img src="/static/assets/images/imagePlaceholder.jpg" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
         <!-- Model No and RW Qty in same line -->
         <div style="display: flex; flex-direction: column; gap: 2px;">
           <div style="display: flex; align-items: center; gap: 15px;">
@@ -2615,7 +2615,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const modalUserImg = modal.querySelector('.user-profile img');
           const modelImage = link.getAttribute('data-model-image');
           if (modalUserImg) {
-            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
+            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.jpg";
           }
     
           // ✅ UPDATED: Fetch ONLY rejected tray data

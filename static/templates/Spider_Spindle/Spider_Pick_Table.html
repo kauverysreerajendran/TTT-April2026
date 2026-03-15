@@ -1159,7 +1159,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 class="model-select-checkbox" 
                                 data-model-no="{{ data.model_stock_no__model_no }}" 
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                                 style="display: none;" />                       
                       </div>
                         <span style="display:flex; align-items:center; gap:3px;">
@@ -1221,7 +1221,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                           <div style="display: flex; align-items: center; gap: 8px;">
                             <!-- Hide scroll buttons since only one image is shown -->
                             <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-                              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
                             </div>
                           </div>
                         </div>
@@ -1540,7 +1540,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     
                     <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
                       <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
-                        <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+                        <img src="/static/assets/images/imagePlaceholder.jpg" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
                         <!-- Model No and Lot Qty in same line -->
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                           <div style="display: flex; align-items: center; gap: 15px;">
@@ -2694,7 +2694,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const modalUserImg = modal.querySelector('.user-profile img');
           const modelImage = link.getAttribute('data-model-image');
           if (modalUserImg) {
-            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
+            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.jpg";
           }
     
           // ✅ UPDATED: Fetch tray data with rejection information using correct endpoint
@@ -5111,14 +5111,14 @@ document.querySelectorAll('.open-jig-modal-btn').forEach(function(btn) {
           const lotData = await resp.json();
           const modelData = {
             modelNo: lotData.model_no || '-',
-            image: (lotData.model_images && lotData.model_images.length > 0) ? lotData.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+            image: (lotData.model_images && lotData.model_images.length > 0) ? lotData.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
             isOriginal: idx === 0 // Mark first as original
           };
           const item = createModelItem(modelData);
           slider.appendChild(item);
         } catch (err) {
           // fallback if error
-          const item = createModelItem({ modelNo: 'Unknown', image: '/static/assets/images/imagePlaceholder.png', isOriginal: idx === 0 });
+          const item = createModelItem({ modelNo: 'Unknown', image: '/static/assets/images/imagePlaceholder.jpg', isOriginal: idx === 0 });
           slider.appendChild(item);
         }
       }));
@@ -5881,7 +5881,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
             
             const modelData = {
               modelNo: data.model_no || originalModalData.modelNo,
-              image: (data.model_images && data.model_images.length > 0) ? data.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+              image: (data.model_images && data.model_images.length > 0) ? data.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
               isOriginal: true
             };
             const item = createModelItem(modelData);
@@ -5898,7 +5898,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
             console.error('Error rebuilding original slider:', error);
             const modelData = {
               modelNo: originalModalData.modelNo,
-              image: '/static/assets/images/imagePlaceholder.png',
+              image: '/static/assets/images/imagePlaceholder.jpg',
               isOriginal: true
             };
             const item = createModelItem(modelData);
@@ -6290,7 +6290,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
         
         const originalModelData = {
           modelNo: originalData.model_no || originalModalData.modelNo,
-          image: (originalData.model_images && originalData.model_images.length > 0) ? originalData.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+          image: (originalData.model_images && originalData.model_images.length > 0) ? originalData.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
           isOriginal: true
         };
         const originalItem = createModelItem(originalModelData);
@@ -6300,7 +6300,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
         // Fallback to stored data without image
         const originalModelData = {
           modelNo: originalModalData.modelNo,
-          image: '/static/assets/images/imagePlaceholder.png',
+          image: '/static/assets/images/imagePlaceholder.jpg',
           isOriginal: true
         };
         const originalItem = createModelItem(originalModelData);
@@ -6317,7 +6317,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
         // ADD EVERY MODEL (including duplicates)
         const modelData = {
           modelNo: r.model_no || '-',
-          image: (r.model_images && r.model_images.length > 0) ? r.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+          image: (r.model_images && r.model_images.length > 0) ? r.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
           isOriginal: false, // Mark as added model (not original)
           lotId: r.original_lot_id // Store lot ID for reference
         };

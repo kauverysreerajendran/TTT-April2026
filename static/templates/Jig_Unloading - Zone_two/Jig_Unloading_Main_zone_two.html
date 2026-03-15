@@ -1919,7 +1919,7 @@ body.add-model-mode #selectAllCheckbox {
                     
                     <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
                       <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
-                        <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+                        <img src="/static/assets/images/imagePlaceholder.jpg" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
                         <!-- Model No and Lot Qty in same line -->
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                           <div style="display: flex; align-items: center; gap: 15px;">
@@ -3509,7 +3509,7 @@ document.addEventListener("DOMContentLoaded", function () {
             
             // FIXED: Get images using the correct data structure
             let images = [];
-            let firstImage = '/static/assets/images/imagePlaceholder.png';
+            let firstImage = '/static/assets/images/imagePlaceholder.jpg';
             
             // Check multiple possible data structures for images
             if (modelImages[modelNo]) {
@@ -3652,7 +3652,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 
                 // Handle image load errors
                 img.addEventListener('error', function() {
-                  this.src = '/static/assets/images/imagePlaceholder.png';
+                  this.src = '/static/assets/images/imagePlaceholder.jpg';
                   this.style.opacity = '0.5';
                 });
                 
@@ -3838,7 +3838,7 @@ function showModelImages(modelNo, imagesJson) {
           <div style="position: relative;">
             <img src="${images[currentIndex]}" alt="Model ${modelNo}" 
                  style="max-width: 100%; max-height: 70vh; object-fit: contain; display: block; margin: 0 auto;"
-                 onerror="this.src='/static/assets/images/imagePlaceholder.png'; this.style.opacity='0.5';">
+                 onerror="this.src='/static/assets/images/imagePlaceholder.jpg'; this.style.opacity='0.5';">
             ${images.length > 1 ? `
               <button onclick="prevImage()" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer;">‹</button>
               <button onclick="nextImage()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer;">›</button>
@@ -4227,7 +4227,7 @@ function showUnloadModal(modelList, modelImages, lotIdQuantities, lotId, lotIdLi
         Object.entries(lotIdQuantities).forEach(([currentLotId, quantity]) => {
           const modelNo = lotIdModelMap[currentLotId] || modelList[0] || 'Unknown';
           const modelImageData = modelImages[modelNo] || {};
-          const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.png';
+          const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.jpg';
 
           modelData.push({
             modelNo: modelNo,
@@ -10060,7 +10060,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const missingData = [];
       if (!modelNo || modelNo === 'N/A') missingData.push('modelNo');
       if (!platingStkNo || platingStkNo === 'N/A') missingData.push('platingStkNo');
-      if (!modelImage || modelImage.includes('imagePlaceholder.png')) missingData.push('modelImage');
+      if (!modelImage || modelImage.includes('imagePlaceholder.jpg')) missingData.push('modelImage');
       
       if (missingData.length > 0) {
         console.warn("⚠️ Missing data:", missingData.join(', '));
@@ -10088,13 +10088,13 @@ document.addEventListener("DOMContentLoaded", function () {
       // Set model image in modal with improved logic
       const modalUserImg = modal.querySelector('.user-profile img');
       if (modalUserImg) {
-        let imageUrl = "/static/assets/images/imagePlaceholder.png"; // Default
+        let imageUrl = "/static/assets/images/imagePlaceholder.jpg"; // Default
         
         if (modelImage && 
             modelImage !== 'N/A' && 
             modelImage !== 'null' && 
             modelImage !== 'undefined' && 
-            !modelImage.includes('imagePlaceholder.png')) {
+            !modelImage.includes('imagePlaceholder.jpg')) {
           imageUrl = modelImage;
           console.log("✅ Using model image:", modelImage);
         } else {
@@ -10107,7 +10107,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // Add error handling for image loading
         modalUserImg.onerror = function() {
           console.log("❌ Image failed to load, using placeholder");
-          this.src = "/static/assets/images/imagePlaceholder.png";
+          this.src = "/static/assets/images/imagePlaceholder.jpg";
         };
         
         modalUserImg.onload = function() {
@@ -10606,7 +10606,7 @@ document.addEventListener("DOMContentLoaded", function() {
                
                // FIXED: Get images using the correct data structure
                let images = [];
-               let firstImage = '/static/assets/images/imagePlaceholder.png';
+               let firstImage = '/static/assets/images/imagePlaceholder.jpg';
                
                // Check multiple possible data structures for images
                if (modelImages[modelNo]) {
@@ -10749,7 +10749,7 @@ document.addEventListener("DOMContentLoaded", function() {
                    
                    // Handle image load errors
                    img.addEventListener('error', function() {
-                     this.src = '/static/assets/images/imagePlaceholder.png';
+                     this.src = '/static/assets/images/imagePlaceholder.jpg';
                      this.style.opacity = '0.5';
                    });
                    
@@ -10935,7 +10935,7 @@ document.addEventListener("DOMContentLoaded", function() {
              <div style="position: relative;">
                <img src="${images[currentIndex]}" alt="Model ${modelNo}" 
                     style="max-width: 100%; max-height: 70vh; object-fit: contain; display: block; margin: 0 auto;"
-                    onerror="this.src='/static/assets/images/imagePlaceholder.png'; this.style.opacity='0.5';">
+                    onerror="this.src='/static/assets/images/imagePlaceholder.jpg'; this.style.opacity='0.5';">
                ${images.length > 1 ? `
                  <button onclick="prevImage()" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer;">‹</button>
                  <button onclick="nextImage()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer;">›</button>
@@ -11007,7 +11007,7 @@ document.addEventListener("DOMContentLoaded", function() {
            if (modelList.length > 0) {
              const firstModel = modelList[0];
              const firstModelImages = modelImages[firstModel] || {};
-             const firstImage = firstModelImages.first_image || '/static/assets/images/imagePlaceholder.png';
+             const firstImage = firstModelImages.first_image || '/static/assets/images/imagePlaceholder.jpg';
              
              tooltip = document.createElement('div');
              tooltip.className = 'model-image-tooltip';

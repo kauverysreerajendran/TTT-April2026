@@ -1143,7 +1143,7 @@ width: 435px !important;
                                 class="model-select-checkbox"
                                 data-model-no="{{ data.model_stock_no__model_no }}"
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                                 style="display: none; border:2px solid #dc3545;" />                      
                      
                         <span style="display:flex; align-items:center; gap:2px;">
@@ -1207,7 +1207,7 @@ width: 435px !important;
                               <div style="display: flex; align-items: center; gap: 8px;">
                                 <!-- Hide scroll buttons since only one image is shown -->
                                 <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-                                  <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                                  <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
                                 </div>
                               </div>
                         </div>
@@ -1544,7 +1544,7 @@ width: 435px !important;
                     
                     <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
                       <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
-                        <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+                        <img src="/static/assets/images/imagePlaceholder.jpg" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
                         <!-- Model No and Lot Qty in same line -->
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                           <div style="display: flex; align-items: center; gap: 15px;">
@@ -2697,7 +2697,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const modalUserImg = modal.querySelector('.user-profile img');
           const modelImage = link.getAttribute('data-model-image');
           if (modalUserImg) {
-            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
+            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.jpg";
           }
     
           // ✅ UPDATED: Fetch tray data with rejection information using correct endpoint
@@ -5377,7 +5377,7 @@ async function rebuildModalFromBackendData() {
             
             const modelData = {
                 modelNo: data.plating_stk_no || '-',
-                image: (data.model_images && data.model_images.length > 0) ? data.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+                image: (data.model_images && data.model_images.length > 0) ? data.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
                 isOriginal: true
             };
             const item = createModelItem(modelData);
@@ -5951,14 +5951,14 @@ newFaultySlotInput.addEventListener('input', function() {
           const lotData = await resp.json();
           const modelData = {
             modelNo: lotData.plating_stk_no || '-',
-            image: (lotData.model_images && lotData.model_images.length > 0) ? lotData.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+            image: (lotData.model_images && lotData.model_images.length > 0) ? lotData.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
             isOriginal: idx === 0 // Mark first as original
           };
           const item = createModelItem(modelData);
           slider.appendChild(item);
         } catch (err) {
           // fallback if error
-          const item = createModelItem({ modelNo: 'Unknown', image: '/static/assets/images/imagePlaceholder.png', isOriginal: idx === 0 });
+          const item = createModelItem({ modelNo: 'Unknown', image: '/static/assets/images/imagePlaceholder.jpg', isOriginal: idx === 0 });
           slider.appendChild(item);
         }
       }));
@@ -6718,7 +6718,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
             
             const modelData = {
               modelNo: data.plating_stk_no || originalModalData.modelNo,
-              image: (data.model_images && data.model_images.length > 0) ? data.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+              image: (data.model_images && data.model_images.length > 0) ? data.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
               isOriginal: true
             };
             const item = createModelItem(modelData);
@@ -6735,7 +6735,7 @@ document.querySelectorAll('.model-select-checkbox').forEach(function(checkbox) {
             console.error('Error rebuilding original slider:', error);
             const modelData = {
               modelNo: originalModalData.modelNo,
-              image: '/static/assets/images/imagePlaceholder.png',
+              image: '/static/assets/images/imagePlaceholder.jpg',
               isOriginal: true
             };
             const item = createModelItem(modelData);
@@ -7227,7 +7227,7 @@ if (isMultiModel) {
         
         const originalModelData = {
           modelNo: originalData.plating_stk_no || originalModalData.modelNo,
-          image: (originalData.model_images && originalData.model_images.length > 0) ? originalData.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+          image: (originalData.model_images && originalData.model_images.length > 0) ? originalData.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
           isOriginal: true
         };
         const originalItem = createModelItem(originalModelData);
@@ -7237,7 +7237,7 @@ if (isMultiModel) {
         // Fallback to stored data without image
         const originalModelData = {
           modelNo: originalModalData.modelNo,
-          image: '/static/assets/images/imagePlaceholder.png',
+          image: '/static/assets/images/imagePlaceholder.jpg',
           isOriginal: true
         };
         const originalItem = createModelItem(originalModelData);
@@ -7260,7 +7260,7 @@ if (isMultiModel) {
         
         const modelData = {
           modelNo: result.plating_stk_no || '-',
-          image: (result.model_images && result.model_images.length > 0) ? result.model_images[0] : '/static/assets/images/imagePlaceholder.png',
+          image: (result.model_images && result.model_images.length > 0) ? result.model_images[0] : '/static/assets/images/imagePlaceholder.jpg',
           isOriginal: false,
           lotId: lotId,
           reducedQuantity: reducedQty  // Store the reduced quantity
@@ -8470,7 +8470,7 @@ async function rebuildModelSliderFromLotQuantities(lotQuantities, platingStockNo
         // SMART FIX: Ensure lotId is always properly set
         const modelData = {
             modelNo: platingStockNo,
-            image: '/static/assets/images/imagePlaceholder.png',
+            image: '/static/assets/images/imagePlaceholder.jpg',
             isOriginal: i === 0,
             lotId: lotId, // ✅ Critical: This must be set
             reducedQuantity: lotQuantities[lotId]

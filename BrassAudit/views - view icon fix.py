@@ -265,7 +265,7 @@ class BrassAuditPickTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
         
             # Add available_qty
@@ -3952,7 +3952,7 @@ class BrassAuditCompletedView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
         print("Processed lot_ids:", [data['stock_lot_id'] for data in master_data])
@@ -5852,7 +5852,7 @@ class BrassAuditRejectTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
         print("✅ Brass Audit Reject data processing completed")

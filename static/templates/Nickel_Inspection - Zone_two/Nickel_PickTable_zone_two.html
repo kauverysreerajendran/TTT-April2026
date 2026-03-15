@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% load static %} {% block content %} {% load stock_filters %}
+{% extends "base.html" %} {% load static %} {% block content %} {% load
+stock_filters %}
 
 <style>
   /* ========== Tablet override — paste at file end (after other table styles) ========== */
@@ -654,7 +655,8 @@
                     <i class="fa fa-filter" aria-hidden="true"></i>
                   </th>
                   <th>
-                    Tray Cate- <br> Capacity
+                    Tray Cate- <br />
+                    Capacity
                     <i class="fa fa-filter" aria-hidden="true"></i>
                   </th>
                   <th style="display: none">
@@ -726,9 +728,14 @@
                   data-brass-qc-accepted-qty-verified="{{ data.nq_qc_accepted_qty_verified|yesno:'True,False' }}"
                 >
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     <span style="display: flex; align-items: center; gap: 3px">
                       {% if is_admin %}
@@ -755,7 +762,8 @@
                         style="display:{% if data.nq_hold_lot or data.nq_release_lot or data.nq_holding_reason or data.nq_release_reason %}inline-block{% else %}none{% endif %}; cursor:pointer;"
                         title="{% if data.nq_holding_reason %}Holding Reason: {{ data.nq_holding_reason }}{% endif %}{% if data.nq_holding_reason and data.nq_release_reason %}&#10;{% endif %}{% if data.nq_release_reason %}Release Reason: {{ data.nq_release_reason }}{% endif %}"
                       >
-                        {% if data.nq_hold_lot or data.nq_release_lot or data.nq_holding_reason or data.nq_release_reason %}
+                        {% if data.nq_hold_lot or data.nq_release_lot or
+                        data.nq_holding_reason or data.nq_release_reason %}
                         <img
                           src="{% static 'assets/icons/view2.png' %}"
                           alt="Remark"
@@ -765,7 +773,8 @@
                       </span>
                       {% else %}
                       <!-- Non-admin: Only show view icon if there's a holding/release reason -->
-                      {% if data.nq_hold_lot or data.nq_release_lot or data.nq_holding_reason or data.nq_release_reason %}
+                      {% if data.nq_hold_lot or data.nq_release_lot or
+                      data.nq_holding_reason or data.nq_release_reason %}
                       <span
                         class="hold-remark-icon"
                         style="display: inline-block; cursor: pointer"
@@ -777,8 +786,7 @@
                           style="width: 18px; height: 18px"
                         />
                       </span>
-                      {% endif %}
-                      {% endif %}
+                      {% endif %} {% endif %}
                       <span class="sno-value"
                         >{{ page_obj.start_index|add:forloop.counter0 }}</span
                       >
@@ -794,12 +802,18 @@
                     {% endif %}
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                     style="white-space: normal; word-break: break-all"
                   >
-                    {% if data.send_to_nickel_brass %} {{ data.na_last_process_date_time|date:"d-M-y" }}<br />
+                    {% if data.send_to_nickel_brass %} {{
+                    data.na_last_process_date_time|date:"d-M-y" }}<br />
                     <span
                       style="
                         display: inline-block;
@@ -822,15 +836,21 @@
                     {% endif %}
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     <span
                       class="model-hover-trigger"
                       style="cursor: pointer; word-break: break-all"
                     >
-                      {{ data.plating_stk_no|highlight_plating_color|safe_html }}
+                      {{ data.plating_stk_no|highlight_plating_color|safe_html
+                      }}
                       <div
                         class="model-image-tooltip"
                         style="
@@ -907,7 +927,7 @@
                             "
                           >
                             <img
-                              src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                              src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                               style="
                                 width: 55px;
                                 height: 55px;
@@ -921,81 +941,169 @@
                     </span>
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
-                    {{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}
+                    {{
+                    data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html
+                    }}
                   </td>
 
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{ data.plating_color }}
                   </td>
                   <!--<td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>-->
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{data.polish_finish}}
                   </td>
-                  <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
-                    {% if data.tray_type and data.tray_capacity %}
-                      {% if data.tray_capacity == 20 %}
-                        <div class="tray-capacity-badge normal-tray"
-                             style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
-                             title="Normal Tray - 20 Capacity (Custom for Nickel QC)">
-                          Normal - 20
-                        </div>
-                      {% elif data.tray_capacity == 12 %}
-                        <div class="tray-capacity-badge jumbo-tray"
-                             style="background: #28a745; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
-                             title="Jumbo Tray - 12 Capacity (RED, DARK GREEN &amp; LITE GREEN)">
-                          Jumbo - 12
-                        </div>
-                      {% else %}
-                        <div class="tray-capacity-badge other-tray"
-                             style="background: #6c757d; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 600; text-align: center;"
-                             title="{{ data.tray_type }} - {{ data.tray_capacity }} Capacity">
-                          {{ data.tray_type }} - {{ data.tray_capacity }}
-                        </div>
-                      {% endif %}
+                  <td
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
+                    class="row-inactive-blur"
+                    {%
+                    endif
+                    %}
+                  >
+                    {% if data.tray_type and data.tray_capacity %} {% if
+                    data.tray_capacity == 20 %}
+                    <div
+                      class="tray-capacity-badge normal-tray"
+                      style="
+                        background: #dc3545;
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 15px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        text-align: center;
+                        border: 1px solid rgba(255, 255, 255, 0.3);
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+                      "
+                      title="Normal Tray - 20 Capacity (Custom for Nickel QC)"
+                    >
+                      Normal - 20
+                    </div>
+                    {% elif data.tray_capacity == 12 %}
+                    <div
+                      class="tray-capacity-badge jumbo-tray"
+                      style="
+                        background: #28a745;
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 15px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        text-align: center;
+                        border: 1px solid rgba(255, 255, 255, 0.3);
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+                      "
+                      title="Jumbo Tray - 12 Capacity (RED, DARK GREEN &amp; LITE GREEN)"
+                    >
+                      Jumbo - 12
+                    </div>
                     {% else %}
-                      <span style="color: #6c757d; font-style: italic; font-size: 12px;">No Tray Info</span>
+                    <div
+                      class="tray-capacity-badge other-tray"
+                      style="
+                        background: #6c757d;
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 15px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        text-align: center;
+                      "
+                      title="{{ data.tray_type }} - {{ data.tray_capacity }} Capacity"
+                    >
+                      {{ data.tray_type }} - {{ data.tray_capacity }}
+                    </div>
+                    {% endif %} {% else %}
+                    <span
+                      style="
+                        color: #6c757d;
+                        font-style: italic;
+                        font-size: 12px;
+                      "
+                      >No Tray Info</span
+                    >
                     {% endif %}
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                     style="display: none"
                   >
                     {{data.version__version_name}}
                   </td>
 
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{data.location__location_name}}
                   </td>
 
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{data.no_of_trays}}
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     <span
                       class="lot-qty"
@@ -1016,7 +1124,13 @@
                         class="brass-checkbox"
                         data-lot-id="{{ data.stock_lot_id }}"
                         style="width: 15px; height: 15px"
-                        {% if data.nq_qc_accepted_qty_verified %}checked disabled{% endif %}
+                        {%
+                        if
+                        data.nq_qc_accepted_qty_verified
+                        %}checked
+                        disabled{%
+                        endif
+                        %}
                       />
                       {% else %}
                       <!-- Show green tick after save -->
@@ -1049,37 +1163,62 @@
                           border: 1px solid #ccc;
                           border-radius: 4px;
                         "
-                        {% if data.nq_qc_accepted_qty_verified %}disabled{% endif %}
+                        {%
+                        if
+                        data.nq_qc_accepted_qty_verified
+                        %}disabled{%
+                        endif
+                        %}
                       />
                     </span>
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{ data.nq_physical_qty|default:0 }}
                   </td>
 
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{ data.nq_qc_accepted_qty|default:0 }}
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {{ data.brass_rejection_total_qty|default:0 }}
                   </td>
                   <!-- Process Status Column -->
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     <div class="d-flex">
                       <!-- Q: Green if nq_qc_accepted_qty_verified, else gray -->
@@ -1128,11 +1267,19 @@
                     </div>
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
-                    {% if not data.nq_qc_accptance and not data.nq_qc_rejection and not data.nq_accepted_tray_scan_status and not data.nq_qc_few_cases_accptance and data.nq_qc_accepted_qty_verified %}
+                    {% if not data.nq_qc_accptance and not data.nq_qc_rejection
+                    and not data.nq_accepted_tray_scan_status and not
+                    data.nq_qc_few_cases_accptance and
+                    data.nq_qc_accepted_qty_verified %}
 
                     <a
                       href="#"
@@ -1163,10 +1310,8 @@
                         "
                       />
                     </span>
-                    {% endif %}
-
-                    {# ✅ Close previous if fully before starting the next one #}
-                    {% if data.iqf_acceptance %}
+                    {% endif %} {# ✅ Close previous if fully before starting
+                    the next one #} {% if data.iqf_acceptance %}
 
                     <!-- IQF Acceptance - Show buttons as ACTIVE/CLICKABLE -->
                     <button
@@ -1174,7 +1319,13 @@
                       class="btn btn-social-icon-text btn-twitter"
                       style="background-color: #66bb6a"
                       data-lot-id="{{ data.stock_lot_id }}"
-                      {% if not data.nq_qc_accepted_qty_verified %}disabled{% endif %}
+                      {%
+                      if
+                      not
+                      data.nq_qc_accepted_qty_verified
+                      %}disabled{%
+                      endif
+                      %}
                     >
                       <i class="fa fa-check-circle"></i>Accept
                     </button>
@@ -1227,16 +1378,20 @@
                     >
                       <i class="fa fa-times-circle"></i>Set Top Tray
                     </button>
-                    {% endif %} 
-                    {% endif %} 
-                    {% elif data.send_to_nickel_ip %}
+                    {% endif %} {% endif %} {% elif data.send_to_nickel_ip %}
                     <!-- Brass QC Acceptance (disabled) -->
                     <button
                       type="button"
                       class="btn btn-social-icon-text btn-twitter"
                       style="background-color: #66bb6a"
                       data-lot-id="{{ data.stock_lot_id }}"
-                      {% if not data.nq_qc_accepted_qty_verified %}disabled{% endif %}
+                      {%
+                      if
+                      not
+                      data.nq_qc_accepted_qty_verified
+                      %}disabled{%
+                      endif
+                      %}
                     >
                       <i class="fa fa-check-circle"></i>Accept
                     </button>
@@ -1246,7 +1401,13 @@
                       style="background-color: #e57373"
                       data-stock-lot-id="{{ data.lot_id }}"
                       data-batch-id="{{ data.batch_id }}"
-                      {% if not data.nq_qc_accepted_qty_verified %}disabled{% endif %}
+                      {%
+                      if
+                      not
+                      data.nq_qc_accepted_qty_verified
+                      %}disabled{%
+                      endif
+                      %}
                     >
                       <i class="fa fa-times-circle"></i>Reject
                     </button>
@@ -1277,7 +1438,8 @@
                       <i class="fa fa-times-circle"></i> Reject
                     </button>
 
-                    {% elif data.nq_qc_rejection or data.nq_qc_few_cases_accptance %}
+                    {% elif data.nq_qc_rejection or
+                    data.nq_qc_few_cases_accptance %}
                     <!-- Brass QC Rejection or Few Cases Acceptance (disabled) -->
                     <button
                       type="button"
@@ -1311,7 +1473,13 @@
                       class="btn btn-social-icon-text btn-twitter"
                       style="background-color: #66bb6a"
                       data-lot-id="{{ data.lot_id }}"
-                      {% if not data.nq_qc_accepted_qty_verified %}disabled{% endif %}
+                      {%
+                      if
+                      not
+                      data.nq_qc_accepted_qty_verified
+                      %}disabled{%
+                      endif
+                      %}
                     >
                       <i class="fa fa-check-circle"></i>Accept
                     </button>
@@ -1321,7 +1489,13 @@
                       style="background-color: #e57373"
                       data-stock-lot-id="{{ data.lot_id }}"
                       data-batch-id="{{ data.batch_id }}"
-                      {% if not data.nq_qc_accepted_qty_verified %}disabled{% endif %}
+                      {%
+                      if
+                      not
+                      data.nq_qc_accepted_qty_verified
+                      %}disabled{%
+                      endif
+                      %}
                     >
                       <i class="fa fa-times-circle"></i>Reject
                     </button>
@@ -1356,9 +1530,14 @@
                     </a>
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     {% if data.nq_onhold_picking or data.nq_draft %}
                     <div
@@ -1389,7 +1568,8 @@
                       On Hold
                     </div>
 
-                    {% elif data.nq_qc_rejection or data.nq_qc_few_cases_accptance or data.nq_qc_accptance %}
+                    {% elif data.nq_qc_rejection or
+                    data.nq_qc_few_cases_accptance or data.nq_qc_accptance %}
                     <div
                       class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                       style="
@@ -1421,9 +1601,14 @@
                     {% endif %}
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     <div
                       class="d-inline-block px-3 fw-semibold text-center rounded-pill"
@@ -1440,9 +1625,14 @@
                     </div>
                   </td>
                   <td
-                    {% if data.nq_hold_lot %}
+                    {%
+                    if
+                    data.nq_hold_lot
+                    %}
                     class="row-inactive-blur"
-                    {% endif %}
+                    {%
+                    endif
+                    %}
                   >
                     <!-- VoiceRec with tooltip (audio remark) -->
                     <a
@@ -1477,7 +1667,9 @@
                           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
                           opacity: 0;
                           visibility: hidden;
-                          transition: opacity 0.3s ease, visibility 0.3s ease;
+                          transition:
+                            opacity 0.3s ease,
+                            visibility 0.3s ease;
                           padding: 10px;
                           z-index: 1000;
                         "
@@ -1558,7 +1750,9 @@
                           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
                           opacity: 0;
                           visibility: hidden;
-                          transition: opacity 0.3s ease, visibility 0.3s ease;
+                          transition:
+                            opacity 0.3s ease,
+                            visibility 0.3s ease;
                           padding: 15px;
                           z-index: 1000;
                         "
@@ -1575,7 +1769,12 @@
                             font-family: Arial, sans-serif;
                             font-size: 14px;
                           "
-                          {% if data.nq_pick_remarks %}readonly{% endif %}
+                          {%
+                          if
+                          data.nq_pick_remarks
+                          %}readonly{%
+                          endif
+                          %}
                         >
 {{ data.nq_pick_remarks|default_if_none:"" }}</textarea
                         >
@@ -1656,7 +1855,7 @@
                       <!-- Model images will be injected here by JS -->
                       <img
                         id="modalUserImg_DayPlanning"
-                        src="{% static 'assets/images/imagePlaceholder.png' %}"
+                        src="{% static 'assets/images/imagePlaceholder.jpg' %}"
                         alt="Model Image"
                         style="
                           border-radius: 50%;
@@ -1950,18 +2149,22 @@
                     ><i class="fa fa-chevron-left"></i
                   ></span>
                 </li>
-                {% endif %} {# Always show first page #} {% if page_obj.number > 3 %}
+                {% endif %} {# Always show first page #} {% if page_obj.number >
+                3 %}
                 <li><a href="?page=1">1</a></li>
                 {% if page_obj.number > 4 %}
                 <li class="disabled"><span>…</span></li>
-                {% endif %} 
-                {% endif %} 
-                {# Show pages around current page #} {% for num in page_obj.paginator.page_range %} {% if num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                {% endif %} {% endif %} {# Show pages around current page #} {%
+                for num in page_obj.paginator.page_range %} {% if num >=
+                page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
                 {% if num == page_obj.number %}
                 <li class="active"><span>{{ num }}</span></li>
                 {% else %}
                 <li><a href="?page={{ num }}">{{ num }}</a></li>
-                {% endif %} {% endif %} {% endfor %} {# Show ellipsis and last page if needed #} {% if page_obj.number < page_obj.paginator.num_pages|add:'-2' %} {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %}
+                {% endif %} {% endif %} {% endfor %} {# Show ellipsis and last
+                page if needed #} {% if page_obj.number <
+                page_obj.paginator.num_pages|add:'-2' %} {% if page_obj.number <
+                page_obj.paginator.num_pages|add:'-3' %}
                 <li class="disabled"><span>…</span></li>
                 {% endif %}
                 <li>
@@ -2153,7 +2356,7 @@
                   Swal.fire(
                     "Deleted!",
                     "Batch deleted successfully.",
-                    "success"
+                    "success",
                   );
                   setTimeout(() => {
                     window.location.reload();
@@ -2162,7 +2365,7 @@
                   Swal.fire(
                     "Error",
                     data.error || "Failed to delete batch.",
-                    "error"
+                    "error",
                   );
                 }
               })
@@ -2241,7 +2444,7 @@
           // For grid layout (if used)
           detailsDiv
             .querySelectorAll(
-              ".tray-validation-status-header, .tray-validation-status-cell"
+              ".tray-validation-status-header, .tray-validation-status-cell",
             )
             .forEach((cell) => {
               cell.innerHTML = `
@@ -2282,7 +2485,7 @@
         // Add the 4th column to the table
         const modal = document.getElementById("trayScanModal_DayPlanning");
         const detailsDiv = document.getElementById(
-          "trayScanDetails_DayPlanning"
+          "trayScanDetails_DayPlanning",
         );
 
         if (modal && detailsDiv && modal.buildTableHTML) {
@@ -2315,7 +2518,7 @@
         // Remove the 4th column from the table
         const modal = document.getElementById("trayScanModal_DayPlanning");
         const detailsDiv = document.getElementById(
-          "trayScanDetails_DayPlanning"
+          "trayScanDetails_DayPlanning",
         );
 
         if (modal && detailsDiv && modal.buildTableHTML) {
@@ -2339,14 +2542,14 @@
     const errorText = document.getElementById("trayErrorText");
 
     console.log(
-      "🔍 [Tray Validation] Script loaded with BrassTrayId awareness"
+      "🔍 [Tray Validation] Script loaded with BrassTrayId awareness",
     );
 
     function getCurrentBatchId() {
       const modal = document.getElementById("trayScanModal_DayPlanning");
       if (modal && modal.dataset.batchId) return modal.dataset.batchId;
       const lastBtn = document.querySelector(
-        ".tray-scan-btn-Jig[data-batch-id]"
+        ".tray-scan-btn-Jig[data-batch-id]",
       );
       return lastBtn ? lastBtn.getAttribute("data-batch-id") : "";
     }
@@ -2369,7 +2572,7 @@
 
       if (isVerified) {
         console.log(
-          "✅ [Validation Config] Using AfterCheck validation (BrassTrayId data)"
+          "✅ [Validation Config] Using AfterCheck validation (BrassTrayId data)",
         );
         console.log(`   AfterCheck Parameters: lot_id=${stockLotId}`);
 
@@ -2383,7 +2586,7 @@
         };
       } else {
         console.log(
-          "✅ [Validation Config] Using Pick validation (JigUnload_TrayId data)"
+          "✅ [Validation Config] Using Pick validation (JigUnload_TrayId data)",
         );
         console.log(`   Pick Parameters: lot_id=${stockLotId}`);
 
@@ -2446,7 +2649,7 @@
           };
 
           console.log(
-            `🚀 [Single Validation Call] Making request to: ${validationConfig.endpoint}`
+            `🚀 [Single Validation Call] Making request to: ${validationConfig.endpoint}`,
           );
           console.log(`   Data Source: ${validationConfig.dataSource}`);
           console.log(`   Parameters:`, requestData);
@@ -2499,7 +2702,7 @@
                           row.style.backgroundColor = "";
                         }, 2000);
                         console.log(
-                          `✅ [Validation Success] Tray "${trayId}" validated successfully in ${validationConfig.dataSource}`
+                          `✅ [Validation Success] Tray "${trayId}" validated successfully in ${validationConfig.dataSource}`,
                         );
                       } else {
                         statusCell.innerHTML = `
@@ -2517,7 +2720,7 @@
                           row.style.backgroundColor = "";
                         }, 2000);
                         console.log(
-                          `❌ [Validation Failed] Tray "${trayId}" validation failed in ${validationConfig.dataSource}`
+                          `❌ [Validation Failed] Tray "${trayId}" validation failed in ${validationConfig.dataSource}`,
                         );
                       }
                     }
@@ -2527,7 +2730,7 @@
 
               if (!found) {
                 showError(
-                  `Tray ID "${trayId}" not found in table (${validationConfig.dataSource}).`
+                  `Tray ID "${trayId}" not found in table (${validationConfig.dataSource}).`,
                 );
               }
 
@@ -2537,7 +2740,7 @@
             .catch((error) => {
               console.error("❌ [Validation Network Error]", error);
               showError(
-                `Network error occurred while validating the tray ID in ${validationConfig.dataSource}.`
+                `Network error occurred while validating the tray ID in ${validationConfig.dataSource}.`,
               );
               validateInput.value = "";
               validateInput.focus();
@@ -2574,14 +2777,14 @@
 
         const modal = document.getElementById("trayScanModal_DayPlanning");
         const detailsDiv = document.getElementById(
-          "trayScanDetails_DayPlanning"
+          "trayScanDetails_DayPlanning",
         );
         const modalModelNo = document.getElementById(
-          "modalModelNo_DayPlanning"
+          "modalModelNo_DayPlanning",
         );
         const modalLotQty = document.getElementById("modalLotQty_DayPlanning");
         const modalQtyLabel = document.getElementById(
-          "modalQtyLabel_DayPlanning"
+          "modalQtyLabel_DayPlanning",
         );
 
         // Get data attributes
@@ -2627,7 +2830,7 @@
         const modelImage = link.getAttribute("data-model-image");
         if (modalUserImg) {
           modalUserImg.src =
-            modelImage || "/static/assets/images/imagePlaceholder.png";
+            modelImage || "/static/assets/images/imagePlaceholder.jpg";
         }
 
         // Set dynamic values for Lot Qty, Missing Qty, Physical Qty
@@ -2674,7 +2877,7 @@
 
           console.log(`✅ [AFTER CHECK MODE] Using: ${trayListEndpoint}`);
           console.log(
-            `   Data Source: ${dataSource} (Physical Qty: ${brassPhysicalQty})`
+            `   Data Source: ${dataSource} (Physical Qty: ${brassPhysicalQty})`,
           );
           console.log(`   Parameters:`, apiParams);
         } else {
@@ -2690,7 +2893,7 @@
 
           console.log(`✅ [PICK MODE] Using: ${trayListEndpoint}`);
           console.log(
-            `   Data Source: ${dataSource} (Lot Qty: ${displayAcceptedQty})`
+            `   Data Source: ${dataSource} (Lot Qty: ${displayAcceptedQty})`,
           );
           console.log(`   Parameters:`, apiParams);
         }
@@ -2712,7 +2915,7 @@
             traysData = result.trays || [];
             rejectionSummary = result.rejection_summary || {};
             console.log(
-              `✅ [SUCCESS] Fetched ${traysData.length} trays from ${dataSource}`
+              `✅ [SUCCESS] Fetched ${traysData.length} trays from ${dataSource}`,
             );
           } else {
             console.error(`❌ [ERROR] API call failed:`, result);
@@ -2742,7 +2945,7 @@
             const acceptedTrays = traysData;
 
             console.log(
-              `📊 [Table Building] Processing ${traysData.length} total trays, ${acceptedTrays.length} accepted`
+              `📊 [Table Building] Processing ${traysData.length} total trays, ${acceptedTrays.length} accepted`,
             );
 
             // Render all trays in their natural DB order (no reordering)
@@ -2758,7 +2961,9 @@
                 <td>
                   <input type="number" class="form-control" value="${displayQuantity || ""}" readonly style="width: 100%;" />
                 </td>
-                ${showValidationColumn ? `
+                ${
+                  showValidationColumn
+                    ? `
                   <td>
                     <div class="validation-status">
                       <div class="status-icon fail">
@@ -2769,7 +2974,9 @@
                       </div>
                     </div>
                   </td>
-                ` : ""}
+                `
+                    : ""
+                }
               </tr>
             `;
               rowCounter++;
@@ -2778,7 +2985,7 @@
             console.log(
               `📊 [Table Complete] Built table with ${
                 rowCounter - 1
-              } rows from ${dataSource}`
+              } rows from ${dataSource}`,
             );
           }
 
@@ -2799,12 +3006,12 @@
         modal.classList.add("open");
 
         console.log(
-          `🎯 [MODAL OPENED] Successfully displayed ${dataSource} data`
+          `🎯 [MODAL OPENED] Successfully displayed ${dataSource} data`,
         );
         console.log(
           `   Quantity Display: ${isVerified ? "Physical Qty" : "Lot Qty"} = ${
             isVerified ? brassPhysicalQty : displayAcceptedQty
-          }`
+          }`,
         );
       });
     });
@@ -2838,12 +3045,12 @@
     // Attach batch_id to each row for easy access
     document.querySelectorAll("tbody tr").forEach(function (row) {
       const trayScanBtn = row.querySelector(
-        ".tray-scan-btn, .tray-scan-btn-Jig"
+        ".tray-scan-btn, .tray-scan-btn-Jig",
       );
       if (trayScanBtn) {
         row.setAttribute(
           "data-batch-id",
-          trayScanBtn.getAttribute("data-batch-id")
+          trayScanBtn.getAttribute("data-batch-id"),
         );
       }
     });
@@ -2896,7 +3103,7 @@
       saveBtn.onclick = function () {
         console.log(
           "Save button clicked, current state:",
-          window.holdToggleState
+          window.holdToggleState,
         );
 
         const remark = document.getElementById("holdRemarkInput").value.trim();
@@ -2943,7 +3150,7 @@
 
               // ✅ Update UI immediately before refresh
               const currentRow = document.querySelector(
-                `tr[data-stock-lot-id="${window.holdToggleState.currentLotId}"]`
+                `tr[data-stock-lot-id="${window.holdToggleState.currentLotId}"]`,
               );
               if (currentRow) {
                 const toggle = currentRow.querySelector(".hold-toggle-btn");
@@ -3096,8 +3303,8 @@
           // Always fetch accepted tray scan data to get latest is_delink_only status
           fetch(
             `/nickle_inspection_zone_two/nq_zone_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(
-              stockLotId
-            )}`
+              stockLotId,
+            )}`,
           )
             .then((res) => res.json())
             .then((rescanData) => {
@@ -3105,8 +3312,8 @@
                 // Check if delink trays are available
                 fetch(
                   `/nickle_inspection_zone_two/nq_zone_get_delink_tray_data/?lot_id=${encodeURIComponent(
-                    stockLotId
-                  )}`
+                    stockLotId,
+                  )}`,
                 )
                   .then((res) => res.json())
                   .then((delinkData) => {
@@ -3120,13 +3327,13 @@
                         rescanData,
                         stockLotId,
                         false,
-                        true
+                        true,
                       );
                     } else {
                       Swal.fire(
                         "No Delink Needed",
                         "There are no empty trays available for delink in this lot.",
-                        "info"
+                        "info",
                       );
                     }
                   });
@@ -3138,14 +3345,14 @@
           // ✅ UPDATED: If nq_onhold_picking is True, directly show accepted tray modal
         } else if (isOnHold) {
           console.log(
-            '🎯 "Set Top Tray" clicked - showing accepted tray modal directly...'
+            '🎯 "Set Top Tray" clicked - showing accepted tray modal directly...',
           );
 
           // Directly fetch and show accepted tray data (skip rejection details popup)
           fetch(
             `/nickle_inspection_zone_two/nq_zone_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(
-              stockLotId
-            )}`
+              stockLotId,
+            )}`,
           )
             .then((res) => res.json())
             .then((rescanData) => {
@@ -3162,23 +3369,23 @@
               } else {
                 console.error(
                   "❌ Failed to fetch accepted tray data:",
-                  rescanData.error
+                  rescanData.error,
                 );
                 // Fallback: show error message
                 alert(
                   "Error loading accepted tray data: " +
-                    (rescanData.error || "Unknown error")
+                    (rescanData.error || "Unknown error"),
                 );
               }
             })
             .catch((error) => {
               console.error(
                 "❌ Network error fetching accepted tray data:",
-                error
+                error,
               );
               // Fallback: show error message
               alert(
-                "Network error loading accepted tray data. Please try again."
+                "Network error loading accepted tray data. Please try again.",
               );
             });
         } else {
@@ -3198,7 +3405,7 @@
           const missingQty = missingQtyAttr || "0";
 
           const modalModelNo = document.getElementById(
-            "trayScanModalHeaderModelNo"
+            "trayScanModalHeaderModelNo",
           );
           const modelNo = row.getAttribute("data-model-no") || "";
           if (modalModelNo && modelNo) {
@@ -3215,10 +3422,10 @@
           setTimeout(() => {
             const lotQtySpan = document.getElementById("trayScanModalLotQty");
             const missingQtySpan = document.getElementById(
-              "trayScanModalMissingQty"
+              "trayScanModalMissingQty",
             );
             const physicalQtySpan = document.getElementById(
-              "trayScanModalPhysicalQty"
+              "trayScanModalPhysicalQty",
             );
 
             if (lotQtySpan) {
@@ -3247,8 +3454,8 @@
     function fetchAndShowAcceptedTrayData(lotId) {
       fetch(
         `/nickle_inspection_zone_two/nq_zone_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(
-          lotId
-        )}`
+          lotId,
+        )}`,
       )
         .then((res) => res.json())
         .then((rescanData) => {
@@ -3265,7 +3472,7 @@
       return new Promise((resolve, reject) => {
         const delinkSection = document.getElementById("delinkSection");
         const url = `/nickle_inspection_zone_two/nq_zone_get_delink_tray_data/?lot_id=${encodeURIComponent(
-          lotId
+          lotId,
         )}`;
 
         fetch(url)
@@ -3284,7 +3491,7 @@
               if (data.delink_trays && data.delink_trays.length === 0) {
                 delinkSection.style.display = "none";
                 console.log(
-                  "🔍 [loadDelinkTrayData] Hiding delink section - no trays"
+                  "🔍 [loadDelinkTrayData] Hiding delink section - no trays",
                 );
               } else {
                 delinkSection.style.display = "";
@@ -3307,7 +3514,7 @@
               console.log(
                 "🔍 [loadDelinkTrayData] Building table for",
                 data.delink_trays.length,
-                "trays"
+                "trays",
               );
 
               tableBody.innerHTML = "";
@@ -3350,7 +3557,7 @@
               }, 100);
             } else {
               console.log(
-                "🔍 [loadDelinkTrayData] No delink data or empty array"
+                "🔍 [loadDelinkTrayData] No delink data or empty array",
               );
               resolve(data);
             }
@@ -3459,10 +3666,10 @@
       const draftBtn = document.getElementById("acceptedTrayDraftBtn");
       const submitBtn = document.getElementById("acceptedTraySubmitBtn");
       const updateDraftBtn = document.getElementById(
-        "acceptedTrayUpdateDraftBtn"
+        "acceptedTrayUpdateDraftBtn",
       );
       const finalSubmitBtn = document.getElementById(
-        "acceptedTrayFinalSubmitBtn"
+        "acceptedTrayFinalSubmitBtn",
       );
 
       let hasErrors = false;
@@ -3645,8 +3852,8 @@
             // Call validation endpoint
             fetch(
               `/nickle_inspection_zone_two/nq_zone_delink_check_tray_id/?tray_id=${encodeURIComponent(
-                trayId
-              )}&lot_id=${encodeURIComponent(lotId)}`
+                trayId,
+              )}&lot_id=${encodeURIComponent(lotId)}`,
             )
               .then((res) => res.json())
               .then((data) => {
@@ -3753,7 +3960,7 @@
       rescanData,
       lotId,
       isDraft,
-      delinkOnlyMode = false
+      delinkOnlyMode = false,
     ) {
       console.log("🔍 [showAcceptedTrayModal] === STARTING ===");
       console.log("🔍 Input rescanData:", rescanData);
@@ -3765,7 +3972,7 @@
       let draftTrayId = rescanData.draft_tray_id || "";
 
       const currentRow = document.querySelector(
-        `tr[data-stock-lot-id="${lotId}"]`
+        `tr[data-stock-lot-id="${lotId}"]`,
       );
       let platingStkNo = "";
       if (currentRow) {
@@ -3782,7 +3989,7 @@
 
       // ✅ FIXED: Check for existing draft before showing modal
       fetch(
-        `/nickle_inspection_zone_two/nq_zone_get_top_tray_scan_draft/?lot_id=${lotId}`
+        `/nickle_inspection_zone_two/nq_zone_get_top_tray_scan_draft/?lot_id=${lotId}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -3805,7 +4012,7 @@
       function buildAndShowModal(
         isDraftMode,
         existingDraftData,
-        isDelinkOnly = false
+        isDelinkOnly = false,
       ) {
         let draftIndicator = isDraftMode ? " (Draft Mode)" : "";
         let draftAlert =
@@ -3941,12 +4148,12 @@
           <button id="delinkOnlySubmitBtn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 30px;">Submit</button>
         `
             : isDraftMode
-            ? `
+              ? `
           <!-- Draft mode buttons -->
           <button id="acceptedTrayUpdateDraftBtn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 30px;">Draft</button>
           <button id="acceptedTrayFinalSubmitBtn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 30px;">Submit</button>
         `
-            : `
+              : `
           <!-- Normal mode buttons -->
           <button id="acceptedTrayDraftBtn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 30px;">Draft</button>
           <button id="acceptedTraySubmitBtn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 30px;">Submit</button>
@@ -3968,7 +4175,7 @@
         // Update the newPopupModal content
         const newPopupModal = document.getElementById("newPopupModal");
         const modalContent = newPopupModal.querySelector(
-          ".tray-scan-modal-content"
+          ".tray-scan-modal-content",
         );
         if (modalContent) {
           modalContent.innerHTML = html;
@@ -3980,7 +4187,7 @@
           lotId,
           rescanData,
           isDraftMode,
-          existingDraftData
+          existingDraftData,
         );
 
         // Add close button event listener
@@ -4037,23 +4244,23 @@
       lotId,
       rescanData,
       isDraftMode,
-      existingDraftData
+      existingDraftData,
     ) {
       console.log(
         "🔄 [loadDelinkAndDraftData] Starting combined loading for lot:",
-        lotId
+        lotId,
       );
       console.log("🔍 [loadDelinkAndDraftData] isDraftMode:", isDraftMode);
       console.log(
         "🔍 [loadDelinkAndDraftData] existingDraftData:",
-        existingDraftData
+        existingDraftData,
       );
 
       // Step 1: Load delink data first (Promise-based)
       loadDelinkTrayData(lotId)
         .then(() => {
           console.log(
-            "✅ [loadDelinkAndDraftData] Delink data loaded, now loading draft..."
+            "✅ [loadDelinkAndDraftData] Delink data loaded, now loading draft...",
           );
 
           // Step 2: Load draft data after delink is ready
@@ -4075,7 +4282,7 @@
         .catch((error) => {
           console.error(
             "❌ [loadDelinkAndDraftData] Error loading delink data:",
-            error
+            error,
           );
 
           // Still try to load draft even if delink fails
@@ -4093,13 +4300,13 @@
 
       if (attemptNumber >= maxAttempts) {
         console.log(
-          "❌ [attemptDraftLoad] Max attempts reached, draft loading failed"
+          "❌ [attemptDraftLoad] Max attempts reached, draft loading failed",
         );
         return;
       }
 
       console.log(
-        `🔄 [attemptDraftLoad] Attempt ${attemptNumber + 1}/${maxAttempts}`
+        `🔄 [attemptDraftLoad] Attempt ${attemptNumber + 1}/${maxAttempts}`,
       );
 
       setTimeout(() => {
@@ -4118,7 +4325,7 @@
           console.log(
             `⏭️ [attemptDraftLoad] Attempt ${
               attemptNumber + 1
-            } failed, retrying...`
+            } failed, retrying...`,
           );
           attemptDraftLoad(draftData, attemptNumber + 1);
         } else if (success) {
@@ -4152,7 +4359,7 @@
           topTrayInput.style.fontWeight = "600";
 
           console.log(
-            `✅ [loadDraftDataDirectly] Top tray: "${oldTopValue}" → "${topTrayInput.value}"`
+            `✅ [loadDraftDataDirectly] Top tray: "${oldTopValue}" → "${topTrayInput.value}"`,
           );
           success = true;
         }
@@ -4160,12 +4367,12 @@
         // 2. Load delink trays
         const delinkInputs = document.querySelectorAll(".delink-tray-input");
         console.log(
-          `🔍 [loadDraftDataDirectly] Found ${delinkInputs.length} delink inputs`
+          `🔍 [loadDraftDataDirectly] Found ${delinkInputs.length} delink inputs`,
         );
 
         if (delinkInputs.length === 0) {
           console.log(
-            "⚠️ [loadDraftDataDirectly] No delink inputs found - may be normal"
+            "⚠️ [loadDraftDataDirectly] No delink inputs found - may be normal",
           );
           return success; // Return current success status
         }
@@ -4174,7 +4381,7 @@
         const delinkTrays = rescanData.delink_trays || [];
         if (Array.isArray(delinkTrays) && delinkTrays.length > 0) {
           console.log(
-            `🔍 [loadDraftDataDirectly] Loading ${delinkTrays.length} delink trays...`
+            `🔍 [loadDraftDataDirectly] Loading ${delinkTrays.length} delink trays...`,
           );
 
           let delinkLoaded = false;
@@ -4200,7 +4407,7 @@
               targetInput.style.fontWeight = "600";
 
               console.log(
-                `✅ [loadDraftDataDirectly] Input[${position}]: "${oldValue}" → "${targetInput.value}"`
+                `✅ [loadDraftDataDirectly] Input[${position}]: "${oldValue}" → "${targetInput.value}"`,
               );
 
               // Trigger events
@@ -4223,7 +4430,7 @@
       } catch (error) {
         console.error(
           "❌ [loadDraftDataDirectly] Error during draft loading:",
-          error
+          error,
         );
         return false;
       }
@@ -4251,7 +4458,7 @@
           if (this.disabled) {
             showAcceptedTrayMessage(
               "Please fix validation errors before proceeding",
-              "#dc3545"
+              "#dc3545",
             );
             return;
           }
@@ -4266,7 +4473,7 @@
           if (this.disabled) {
             showAcceptedTrayMessage(
               "Please fix validation errors before proceeding",
-              "#dc3545"
+              "#dc3545",
             );
             return;
           }
@@ -4306,7 +4513,7 @@
       if (delinkTrays.length === 0) {
         showAcceptedTrayMessage(
           "Please scan at least one delink tray ID",
-          "#dc3545"
+          "#dc3545",
         );
         return;
       }
@@ -4328,7 +4535,7 @@
 
       console.log(
         "🚀 [saveDelinkOnlyData] Sending delink-only payload:",
-        payload
+        payload,
       );
 
       // Show loading message
@@ -4337,7 +4544,7 @@
       } else {
         showAcceptedTrayMessage(
           "💾 Saving delink trays as draft...",
-          "#007bff"
+          "#007bff",
         );
       }
 
@@ -4469,7 +4676,7 @@
 
             // Remove draft indicators
             const draftIndicators = topTrayInput.parentElement.querySelectorAll(
-              '[title="Draft Data"]'
+              '[title="Draft Data"]',
             );
             draftIndicators.forEach((indicator) => indicator.remove());
 
@@ -4512,8 +4719,8 @@
         // ✅ FIXED: Use the correct endpoint and handle the response properly
         fetch(
           `/nickle_inspection_zone_two/nq_zone_check_tray_id/?tray_id=${encodeURIComponent(
-            trayId
-          )}&lot_id=${encodeURIComponent(lotId)}`
+            trayId,
+          )}&lot_id=${encodeURIComponent(lotId)}`,
         )
           .then((res) => res.json())
           .then((data) => {
@@ -4569,7 +4776,7 @@
             console.error("❌ [validateTopTrayIdForDisplay] Error:", error);
             showEnhancedError(
               "❌ Validation failed. Please try again.",
-              "#dc3545"
+              "#dc3545",
             );
 
             // Style input as invalid
@@ -4710,10 +4917,10 @@
       if (isDraft) {
         // Update Draft button
         const updateDraftBtn = document.getElementById(
-          "acceptedTrayUpdateDraftBtn"
+          "acceptedTrayUpdateDraftBtn",
         );
         const finalSubmitBtn = document.getElementById(
-          "acceptedTrayFinalSubmitBtn"
+          "acceptedTrayFinalSubmitBtn",
         );
 
         if (updateDraftBtn) {
@@ -4721,7 +4928,7 @@
             if (this.disabled) {
               showAcceptedTrayMessage(
                 "Please fix validation errors before proceeding",
-                "#dc3545"
+                "#dc3545",
               );
               return;
             }
@@ -4734,7 +4941,7 @@
             if (this.disabled) {
               showAcceptedTrayMessage(
                 "Please fix validation errors before proceeding",
-                "#dc3545"
+                "#dc3545",
               );
               return;
             }
@@ -4752,7 +4959,7 @@
             if (this.disabled) {
               showAcceptedTrayMessage(
                 "Please fix validation errors before proceeding",
-                "#dc3545"
+                "#dc3545",
               );
               return;
             }
@@ -4765,7 +4972,7 @@
             if (this.disabled) {
               showAcceptedTrayMessage(
                 "Please fix validation errors before proceeding",
-                "#dc3545"
+                "#dc3545",
               );
               return;
             }
@@ -4818,7 +5025,7 @@
         if (delinkInputs.length > 0 && !allDelinkFilled) {
           showAcceptedTrayMessage(
             "Please fill all Delink Tray IDs before submitting.",
-            "#dc3545"
+            "#dc3545",
           );
           return;
         }
@@ -4826,7 +5033,7 @@
         if (!trayId) {
           showAcceptedTrayMessage(
             "Please scan Top Tray ID before submitting.",
-            "#dc3545"
+            "#dc3545",
           );
           return;
         }
@@ -4837,7 +5044,7 @@
       if (!trayId && !hasDelinkTrays) {
         showAcceptedTrayMessage(
           "Please scan at least one tray ID (either Top Tray or Delink)",
-          "#dc3545"
+          "#dc3545",
         );
         return;
       }
@@ -4852,7 +5059,7 @@
 
       console.log(
         "🚀 [saveTopTrayScanFinal] Sending final submission payload:",
-        payload
+        payload,
       );
 
       // Show loading message
@@ -4957,8 +5164,8 @@
     function loadTopTrayScanDraft(lotId) {
       fetch(
         `/nickle_inspection_zone_two/nq_zone_get_top_tray_scan_draft/?lot_id=${encodeURIComponent(
-          lotId
-        )}`
+          lotId,
+        )}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -4973,7 +5180,7 @@
             }
             // Fill tray qty if needed
             const trayQtyInput = document.querySelector(
-              'input[type="number"][readonly]'
+              'input[type="number"][readonly]',
             );
             if (trayQtyInput && draft.tray_qty) {
               trayQtyInput.value = draft.tray_qty;
@@ -5034,7 +5241,7 @@
           // Optionally set capacity or other info if needed
           input.setAttribute(
             "data-original-capacity",
-            delinkTray.original_capacity || 0
+            delinkTray.original_capacity || 0,
           );
         }
       });
@@ -5128,7 +5335,7 @@
     function addDraftModeEventListeners(lotId) {
       // Update Draft button
       const updateDraftBtn = document.getElementById(
-        "acceptedTrayUpdateDraftBtn"
+        "acceptedTrayUpdateDraftBtn",
       );
       if (updateDraftBtn) {
         updateDraftBtn.addEventListener("click", function () {
@@ -5138,7 +5345,7 @@
 
       // Final Submit button
       const finalSubmitBtn = document.getElementById(
-        "acceptedTrayFinalSubmitBtn"
+        "acceptedTrayFinalSubmitBtn",
       );
       if (finalSubmitBtn) {
         finalSubmitBtn.addEventListener("click", function () {
@@ -5184,8 +5391,8 @@
             // ✅ FIXED: Use the nq_zone_reject_check_tray_id endpoint for consistent validation
             fetch(
               `/nickle_inspection_zone_two/nq_zone_reject_check_tray_id/?tray_id=${encodeURIComponent(
-                trayId
-              )}&lot_id=${encodeURIComponent(lotId)}`
+                trayId,
+              )}&lot_id=${encodeURIComponent(lotId)}`,
             )
               .then((res) => res.json())
               .then((data) => {
@@ -5231,7 +5438,7 @@
         .forEach((input, idx) => {
           const tray_id = input.value;
           const qtyInput = input.parentElement.nextElementSibling.querySelector(
-            'input[type="number"]'
+            'input[type="number"]',
           );
           const tray_qty = qtyInput ? qtyInput.value : "";
           rows.push({ tray_id, tray_qty });
@@ -5294,7 +5501,7 @@
           "✅ Set modal context - stockLotId:",
           stockLotId,
           "batchId:",
-          batchId
+          batchId,
         );
       }
 
@@ -5320,10 +5527,10 @@
       setTimeout(() => {
         const lotQtySpan = document.getElementById("trayScanModalLotQty");
         const missingQtySpan = document.getElementById(
-          "trayScanModalMissingQty"
+          "trayScanModalMissingQty",
         );
         const physicalQtySpan = document.getElementById(
-          "trayScanModalPhysicalQty"
+          "trayScanModalPhysicalQty",
         );
 
         if (lotQtySpan) {
@@ -5481,10 +5688,10 @@
       // ✅ NEW: Add event listener for Lot Rejection checkbox
       const batchRejectionCheckbox = document.getElementById("batchRejection");
       const rejectionReasonsSection = document.getElementById(
-        "rejection-reasons-section"
+        "rejection-reasons-section",
       );
       const lotRejectionRemarksSection = document.getElementById(
-        "lotRejectionRemarksSection"
+        "lotRejectionRemarksSection",
       );
 
       if (batchRejectionCheckbox) {
@@ -5502,7 +5709,7 @@
 
             // Update total quantity to 0
             const totalQtyElement = document.getElementById(
-              "rejection-total-qty"
+              "rejection-total-qty",
             );
             if (totalQtyElement) {
               totalQtyElement.textContent = "0";
@@ -5514,7 +5721,7 @@
 
             // Clear lot rejection remarks when switching back
             const lotRemarksInput = document.getElementById(
-              "lotRejectionRemarksInput"
+              "lotRejectionRemarksInput",
             );
             if (lotRemarksInput) {
               lotRemarksInput.value = "";
@@ -5535,13 +5742,13 @@
 
         // Setup auto-save for rejection quantity inputs
         const rejectionInputs = document.querySelectorAll(
-          ".rejection-qty-input"
+          ".rejection-qty-input",
         );
         rejectionInputs.forEach((input) => {
           if (!input.dataset.autoSaveSetup) {
             setupInputListeners(input, "quantity");
             console.log(
-              `✅ Auto-save setup for rejection input: ${input.name}`
+              `✅ Auto-save setup for rejection input: ${input.name}`,
             );
           }
         });
@@ -5555,7 +5762,7 @@
 
         // Setup auto-save for lot rejection remarks
         const lotRemarksInput = document.getElementById(
-          "lotRejectionRemarksInput"
+          "lotRejectionRemarksInput",
         );
         if (lotRemarksInput && !lotRemarksInput.dataset.autoSaveSetup) {
           setupInputListeners(lotRemarksInput, "remarks");
@@ -5567,7 +5774,7 @@
           if (data) {
             console.log(
               "🔄 Applying existing auto-save data to rejection form:",
-              data
+              data,
             );
             applyAutoSaveData(data);
             showAutoSaveToast("Previous data restored");
@@ -5584,7 +5791,7 @@
 
       // ✅ NEW: Get all draft types for this lot
       fetch(
-        `/nickle_inspection_zone_two/nq_zone_get_all_drafts/?lot_id=${stockLotId}`
+        `/nickle_inspection_zone_two/nq_zone_get_all_drafts/?lot_id=${stockLotId}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -5628,7 +5835,7 @@
       // ✅ STEP 2: Wait for remarks section to appear, then fill it
       setTimeout(() => {
         const lotRejectionRemarksInput = document.getElementById(
-          "lotRejectionRemarksInput"
+          "lotRejectionRemarksInput",
         );
         if (lotRejectionRemarksInput && draftData.lot_rejected_comment) {
           lotRejectionRemarksInput.value = draftData.lot_rejected_comment;
@@ -5647,7 +5854,7 @@
         // Show draft indicator
         showDraftIndicator(
           "Lot rejection draft loaded successfully",
-          "Batch Draft"
+          "Batch Draft",
         );
       }, 300);
     }
@@ -5682,7 +5889,7 @@
         // Fill in the quantity inputs with visual feedback
         Object.keys(reasonQuantities).forEach((reasonId) => {
           const qtyInput = document.querySelector(
-            `input[data-reason-id="${reasonId}"]`
+            `input[data-reason-id="${reasonId}"]`,
           );
           if (qtyInput) {
             qtyInput.value = reasonQuantities[reasonId];
@@ -5695,7 +5902,7 @@
         // Calculate total quantity and update tray table
         const totalQty = Object.values(reasonQuantities).reduce(
           (sum, qty) => sum + qty,
-          0
+          0,
         );
 
         console.log("🔍 Zone 2 Draft loading debug:", {
@@ -5719,7 +5926,7 @@
         } else {
           console.log(
             "📊 Calculating tray distribution for total qty:",
-            totalQty
+            totalQty,
           );
           // Calculate proper tray distribution based on total quantity
           setTimeout(() => {
@@ -5747,7 +5954,7 @@
         // Show draft indicator
         showDraftIndicator(
           "Tray rejection draft loaded successfully",
-          "Tray Draft"
+          "Tray Draft",
         );
       }, 300);
     }
@@ -5756,7 +5963,7 @@
     function addEnhancedCheckboxHandler() {
       const batchRejectionCheckbox = document.getElementById("batchRejection");
       const lotRejectionRemarksSection = document.getElementById(
-        "lotRejectionRemarksSection"
+        "lotRejectionRemarksSection",
       );
 
       if (batchRejectionCheckbox && lotRejectionRemarksSection) {
@@ -5764,20 +5971,20 @@
         const newCheckbox = batchRejectionCheckbox.cloneNode(true);
         batchRejectionCheckbox.parentNode.replaceChild(
           newCheckbox,
-          batchRejectionCheckbox
+          batchRejectionCheckbox,
         );
 
         // Add enhanced event listener
         newCheckbox.addEventListener("change", function () {
           const rejectionTableBody = document.getElementById(
-            "rejection-table-body"
+            "rejection-table-body",
           );
           const traySection = document.getElementById("rejection-tray-section");
           const inputs = rejectionTableBody
             ? rejectionTableBody.querySelectorAll("input")
             : [];
           const trayInputs = document.querySelectorAll(
-            "#rejection-tray-table-body input"
+            "#rejection-tray-table-body input",
           );
 
           if (this.checked) {
@@ -5815,7 +6022,7 @@
 
               // ✅ CRITICAL: Clear the remarks input when hiding
               const lotRejectionRemarksInput = document.getElementById(
-                "lotRejectionRemarksInput"
+                "lotRejectionRemarksInput",
               );
               if (lotRejectionRemarksInput) {
                 lotRejectionRemarksInput.value = "";
@@ -5835,7 +6042,7 @@
     // Function to load draft tray IDs
     function loadDraftTrayIds(trayRejections) {
       const trayTableBody = document.getElementById(
-        "rejection-tray-table-body"
+        "rejection-tray-table-body",
       );
       if (!trayTableBody) return;
 
@@ -5870,7 +6077,7 @@
     // Function to load draft tray structure (new method)
     function loadDraftTrayStructure(trays) {
       const trayTableBody = document.getElementById(
-        "rejection-tray-table-body"
+        "rejection-tray-table-body",
       );
       const traySection = document.getElementById("rejection-tray-section");
 
@@ -5902,7 +6109,7 @@
                data-tray-capacity="${tray.expected_qty}"
                data-rejection-qty="${trays.reduce(
                  (sum, t) => sum + t.expected_qty,
-                 0
+                 0,
                )}" />
         <div class="tray-id-error rejection-tray-error" style="color: #d32f2f; font-size: 11px; display: none; margin-top: 2px; padding: 2px 4px; background: #ffebee; border-radius: 3px;"></div>
       </td>
@@ -5936,7 +6143,7 @@
       row,
       batchId,
       stockLotId,
-      trayCapacity
+      trayCapacity,
     ) {
       const availableQty =
         parseInt(row.getAttribute("data-available-qty"), 10) || 0;
@@ -5944,7 +6151,7 @@
       // ✅ CORRECTED: Get tray capacity from MODAL CONTEXT (correct lot_id)
       async function updateRejectionTrayTable(totalQty) {
         const trayTableBody = document.getElementById(
-          "rejection-tray-table-body"
+          "rejection-tray-table-body",
         );
         const traySection = document.getElementById("rejection-tray-section");
 
@@ -5968,7 +6175,7 @@
 
             // Now find the CORRECT row using this lot_id
             currentRow = document.querySelector(
-              `tr[data-stock-lot-id="${stockLotId}"]`
+              `tr[data-stock-lot-id="${stockLotId}"]`,
             );
             if (currentRow) {
               console.log("✅ Found CORRECT row for lot_id:", stockLotId);
@@ -5982,7 +6189,7 @@
               stockLotId = currentRow.getAttribute("data-stock-lot-id");
               console.log(
                 "✅ Fallback: got lot_id from highlighted row:",
-                stockLotId
+                stockLotId,
               );
             }
           }
@@ -5999,8 +6206,8 @@
           try {
             const response = await fetch(
               `/nickle_inspection_zone_two/nq_zone_get_tray_capacity_for_lot/?lot_id=${encodeURIComponent(
-                stockLotId
-              )}`
+                stockLotId,
+              )}`,
             );
             if (response.ok) {
               const data = await response.json();
@@ -6010,12 +6217,12 @@
                   "✅ Got tray capacity from backend API:",
                   trayCapacity,
                   "Source:",
-                  data.source
+                  data.source,
                 );
               } else {
                 console.warn(
                   "⚠️ Backend API returned error:",
-                  data.error || "Unknown error"
+                  data.error || "Unknown error",
                 );
               }
             } else {
@@ -6024,7 +6231,7 @@
           } catch (error) {
             console.warn(
               "⚠️ Error fetching tray capacity from backend:",
-              error
+              error,
             );
           }
 
@@ -6042,7 +6249,7 @@
                   trayCapacity = parseInt(parts[1]);
                   console.log(
                     "✅ Extracted tray capacity from HTML table:",
-                    trayCapacity
+                    trayCapacity,
                   );
                 }
               }
@@ -6052,7 +6259,7 @@
           // ✅ Method 3: Fallback - check data attributes
           if (!trayCapacity || isNaN(trayCapacity)) {
             const trayScanBtn = currentRow.querySelector(
-              ".tray-scan-btn, .tray-scan-btn-Jig"
+              ".tray-scan-btn, .tray-scan-btn-Jig",
             );
             if (trayScanBtn) {
               const capacityAttr =
@@ -6061,7 +6268,7 @@
                 trayCapacity = parseInt(capacityAttr);
                 console.log(
                   "✅ Got tray capacity from data attribute:",
-                  trayCapacity
+                  trayCapacity,
                 );
               }
             }
@@ -6070,7 +6277,7 @@
           // ✅ Final validation
           if (!trayCapacity || isNaN(trayCapacity) || trayCapacity <= 0) {
             console.error(
-              "❌ Could not determine tray capacity, using fallback"
+              "❌ Could not determine tray capacity, using fallback",
             );
             trayCapacity = 12; // Only if absolutely no other option
           }
@@ -6079,7 +6286,7 @@
             "🎯 FINAL tray capacity for lot_id",
             stockLotId,
             ":",
-            trayCapacity
+            trayCapacity,
           );
 
           // ✅ CORRECTED CALCULATION: Remainder FIRST, then full trays
@@ -6087,7 +6294,7 @@
           const fullTrays = Math.floor(totalQty / trayCapacity);
 
           console.log(
-            `📊 Calculation for lot_id ${stockLotId}: ${totalQty} ÷ ${trayCapacity} = ${fullTrays} full trays + ${remainder} remainder`
+            `📊 Calculation for lot_id ${stockLotId}: ${totalQty} ÷ ${trayCapacity} = ${fullTrays} full trays + ${remainder} remainder`,
           );
 
           // ✅ Build quantities array with REMAINDER FIRST
@@ -6106,8 +6313,8 @@
           console.log("✅ CORRECTED tray quantities:", trayQuantities);
           console.log(
             `📝 Example: qty=${totalQty}, capacity=${trayCapacity} → [${trayQuantities.join(
-              ", "
-            )}] (remainder first!)`
+              ", ",
+            )}] (remainder first!)`,
           );
 
           // ✅ Create rows with CORRECTED quantities
@@ -6148,7 +6355,7 @@
         const lotId = trayModal.dataset.stockLotId;
         const rows = document.querySelectorAll("#rejection-table-body tr");
         const trayRows = document.querySelectorAll(
-          "#rejection-tray-table-body tr"
+          "#rejection-tray-table-body tr",
         );
 
         let tray_rejections = [];
@@ -6156,7 +6363,7 @@
         // Enhanced validation logic
         const totalRejectionQty =
           parseInt(
-            document.getElementById("rejection-total-qty").textContent
+            document.getElementById("rejection-total-qty").textContent,
           ) || 0;
 
         if (totalRejectionQty <= 0) {
@@ -6314,7 +6521,7 @@
         // ✅ STEP 3: Check if total available capacity is sufficient
         const totalAvailableCapacity = availableTrays.reduce(
           (sum, tray) => sum + tray.capacity,
-          0
+          0,
         );
         if (totalRejectionQty > totalAvailableCapacity) {
           if (msgDiv) {
@@ -6334,7 +6541,7 @@
           let remainingQtyToDistribute = rejection.quantity;
 
           console.log(
-            `📝 Distributing ${remainingQtyToDistribute} units of reason ${rejection.reason_id}`
+            `📝 Distributing ${remainingQtyToDistribute} units of reason ${rejection.reason_id}`,
           );
 
           // ✅ NEW LOGIC: Distribute this rejection reason across available trays
@@ -6344,7 +6551,7 @@
             if (tray.remaining_capacity > 0) {
               const qtyForThisTray = Math.min(
                 remainingQtyToDistribute,
-                tray.remaining_capacity
+                tray.remaining_capacity,
               );
 
               // Create rejection record for this portion
@@ -6359,10 +6566,10 @@
               tray.remaining_capacity -= qtyForThisTray;
 
               console.log(
-                `✅ Assigned ${qtyForThisTray} of reason ${rejection.reason_id} to tray ${tray.tray_id}`
+                `✅ Assigned ${qtyForThisTray} of reason ${rejection.reason_id} to tray ${tray.tray_id}`,
               );
               console.log(
-                `   Tray ${tray.tray_id} remaining capacity: ${tray.remaining_capacity}`
+                `   Tray ${tray.tray_id} remaining capacity: ${tray.remaining_capacity}`,
               );
             }
           }
@@ -6429,12 +6636,12 @@
               // ✅ ENHANCED: Auto-trigger accepted tray modal with conditional logic for delink-only
               setTimeout(() => {
                 console.log(
-                  "🎯 Auto-triggering accepted tray modal after rejection save..."
+                  "🎯 Auto-triggering accepted tray modal after rejection save...",
                 );
 
                 // ✅ NEW: Calculate total rejection quantity and available quantity
                 const currentRow = document.querySelector(
-                  `tr[data-stock-lot-id="${lotId}"]`
+                  `tr[data-stock-lot-id="${lotId}"]`,
                 );
                 const availableQty = currentRow
                   ? parseInt(currentRow.getAttribute("data-available-qty")) || 0
@@ -6443,7 +6650,7 @@
                 // Calculate total rejection quantity from all rejection reasons
                 let totalRejectionQty = 0;
                 const rejectionInputs = document.querySelectorAll(
-                  ".rejection-qty-input"
+                  ".rejection-qty-input",
                 );
                 rejectionInputs.forEach((input) => {
                   const qty = parseInt(input.value) || 0;
@@ -6453,13 +6660,13 @@
                 });
 
                 console.log(
-                  `📊 Quantity Analysis: Available=${availableQty}, Rejected=${totalRejectionQty}`
+                  `📊 Quantity Analysis: Available=${availableQty}, Rejected=${totalRejectionQty}`,
                 );
 
                 fetch(
                   `/nickle_inspection_zone_two/nq_zone_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(
-                    lotId
-                  )}`
+                    lotId,
+                  )}`,
                 )
                   .then((res) => res.json())
                   .then((rescanData) => {
@@ -6469,14 +6676,14 @@
                       // ✅ NEW: Handle delink-only case (when all pieces rejected)
                       if (rescanData.is_delink_only) {
                         console.log(
-                          "🎯 DELINK-ONLY case detected: All pieces rejected"
+                          "🎯 DELINK-ONLY case detected: All pieces rejected",
                         );
 
                         // Check for delink availability
                         return fetch(
                           `/nickle_inspection_zone_two/nq_zone_get_delink_tray_data/?lot_id=${encodeURIComponent(
-                            lotId
-                          )}`
+                            lotId,
+                          )}`,
                         )
                           .then((delinkRes) => delinkRes.json())
                           .then((delinkData) => {
@@ -6486,24 +6693,24 @@
                               delinkData.delink_trays.length > 0;
 
                             console.log(
-                              `🔍 Delink Analysis for ALL REJECTED: Has delink trays = ${hasDelinkTrays}`
+                              `🔍 Delink Analysis for ALL REJECTED: Has delink trays = ${hasDelinkTrays}`,
                             );
 
                             if (hasDelinkTrays) {
                               // Show modal with ONLY delink table (no top tray section)
                               console.log(
-                                "🎯 All rejected + delink available - showing delink-only modal"
+                                "🎯 All rejected + delink available - showing delink-only modal",
                               );
                               showAcceptedTrayModal(
                                 rescanData,
                                 lotId,
                                 false,
-                                true
+                                true,
                               ); // true = delink only mode
                             } else {
                               // No delink needed - just reload
                               console.log(
-                                "🎯 All rejected + no delink - reloading page"
+                                "🎯 All rejected + no delink - reloading page",
                               );
                               trayModal.classList.remove("open");
                               setTimeout(() => {
@@ -6517,8 +6724,8 @@
                       // ✅ NEW: Check for delink availability for partial rejections
                       return fetch(
                         `/nickle_inspection_zone_two/nq_zone_get_delink_tray_data/?lot_id=${encodeURIComponent(
-                          lotId
-                        )}`
+                          lotId,
+                        )}`,
                       )
                         .then((delinkRes) => delinkRes.json())
                         .then((delinkData) => {
@@ -6528,7 +6735,7 @@
                             delinkData.delink_trays.length > 0;
 
                           console.log(
-                            `🔍 Delink Analysis: Has delink trays = ${hasDelinkTrays}`
+                            `🔍 Delink Analysis: Has delink trays = ${hasDelinkTrays}`,
                           );
 
                           // ✅ CONDITIONAL LOGIC:
@@ -6536,18 +6743,18 @@
                             if (hasDelinkTrays) {
                               // Case 1: Equal quantities + delink available = Show modal with ONLY delink table
                               console.log(
-                                "🎯 Case 1: Equal qty + delink available - showing modal with delink only"
+                                "🎯 Case 1: Equal qty + delink available - showing modal with delink only",
                               );
                               showAcceptedTrayModal(
                                 rescanData,
                                 lotId,
                                 rescanData.has_draft,
-                                true
+                                true,
                               ); // true = delink only mode
                             } else {
                               // Case 2: Equal quantities + no delink = Don't show modal
                               console.log(
-                                "🎯 Case 2: Equal qty + no delink - not showing modal"
+                                "🎯 Case 2: Equal qty + no delink - not showing modal",
                               );
                               trayModal.classList.remove("open");
                               setTimeout(() => {
@@ -6557,26 +6764,26 @@
                           } else if (availableQty > totalRejectionQty) {
                             // Case 3: Available > Rejected = Show full modal (normal behavior)
                             console.log(
-                              "🎯 Case 3: Available > Rejected - showing full modal"
+                              "🎯 Case 3: Available > Rejected - showing full modal",
                             );
                             const hasDraft = rescanData.has_draft;
                             showAcceptedTrayModal(
                               rescanData,
                               lotId,
                               hasDraft,
-                              false
+                              false,
                             ); // false = full modal
                           } else {
                             // Case 4: Available < Rejected (shouldn't happen, but handle gracefully)
                             console.log(
-                              "🎯 Case 4: Available < Rejected - showing full modal as fallback"
+                              "🎯 Case 4: Available < Rejected - showing full modal as fallback",
                             );
                             const hasDraft = rescanData.has_draft;
                             showAcceptedTrayModal(
                               rescanData,
                               lotId,
                               hasDraft,
-                              false
+                              false,
                             );
                           }
 
@@ -6585,7 +6792,7 @@
                     } else {
                       console.error(
                         "❌ Failed to fetch accepted tray data:",
-                        rescanData.error
+                        rescanData.error,
                       );
                       trayModal.classList.remove("open");
                       setTimeout(() => {
@@ -6596,7 +6803,7 @@
                   .catch((error) => {
                     console.error(
                       "❌ Network error fetching accepted tray data:",
-                      error
+                      error,
                     );
                     trayModal.classList.remove("open");
                     setTimeout(() => {
@@ -6628,7 +6835,7 @@
 
         // ✅ Use both class names to ensure we catch all inputs
         const trayInputs = document.querySelectorAll(
-          "#rejection-tray-table-body .tray-id-input, #rejection-tray-table-body .rejection-tray-id-input"
+          "#rejection-tray-table-body .tray-id-input, #rejection-tray-table-body .rejection-tray-id-input",
         );
 
         trayInputs.forEach(function (input, idx) {
@@ -6766,33 +6973,33 @@
               lot_id: currentLotId,
               rejection_qty: individualTrayQty,
               current_session_allocations: JSON.stringify(
-                progressiveSessionAllocations
+                progressiveSessionAllocations,
               ),
             };
 
             console.log(
               `🔍 [Progressive Validation Row ${idx + 1}] Context:`,
-              rejectionContext
+              rejectionContext,
             );
             console.log(
               `🔍 [Progressive Validation Row ${
                 idx + 1
-              }] This tray qty: ${individualTrayQty}`
+              }] This tray qty: ${individualTrayQty}`,
             );
             console.log(
               `🔍 [Progressive Validation Row ${
                 idx + 1
               }] Previous allocations:`,
-              progressiveSessionAllocations
+              progressiveSessionAllocations,
             );
 
             const queryParams = new URLSearchParams(
-              rejectionContext
+              rejectionContext,
             ).toString();
 
             // Call validation endpoint
             fetch(
-              `/nickle_inspection_zone_two/nq_zone_reject_check_tray_id_simple/?${queryParams}`
+              `/nickle_inspection_zone_two/nq_zone_reject_check_tray_id_simple/?${queryParams}`,
             )
               .then((res) => res.json())
               .then((data) => {
@@ -6800,7 +7007,7 @@
 
                 console.log(
                   `🔍 [Progressive Validation Row ${idx + 1}] Response:`,
-                  data
+                  data,
                 );
 
                 if (errorDiv) {
@@ -6818,7 +7025,7 @@
                       data.rearrangement_plan
                     ) {
                       successMessage += ` (Plan: [${data.rearrangement_plan.join(
-                        ", "
+                        ", ",
                       )}])`;
                     }
 
@@ -6872,7 +7079,7 @@
                 this._hasError = true;
                 console.error(
                   `Progressive tray validation error for row ${idx + 1}:`,
-                  error
+                  error,
                 );
 
                 if (errorDiv) {
@@ -6900,13 +7107,13 @@
         // ✅ STEP 1: Get the current input's row index to determine which rejections came before
         const trayInputs = Array.from(
           document.querySelectorAll(
-            "#rejection-tray-table-body .tray-id-input, #rejection-tray-table-body .rejection-tray-id-input"
-          )
+            "#rejection-tray-table-body .tray-id-input, #rejection-tray-table-body .rejection-tray-id-input",
+          ),
         );
         const currentInputIndex = trayInputs.indexOf(excludeInput);
 
         console.log(
-          `📊 [Progressive Collection] Current input index: ${currentInputIndex} of ${trayInputs.length}`
+          `📊 [Progressive Collection] Current input index: ${currentInputIndex} of ${trayInputs.length}`,
         );
 
         // ✅ STEP 2: Collect ALL rejection quantities from the rejection reasons table
@@ -6927,7 +7134,7 @@
               // Skip SHORTAGE - it doesn't consume existing trays
               if (reasonText === "SHORTAGE") {
                 console.log(
-                  `📊 [Progressive Collection] Skipping SHORTAGE reason ${reasonId}`
+                  `📊 [Progressive Collection] Skipping SHORTAGE reason ${reasonId}`,
                 );
                 return;
               }
@@ -6939,7 +7146,7 @@
               });
 
               console.log(
-                `📊 [Progressive Collection] Found rejection: reason=${reasonText}, qty=${qty}`
+                `📊 [Progressive Collection] Found rejection: reason=${reasonText}, qty=${qty}`,
               );
             }
           });
@@ -6978,7 +7185,7 @@
               if (trayId) {
                 collectedTrayIds.push(trayId);
                 console.log(
-                  `📊 [Progressive Collection] Added tray ${trayId} for rejection ${rejection.reason_text}`
+                  `📊 [Progressive Collection] Added tray ${trayId} for rejection ${rejection.reason_text}`,
                 );
               }
             }
@@ -6994,11 +7201,11 @@
               tray_ids: collectedTrayIds,
             });
             console.log(
-              `📊 [Progressive Collection] COMPLETED rejection: ${rejection.reason_text}, qty=${rejectionQty}, trays=${collectedTrayIds}`
+              `📊 [Progressive Collection] COMPLETED rejection: ${rejection.reason_text}, qty=${rejectionQty}, trays=${collectedTrayIds}`,
             );
           } else {
             console.log(
-              `📊 [Progressive Collection] INCOMPLETE rejection: ${rejection.reason_text}, need ${numTraysNeeded} trays, have ${collectedTrayIds.length}`
+              `📊 [Progressive Collection] INCOMPLETE rejection: ${rejection.reason_text}, need ${numTraysNeeded} trays, have ${collectedTrayIds.length}`,
             );
             // This rejection is partially or completely AFTER current input, so don't include it
             break; // Stop processing further rejections
@@ -7007,7 +7214,7 @@
 
         console.log(
           "📊 [Progressive Collection] FINAL allocations:",
-          allocations
+          allocations,
         );
         return allocations;
       }
@@ -7017,7 +7224,7 @@
         const modal = document.getElementById("trayScanModal");
         if (modal && modal.dataset.stockLotId) return modal.dataset.stockLotId;
         const lastBtn = document.querySelector(
-          ".tray-scan-btn[data-stock-lot-id]"
+          ".tray-scan-btn[data-stock-lot-id]",
         );
         return lastBtn ? lastBtn.getAttribute("data-stock-lot-id") : "";
       }
@@ -7062,7 +7269,9 @@
                 console.error("Error updating rejection tray table:", error);
               });
             } else {
-              console.log("⏳ Skipping updateRejectionTrayTable - Draft is loading");
+              console.log(
+                "⏳ Skipping updateRejectionTrayTable - Draft is loading",
+              );
             }
 
             // Show error below the input if exceeded
@@ -7083,10 +7292,10 @@
       //  rejection checkbox event listener
       const batchRejectionCheckbox = document.getElementById("batchRejection");
       const rejectionTableBody = document.getElementById(
-        "rejection-table-body"
+        "rejection-table-body",
       );
       const lotRejectionRemarksSection = document.getElementById(
-        "lotRejectionRemarksSection"
+        "lotRejectionRemarksSection",
       );
       const traySection = document.getElementById("rejection-tray-section");
 
@@ -7094,7 +7303,7 @@
         batchRejectionCheckbox.addEventListener("change", function () {
           const inputs = rejectionTableBody.querySelectorAll("input");
           const trayInputs = document.querySelectorAll(
-            "#rejection-tray-table-body input"
+            "#rejection-tray-table-body input",
           );
 
           if (this.checked) {
@@ -7145,7 +7354,7 @@
 
       // Character count functionality for remarks
       const lotRejectionRemarksInput = document.getElementById(
-        "lotRejectionRemarksInput"
+        "lotRejectionRemarksInput",
       );
       const remarksCharCount = document.getElementById("remarksCharCount");
 
@@ -7184,7 +7393,7 @@
           // ✅ NEW: Clear any existing drafts when switching modes
           clearExistingDraftsBeforeSave(
             stockLotId,
-            batchRejectionCheckbox.checked
+            batchRejectionCheckbox.checked,
           );
 
           if (batchRejectionCheckbox && batchRejectionCheckbox.checked) {
@@ -7196,7 +7405,7 @@
               batchId,
               stockLotId,
               msgDiv,
-              draftButton
+              draftButton,
             );
           }
         });
@@ -7233,10 +7442,10 @@
         batchId,
         stockLotId,
         msgDiv,
-        draftButton
+        draftButton,
       ) {
         const lotRejectionRemarksInput = document.getElementById(
-          "lotRejectionRemarksInput"
+          "lotRejectionRemarksInput",
         );
         const lotRejectionRemarks = lotRejectionRemarksInput
           ? lotRejectionRemarksInput.value.trim()
@@ -7309,7 +7518,7 @@
         batchId,
         stockLotId,
         msgDiv,
-        draftButton
+        draftButton,
       ) {
         const rows = document.querySelectorAll("#rejection-table-body tr");
 
@@ -7345,13 +7554,13 @@
         // Calculate total rejection quantity
         const totalRejectionQty = rejectionReasons.reduce(
           (sum, r) => sum + r.quantity,
-          0
+          0,
         );
 
         // Get tray capacity (same logic as updateRejectionTrayTable)
         let trayCapacity = 12; // Default fallback
         const currentRow = document.querySelector(
-          `tr[data-stock-lot-id="${stockLotId}"]`
+          `tr[data-stock-lot-id="${stockLotId}"]`,
         );
         if (currentRow) {
           const trayCapacityCell = currentRow.cells[7]; // "Tray Cate-Capacity" column (now index 7)
@@ -7383,7 +7592,7 @@
 
         // Get existing tray IDs if tray table exists
         const existingTrayRows = document.querySelectorAll(
-          "#rejection-tray-table-body tr"
+          "#rejection-tray-table-body tr",
         );
         const trayToQuantityMap = [];
 
@@ -7440,7 +7649,7 @@
             if (currentTray.remaining_capacity > 0) {
               const qtyForThisTray = Math.min(
                 remainingQty,
-                currentTray.remaining_capacity
+                currentTray.remaining_capacity,
               );
 
               currentTray.rejections.push({
@@ -7541,7 +7750,7 @@
 
         // Find the row and trigger click again to reload modal with draft data
         const targetRow = document.querySelector(
-          `tr[data-stock-lot-id="${stockLotId}"]`
+          `tr[data-stock-lot-id="${stockLotId}"]`,
         );
         if (targetRow) {
           const rejectBtn = targetRow.querySelector(".tray-scan-btn");
@@ -7570,7 +7779,7 @@
           if (batchRejectionCheckbox && batchRejectionCheckbox.checked) {
             // ✅ ENHANCED: Lot Rejection with Delink Integration
             const lotRejectionRemarksInput = document.getElementById(
-              "lotRejectionRemarksInput"
+              "lotRejectionRemarksInput",
             );
             const lotRejectionRemarks = lotRejectionRemarksInput
               ? lotRejectionRemarksInput.value.trim()
@@ -7602,7 +7811,7 @@
 
             // ✅ NEW: Check for missing quantity in batch rejection
             const currentRow = document.querySelector(
-              `tr[data-stock-lot-id="${lotId}"]`
+              `tr[data-stock-lot-id="${lotId}"]`,
             );
             const missingQtyInput = currentRow
               ? currentRow.querySelector(".missing-qty-input")
@@ -7612,14 +7821,14 @@
               : 0;
 
             console.log(
-              `🔍 [Batch Rejection] Checking missing qty: ${missingQty} for lot: ${lotId}`
+              `🔍 [Batch Rejection] Checking missing qty: ${missingQty} for lot: ${lotId}`,
             );
 
             if (missingQty > 0) {
               // ✅ Show delink modal for batch rejection
               console.log(
                 "🔗 Showing delink modal for batch rejection with missing qty:",
-                missingQty
+                missingQty,
               );
 
               // Close the current rejection modal
@@ -7635,18 +7844,18 @@
                 batchId,
                 missingQty,
                 lotRejectionRemarks,
-                totalQty
+                totalQty,
               );
             } else {
               // ✅ No missing quantity - proceed with normal batch rejection
               console.log(
-                "✅ No missing quantity - proceeding with normal batch rejection"
+                "✅ No missing quantity - proceeding with normal batch rejection",
               );
               performBatchRejection(
                 batchId,
                 lotId,
                 totalQty,
-                lotRejectionRemarks
+                lotRejectionRemarks,
               );
             }
           } else {
@@ -7662,13 +7871,13 @@
         batchId,
         missingQty,
         lotRejectionRemarks,
-        totalQty
+        totalQty,
       ) {
         console.log(
           "🔗 Showing batch rejection delink modal for lot:",
           lotId,
           "missing qty:",
-          missingQty
+          missingQty,
         );
 
         const modal = document.getElementById("delinkModal");
@@ -7737,7 +7946,7 @@
               .filter((id) => id);
             const topTrayId = topTrayInput ? topTrayInput.value.trim() : "";
             const topTrayQtyElement = document.querySelector(
-              "#topTrayTableBody td:last-child"
+              "#topTrayTableBody td:last-child",
             );
             const topTrayQty = topTrayQtyElement
               ? topTrayQtyElement.textContent.trim()
@@ -7771,7 +7980,7 @@
               }).then((result) => {
                 if (result.isConfirmed) {
                   console.log(
-                    "🚀 BATCH REJECTION: User confirmed, calling performBatchRejectionWithDelink"
+                    "🚀 BATCH REJECTION: User confirmed, calling performBatchRejectionWithDelink",
                   );
                   performBatchRejectionWithDelink(
                     lotId,
@@ -7780,7 +7989,7 @@
                     topTrayId,
                     topTrayQty,
                     lotRejectionRemarks,
-                    totalQty
+                    totalQty,
                   );
                 }
               });
@@ -7789,11 +7998,11 @@
                 confirm(
                   "Confirm LOT Rejection with Delink\n\nThis will delink " +
                     missingQty +
-                    " pieces and REJECT the entire batch. Are you sure?"
+                    " pieces and REJECT the entire batch. Are you sure?",
                 )
               ) {
                 console.log(
-                  "🚀 BATCH REJECTION: User confirmed, calling performBatchRejectionWithDelink"
+                  "🚀 BATCH REJECTION: User confirmed, calling performBatchRejectionWithDelink",
                 );
                 performBatchRejectionWithDelink(
                   lotId,
@@ -7802,7 +8011,7 @@
                   topTrayId,
                   topTrayQty,
                   lotRejectionRemarks,
-                  totalQty
+                  totalQty,
                 );
               }
             }
@@ -7819,7 +8028,7 @@
           "📡 Fetching delink calculation for batch rejection - lot:",
           lotId,
           "missing qty:",
-          missingQty
+          missingQty,
         );
 
         const loadingDiv = document.getElementById("delinkLoadingDiv");
@@ -7828,7 +8037,7 @@
         const confirmBtn = document.getElementById("confirmDelinkBtn");
 
         const apiUrl = `/nickle_inspection_zone_two/nq_zone_tray_delink_top_tray_calc/?lot_id=${encodeURIComponent(
-          lotId
+          lotId,
         )}&missing_qty=${missingQty}`;
         console.log("🌐 API URL:", apiUrl);
 
@@ -7856,7 +8065,7 @@
             } else {
               showDelinkError(
                 data.error ||
-                  "Failed to calculate delink requirements for batch rejection"
+                  "Failed to calculate delink requirements for batch rejection",
               );
             }
           })
@@ -7864,7 +8073,7 @@
             console.error("❌ API Error:", error);
             if (loadingDiv) loadingDiv.style.display = "none";
             showDelinkError(
-              "Network error while calculating delink requirements for batch rejection."
+              "Network error while calculating delink requirements for batch rejection.",
             );
           });
       }
@@ -7873,7 +8082,7 @@
       function populateDelinkTablesForBatchRejection(data) {
         console.log(
           "📋 Populating compact delink tables for batch rejection with data:",
-          data
+          data,
         );
 
         const delinkTraysSection =
@@ -7948,7 +8157,7 @@
 
         // Make tables more compact
         const tables = document.querySelectorAll(
-          "#delinkTraysSection table, #topTraySection table"
+          "#delinkTraysSection table, #topTraySection table",
         );
         tables.forEach((table) => {
           table.style.margin = "8px 0";
@@ -7974,7 +8183,7 @@
         // Wait for inputs to be available
         const waitForInputs = () => {
           const inputs = document.querySelectorAll(
-            ".delink-tray-input, #topTrayIdInput"
+            ".delink-tray-input, #topTrayIdInput",
           );
 
           if (inputs.length === 0) {
@@ -7984,7 +8193,7 @@
           }
 
           console.log(
-            `[VALIDATION] Found ${inputs.length} inputs, setting up validation`
+            `[VALIDATION] Found ${inputs.length} inputs, setting up validation`,
           );
           setupValidation(inputs);
         };
@@ -8020,7 +8229,7 @@
                 console.log(
                   `[MOVE] Moving from input ${currentIndex} to ${
                     currentIndex + 1
-                  }`
+                  }`,
                 );
                 setTimeout(() => {
                   nextInput.focus();
@@ -8028,7 +8237,7 @@
                 }, 100);
               } else {
                 console.log(
-                  "[MOVE] Last input reached, focusing submit button"
+                  "[MOVE] Last input reached, focusing submit button",
                 );
                 const submitBtn = document.getElementById("confirmDelinkBtn");
                 if (submitBtn) {
@@ -8099,8 +8308,8 @@
 
               fetch(
                 `/nickle_inspection_zone_two/nq_zone_validate_tray_id/?tray_id=${encodeURIComponent(
-                  trayId
-                )}&lot_id=${encodeURIComponent(lotId)}`
+                  trayId,
+                )}&lot_id=${encodeURIComponent(lotId)}`,
               )
                 .then((res) => res.json())
                 .then((data) => {
@@ -8194,7 +8403,7 @@
             });
 
             console.log(
-              `[READY] Input ${index} configured with Enter navigation`
+              `[READY] Input ${index} configured with Enter navigation`,
             );
           });
 
@@ -8217,7 +8426,7 @@
         if (!confirmBtn) return;
 
         const allInputs = document.querySelectorAll(
-          ".delink-tray-input, #topTrayIdInput"
+          ".delink-tray-input, #topTrayIdInput",
         );
         let hasErrors = false;
         let hasEmptyInputs = false;
@@ -8251,7 +8460,7 @@
           const newConfirmBtn = confirmDelinkBtn.cloneNode(true);
           confirmDelinkBtn.parentNode.replaceChild(
             newConfirmBtn,
-            confirmDelinkBtn
+            confirmDelinkBtn,
           );
 
           newConfirmBtn.addEventListener("click", function () {
@@ -8295,7 +8504,7 @@
               .filter((id) => id);
             const topTrayId = topTrayInput ? topTrayInput.value.trim() : "";
             const topTrayQtyElement = document.querySelector(
-              "#topTrayTableBody td:last-child"
+              "#topTrayTableBody td:last-child",
             );
             const topTrayQty = topTrayQtyElement
               ? topTrayQtyElement.textContent.trim()
@@ -8324,9 +8533,9 @@
                     topTrayId,
                     topTrayQty,
                     lotRejectionRemarks,
-                    totalQty
+                    totalQty,
                   );
-                }
+                },
               );
             } else {
               console.log("ROUTING TO: Accept with Delink (default)");
@@ -8338,9 +8547,9 @@
                     lotId,
                     delinkTrayIds,
                     topTrayId,
-                    topTrayQty
+                    topTrayQty,
                   );
-                }
+                },
               );
             }
           });
@@ -8360,10 +8569,10 @@
         topTrayId,
         topTrayQty,
         lotRejectionRemarks,
-        totalQty
+        totalQty,
       ) {
         console.log(
-          "🎯 BATCH REJECTION: Starting performBatchRejectionWithDelink"
+          "🎯 BATCH REJECTION: Starting performBatchRejectionWithDelink",
         );
         console.log("📊 BATCH REJECTION: Parameters:", {
           lotId,
@@ -8382,7 +8591,7 @@
           if (isNaN(parsedTopTrayQty)) {
             console.error(
               "❌ BATCH REJECTION: Invalid top tray quantity:",
-              topTrayQty
+              topTrayQty,
             );
             showAlert("Error", "Invalid top tray quantity", "error");
             return;
@@ -8398,7 +8607,7 @@
 
         console.log(
           "📤 BATCH REJECTION: Sending delink payload:",
-          delinkPayload
+          delinkPayload,
         );
 
         // Step 1: Perform delink operation first
@@ -8411,7 +8620,7 @@
               "X-CSRFToken": getCookie("csrftoken"),
             },
             body: JSON.stringify(delinkPayload),
-          }
+          },
         )
           .then((res) => {
             console.log("📡 BATCH REJECTION: Delink API status:", res.status);
@@ -8421,7 +8630,7 @@
             console.log("📊 BATCH REJECTION: Delink API Response:", data);
             if (data && data.success) {
               console.log(
-                "✅ BATCH REJECTION: Delink successful, now calling BATCH REJECTION endpoint..."
+                "✅ BATCH REJECTION: Delink successful, now calling BATCH REJECTION endpoint...",
               );
 
               // Step 2: EXPLICIT BATCH REJECTION CALL
@@ -8433,11 +8642,11 @@
               };
 
               console.log(
-                "📤 BATCH REJECTION: Sending to /nickle_inspection_zone_two/nq_zone_batch_rejection/"
+                "📤 BATCH REJECTION: Sending to /nickle_inspection_zone_two/nq_zone_batch_rejection/",
               );
               console.log(
                 "📦 BATCH REJECTION: Payload:",
-                batchRejectionPayload
+                batchRejectionPayload,
               );
 
               // ✅ EXPLICIT: Call batch rejection endpoint (NOT accept endpoint)
@@ -8450,25 +8659,25 @@
                     "X-CSRFToken": getCookie("csrftoken"),
                   },
                   body: JSON.stringify(batchRejectionPayload),
-                }
+                },
               );
             } else {
               throw new Error(
-                data.error || "Failed to perform delink operation"
+                data.error || "Failed to perform delink operation",
               );
             }
           })
           .then((res) => {
             console.log(
               "📡 BATCH REJECTION: Batch rejection API status:",
-              res.status
+              res.status,
             );
 
             // Check if it's a redirect response (which shouldn't happen for batch rejection)
             if (res.redirected) {
               console.warn(
                 "⚠️ BATCH REJECTION: Unexpected redirect to:",
-                res.url
+                res.url,
               );
             }
 
@@ -8479,7 +8688,7 @@
 
             if (data && data.success) {
               console.log(
-                "✅ BATCH REJECTION: Success - showing success message"
+                "✅ BATCH REJECTION: Success - showing success message",
               );
               showSuccess("Lot Rejection completed successfully!", function () {
                 window.location.reload();
@@ -8487,25 +8696,25 @@
             } else {
               console.error(
                 "❌ BATCH REJECTION: Failed with error:",
-                data.error
+                data.error,
               );
               showAlert(
                 "Error",
                 "Delink successful but batch rejection failed: " +
                   (data.error || "Unknown error"),
-                "error"
+                "error",
               );
             }
           })
           .catch((error) => {
             console.error(
               "❌ BATCH REJECTION: Network/processing error:",
-              error
+              error,
             );
             showAlert(
               "Error",
               "Error during batch rejection with delink: " + error.message,
-              "error"
+              "error",
             );
           });
       }
@@ -8515,7 +8724,7 @@
         batchId,
         lotId,
         totalQty,
-        lotRejectionRemarks
+        lotRejectionRemarks,
       ) {
         console.log("🎯 Performing normal batch rejection:", {
           batchId,
@@ -8624,8 +8833,8 @@
           // Always fetch accepted tray scan data to get latest is_delink_only status
           fetch(
             `/nickle_inspection_zone_two/nq_zone_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(
-              lotId
-            )}`
+              lotId,
+            )}`,
           )
             .then((res) => res.json())
             .then((rescanData) => {
@@ -8633,8 +8842,8 @@
                 // Check if delink trays are available
                 fetch(
                   `/nickle_inspection_zone_two/nq_zone_get_delink_tray_data/?lot_id=${encodeURIComponent(
-                    lotId
-                  )}`
+                    lotId,
+                  )}`,
                 )
                   .then((res) => res.json())
                   .then((delinkData) => {
@@ -8649,7 +8858,7 @@
                       Swal.fire(
                         "No Delink Needed",
                         "There are no empty trays available for delink in this lot.",
-                        "info"
+                        "info",
                       );
                     }
                   });
@@ -8773,7 +8982,7 @@
               Swal.fire(
                 "Error",
                 data.error || "Failed to save checkbox",
-                "error"
+                "error",
               );
               checkbox.checked = false;
             }
@@ -9228,7 +9437,7 @@
       function () {
         console.log("✅ User confirmed accept");
         performAcceptAction(lotId);
-      }
+      },
     );
   }
 
@@ -9237,7 +9446,7 @@
       "🔗 Showing compact delink modal for lot:",
       lotId,
       "missing qty:",
-      missingQty
+      missingQty,
     );
 
     const modal = document.getElementById("delinkModal");
@@ -9276,7 +9485,7 @@
       "📡 Fetching delink calculation for lot:",
       lotId,
       "missing qty:",
-      missingQty
+      missingQty,
     );
 
     const loadingDiv = document.getElementById("delinkLoadingDiv");
@@ -9285,7 +9494,7 @@
     const confirmBtn = document.getElementById("confirmDelinkBtn");
 
     const apiUrl = `/nickle_inspection_zone_two/nq_zone_tray_delink_top_tray_calc/?lot_id=${encodeURIComponent(
-      lotId
+      lotId,
     )}&missing_qty=${missingQty}`;
     console.log("🌐 API URL:", apiUrl);
 
@@ -9305,7 +9514,7 @@
           if (confirmBtn) confirmBtn.style.display = "inline-block";
         } else {
           showDelinkError(
-            data.error || "Failed to calculate delink requirements"
+            data.error || "Failed to calculate delink requirements",
           );
         }
       })
@@ -9381,11 +9590,11 @@
   }
   function attachValidationToInputs() {
     console.log(
-      "[ACCEPT-VALIDATION] Setting up Enter key validation with duplicate prevention"
+      "[ACCEPT-VALIDATION] Setting up Enter key validation with duplicate prevention",
     );
 
     const inputs = document.querySelectorAll(
-      ".delink-tray-input, #topTrayIdInput"
+      ".delink-tray-input, #topTrayIdInput",
     );
     const inputArray = Array.from(inputs);
     console.log(`[ACCEPT-VALIDATION] Found ${inputs.length} inputs`);
@@ -9427,7 +9636,7 @@
           }, 100);
         } else {
           console.log(
-            `[ACCEPT-NAVIGATION] Last field - focusing submit button`
+            `[ACCEPT-NAVIGATION] Last field - focusing submit button`,
           );
           const submitBtn = document.getElementById("confirmDelinkBtn");
           if (submitBtn && !submitBtn.disabled) {
@@ -9499,8 +9708,8 @@
 
         fetch(
           `/nickle_inspection_zone_two/nq_zone_validate_tray_id/?tray_id=${encodeURIComponent(
-            trayId
-          )}&lot_id=${encodeURIComponent(lotId)}`
+            trayId,
+          )}&lot_id=${encodeURIComponent(lotId)}`,
         )
           .then((res) => res.json())
           .then((data) => {
@@ -9591,12 +9800,12 @@
       });
 
       console.log(
-        `[ACCEPT-READY] Input ${index} configured with Enter navigation and duplicate prevention`
+        `[ACCEPT-READY] Input ${index} configured with Enter navigation and duplicate prevention`,
       );
     });
 
     console.log(
-      "[ACCEPT-SUCCESS] All accept button inputs ready for Enter + duplicate validation"
+      "[ACCEPT-SUCCESS] All accept button inputs ready for Enter + duplicate validation",
     );
   }
 
@@ -9633,7 +9842,7 @@
     if (!confirmBtn) return;
 
     const allInputs = document.querySelectorAll(
-      ".delink-tray-input, #topTrayIdInput"
+      ".delink-tray-input, #topTrayIdInput",
     );
     let hasErrors = false;
     let hasEmptyInputs = false;
@@ -9759,7 +9968,7 @@
           "📊 Confirming delink for lot:",
           lotId,
           "missing qty:",
-          missingQty
+          missingQty,
         );
 
         if (!lotId) {
@@ -9777,7 +9986,7 @@
         const topTrayId = topTrayInput ? topTrayInput.value.trim() : "";
 
         const topTrayQtyElement = document.querySelector(
-          "#topTrayTableBody td:last-child"
+          "#topTrayTableBody td:last-child",
         );
         const topTrayQty = topTrayQtyElement
           ? topTrayQtyElement.textContent.trim()
@@ -9799,9 +10008,9 @@
               lotId,
               delinkTrayIds,
               topTrayId,
-              topTrayQty
+              topTrayQty,
             );
-          }
+          },
         );
       });
     }
@@ -9813,7 +10022,7 @@
     lotId,
     delinkTrayIds,
     topTrayId,
-    topTrayQty
+    topTrayQty,
   ) {
     console.log("🎯 Performing delink accept action:", {
       lotId,
@@ -9850,7 +10059,7 @@
           "X-CSRFToken": getCookie("csrftoken"),
         },
         body: JSON.stringify(payload),
-      }
+      },
     )
       .then((res) => res.json())
       .then((data) => {
@@ -9891,7 +10100,7 @@
           showAlert(
             "Error",
             "Delink successful but accept failed: " + data.error,
-            "error"
+            "error",
           );
         }
       })
@@ -9900,7 +10109,7 @@
         showAlert(
           "Error",
           error.message || "Network error during operation",
-          "error"
+          "error",
         );
       });
   }
@@ -9979,7 +10188,7 @@
             Swal.fire(
               "Error",
               "Please enter a remark before sending.",
-              "error"
+              "error",
             );
             return;
           }
@@ -10046,7 +10255,7 @@
                 Swal.fire(
                   "Error",
                   data.error || "Failed to save remark",
-                  "error"
+                  "error",
                 );
               }
             })
@@ -10150,7 +10359,7 @@
 
         // Toggle header
         const header = detailsDiv.querySelector(
-          ".tray-validation-status-header"
+          ".tray-validation-status-header",
         );
         if (header) {
           header.style.opacity = validationEnabled ? "1" : "0.3";
@@ -10326,7 +10535,7 @@
               if (movedRow && placeholderRow && placeholderRow.parentNode) {
                 placeholderRow.parentNode.insertBefore(
                   movedRow,
-                  placeholderRow
+                  placeholderRow,
                 );
                 placeholderRow.parentNode.removeChild(placeholderRow);
                 movedRow.classList.remove("dp-row-action-highlight");
@@ -10343,7 +10552,7 @@
               }
               tbody.insertBefore(
                 placeholderRow,
-                tbody.children[originalRowIndex]
+                tbody.children[originalRowIndex],
               );
               tbody.insertBefore(row, tbody.firstElementChild);
             }
@@ -10355,7 +10564,7 @@
 
     // Accept, Reject, View (tray-scan-btn, tray-scan-btn-Jig, btn-twitter, tray-scan-btn-BQ-view)
     attachRowHighlight(
-      ".tray-scan-btn, .tray-scan-btn-Jig, .btn-twitter, .tray-scan-btn-BQ-view"
+      ".tray-scan-btn, .tray-scan-btn-Jig, .btn-twitter, .tray-scan-btn-BQ-view",
     );
 
     // Restore on all modal closes (tray scan, day planning, new popup, etc)
@@ -10379,7 +10588,7 @@
             if (event.target === modal) restoreRowPosition();
           });
         }
-      }
+      },
     );
 
     // Restore on ESC key
@@ -10736,7 +10945,7 @@
             e.stopPropagation();
             openImageSlider(
               images.map((i) => i.src),
-              idx
+              idx,
             );
           });
         });
@@ -10894,13 +11103,12 @@
   });
 </script>
 
-
 <script nonce="{{ csp_nonce }}">
   document.addEventListener("DOMContentLoaded", function () {
     function lockParentActions() {
       document
         .querySelectorAll(
-          'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button:not(#closeTrayScanModal_DayPlanning):not(#trayValidateBtn):not(#trayScanRedoBtn), .hold-toggle-btn, .hold-remark-icon, label.hold-toggle-switch'
+          'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button:not(#closeTrayScanModal_DayPlanning):not(#trayValidateBtn):not(#trayScanRedoBtn), .hold-toggle-btn, .hold-remark-icon, label.hold-toggle-switch',
         )
         .forEach(function (el) {
           el.style.pointerEvents = "none";
@@ -10942,7 +11150,7 @@
     function unlockParentActions() {
       document
         .querySelectorAll(
-          'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button, .hold-toggle-btn, .hold-remark-icon, label.hold-toggle-switch'
+          'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button, .hold-toggle-btn, .hold-remark-icon, label.hold-toggle-switch',
         )
         .forEach(function (el) {
           el.style.pointerEvents = "";
@@ -11061,8 +11269,8 @@
         // Validate tray ID via API
         fetch(
           `/nickle_inspection_zone_two/nq_zone_check_tray_id/?tray_id=${encodeURIComponent(
-            trayId
-          )}&lot_id=${encodeURIComponent(lotId)}`
+            trayId,
+          )}&lot_id=${encodeURIComponent(lotId)}`,
         )
           .then((res) => res.json())
           .then((data) => {
@@ -11127,8 +11335,8 @@
           type === "success"
             ? "#28a745"
             : type === "error"
-            ? "#dc3545"
-            : "#ffc107"
+              ? "#dc3545"
+              : "#ffc107"
         };
         color: white;
         padding: 12px 20px;
@@ -11204,7 +11412,11 @@
 
     // ✅ SPECIFIC: Collect tray validate input
     const trayValidateInput = document.getElementById("trayValidateInput");
-    if (trayValidateInput && trayValidateInput.value && trayValidateInput.value.trim()) {
+    if (
+      trayValidateInput &&
+      trayValidateInput.value &&
+      trayValidateInput.value.trim()
+    ) {
       data["tray_validate_input"] = trayValidateInput.value.trim();
     }
 
@@ -11233,7 +11445,7 @@
 
     // Collect modal-specific data
     const activeModal = document.querySelector(
-      '.modal:not([style*="display: none"]), [id*="Modal"]:not([style*="display: none"])'
+      '.modal:not([style*="display: none"]), [id*="Modal"]:not([style*="display: none"])',
     );
     if (activeModal) {
       const modalId = activeModal.id;
@@ -11241,7 +11453,7 @@
 
       // Collect all inputs within active modal
       const modalInputs = activeModal.querySelectorAll(
-        "input, textarea, select"
+        "input, textarea, select",
       );
       modalInputs.forEach((input) => {
         if (input.id || input.name || input.className) {
@@ -11308,7 +11520,7 @@
 
     try {
       const response = await fetch(
-        `${window.autoSaveSystem.loadEndpoint}${lotId}/`
+        `${window.autoSaveSystem.loadEndpoint}${lotId}/`,
       );
       const result = await response.json();
 
@@ -11343,8 +11555,12 @@
         const delinkInputs = document.querySelectorAll(".delink-tray-input");
         if (delinkInputs[index]) {
           delinkInputs[index].value = value;
-          delinkInputs[index].dispatchEvent(new Event("input", { bubbles: true }));
-          delinkInputs[index].dispatchEvent(new Event("change", { bubbles: true }));
+          delinkInputs[index].dispatchEvent(
+            new Event("input", { bubbles: true }),
+          );
+          delinkInputs[index].dispatchEvent(
+            new Event("change", { bubbles: true }),
+          );
           console.log(`✅ Restored delink tray ID ${index}: ${value}`);
           return;
         }
@@ -11367,8 +11583,12 @@
         const trayValidateInput = document.getElementById("trayValidateInput");
         if (trayValidateInput) {
           trayValidateInput.value = value;
-          trayValidateInput.dispatchEvent(new Event("input", { bubbles: true }));
-          trayValidateInput.dispatchEvent(new Event("change", { bubbles: true }));
+          trayValidateInput.dispatchEvent(
+            new Event("input", { bubbles: true }),
+          );
+          trayValidateInput.dispatchEvent(
+            new Event("change", { bubbles: true }),
+          );
           console.log(`✅ Restored tray validate input: ${value}`);
           return;
         }
@@ -11380,7 +11600,7 @@
 
         // Try to find by reason ID
         const reasonInput = document.querySelector(
-          `input[data-reason-id="${reasonId}"]`
+          `input[data-reason-id="${reasonId}"]`,
         );
         if (reasonInput) {
           reasonInput.value = value;
@@ -11397,7 +11617,7 @@
           nameInput.dispatchEvent(new Event("input", { bubbles: true }));
           nameInput.dispatchEvent(new Event("change", { bubbles: true }));
           console.log(
-            `✅ Restored rejection quantity by name: ${reasonId} = ${value}`
+            `✅ Restored rejection quantity by name: ${reasonId} = ${value}`,
           );
           return;
         }
@@ -11468,7 +11688,7 @@
             "X-CSRFToken":
               document.querySelector("[name=csrfmiddlewaretoken]")?.value || "",
           },
-        }
+        },
       );
 
       const result = await response.json();
@@ -11578,15 +11798,18 @@
     if (!value.trim()) return false;
 
     const normalizedValue = value.trim().toUpperCase();
-    
+
     // Get all tray ID inputs
     const allTrayInputs = document.querySelectorAll(
-      ".delink-tray-input, #topTrayIdInput, #trayValidateInput"
+      ".delink-tray-input, #topTrayIdInput, #trayValidateInput",
     );
 
     // Check for duplicates (excluding current element)
     for (const input of allTrayInputs) {
-      if (input !== currentElement && input.value.trim().toUpperCase() === normalizedValue) {
+      if (
+        input !== currentElement &&
+        input.value.trim().toUpperCase() === normalizedValue
+      ) {
         return true;
       }
     }
@@ -11761,7 +11984,7 @@
       () => {
         // Check for lot input field
         const lotInput = document.querySelector(
-          'input[name*="lot"], input[id*="lot"]'
+          'input[name*="lot"], input[id*="lot"]',
         );
         return lotInput ? lotInput.value : null;
       },
@@ -11773,7 +11996,7 @@
       () => {
         // Check for any element with lot ID data
         const elementWithLot = document.querySelector(
-          "[data-lot-id], [data-stock-lot-id]"
+          "[data-lot-id], [data-stock-lot-id]",
         );
         return elementWithLot
           ? elementWithLot.dataset.lotId || elementWithLot.dataset.stockLotId
@@ -11802,28 +12025,41 @@
     // Monitor for new tray inputs being added to the DOM
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.type === 'childList') {
+        if (mutation.type === "childList") {
           // Check for new tray inputs
           const addedNodes = Array.from(mutation.addedNodes);
           addedNodes.forEach((node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
               // Find tray inputs in the added content
-              const trayInputs = node.querySelectorAll 
-                ? node.querySelectorAll('.delink-tray-input, #topTrayIdInput, #trayValidateInput')
+              const trayInputs = node.querySelectorAll
+                ? node.querySelectorAll(
+                    ".delink-tray-input, #topTrayIdInput, #trayValidateInput",
+                  )
                 : [];
-              
+
               trayInputs.forEach((input) => {
                 if (!input.dataset.autoSaveSetup) {
-                  setupInputListeners(input, 'trayId');
-                  console.log('✅ Auto-save setup for dynamic tray input:', input.className || input.id);
+                  setupInputListeners(input, "trayId");
+                  console.log(
+                    "✅ Auto-save setup for dynamic tray input:",
+                    input.className || input.id,
+                  );
                 }
               });
 
               // Also check if the added node is itself a tray input
-              if (node.matches && node.matches('.delink-tray-input, #topTrayIdInput, #trayValidateInput')) {
+              if (
+                node.matches &&
+                node.matches(
+                  ".delink-tray-input, #topTrayIdInput, #trayValidateInput",
+                )
+              ) {
                 if (!node.dataset.autoSaveSetup) {
-                  setupInputListeners(node, 'trayId');
-                  console.log('✅ Auto-save setup for dynamic tray input:', node.className || node.id);
+                  setupInputListeners(node, "trayId");
+                  console.log(
+                    "✅ Auto-save setup for dynamic tray input:",
+                    node.className || node.id,
+                  );
                 }
               }
             }
@@ -11835,7 +12071,7 @@
     // Start observing
     observer.observe(document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
     });
 
     return observer;
@@ -11884,7 +12120,7 @@
     // ✅ SPECIFIC: Handle tray scan modal close events
     const trayScanModalClose = document.getElementById("closeTrayScanModal");
     if (trayScanModalClose) {
-      trayScanModalClose.addEventListener("click", function() {
+      trayScanModalClose.addEventListener("click", function () {
         const lotId = getCurrentLotIdFromContext();
         if (lotId) {
           performAutoSave(lotId, true); // Show toast on tray scan modal close
@@ -11892,10 +12128,12 @@
       });
     }
 
-    // ✅ SPECIFIC: Handle day planning modal close events  
-    const dayPlanningModalClose = document.getElementById("closeTrayScanModal_DayPlanning");
+    // ✅ SPECIFIC: Handle day planning modal close events
+    const dayPlanningModalClose = document.getElementById(
+      "closeTrayScanModal_DayPlanning",
+    );
     if (dayPlanningModalClose) {
-      dayPlanningModalClose.addEventListener("click", function() {
+      dayPlanningModalClose.addEventListener("click", function () {
         const lotId = getCurrentLotIdFromContext();
         if (lotId) {
           performAutoSave(lotId, true); // Show toast on day planning modal close
@@ -11976,7 +12214,9 @@
   function initializeAutoSaveSystem() {
     if (window.autoSaveSystem.isInitialized) return;
 
-    console.log("🚀 Initializing Enhanced Auto-Save System for Tray ID Inputs...");
+    console.log(
+      "🚀 Initializing Enhanced Auto-Save System for Tray ID Inputs...",
+    );
 
     // Setup input tracking
     setupInputTracking();
@@ -12027,16 +12267,24 @@
   });
 
   // ✅ FUNCTION TO SETUP AUTO-SAVE FOR TRAY SCAN CONTENT
-  window.setupTrayInputAutoSave = function(containerId) {
-    const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+  window.setupTrayInputAutoSave = function (containerId) {
+    const container =
+      typeof containerId === "string"
+        ? document.getElementById(containerId)
+        : containerId;
     if (!container) return;
 
     // Find all tray inputs in the container
-    const trayInputs = container.querySelectorAll('.delink-tray-input, #topTrayIdInput, #trayValidateInput');
+    const trayInputs = container.querySelectorAll(
+      ".delink-tray-input, #topTrayIdInput, #trayValidateInput",
+    );
     trayInputs.forEach((input) => {
       if (!input.dataset.autoSaveSetup) {
-        setupInputListeners(input, 'trayId');
-        console.log('✅ Manual auto-save setup for tray input:', input.className || input.id);
+        setupInputListeners(input, "trayId");
+        console.log(
+          "✅ Manual auto-save setup for tray input:",
+          input.className || input.id,
+        );
       }
     });
 

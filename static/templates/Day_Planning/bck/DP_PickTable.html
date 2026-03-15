@@ -682,7 +682,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
             <button class="info-btn" style="position:absolute; top:8px; left:8px;">Info</button>
             <button class="img-scroll-left" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8592;</button>
             <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" 
+              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" 
                   style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
             </div>
 
@@ -894,7 +894,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 <!-- New top header container: title + user profile aligned left -->
 <!-- Header Section -->
     <div class="modal-top-header">
-      <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 44px; height: 44px; object-fit: cover;" />
+      <img src="/static/assets/images/imagePlaceholder.jpg" alt="User Profile" style="border-radius: 50%; width: 44px; height: 44px; object-fit: cover;" />
       
       <div style="font-weight: 600; color: #222; font-size: 17px;">
         Model No:
@@ -971,7 +971,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     style="display: flex; align-items: center; gap: 8px"
                   >
                     <img
-                      src="/static/assets/images/imagePlaceholder.png"
+                      src="/static/assets/images/imagePlaceholder.jpg"
                       alt="User Profile"
                       style="
                         border-radius: 50%;
@@ -3910,7 +3910,7 @@ trayScanLinks.forEach((link) => {
             if (modelImage) {
                 modalUserImg.src = modelImage;
             } else {
-                modalUserImg.src = "/static/assets/images/imagePlaceholder.png";
+                modalUserImg.src = "/static/assets/images/imagePlaceholder.jpg";
             }
         }
 

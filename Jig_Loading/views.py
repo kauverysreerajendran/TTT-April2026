@@ -2305,10 +2305,19 @@ class JigCompletedTable(TemplateView):
                 if not stock:
                     continue  # Skip if no corresponding stock record
                     
-                plating_stk_no = (
-                    getattr(stock.batch_id, 'plating_stk_no', None)
-                    or getattr(stock.model_stock_no, 'plating_stk_no', None)
-                )
+                plating_stk_nos = JigLoadTrayId.objects.filter(lot_id=jig_completed.lot_id).values_list('batch_id__plating_stk_no', flat=True).distinct()
+                plating_stk_nos = [psn for psn in plating_stk_nos if psn]  # Filter out None/empty
+                
+                if plating_stk_nos:
+                    lot_plating_stk_nos = plating_stk_nos
+                else:
+                    # Fallback to single plating_stk_no
+                    plating_stk_no = (
+                        getattr(stock.batch_id, 'plating_stk_no', None)
+                        or getattr(stock.model_stock_no, 'plating_stk_no', None)
+                    )
+                    lot_plating_stk_nos = [plating_stk_no or 'No Plating Stock No']
+                
                 polishing_stk_no = (
                     getattr(stock.batch_id, 'polishing_stk_no', None)
                     or getattr(stock.model_stock_no, 'polishing_stk_no', None)
@@ -2346,7 +2355,7 @@ class JigCompletedTable(TemplateView):
                     'batch_id': jig_completed.batch_id,
                     'jig_loaded_date_time': jig_completed.updated_at,
                     'lot_id': jig_completed.lot_id,  # Use original lot_id for completed portion
-                    'lot_plating_stk_nos': plating_stk_no or 'No Plating Stock No',
+                    'lot_plating_stk_nos': lot_plating_stk_nos,
                     'lot_polishing_stk_nos': polishing_stk_no or 'No Polishing Stock No',
                     'plating_color': stock.plating_color.plating_color if stock.plating_color else '',
                     'polish_finish': stock.polish_finish.polish_finish if stock.polish_finish else '',

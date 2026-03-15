@@ -710,14 +710,14 @@ class InprocessInspectionView(TemplateView):
                                     print(f"   📸 Found image: {img.master_image.url}")
                         
                         if not images:
-                            images = [static('assets/images/imagePlaceholder.png')]
+                            images = [static('assets/images/imagePlaceholder.jpg')]
                             print(f"   📸 No images found, using placeholder")
                         
                         jig_model_images[model_no] = images
                         
                     except Exception as e:
                         print(f"   ❌ Error getting images for model {model_no}: {e}")
-                        jig_model_images[model_no] = [static('assets/images/imagePlaceholder.png')]
+                        jig_model_images[model_no] = [static('assets/images/imagePlaceholder.jpg')]
                 
                 jig_detail.model_colors = jig_model_colors
                 jig_detail.model_images = jig_model_images
@@ -770,7 +770,7 @@ class InprocessInspectionView(TemplateView):
                             
                             # Keep model images for existing functionality
                             jig_model_images = {}
-                            model_images = batch_data.get('model_images', [static('assets/images/imagePlaceholder.png')])
+                            model_images = batch_data.get('model_images', [static('assets/images/imagePlaceholder.jpg')])
                             for model_no in jig_detail.no_of_model_cases:
                                 jig_model_images[model_no] = {
                                     'images': model_images,
@@ -836,7 +836,7 @@ class InprocessInspectionView(TemplateView):
                         images.append(img.master_image.url)
             
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             # Safe version access
             version_name = "No Version"
@@ -1005,7 +1005,7 @@ class InprocessInspectionView(TemplateView):
                     images.append(img.master_image.url)
         
         if not images:
-            images = [static('assets/images/imagePlaceholder.png')]
+            images = [static('assets/images/imagePlaceholder.jpg')]
         
         model_no = model_master.model_stock_no.model_no if model_master.model_stock_no else None
         
@@ -1068,7 +1068,7 @@ class InprocessInspectionView(TemplateView):
             'tray_capacity': 0,
             'vendor_internal': "No Vendor",
             'calculated_no_of_trays': 0,
-            'model_images': [static('assets/images/imagePlaceholder.png')],
+            'model_images': [static('assets/images/imagePlaceholder.jpg')],
             'source_model': 'Unknown',
             'batch_model_type': 'Unknown'
         }
@@ -2002,7 +2002,7 @@ class InprocessInspectionCompleteView(TemplateView):
                     
                     # Keep model images for existing functionality
                     jig_model_images = {}
-                    model_images = batch_data.get('model_images', [static('assets/images/imagePlaceholder.png')])
+                    model_images = batch_data.get('model_images', [static('assets/images/imagePlaceholder.jpg')])
                     for model_no in jig_detail.no_of_model_cases:
                         jig_model_images[model_no] = {
                             'images': model_images,
@@ -2065,7 +2065,7 @@ class InprocessInspectionCompleteView(TemplateView):
                         images.append(img.master_image.url)
             
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             # Safe version access
             version_name = "No Version"
@@ -2132,7 +2132,7 @@ class InprocessInspectionCompleteView(TemplateView):
             'tray_capacity': 0,
             'vendor_internal': "No Vendor",
             'calculated_no_of_trays': 0,
-            'model_images': [static('assets/images/imagePlaceholder.png')],
+            'model_images': [static('assets/images/imagePlaceholder.jpg')],
             'source_model': 'Unknown',
             'batch_model_type': 'Unknown'
         }

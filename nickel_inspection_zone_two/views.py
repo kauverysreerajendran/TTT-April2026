@@ -769,7 +769,7 @@ class NQ_Zone_PickTableView(APIView):
                 print("📷 NQ View - No images found, using placeholder")
 
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
 
             
@@ -955,7 +955,7 @@ class NQ_Zone_PickTableView(APIView):
             if not images:
 
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
 
             data['model_images'] = images
@@ -1471,7 +1471,7 @@ class NQ_Zone_RejectTableView(APIView):
                 print("📷 Nickel Reject View - No images found, using placeholder")
 
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
 
             
@@ -13097,7 +13097,7 @@ class NQ_Zone_CompletedView(APIView):
                 print("📷 NQ Completed View - No images found, using placeholder")
 
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
 
             

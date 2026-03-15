@@ -215,7 +215,7 @@ class NQ_PickTableView(APIView):
             # Priority 3: Use placeholder if no images found
             if not images:
                 print("📷 NQ View - No images found, using placeholder")
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
             print(f"📸 NQ View - Final images for lot {jig_unload_obj.lot_id}: {len(images)} images")
@@ -395,7 +395,7 @@ class NickelQcRejectTableView(APIView):
             # Priority 3: Use placeholder if no images found
             if not images:
                 print("📷 Nickel Reject View - No images found, using placeholder")
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
             print(f"📸 Nickel Reject View - Final images for lot {obj.lot_id}: {len(images)} images")
@@ -4062,7 +4062,7 @@ class NQCompletedView(APIView):
             # Priority 3: Use placeholder if no images found
             if not images:
                 print("📷 NQ Completed View - No images found, using placeholder")
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
             print(f"📸 NQ Completed View - Final images for lot {jig_unload_obj.lot_id}: {len(images)} images")

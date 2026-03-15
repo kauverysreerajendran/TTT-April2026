@@ -206,7 +206,7 @@ class RecoveryBrassPickTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
         
             # Add available_qty
@@ -3111,7 +3111,7 @@ class RecoveryBrassCompletedView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
         print("Processed lot_ids:", [data['stock_lot_id'] for data in master_data])

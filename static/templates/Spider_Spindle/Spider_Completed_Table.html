@@ -1098,7 +1098,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 class="model-select-checkbox" 
                                 data-model-no="{{ data.model_stock_no__model_no }}" 
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                                 style="display: none;" />                       
                       </div>
                           <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
@@ -1129,7 +1129,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                           <div style="display: flex; align-items: center; gap: 8px;">
                             <!-- Hide scroll buttons since only one image is shown -->
                             <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-                              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                              <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
                             </div>
                           </div>
                         </div>

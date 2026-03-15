@@ -500,7 +500,7 @@ class NQ_PickTableView(APIView):
 
                 print("📷 NQ View - No images found, using placeholder")
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
             
 
@@ -927,7 +927,7 @@ class NickelQcRejectTableView(APIView):
 
                 print("📷 Nickel Reject View - No images found, using placeholder")
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
             
 
@@ -8626,7 +8626,7 @@ class NQCompletedView(APIView):
 
                 print("📷 NQ Completed View - No images found, using placeholder")
 
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
 
             
 

@@ -183,7 +183,7 @@ class RecoveryIQFPickTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             # Add available_qty for each row
@@ -1686,7 +1686,7 @@ class RecoveryIQFCompletedTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             # ✅ UPDATED: Add available_qty logic with fallback
@@ -1847,7 +1847,7 @@ class RecoveryIQFRejectTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             master_data.append(data)
@@ -3325,7 +3325,7 @@ class RecoveryIQFAcceptTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             # Add available_qty logic with fallback

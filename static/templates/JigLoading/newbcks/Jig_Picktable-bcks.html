@@ -1976,7 +1976,7 @@
                     data-model-no="{{ data.model_stock_no__model_no }}"
                     data-display-qty="{{ data.display_qty }}"
                     data-original-qty="{{ data.original_qty|default:data.display_qty }}"
-                    data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                    data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                     {% if add_model_mode %}style="display: inline-block; margin-right: 8px;"{% if not data.checkbox_enabled %} disabled{% endif %}{% else %}style="display: none; border: 2px solid #dc3545"{% endif %}
                   />
                   <span style="display: flex; align-items: center; gap: 2px">
@@ -2146,7 +2146,7 @@
                       data-total-batch-quantity="{{ data.display_qty|default:0 }}"
                       data-missing-qty="{{ data.missing_qty|default:0 }}"
                       data-physical-qty="{{ data.physical_qty|default:0 }}"
-                      data-model-image="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                      data-model-image="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                       style="margin-left: 8px; vertical-align: middle;"
                     >
                       <img
@@ -2504,7 +2504,7 @@
       <div class="user-profile">
         <img
           id="trayModalUserImg_Jig"
-          src="/static/assets/images/imagePlaceholder.png"
+          src="/static/assets/images/imagePlaceholder.jpg"
           alt="Model image"
         />
       </div>
@@ -2610,7 +2610,7 @@
       >
         <img
           id="modelImagePreview"
-          src="/static/assets/images/imagePlaceholder.png"
+          src="/static/assets/images/imagePlaceholder.jpg"
           alt="Model Image"
           style="
             width: 32px;
@@ -3023,7 +3023,7 @@ if (data.valid === true) {
         const physicalQty = link.getAttribute("data-physical-qty") || "0";
         const modelImg =
           link.getAttribute("data-model-image") ||
-          "/static/assets/images/imagePlaceholder.png";
+          "/static/assets/images/imagePlaceholder.jpg";
 
         // Set header info
         document.getElementById("trayModalUserImg_Jig").src = modelImg;
@@ -4462,7 +4462,7 @@ function renderHalfFilledTraySection(trayDistribution, brokenHooks = 0, halfFill
         imgElement.src = images[0].url;
         imgElement.alt = images[0].alt_text || "Model Image";
       } else {
-        imgElement.src = "/static/assets/images/imagePlaceholder.png";
+        imgElement.src = "/static/assets/images/imagePlaceholder.jpg";
         imgElement.alt = "No Image Available";
       }
     }

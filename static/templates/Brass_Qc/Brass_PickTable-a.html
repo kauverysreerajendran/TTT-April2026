@@ -1037,7 +1037,7 @@ stock_filters %}
                             "
                           >
                             <img
-                              src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                              src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                               style="
                                 width: 55px;
                                 height: 55px;
@@ -1891,7 +1891,7 @@ stock_filters %}
                     style="display: flex; align-items: center; gap: 8px"
                   >
                     <img
-                      src="/static/assets/images/imagePlaceholder.png"
+                      src="/static/assets/images/imagePlaceholder.jpg"
                       alt="User Profile"
                       style="
                         border-radius: 50%;
@@ -3047,7 +3047,7 @@ stock_filters %}
         const modelImage = link.getAttribute("data-model-image");
         if (modalUserImg) {
           modalUserImg.src =
-            modelImage || "/static/assets/images/imagePlaceholder.png";
+            modelImage || "/static/assets/images/imagePlaceholder.jpg";
         }
 
         // Continue with existing endpoint selection logic...
@@ -3370,7 +3370,7 @@ stock_filters %}
         const modelImage = link.getAttribute("data-model-image");
         if (modalUserImg) {
           modalUserImg.src =
-            modelImage || "/static/assets/images/imagePlaceholder.png";
+            modelImage || "/static/assets/images/imagePlaceholder.jpg";
         }
 
         // ✅ Enhanced endpoint selection with data source indication

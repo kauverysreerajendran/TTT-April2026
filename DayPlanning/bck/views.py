@@ -1497,7 +1497,7 @@ class DayPlanningPickTableAPIView(APIView):
                         images.append(img.master_image.url)
             if not images:
                 from django.templatetags.static import static
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
  
         context = {
@@ -2790,7 +2790,7 @@ class DPCompletedTableView(APIView):
                         images.append(img.master_image.url)
             if not images:
                 from django.templatetags.static import static
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
         context = {

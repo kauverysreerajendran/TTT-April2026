@@ -359,7 +359,7 @@ class JigPickTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             # Calculate batch status using the efficient method
@@ -1547,7 +1547,7 @@ def fetch_jig_related_data(request):
                     images.append(img.master_image.url)
                     
         if not images:
-            images = [static('assets/images/imagePlaceholder.png')]
+            images = [static('assets/images/imagePlaceholder.jpg')]
 
         # Fetch JigLoadingMaster - use the appropriate model_stock_no
         jig_model_stock_no = model_stock_no or (mmc.model_stock_no if mmc and hasattr(mmc, 'model_stock_no') else None)
@@ -3339,7 +3339,7 @@ class JigCompletedTable(TemplateView):
         Example: "2648SSA02" -> model_no="2648", plating="S", polish="S", version="A"
         """
         if not plating_stk_no or len(plating_stk_no) < 7:
-            return [static('assets/images/imagePlaceholder.png')]
+            return [static('assets/images/imagePlaceholder.jpg')]
         
         try:
             # Parse the components
@@ -3363,12 +3363,12 @@ class JigCompletedTable(TemplateView):
                     if hasattr(img, 'master_image') and img.master_image:
                         images.append(img.master_image.url)
                 
-                return images if images else [static('assets/images/imagePlaceholder.png')]
+                return images if images else [static('assets/images/imagePlaceholder.jpg')]
             
         except Exception as e:
             print(f"Error parsing {plating_stk_no}: {e}")
         
-        return [static('assets/images/imagePlaceholder.png')]
+        return [static('assets/images/imagePlaceholder.jpg')]
     def extract_model_data(self, model_master, source_type):
         """
         Extract model data from either ModelMasterCreation or RecoveryMasterCreation
@@ -3381,7 +3381,7 @@ class JigCompletedTable(TemplateView):
                     images.append(img.master_image.url)
         
         if not images:
-            images = [static('assets/images/imagePlaceholder.png')]
+            images = [static('assets/images/imagePlaceholder.jpg')]
         
         model_no = model_master.model_stock_no.model_no if model_master.model_stock_no else None
         
@@ -3432,7 +3432,7 @@ class JigCompletedTable(TemplateView):
                         images.append(img.master_image.url)
             
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             # Safe version access
             version_name = "No Version"
@@ -3487,7 +3487,7 @@ class JigCompletedTable(TemplateView):
             'tray_capacity': 0,
             'vendor_internal': "No Vendor",
             'calculated_no_of_trays': 0,
-            'model_images': [static('assets/images/imagePlaceholder.png')],
+            'model_images': [static('assets/images/imagePlaceholder.jpg')],
             'source_model': 'Unknown',
             'batch_model_type': 'Unknown'
         }

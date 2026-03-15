@@ -245,7 +245,7 @@ class BrassPickTableView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
         
             # Add available_qty
@@ -3839,7 +3839,7 @@ class BrassCompletedView(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             if data.get('brass_physical_qty') and data.get('brass_physical_qty') > 0:

@@ -1472,7 +1472,7 @@ body.add-model-mode #selectAllCheckbox {
                       <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
                         <div id="modalModelImages_DayPlanning" style="display: flex; gap: 6px;">
                             <!-- Model images will be injected here by JS -->
-                            <img id="modalUserImg_DayPlanning" src="{% static 'assets/images/imagePlaceholder.png' %}" alt="Model Image" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+                            <img id="modalUserImg_DayPlanning" src="{% static 'assets/images/imagePlaceholder.jpg' %}" alt="Model Image" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
                           </div>                        
                           <!-- Model No and Lot Qty in same line -->
                         <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -1789,7 +1789,7 @@ document.addEventListener("DOMContentLoaded", function () {
           });
         } else {
           // Fallback to placeholder
-          imagesDiv.innerHTML = `<img src="/static/assets/images/imagePlaceholder.png" alt="Model Image" style="border-radius:50%;width:50px;height:50px;object-fit:cover;" />`;
+          imagesDiv.innerHTML = `<img src="/static/assets/images/imagePlaceholder.jpg" alt="Model Image" style="border-radius:50%;width:50px;height:50px;object-fit:cover;" />`;
         }
       }
 

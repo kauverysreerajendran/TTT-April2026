@@ -207,7 +207,7 @@ class RIS_PickTable(APIView):
                         images.append(img.master_image.url)
             # If no images, add a placeholder
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
             
             # Simplified accepted quantity logic
@@ -2872,7 +2872,7 @@ class RIS_Completed_Table(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
             
             # Simplified accepted quantity logic
@@ -3078,7 +3078,7 @@ class RIS_AcceptTable(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
             
         # Simplified accepted quantity logic
@@ -3326,7 +3326,7 @@ class RIS_RejectTable(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
         
         print("=== END MANUAL LOOKUP ===")

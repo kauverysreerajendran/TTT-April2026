@@ -2447,7 +2447,7 @@
            modelList.forEach(function(modelNo, index) {
              const color = modelColors[modelNo] || '#ccc';
              const modelImageData = modelImages[modelNo] || {};
-             const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.png';
+             const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.jpg';
              
              html += `
                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
@@ -2577,7 +2577,7 @@
            if (modelList.length > 0) {
              const firstModel = modelList[0];
              const firstModelImages = modelImages[firstModel] || {};
-             const firstImage = firstModelImages.first_image || '/static/assets/images/imagePlaceholder.png';
+             const firstImage = firstModelImages.first_image || '/static/assets/images/imagePlaceholder.jpg';
              
              tooltip = document.createElement('div');
              tooltip.className = 'model-image-tooltip';
@@ -2918,7 +2918,7 @@ document.addEventListener("DOMContentLoaded", function () {
              // Use global color instead of local color mapping
              const color = getGlobalModelColor(modelNo);
              const modelImageData = modelImages[modelNo] || {};
-             const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.png';
+             const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.jpg';
              
              html += `
                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">

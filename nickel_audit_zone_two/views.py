@@ -237,7 +237,7 @@ class NA_Zone_PickTableView(APIView):
             # Priority 3: Use placeholder if no images found
             if not images:
                 print("📷 NA Pick View - No images found, using placeholder")
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
             print(f"📸 NA Pick View - Final images for lot {jig_unload_obj.lot_id}: {len(images)} images")
@@ -3553,7 +3553,7 @@ class NA_Zone_CompletedView(APIView):
             # Priority 3: Use placeholder if no images found
             if not images:
                 print("📷 NA Completed View - No images found, using placeholder")
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
             print(f"📸 NA Completed View - Final images for lot {jig_unload_obj.lot_id}: {len(images)} images")

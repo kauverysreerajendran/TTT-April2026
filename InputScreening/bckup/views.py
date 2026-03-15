@@ -211,7 +211,7 @@ class IS_PickTable(APIView):
                         images.append(img.master_image.url)
             # If no images, add a placeholder
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
             
             # Simplified accepted quantity logic
@@ -2885,7 +2885,7 @@ class IS_Completed_Table(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
             
             # Simplified accepted quantity logic
@@ -3039,7 +3039,7 @@ class IS_AcceptTable(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
             
             # Simplified accepted quantity logic
@@ -3249,7 +3249,7 @@ class IS_RejectTable(APIView):
                     if img.master_image:
                         images.append(img.master_image.url)
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
             master_data.append(data)

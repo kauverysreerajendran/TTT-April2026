@@ -219,7 +219,7 @@ class Zone_SpiderPickTableView(APIView):
             
             # Use placeholder if no images found
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
 
@@ -1067,7 +1067,7 @@ def Zone_fetch_jig_related_data(request):
             # Priority 3: Use placeholder if no images found
             if not images:
                 print("📷 No images found, using placeholder")
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             print(f"📸 Final images list: {len(images)} images - {images}")
         
@@ -2834,7 +2834,7 @@ class Zone_SpiderCompletedTableView(APIView):
             
             # Use placeholder if no images found
             if not images:
-                images = [static('assets/images/imagePlaceholder.png')]
+                images = [static('assets/images/imagePlaceholder.jpg')]
             
             data['model_images'] = images
                     

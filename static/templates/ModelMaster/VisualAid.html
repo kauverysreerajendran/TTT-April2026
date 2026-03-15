@@ -1,542 +1,548 @@
-{% extends "base.html" %}
-{% load static %}
-
-{% block content %}
+{% extends "base.html" %} {% load static %} {% block content %}
 
 <style>
-    .image-controls {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 20px;
-        margin-top: 10px;
-    }
+  .image-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin-top: 10px;
+  }
 
-    .image-controls .control-icon {
-        font-size: 20px;
-        padding: 8px 12px;
-        border-radius: 6px;
-        background-color: #f0f0f0;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-        user-select: none;
-    }
+  .image-controls .control-icon {
+    font-size: 20px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    user-select: none;
+  }
 
-    .image-controls .control-icon:hover {
-        background-color: #e0e0e0;
-    }
+  .image-controls .control-icon:hover {
+    background-color: #e0e0e0;
+  }
 
-    .image-controls .control-icon:active {
-        background-color: #d0d0d0;
-    }
+  .image-controls .control-icon:active {
+    background-color: #d0d0d0;
+  }
 
-    .image-controls .fa {
-        font-size: 18px;
-    }
+  .image-controls .fa {
+    font-size: 18px;
+  }
 
-    .model-title {
-        font-weight: 600;
-        font-size: 18px;
-        color: #333;
-        margin-bottom: 15px;
-        margin-top: 0;
-        text-align: center;
-    }
+  .model-title {
+    font-weight: 600;
+    font-size: 18px;
+    color: #333;
+    margin-bottom: 15px;
+    margin-top: 0;
+    text-align: center;
+  }
 
+  .big-image-container {
+    margin-left: -15px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+  }
+
+  .big-image-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    display: block;
+    transition: transform 0.3s ease;
+    cursor: grab;
+  }
+
+  .big-image-container img:active {
+    cursor: grabbing;
+  }
+
+  @media (max-width: 768px) {
     .big-image-container {
-        margin-left: -15px;
-        position: relative;
-        overflow: hidden;
-        border-radius: 8px;
-        height: 400px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #f8f9fa;
+      margin-left: 0;
+      height: 250px;
     }
+  }
 
-    .big-image-container img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-        border-radius: 8px;
-        display: block;
-        transition: transform 0.3s ease;
-        cursor: grab;
-    }
+  .table-container {
+    overflow-x: auto;
+    max-width: 100%;
+    margin: 0;
+  }
 
-    .big-image-container img:active {
-        cursor: grabbing;
-    }
+  .scrollable-images {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 0;
+  }
 
-    @media (max-width: 768px) {
-        .big-image-container {
-            margin-left: 0;
-            height: 250px;
-        }
-    }
+  .scrollable-image {
+    width: 22%;
+    max-width: 150px;
+    height: auto;
+    aspect-ratio: 1/1;
+    border-radius: 8px;
+    object-fit: cover;
+    cursor: pointer;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+    border: 2px solid transparent;
+  }
 
-    .table-container {
-        overflow-x: auto;
-        max-width: 100%;
-        margin: 0;
-    }
+  .scrollable-image:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
 
-    .scrollable-images {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 10px;
-        padding: 10px 0;
-    }
+  .scrollable-image.active {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
 
+  @media (max-width: 768px) {
     .scrollable-image {
-        width: 22%;
-        max-width: 150px;
-        height: auto;
-        aspect-ratio: 1/1;
-        border-radius: 8px;
-        object-fit: cover;
-        cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        border: 2px solid transparent;
+      width: 45%;
     }
+  }
 
-    .scrollable-image:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  @media (max-width: 480px) {
+    .scrollable-image {
+      width: 100%;
     }
+  }
 
-    .scrollable-image.active {
-        border-color: #007bff;
-        box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-    }
+  .zoom-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
 
-    @media (max-width: 768px) {
-        .scrollable-image {
-            width: 45%;
-        }
-    }
+  .no-images-message {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 20px;
+  }
 
-    @media (max-width: 480px) {
-        .scrollable-image {
-            width: 100%;
-        }
-    }
+  /* Styles for similar model links */
+  .similar-model-link {
+    color: #089da5;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+    display: block;
+    padding: 5px;
+    border-radius: 4px;
+  }
 
-    .zoom-indicator {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background: rgba(0,0,0,0.7);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
+  .similar-model-link:hover {
+    color: #067580;
+    text-decoration: underline;
+    background-color: #f8f9fa;
+  }
 
-    .no-images-message {
-        text-align: center;
-        color: #666;
-        font-style: italic;
-        padding: 20px;
-    }
+  .similar-model-link:focus {
+    outline: 2px solid #089da5;
+    outline-offset: 2px;
+  }
 
-    /* Styles for similar model links */
-    .similar-model-link {
-        color: #089da5;
-        text-decoration: none;
-        font-weight: 500;
-        transition: color 0.3s ease;
-        display: block;
-        padding: 5px;
-        border-radius: 4px;
-    }
+  /* Highlight current model */
+  .current-model {
+    background-color: #e8f4f5;
+    font-weight: 600;
+    color: #055c61;
+  }
 
-    .similar-model-link:hover {
-        color: #067580;
-        text-decoration: underline;
-        background-color: #f8f9fa;
-    }
+  /* Disabled model style - keeping for potential future use */
+  .disabled-model {
+    color: #999;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+    opacity: 0.7;
+  }
 
-    .similar-model-link:focus {
-        outline: 2px solid #089da5;
-        outline-offset: 2px;
-    }
+  .disabled-model:hover {
+    background-color: #f8f9fa;
+    color: #999;
+    text-decoration: none;
+  }
 
-    /* Highlight current model */
-    .current-model {
-        background-color: #e8f4f5;
-        font-weight: 600;
-        color: #055c61;
-    }
+  /* Badge styles for data source indicator */
+  .badge {
+    font-size: 0.7em;
+    margin-left: 5px;
+    padding: 2px 6px;
+    border-radius: 10px;
+  }
 
-    /* Disabled model style - keeping for potential future use */
-    .disabled-model {
-        color: #999;
-        cursor: not-allowed;
-        background-color: #f8f9fa;
-        opacity: 0.7;
-    }
+  .badge-secondary {
+    background-color: #6c757d;
+    color: white;
+  }
 
-    .disabled-model:hover {
-        background-color: #f8f9fa;
-        color: #999;
-        text-decoration: none;
-    }
+  .badge-success {
+    background-color: #28a745;
+    color: white;
+  }
 
-    /* Badge styles for data source indicator */
-    .badge {
-        font-size: 0.7em;
-        margin-left: 5px;
-        padding: 2px 6px;
-        border-radius: 10px;
-    }
+  .badge-info {
+    background-color: #17a2b8;
+    color: white;
+  }
 
-    .badge-secondary {
-        background-color: #6c757d;
-        color: white;
-    }
+  /* Data source badge in title */
+  .data-source-badge {
+    margin-left: 10px;
+  }
 
-    .badge-success {
-        background-color: #28a745;
-        color: white;
-    }
+  .data-source-badge .badge {
+    font-size: 0.6em;
+    vertical-align: middle;
+  }
 
-    .badge-info {
-        background-color: #17a2b8;
-        color: white;
-    }
+  /* Small text styling in similar models */
+  .similar-model-link small {
+    font-size: 0.75em;
+    margin-top: 2px;
+  }
 
-    /* Data source badge in title */
-    .data-source-badge {
-        margin-left: 10px;
-    }
-
-    .data-source-badge .badge {
-        font-size: 0.6em;
-        vertical-align: middle;
-    }
-
-    /* Small text styling in similar models */
-    .similar-model-link small {
-        font-size: 0.75em;
-        margin-top: 2px;
-    }
-
-    .similar-model-link .d-block {
-        display: block !important;
-    }
+  .similar-model-link .d-block {
+    display: block !important;
+  }
 </style>
 
 <div class="container-fluid mt-4">
-    {% if error %}
-        <div class="alert alert-danger" role="alert">
-            {{ error }}
-        </div>
-    {% else %}
-        <div class="row mb-4">
-            <!-- Big Image View -->
-            <div class="col-lg-6 col-md-12 mb-3">
-                <h5 class="model-title">
-                    Model No: {{ plating_stk_no|default:"N/A" }}
-                </h5>
-                <div class="big-image-container">
-                    {% if image_urls and image_urls|length > 0 %}
-                        <img id="bigImage" src="{{ image_urls.0 }}" alt="Big View" />
-                    {% else %}
-                        <img id="bigImage" src="{% static 'assets/images/imagePlaceholder.png' %}" alt="Big View" />
+  {% if error %}
+  <div class="alert alert-danger" role="alert">{{ error }}</div>
+  {% else %}
+  <div class="row mb-4">
+    <!-- Big Image View -->
+    <div class="col-lg-6 col-md-12 mb-3">
+      <h5 class="model-title">Model No: {{ plating_stk_no|default:"N/A" }}</h5>
+      <div class="big-image-container">
+        {% if image_urls and image_urls|length > 0 %}
+        <img id="bigImage" src="{{ image_urls.0 }}" alt="Big View" />
+        {% else %}
+        <img
+          id="bigImage"
+          src="{% static 'assets/images/imagePlaceholder.jpg' %}"
+          alt="Big View"
+        />
+        {% endif %}
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+      <div class="image-controls">
+        <span class="control-icon" id="prevBtn"
+          ><i class="fa fa-arrow-left"></i
+        ></span>
+        <span class="control-icon" id="zoomInBtn"
+          ><i class="fa fa-search-plus"></i
+        ></span>
+        <span class="control-icon" id="zoomOutBtn"
+          ><i class="fa fa-search"></i
+        ></span>
+        <span class="control-icon" id="nextBtn"
+          ><i class="fa fa-arrow-right"></i
+        ></span>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="col-lg-6 col-md-12">
+      <div class="row">
+        <!-- Main Model Details Table -->
+        <div class="col-md-8">
+          <div class="table-container">
+            <table class="table table-bordered">
+              <tbody>
+                <tr>
+                  <th>Model No</th>
+                  <td>{{ plating_stk_no|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                  <th>Version</th>
+                  <td>{{ version|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                  <th>Variants</th>
+                  <td>
+                    {% if modelmaster_versions %} {{
+                    modelmaster_versions|join:", " }} {% else %}
+                    <span class="text-muted">N/A</span>
                     {% endif %}
-                    <div class="zoom-indicator" id="zoomIndicator">100%</div>
-                </div>
-                <div class="image-controls">
-                    <span class="control-icon" id="prevBtn"><i class="fa fa-arrow-left"></i></span>
-                    <span class="control-icon" id="zoomInBtn"><i class="fa fa-search-plus"></i></span>
-                    <span class="control-icon" id="zoomOutBtn"><i class="fa fa-search"></i></span>
-                    <span class="control-icon" id="nextBtn"><i class="fa fa-arrow-right"></i></span>
-                </div>
-            </div>
-            
-            <!-- Table -->
-            <div class="col-lg-6 col-md-12">
-                <div class="row">
-                    <!-- Main Model Details Table -->
-                    <div class="col-md-8">
-                        <div class="table-container">
-                            <table class="table table-bordered">
-                                <tbody>
-                                    <tr>
-                                        <th>Model No</th>
-                                        <td>{{ plating_stk_no|default:"N/A" }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Version</th>
-                                        <td>{{ version|default:"N/A" }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Variants</th>
-                                        <td>
-                                            {% if modelmaster_versions %}
-                                                {{ modelmaster_versions|join:", " }}
-                                            {% else %}
-                                                <span class="text-muted">N/A</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% if data_source == "ModelMasterCreation" %}
-                                        <tr>
-                                            <th>Changes</th>
-                                            <td>{{ changes|default:"N/A" }}</td>
-                                        </tr>
-                                    {% else %}
-
-                                    {% endif %}
-
-                                   
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Similar Models Table with Links -->
-                    <div class="col-md-4">
-                        <div>
-                            <table class="table table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th class="text-center" style="background-color: #089da5; color: #fff;">
-                                            Similar models
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% if same_model_list %}
-                                        {% for model_info in same_model_list %}
-                                            <tr>
-                                                <td class="text-center">
-                                                    {% if model_info.plating_stk_no == plating_stk_no %}
-                                                        <!-- Current model - no link, just highlight -->
-                                                        <span class="similar-model-link current-model">
-                                                            {{ model_info.plating_stk_no }}
-
-                                                        </span>
-                                                    {% else %}
-                                                        <!-- All other models are clickable since they exist in ModelMaster -->
-                                                        <a href="?plating_stk_no={{ model_info.plating_stk_no }}" 
-                                                           class="similar-model-link"
-                                                           title="View details for {{ model_info.plating_stk_no }}{% if model_info.version %} (Version: {{ model_info.version }}){% endif %}">
-                                                            {{ model_info.plating_stk_no }}
-
-                                                
-                                                        </a>
-                                                    {% endif %}
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    {% else %}
-                                        <tr>
-                                            <td class="text-center text-muted">No similar models found</td>
-                                        </tr>
-                                    {% endif %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-            
-                <!-- 360° View -->
-                <div class="mt-4">
-                    <h5 class="text-center">360° View</h5>
-                    <div class="scrollable-images" id="imageGallery">
-                        {% if image_urls and image_urls|length > 0 %}
-                            {% for url in image_urls %}
-                                <img src="{{ url }}" 
-                                     alt="360 View {{ forloop.counter }}" 
-                                     class="scrollable-image {% if forloop.first %}active{% endif %}" 
-                                     data-index="{{ forloop.counter0 }}" />
-                            {% endfor %}
-                        {% else %}
-                            <div class="no-images-message">
-                                <img src="{% static 'assets/images/imagePlaceholder.png' %}" 
-                                     alt="No Image Available" 
-                                     class="scrollable-image active" 
-                                     data-index="0" />
-                                <p>No images available for this model</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+                  </td>
+                </tr>
+                {% if data_source == "ModelMasterCreation" %}
+                <tr>
+                  <th>Changes</th>
+                  <td>{{ changes|default:"N/A" }}</td>
+                </tr>
+                {% else %} {% endif %}
+              </tbody>
+            </table>
+          </div>
         </div>
-    {% endif %}
+
+        <!-- Similar Models Table with Links -->
+        <div class="col-md-4">
+          <div>
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th
+                    class="text-center"
+                    style="background-color: #089da5; color: #fff"
+                  >
+                    Similar models
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if same_model_list %} {% for model_info in same_model_list %}
+                <tr>
+                  <td class="text-center">
+                    {% if model_info.plating_stk_no == plating_stk_no %}
+                    <!-- Current model - no link, just highlight -->
+                    <span class="similar-model-link current-model">
+                      {{ model_info.plating_stk_no }}
+                    </span>
+                    {% else %}
+                    <!-- All other models are clickable since they exist in ModelMaster -->
+                    <a
+                      href="?plating_stk_no={{ model_info.plating_stk_no }}"
+                      class="similar-model-link"
+                      title="View details for {{ model_info.plating_stk_no }}{% if model_info.version %} (Version: {{ model_info.version }}){% endif %}"
+                    >
+                      {{ model_info.plating_stk_no }}
+                    </a>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %} {% else %}
+                <tr>
+                  <td class="text-center text-muted">
+                    No similar models found
+                  </td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 360° View -->
+      <div class="mt-4">
+        <h5 class="text-center">360° View</h5>
+        <div class="scrollable-images" id="imageGallery">
+          {% if image_urls and image_urls|length > 0 %} {% for url in image_urls
+          %}
+          <img
+            src="{{ url }}"
+            alt="360 View {{ forloop.counter }}"
+            class="scrollable-image {% if forloop.first %}active{% endif %}"
+            data-index="{{ forloop.counter0 }}"
+          />
+          {% endfor %} {% else %}
+          <div class="no-images-message">
+            <img
+              src="{% static 'assets/images/imagePlaceholder.jpg' %}"
+              alt="No Image Available"
+              class="scrollable-image active"
+              data-index="0"
+            />
+            <p>No images available for this model</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <script nonce="{{ csp_nonce }}">
-document.addEventListener("DOMContentLoaded", function() {
-    const bigImg = document.getElementById('bigImage');
-    const zoomInBtn = document.getElementById('zoomInBtn');
-    const zoomOutBtn = document.getElementById('zoomOutBtn');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const zoomIndicator = document.getElementById('zoomIndicator');
-    const smallImages = document.querySelectorAll('.scrollable-image');
-    
-    let currentImageIndex = 0;
-    let zoomLevel = 1;
-    const zoomStep = 0.2;
-    const zoomMin = 0.5;
-    const zoomMax = 3;
+  document.addEventListener("DOMContentLoaded", function() {
+      const bigImg = document.getElementById('bigImage');
+      const zoomInBtn = document.getElementById('zoomInBtn');
+      const zoomOutBtn = document.getElementById('zoomOutBtn');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const zoomIndicator = document.getElementById('zoomIndicator');
+      const smallImages = document.querySelectorAll('.scrollable-image');
 
-    // Build image URLs array from Django template
-    const imageUrls = [
-        {% if image_urls and image_urls|length > 0 %}
-            {% for url in image_urls %}
-                "{{ url }}"{% if not forloop.last %},{% endif %}
-            {% endfor %}
-        {% else %}
-            "{% static 'assets/images/imagePlaceholder.png' %}"
-        {% endif %}
-    ];
+      let currentImageIndex = 0;
+      let zoomLevel = 1;
+      const zoomStep = 0.2;
+      const zoomMin = 0.5;
+      const zoomMax = 3;
 
-    console.log('🖼️ Loaded images:', imageUrls);
+      // Build image URLs array from Django template
+      const imageUrls = [
+          {% if image_urls and image_urls|length > 0 %}
+              {% for url in image_urls %}
+                  "{{ url }}"{% if not forloop.last %},{% endif %}
+              {% endfor %}
+          {% else %}
+              "{% static 'assets/images/imagePlaceholder.jpg' %}"
+          {% endif %}
+      ];
 
-    // Update zoom indicator
-    function updateZoomIndicator() {
-        zoomIndicator.textContent = Math.round(zoomLevel * 100) + '%';
-    }
+      console.log('🖼️ Loaded images:', imageUrls);
 
-    // Update active image indicator
-    function updateActiveImage() {
-        smallImages.forEach((img, index) => {
-            img.classList.toggle('active', index === currentImageIndex);
-        });
-    }
+      // Update zoom indicator
+      function updateZoomIndicator() {
+          zoomIndicator.textContent = Math.round(zoomLevel * 100) + '%';
+      }
 
-    // Change big image
-    function changeBigImage(index) {
-        if (index >= 0 && index < imageUrls.length) {
-            currentImageIndex = index;
-            bigImg.src = imageUrls[index];
-            updateActiveImage();
-            // Reset zoom when changing image
-            zoomLevel = 1;
-            bigImg.style.transform = `scale(${zoomLevel})`;
-            updateZoomIndicator();
-            
-            console.log(`🔄 Changed to image ${index + 1}/${imageUrls.length}`);
-        }
-    }
+      // Update active image indicator
+      function updateActiveImage() {
+          smallImages.forEach((img, index) => {
+              img.classList.toggle('active', index === currentImageIndex);
+          });
+      }
 
-    // Only initialize controls if we have images
-    if (imageUrls.length > 0) {
-        // Zoom In
-        zoomInBtn.addEventListener('click', function() {
-            if (zoomLevel < zoomMax) {
-                zoomLevel = Math.min(zoomLevel + zoomStep, zoomMax);
-                bigImg.style.transform = `scale(${zoomLevel})`;
-                updateZoomIndicator();
-                console.log(`🔍 Zoom in: ${Math.round(zoomLevel * 100)}%`);
-            }
-        });
+      // Change big image
+      function changeBigImage(index) {
+          if (index >= 0 && index < imageUrls.length) {
+              currentImageIndex = index;
+              bigImg.src = imageUrls[index];
+              updateActiveImage();
+              // Reset zoom when changing image
+              zoomLevel = 1;
+              bigImg.style.transform = `scale(${zoomLevel})`;
+              updateZoomIndicator();
 
-        // Zoom Out
-        zoomOutBtn.addEventListener('click', function() {
-            if (zoomLevel > zoomMin) {
-                zoomLevel = Math.max(zoomLevel - zoomStep, zoomMin);
-                bigImg.style.transform = `scale(${zoomLevel})`;
-                updateZoomIndicator();
-                console.log(`🔍 Zoom out: ${Math.round(zoomLevel * 100)}%`);
-            }
-        });
+              console.log(`🔄 Changed to image ${index + 1}/${imageUrls.length}`);
+          }
+      }
 
-        // Previous Image
-        prevBtn.addEventListener('click', function() {
-            const newIndex = currentImageIndex > 0 ? currentImageIndex - 1 : imageUrls.length - 1;
-            changeBigImage(newIndex);
-        });
+      // Only initialize controls if we have images
+      if (imageUrls.length > 0) {
+          // Zoom In
+          zoomInBtn.addEventListener('click', function() {
+              if (zoomLevel < zoomMax) {
+                  zoomLevel = Math.min(zoomLevel + zoomStep, zoomMax);
+                  bigImg.style.transform = `scale(${zoomLevel})`;
+                  updateZoomIndicator();
+                  console.log(`🔍 Zoom in: ${Math.round(zoomLevel * 100)}%`);
+              }
+          });
 
-        // Next Image
-        nextBtn.addEventListener('click', function() {
-            const newIndex = currentImageIndex < imageUrls.length - 1 ? currentImageIndex + 1 : 0;
-            changeBigImage(newIndex);
-        });
+          // Zoom Out
+          zoomOutBtn.addEventListener('click', function() {
+              if (zoomLevel > zoomMin) {
+                  zoomLevel = Math.max(zoomLevel - zoomStep, zoomMin);
+                  bigImg.style.transform = `scale(${zoomLevel})`;
+                  updateZoomIndicator();
+                  console.log(`🔍 Zoom out: ${Math.round(zoomLevel * 100)}%`);
+              }
+          });
 
-        // Small image click handlers
-        smallImages.forEach((img, index) => {
-            img.addEventListener('click', function() {
-                changeBigImage(index);
-            });
-        });
+          // Previous Image
+          prevBtn.addEventListener('click', function() {
+              const newIndex = currentImageIndex > 0 ? currentImageIndex - 1 : imageUrls.length - 1;
+              changeBigImage(newIndex);
+          });
 
-        // Keyboard navigation
-        document.addEventListener('keydown', function(e) {
-            switch(e.key) {
-                case 'ArrowLeft':
-                    prevBtn.click();
-                    break;
-                case 'ArrowRight':
-                    nextBtn.click();
-                    break;
-                case '+':
-                case '=':
-                    zoomInBtn.click();
-                    break;
-                case '-':
-                    zoomOutBtn.click();
-                    break;
-            }
-        });
+          // Next Image
+          nextBtn.addEventListener('click', function() {
+              const newIndex = currentImageIndex < imageUrls.length - 1 ? currentImageIndex + 1 : 0;
+              changeBigImage(newIndex);
+          });
 
-        // Mouse wheel zoom
-        bigImg.addEventListener('wheel', function(e) {
-            e.preventDefault();
-            if (e.deltaY < 0) {
-                zoomInBtn.click();
-            } else {
-                zoomOutBtn.click();
-            }
-        });
+          // Small image click handlers
+          smallImages.forEach((img, index) => {
+              img.addEventListener('click', function() {
+                  changeBigImage(index);
+              });
+          });
 
-        // Add visual feedback for controls
-        [zoomInBtn, zoomOutBtn, prevBtn, nextBtn].forEach(btn => {
-            btn.addEventListener('mousedown', function() {
-                this.style.transform = 'scale(0.95)';
-            });
-            
-            btn.addEventListener('mouseup', function() {
-                this.style.transform = 'scale(1)';
-            });
-            
-            btn.addEventListener('mouseleave', function() {
-                this.style.transform = 'scale(1)';
-            });
-        });
+          // Keyboard navigation
+          document.addEventListener('keydown', function(e) {
+              switch(e.key) {
+                  case 'ArrowLeft':
+                      prevBtn.click();
+                      break;
+                  case 'ArrowRight':
+                      nextBtn.click();
+                      break;
+                  case '+':
+                  case '=':
+                      zoomInBtn.click();
+                      break;
+                  case '-':
+                      zoomOutBtn.click();
+                      break;
+              }
+          });
 
-        // Initialize
-        updateActiveImage();
-        updateZoomIndicator();
-        
-        console.log(`✅ VisualAid initialized with ${imageUrls.length} images`);
-    } else {
-        console.log('⚠️ No images available for this model');
-        // Disable navigation controls if no images
-        [prevBtn, nextBtn].forEach(btn => {
-            btn.style.opacity = '0.5';
-            btn.style.cursor = 'not-allowed';
-        });
-    }
+          // Mouse wheel zoom
+          bigImg.addEventListener('wheel', function(e) {
+              e.preventDefault();
+              if (e.deltaY < 0) {
+                  zoomInBtn.click();
+              } else {
+                  zoomOutBtn.click();
+              }
+          });
 
-    // Add smooth loading animation for similar model links
-    const similarLinks = document.querySelectorAll('.similar-model-link[href]');
-    similarLinks.forEach(link => {
-        link.addEventListener('click', function(e) {
-            // Add loading indicator
-            this.style.opacity = '0.7';
-            this.innerHTML += ' <i class="fa fa-spinner fa-spin"></i>';
-        });
-    });
-});
+          // Add visual feedback for controls
+          [zoomInBtn, zoomOutBtn, prevBtn, nextBtn].forEach(btn => {
+              btn.addEventListener('mousedown', function() {
+                  this.style.transform = 'scale(0.95)';
+              });
+
+              btn.addEventListener('mouseup', function() {
+                  this.style.transform = 'scale(1)';
+              });
+
+              btn.addEventListener('mouseleave', function() {
+                  this.style.transform = 'scale(1)';
+              });
+          });
+
+          // Initialize
+          updateActiveImage();
+          updateZoomIndicator();
+
+          console.log(`✅ VisualAid initialized with ${imageUrls.length} images`);
+      } else {
+          console.log('⚠️ No images available for this model');
+          // Disable navigation controls if no images
+          [prevBtn, nextBtn].forEach(btn => {
+              btn.style.opacity = '0.5';
+              btn.style.cursor = 'not-allowed';
+          });
+      }
+
+      // Add smooth loading animation for similar model links
+      const similarLinks = document.querySelectorAll('.similar-model-link[href]');
+      similarLinks.forEach(link => {
+          link.addEventListener('click', function(e) {
+              // Add loading indicator
+              this.style.opacity = '0.7';
+              this.innerHTML += ' <i class="fa fa-spinner fa-spin"></i>';
+          });
+      });
+  });
 </script>
 
 {% endblock %}

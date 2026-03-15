@@ -1845,7 +1845,7 @@ stock_filters %} {% block content %}
                     class="model-select-checkbox"
                     data-model-no="{{ data.model_stock_no__model_no }}"
                     data-stock-lot-id="{{ data.stock_lot_id }}"
-                    data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                    data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                     style="display: none; border: 2px solid #dc3545"
                   />
                   <span style="display: flex; align-items: center; gap: 2px">
@@ -2018,7 +2018,7 @@ stock_filters %} {% block content %}
                   data-total-batch-quantity="{{ data.display_qty|default:0 }}"
                   data-missing-qty="{{ data.missing_qty|default:0 }}"
                   data-physical-qty="{{ data.physical_qty|default:0 }}"
-                  data-model-image="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                  data-model-image="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
                   style="margin-left: 8px; vertical-align: middle"
                 >
                   <img
@@ -2086,7 +2086,9 @@ stock_filters %} {% block content %}
                       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
                       opacity: 0;
                       visibility: hidden;
-                      transition: opacity 0.3s ease, visibility 0.3s ease;
+                      transition:
+                        opacity 0.3s ease,
+                        visibility 0.3s ease;
                       padding: 10px;
                       z-index: 1000;
                     "
@@ -2163,7 +2165,9 @@ stock_filters %} {% block content %}
                       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
                       opacity: 0;
                       visibility: hidden;
-                      transition: opacity 0.3s ease, visibility 0.3s ease;
+                      transition:
+                        opacity 0.3s ease,
+                        visibility 0.3s ease;
                       padding: 15px;
                       z-index: 1000;
                     "
@@ -2361,7 +2365,7 @@ stock_filters %} {% block content %}
       <div class="user-profile">
         <img
           id="trayModalUserImg_Jig"
-          src="/static/assets/images/imagePlaceholder.png"
+          src="/static/assets/images/imagePlaceholder.jpg"
           alt="Model image"
         />
       </div>
@@ -2461,7 +2465,7 @@ stock_filters %} {% block content %}
       >
         <img
           id="modelImagePreview"
-          src="/static/assets/images/imagePlaceholder.png"
+          src="/static/assets/images/imagePlaceholder.jpg"
           alt="Model Image"
           style="
             width: 32px;
@@ -2565,7 +2569,11 @@ stock_filters %} {% block content %}
             draggable="false"
             ondragstart="return false;"
             ondrop="return false;"
-            onmousedown="if(event.detail>1){event.preventDefault();}"
+            onmousedown="
+              if (event.detail > 1) {
+                event.preventDefault();
+              }
+            "
           >
           </span>
           <span
@@ -2809,7 +2817,7 @@ stock_filters %} {% block content %}
               console.log("📡 Response ok:", resp.ok);
               console.log(
                 "📡 Response content-type:",
-                resp.headers.get("content-type")
+                resp.headers.get("content-type"),
               );
 
               // Check if response is JSON
@@ -2819,11 +2827,11 @@ stock_filters %} {% block content %}
                 const text = await resp.text();
                 console.log(
                   "📄 Response text (first 200 chars):",
-                  text.substring(0, 200)
+                  text.substring(0, 200),
                 );
                 showJigIdValidationError(
                   jigIdInput,
-                  "Validation error - server response issue"
+                  "Validation error - server response issue",
                 );
                 return;
               }
@@ -2864,7 +2872,7 @@ stock_filters %} {% block content %}
                   // If valid===true but message is not a known valid message, treat as error
                   showJigIdValidationError(
                     jigIdInput,
-                    data.message || "Validation error"
+                    data.message || "Validation error",
                   );
                   // --- FIX: Auto-select only if 9 chars entered and invalid ---
                   if (jigId.length === 9) {
@@ -2876,7 +2884,7 @@ stock_filters %} {% block content %}
               } else {
                 showJigIdValidationError(
                   jigIdInput,
-                  data.message || "Validation error"
+                  data.message || "Validation error",
                 );
                 // --- FIX: Auto-select only if 9 chars entered and invalid ---
                 if (jigId.length === 9) {
@@ -2906,22 +2914,18 @@ stock_filters %} {% block content %}
           const physicalQty = link.getAttribute("data-physical-qty") || "0";
           const modelImg =
             link.getAttribute("data-model-image") ||
-            "/static/assets/images/imagePlaceholder.png";
+            "/static/assets/images/imagePlaceholder.jpg";
 
           // Set header info
           document.getElementById("trayModalUserImg_Jig").src = modelImg;
-          document.getElementById(
-            "modalModelNo_Jig"
-          ).textContent = `Model No: ${modelNo}`;
-          document.getElementById(
-            "modalLotQty_Jig"
-          ).textContent = `Lot Qty: ${lotQty}`;
-          document.getElementById(
-            "modalMissingQty_Jig"
-          ).textContent = `Missing Qty: ${missingQty}`;
-          document.getElementById(
-            "modalPhysicalQty_Jig"
-          ).textContent = `Physical Qty: ${physicalQty}`;
+          document.getElementById("modalModelNo_Jig").textContent =
+            `Model No: ${modelNo}`;
+          document.getElementById("modalLotQty_Jig").textContent =
+            `Lot Qty: ${lotQty}`;
+          document.getElementById("modalMissingQty_Jig").textContent =
+            `Missing Qty: ${missingQty}`;
+          document.getElementById("modalPhysicalQty_Jig").textContent =
+            `Physical Qty: ${physicalQty}`;
 
           modal.classList.add("open");
 
@@ -2929,7 +2933,7 @@ stock_filters %} {% block content %}
           let traysData = [];
           try {
             const resp = await fetch(
-              `/jig_loading/tray-info/?lot_id=${lotId}&batch_id=${batchId}`
+              `/jig_loading/tray-info/?lot_id=${lotId}&batch_id=${batchId}`,
             );
             const result = await resp.json();
             traysData = result.trays || [];
@@ -3048,11 +3052,11 @@ stock_filters %} {% block content %}
 
       function removeJigIdAlert(input) {
         const errorAlerts = input.parentNode.querySelectorAll(
-          ".jig-id-error-alert"
+          ".jig-id-error-alert",
         );
         errorAlerts.forEach((a) => a.remove());
         const validAlerts = input.parentNode.querySelectorAll(
-          ".jig-id-valid-alert"
+          ".jig-id-valid-alert",
         );
         validAlerts.forEach((a) => a.remove());
       }
@@ -3100,7 +3104,7 @@ stock_filters %} {% block content %}
       // Recalculate loaded cases qty based on scanned trays
       function recalcLoadedCasesQty() {
         const loadedCaseQtyElem = document.getElementById(
-          "loadedCasesQtyDisplay"
+          "loadedCasesQtyDisplay",
         );
         const jigCapacityElem = document.getElementById("jigCapacityInput");
         const lotQtyElem = document.getElementById("lotQtyHidden");
@@ -3123,7 +3127,7 @@ stock_filters %} {% block content %}
 
         // Count half-filled tray inputs with valid alerts
         const halfFilledSection = document.getElementById(
-          "halfFilledTraySection"
+          "halfFilledTraySection",
         );
         if (halfFilledSection) {
           halfFilledSection
@@ -3140,7 +3144,7 @@ stock_filters %} {% block content %}
 
         // Check if broken hooks are present
         const brokenHooksInput = document.getElementById(
-          "brokenBuildupHooksInput"
+          "brokenBuildupHooksInput",
         );
         const brokenHooks = brokenHooksInput
           ? parseInt(brokenHooksInput.value || 0)
@@ -3150,10 +3154,10 @@ stock_filters %} {% block content %}
         if (brokenHooks > 0) {
           // Count delink and half-filled tray inputs separately for better accuracy
           const delinkInputs = document.querySelectorAll(
-            "#delinkTableSection .tray-id-input"
+            "#delinkTableSection .tray-id-input",
           );
           const halfFilledInputs = document.querySelectorAll(
-            "#halfFilledTraySection .tray-id-input"
+            "#halfFilledTraySection .tray-id-input",
           );
           const totalTrayInputs = delinkInputs.length + halfFilledInputs.length;
 
@@ -3219,7 +3223,7 @@ stock_filters %} {% block content %}
         console.log("🎯 Modal context stored:", window.currentModalContext);
 
         fetch(
-          `/jig_loading/jig-add-modal-data/?batch_id=${batchId}&lot_id=${lotId}&jig_qr_id=${jigQrId}`
+          `/jig_loading/jig-add-modal-data/?batch_id=${batchId}&lot_id=${lotId}&jig_qr_id=${jigQrId}`,
         )
           .then((resp) => {
             if (!resp.ok) throw new Error("Failed to fetch modal data");
@@ -3234,7 +3238,7 @@ stock_filters %} {% block content %}
 
             // Set Original Lot Qty from the fetched data
             const originalLotQtyInput = document.getElementById(
-              "originalLotQtyInput"
+              "originalLotQtyInput",
             );
             if (originalLotQtyInput) {
               originalLotQtyInput.value =
@@ -3257,7 +3261,7 @@ stock_filters %} {% block content %}
                   // Remove the call to updateSaveButtonState from renderModalContent
                   // Since we can't modify it, show the modal anyway
                   console.log(
-                    "Attempting to open modal without updateSaveButtonState"
+                    "Attempting to open modal without updateSaveButtonState",
                   );
                 } catch (e) {
                   console.error("Failed to render modal", e);
@@ -3281,7 +3285,7 @@ stock_filters %} {% block content %}
             // Wait for tray inputs to be rendered before restoring draft
             setTimeout(() => {
               fetch(
-                `/jig_loading/manual-draft-fetch/?batch_id=${batchId}&lot_id=${lotId}`
+                `/jig_loading/manual-draft-fetch/?batch_id=${batchId}&lot_id=${lotId}`,
               )
                 .then((resp) => resp.json())
                 .then((result) => {
@@ -3327,7 +3331,7 @@ stock_filters %} {% block content %}
           jigIdInput.offsetParent !== null
         ) {
           const errorDiv = jigIdInput.parentNode.querySelector(
-            ".jig-id-error-alert"
+            ".jig-id-error-alert",
           );
           if (
             errorDiv &&
@@ -3342,7 +3346,7 @@ stock_filters %} {% block content %}
         }
         // 2. Broken Hooks
         const brokenHooksInput = document.getElementById(
-          "brokenBuildupHooksInput"
+          "brokenBuildupHooksInput",
         ); // Do not recalc empty hooks here
         if (
           brokenHooksInput &&
@@ -3355,7 +3359,7 @@ stock_filters %} {% block content %}
         }
         // 3. Delink Tray IDs (in order first)
         const delinkTrayInputs = document.querySelectorAll(
-          "#delinkTableSection .tray-id-input"
+          "#delinkTableSection .tray-id-input",
         );
         for (let input of delinkTrayInputs) {
           if (
@@ -3370,7 +3374,7 @@ stock_filters %} {% block content %}
 
         // 4. Half-filled Tray ID (after all delink trays)
         const halfFilledTrayInput = document.querySelector(
-          "#halfFilledTraySection .tray-id-input"
+          "#halfFilledTraySection .tray-id-input",
         );
         if (
           halfFilledTrayInput &&
@@ -3401,24 +3405,27 @@ stock_filters %} {% block content %}
           draftData.trays.forEach((tray) => {
             if (tray.tray_id && tray.row_index !== undefined) {
               const trayInput = document.querySelector(
-                `.tray-id-input[data-row-index="${tray.row_index}"]`
+                `.tray-id-input[data-row-index="${tray.row_index}"]`,
               );
               if (trayInput) {
                 trayInput.value = tray.tray_id;
-                setTimeout(() => {
-                  validateAndMoveToNext(trayInput);
-                }, 100 + parseInt(tray.row_index) * 50);
+                setTimeout(
+                  () => {
+                    validateAndMoveToNext(trayInput);
+                  },
+                  100 + parseInt(tray.row_index) * 50,
+                );
               }
             }
           });
 
           // Restore half-filled tray (row_index is null)
           const halfFilledTray = draftData.trays.find(
-            (tray) => tray.row_index === null && tray.tray_id
+            (tray) => tray.row_index === null && tray.tray_id,
           );
           if (halfFilledTray) {
             const halfFilledSection = document.getElementById(
-              "halfFilledTraySection"
+              "halfFilledTraySection",
             );
             if (halfFilledSection) {
               const input = halfFilledSection.querySelector(".tray-id-input");
@@ -3434,7 +3441,7 @@ stock_filters %} {% block content %}
 
         // Restore broken hooks
         const brokenHooksInput = document.getElementById(
-          "brokenBuildupHooksInput"
+          "brokenBuildupHooksInput",
         ); // Do not recalc empty hooks here
         if (brokenHooksInput && draftData.broken_buildup_hooks !== undefined) {
           brokenHooksInput.value = draftData.broken_buildup_hooks;
@@ -3447,7 +3454,7 @@ stock_filters %} {% block content %}
 
         // Restore original lot qty
         const originalLotQtyInput = document.getElementById(
-          "originalLotQtyInput"
+          "originalLotQtyInput",
         );
         if (originalLotQtyInput && draftData.original_lot_qty !== undefined) {
           originalLotQtyInput.value = draftData.original_lot_qty;
@@ -3493,7 +3500,7 @@ stock_filters %} {% block content %}
 
         // Set loaded case qty display and lot qty hidden
         const loadedCaseQtyElem = document.getElementById(
-          "loadedCasesQtyDisplay"
+          "loadedCasesQtyDisplay",
         );
         const lotQtyElem = document.getElementById("lotQtyHidden");
         const effectiveDenominator =
@@ -3533,7 +3540,7 @@ stock_filters %} {% block content %}
         renderHalfFilledTraySection(
           data.tray_distribution || {},
           data.broken_buildup_hooks || 0,
-          data.half_filled_tray_cases || 0
+          data.half_filled_tray_cases || 0,
         );
 
         // Debug logging
@@ -3553,7 +3560,7 @@ stock_filters %} {% block content %}
 
         // Also call updateSaveButtonState when broken hooks input changes
         const brokenHooksInput = document.getElementById(
-          "brokenBuildupHooksInput"
+          "brokenBuildupHooksInput",
         );
         if (brokenHooksInput && !brokenHooksInput.hasListener) {
           brokenHooksInput.hasListener = true; // Prevent duplicate listeners
@@ -3563,7 +3570,7 @@ stock_filters %} {% block content %}
             const currentJigId =
               document.getElementById("jigIdInput")?.value || "";
             fetch(
-              `/jig_loading/jig-add-modal-data/?batch_id=${window.currentModalContext.batchId}&lot_id=${window.currentModalContext.lotId}&jig_qr_id=${window.currentModalContext.jigQrId}&broken_hooks=${brokenHooks}`
+              `/jig_loading/jig-add-modal-data/?batch_id=${window.currentModalContext.batchId}&lot_id=${window.currentModalContext.lotId}&jig_qr_id=${window.currentModalContext.jigQrId}&broken_hooks=${brokenHooks}`,
             )
               .then((resp) => resp.json())
               .then((data) => {
@@ -3579,7 +3586,7 @@ stock_filters %} {% block content %}
                 renderHalfFilledTraySection(
                   data.tray_distribution || {},
                   data.broken_buildup_hooks || 0,
-                  data.half_filled_tray_cases || 0
+                  data.half_filled_tray_cases || 0,
                 );
                 // Re-render delink table with updated data
                 renderDelinkTableFromData(data.delink_table || []);
@@ -3637,10 +3644,10 @@ stock_filters %} {% block content %}
       function renderHalfFilledTraySection(
         trayDistribution,
         brokenHooks = 0,
-        halfFilledTrayCases = 0
+        halfFilledTrayCases = 0,
       ) {
         const halfFilledSection = document.getElementById(
-          "halfFilledTraySection"
+          "halfFilledTraySection",
         );
 
         if (!halfFilledSection) return;
@@ -3735,8 +3742,8 @@ stock_filters %} {% block content %}
               html += `
         <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 4px; padding: 6px 10px; font-size: 12px; color: ${textColor}; font-weight: 600;">
           ${isPartial ? "Top Tray" : "Tray " + tray.tray_number}: ${
-                tray.cases
-              } cases
+            tray.cases
+          } cases
         </div>`;
             });
 
@@ -3810,8 +3817,8 @@ stock_filters %} {% block content %}
                 html += `
           <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 4px; padding: 8px; font-size: 12px; color: ${textColor}; font-weight: 600; min-width: 200px;">
             <div style="margin-bottom: 4px;">Tray ${tray.tray_number}: ${
-                  tray.cases
-                } cases (Scan Required)</div>
+              tray.cases
+            } cases (Scan Required)</div>
             <input type="text" class="tray-id-input half-filled-tray-input" placeholder="Scan Tray ID (${
               tray.cases
             } pcs)" 
@@ -3825,16 +3832,16 @@ stock_filters %} {% block content %}
                 html += `
           <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 4px; padding: 8px; font-size: 12px; color: ${textColor}; font-weight: 600; min-width: 200px;">
             <div>Tray ${tray.tray_number}: ${
-                  tray.cases
-                } cases (Auto Assigned)</div>
+              tray.cases
+            } cases (Auto Assigned)</div>
             <div style="font-size: 11px; opacity: 0.8;">Will use existing tray ID</div>
             <input type="hidden" class="half-filled-tray-input" value="AUTO-${
               tray.tray_number
             }" data-tray-qty="${
-                  tray.cases
-                }" data-row-index="half_${index}" data-batch-id="${
-                  window.currentModalContext?.batchId || ""
-                }" data-lot-id="${window.currentModalContext?.lotId || ""}">
+              tray.cases
+            }" data-row-index="half_${index}" data-batch-id="${
+              window.currentModalContext?.batchId || ""
+            }" data-lot-id="${window.currentModalContext?.lotId || ""}">
           </div>`;
               }
             });
@@ -3848,7 +3855,7 @@ stock_filters %} {% block content %}
               // Calculate total cases in half-filled section
               let totalCasesInHalf = leftDist.trays.reduce(
                 (sum, tray) => sum + tray.cases,
-                0
+                0,
               );
               let trayCount = leftDist.trays.length;
 
@@ -3859,16 +3866,16 @@ stock_filters %} {% block content %}
               } else {
                 // Multiple trays case
                 let fullTraysInHalf = leftDist.trays.filter(
-                  (t) => t.cases === leftoverLot.tray_capacity
+                  (t) => t.cases === leftoverLot.tray_capacity,
                 ).length;
                 let partialTraysInHalf = leftDist.trays.filter(
-                  (t) => t.cases < leftoverLot.tray_capacity
+                  (t) => t.cases < leftoverLot.tray_capacity,
                 );
 
                 if (fullTraysInHalf > 0 && partialTraysInHalf.length > 0) {
                   let partialCases = partialTraysInHalf.reduce(
                     (sum, tray) => sum + tray.cases,
-                    0
+                    0,
                   );
                   accountabilityText = `${fullTraysInHalf} full tray${
                     fullTraysInHalf > 1 ? "s" : ""
@@ -3886,7 +3893,7 @@ stock_filters %} {% block content %}
                 } else {
                   let partialCases = partialTraysInHalf.reduce(
                     (sum, tray) => sum + tray.cases,
-                    0
+                    0,
                   );
                   accountabilityText = `${
                     partialTraysInHalf.length
@@ -3925,7 +3932,7 @@ stock_filters %} {% block content %}
           imgElement.src = images[0].url;
           imgElement.alt = images[0].alt_text || "Model Image";
         } else {
-          imgElement.src = "/static/assets/images/imagePlaceholder.png";
+          imgElement.src = "/static/assets/images/imagePlaceholder.jpg";
           imgElement.alt = "No Image Available";
         }
       }
@@ -3934,7 +3941,7 @@ stock_filters %} {% block content %}
       the backend validation on every input change (not just on Enter & on the fly). */
       function setupTrayScanningListeners() {
         const trayInputs = document.querySelectorAll(
-          ".tray-id-input:not([readonly])"
+          ".tray-id-input:not([readonly])",
         );
         trayInputs.forEach((input) => {
           input.addEventListener("keydown", function (e) {
@@ -4051,10 +4058,10 @@ stock_filters %} {% block content %}
           // Instant backend validation
           fetch(
             `/jig_loading/validate-tray-id/?tray_id=${encodeURIComponent(
-              trayId
+              trayId,
             )}&batch_id=${encodeURIComponent(
-              batchId
-            )}&lot_id=${encodeURIComponent(lotId)}`
+              batchId,
+            )}&lot_id=${encodeURIComponent(lotId)}`,
           )
             .then((resp) => resp.json())
             .then((data) => {
@@ -4072,7 +4079,7 @@ stock_filters %} {% block content %}
               } else {
                 showTrayValidationError(
                   input,
-                  data.message || "Tray ID not valid for this batch"
+                  data.message || "Tray ID not valid for this batch",
                 );
                 recalcLoadedCasesQty();
                 // Invalid tray: auto-select current input, don't move focus
@@ -4095,7 +4102,7 @@ stock_filters %} {% block content %}
         // Remove error alerts only if input is cleared (not on every input)
         if (input.value.trim() === "") {
           const errorAlerts = input.parentNode.querySelectorAll(
-            ".tray-error-message"
+            ".tray-error-message",
           );
           errorAlerts.forEach((a) => a.remove());
           // Optionally remove valid alerts
@@ -4123,7 +4130,7 @@ stock_filters %} {% block content %}
 
         // Also remove error alert if present (so only valid is shown)
         const errorAlerts = input.parentNode.querySelectorAll(
-          ".tray-error-message"
+          ".tray-error-message",
         );
         errorAlerts.forEach((a) => a.remove());
 
@@ -4146,7 +4153,7 @@ stock_filters %} {% block content %}
       function showTrayValidationError(input, message) {
         // Remove previous error alert only
         const errorAlerts = input.parentNode.querySelectorAll(
-          ".tray-error-message"
+          ".tray-error-message",
         );
         errorAlerts.forEach((a) => a.remove());
 
@@ -4211,12 +4218,12 @@ stock_filters %} {% block content %}
         // Apply max broken hooks validation
         if (validation.max_broken_hooks) {
           const brokenHooksInput = document.getElementById(
-            "brokenBuildupHooksInput"
+            "brokenBuildupHooksInput",
           );
           if (brokenHooksInput) {
             brokenHooksInput.setAttribute("max", validation.max_broken_hooks);
             console.log(
-              `🔧 Set broken hooks max to: ${validation.max_broken_hooks}`
+              `🔧 Set broken hooks max to: ${validation.max_broken_hooks}`,
             );
 
             // Validate current value and clamp if needed
@@ -4225,7 +4232,7 @@ stock_filters %} {% block content %}
               const oldValue = currentValue;
               brokenHooksInput.value = validation.max_broken_hooks;
               console.warn(
-                `⚠️ Clamped broken hooks from ${oldValue} to ${validation.max_broken_hooks}`
+                `⚠️ Clamped broken hooks from ${oldValue} to ${validation.max_broken_hooks}`,
               );
 
               // Show notification to user
@@ -4256,14 +4263,14 @@ stock_filters %} {% block content %}
         setTimeout(() => {
           // Don't auto-focus if user is currently typing in broken hooks field
           const brokenHooksInput = document.getElementById(
-            "brokenBuildupHooksInput"
+            "brokenBuildupHooksInput",
           );
           if (brokenHooksInput && document.activeElement === brokenHooksInput) {
             return;
           }
 
           const firstEmptyInput = document.querySelector(
-            ".tray-id-input:not([readonly]):not([value])"
+            ".tray-id-input:not([readonly]):not([value])",
           );
           if (firstEmptyInput) {
             firstEmptyInput.focus();
@@ -4274,7 +4281,7 @@ stock_filters %} {% block content %}
       /* Pointer Handling */
       function findNextEmptyTrayInput(currentRowIndex) {
         const trayInputs = document.querySelectorAll(
-          ".tray-id-input:not([readonly])"
+          ".tray-id-input:not([readonly])",
         );
         for (let input of trayInputs) {
           const rowIndex = parseInt(input.dataset.rowIndex);
@@ -4333,7 +4340,7 @@ stock_filters %} {% block content %}
 
           // Clear Broken Hooks
           const brokenHooksInput = document.getElementById(
-            "brokenBuildupHooksInput"
+            "brokenBuildupHooksInput",
           ); // Do not recalc empty hooks here
           if (brokenHooksInput) {
             brokenHooksInput.value = "";
@@ -4400,7 +4407,7 @@ stock_filters %} {% block content %}
             jig_id: document.getElementById("jigIdInput")?.value,
             no_of_cycle: document.getElementById("modalNoOfCycle")?.textContent,
             broken_buildup_hooks: document.getElementById(
-              "brokenBuildupHooksInput"
+              "brokenBuildupHooksInput",
             )?.value,
             plating_stk_no:
               document.getElementById("modelImageLabel")?.textContent,
@@ -4409,7 +4416,7 @@ stock_filters %} {% block content %}
                 tray_id: input.value,
                 tray_qty: input.getAttribute("data-tray-qty"),
                 row_index: input.getAttribute("data-row-index"),
-              })
+              }),
             ),
             add_model_clicked:
               document.getElementById("addModelBtn")?.disabled === false,
@@ -4569,7 +4576,7 @@ stock_filters %} {% block content %}
             e.target.title = "";
             // Recalculate loaded cases qty on clear
             const loadedCaseQtyElem = document.getElementById(
-              "loadedCasesQtyDisplay"
+              "loadedCasesQtyDisplay",
             );
             const lotQtyElem = document.getElementById("lotQtyHidden");
             if (loadedCaseQtyElem && lotQtyElem) {
@@ -4583,7 +4590,7 @@ stock_filters %} {% block content %}
                   ) {
                     total += parseInt(
                       inp.getAttribute("data-tray-qty") || "0",
-                      10
+                      10,
                     );
                   }
                 });
@@ -4628,7 +4635,7 @@ stock_filters %} {% block content %}
         if (currentValue > maxBrokenHooks) {
           input.value = maxBrokenHooks;
           console.warn(
-            `⚠️ Broken hooks limited to ${maxBrokenHooks} for this jig capacity`
+            `⚠️ Broken hooks limited to ${maxBrokenHooks} for this jig capacity`,
           );
 
           // Show a brief notification to user

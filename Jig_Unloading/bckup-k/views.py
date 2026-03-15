@@ -2666,14 +2666,14 @@ class JigUnloading_Completedtable(TemplateView):
             for model_master in model_masters:
                 images = list(model_master.images.all())
                 image_urls = []
-                first_image = "/static/assets/images/imagePlaceholder.png"
+                first_image = "/static/assets/images/imagePlaceholder.jpg"
                 
                 for img in images:
                     if img.master_image:
                         try:
                             img_url = img.master_image.url if hasattr(img.master_image, 'url') else str(img.master_image)
                             image_urls.append(img_url)
-                            if first_image == "/static/assets/images/imagePlaceholder.png":
+                            if first_image == "/static/assets/images/imagePlaceholder.jpg":
                                 first_image = img_url
                         except Exception as img_err:
                             print(f"[DEBUG] Error processing image {img.id}: {img_err}")
@@ -2794,7 +2794,7 @@ class JigUnloading_Completedtable(TemplateView):
                             else:
                                 model_images[model_no] = {
                                     'images': [],
-                                    'first_image': "/static/assets/images/imagePlaceholder.png"
+                                    'first_image': "/static/assets/images/imagePlaceholder.jpg"
                                 }
                     except Exception as e:
                         print(f"[DEBUG] Error processing lot_id {lot_id}: {e}")

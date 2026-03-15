@@ -2408,8 +2408,6 @@
        select.addEventListener('change', function() {
          const jigId = this.getAttribute('data-jig-id');
          const bathNumber = this.value;
-         const selectedOption = this.options[this.selectedIndex];
-         const bathType = selectedOption ? selectedOption.getAttribute('data-bath-type') : this.getAttribute('data-bath-type');
          
          if (!bathNumber) {
            return; // Don't process empty selections
@@ -2422,8 +2420,7 @@
          // Prepare data for AJAX request
          const data = {
            jig_id: jigId,
-           bath_number: bathNumber,
-           bath_type: bathType
+           bath_number: bathNumber
          };
          
          // Send AJAX request
@@ -3641,8 +3638,7 @@ document.addEventListener("DOMContentLoaded", function () {
             // Prepare data for AJAX request
             const data = {
                 jig_id: jigId,
-                bath_number: bathNumber,
-                bath_type: selectedBathType
+                bath_number: bathNumber
             };
             
             console.log('📤 Sending AJAX request:', data);

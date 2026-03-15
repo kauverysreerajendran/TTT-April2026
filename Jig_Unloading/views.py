@@ -1132,7 +1132,11 @@ class Jig_Unloading_MainTable(TemplateView):
                 # Set default values for remaining fields
                 jig_detail.jig_type = getattr(jig_detail, 'jig_type', "N/A")
                 jig_detail.jig_capacity = getattr(jig_detail, 'jig_capacity', 0)
-                jig_detail.plating_color = jig_detail.plating_color or "N/A"
+                # Safely resolve plating color — prefer explicit attribute, then annotated cast, else fallback
+                plating_color_val = getattr(jig_detail, 'plating_color', None)
+                if not plating_color_val:
+                    plating_color_val = getattr(jig_detail, 'plating_color_cast', None)
+                jig_detail.plating_color = plating_color_val or "N/A"
                 
                 # Calculate no_of_trays based on total_cases_loaded and tray_capacity
                 valid_capacities = [cap for cap in all_tray_capacities if cap and cap > 0]
@@ -3488,14 +3492,14 @@ class JigUnloading_Completedtable(TemplateView):
             for model_master in model_masters:
                 images = list(model_master.images.all())
                 image_urls = []
-                first_image = "/static/assets/images/imagePlaceholder.png"
+                first_image = "/static/assets/images/imagePlaceholder.jpg"
                 
                 for img in images:
                     if img.master_image:
                         try:
                             img_url = img.master_image.url if hasattr(img.master_image, 'url') else str(img.master_image)
                             image_urls.append(img_url)
-                            if first_image == "/static/assets/images/imagePlaceholder.png":
+                            if first_image == "/static/assets/images/imagePlaceholder.jpg":
                                 first_image = img_url
                         except Exception as img_err:
                             print(f"[DEBUG] Error processing image {img.id}: {img_err}")
@@ -3725,7 +3729,7 @@ class JigUnloading_Completedtable(TemplateView):
                             else:
                                 model_images[model_no] = {
                                     'images': [],
-                                    'first_image': "/static/assets/images/imagePlaceholder.png"
+                                    'first_image': "/static/assets/images/imagePlaceholder.jpg"
                                 }
                     except Exception as e:
                         print(f"[DEBUG] Error processing lot_id {lot_id}: {e}")
