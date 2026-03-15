@@ -3404,130 +3404,94 @@ async function fetchTrayCapacityDynamic(lotId) {
 
 // ✅ FIXED: Calculate optimal distribution - ONLY EXCLUDE VALID DELINK CANDIDATES
 async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
-  console.log('🎯 Calculating FIXED distribution with shuffled tray IDs...');
+  console.log('🎯 Fetching ACTUAL allocated rejection trays from database...');
   
   // Store globally for validation function
   window.currentRemainingTrays = allRemainingTrays;
   
-  // 1. ✅ Get scanned delink trays - BUT ONLY VALID ONES (is_delink_candidate: true)
-  const validScannedDelinkTrays = [];
-  document.querySelectorAll('.delink-tray-id-input').forEach(input => {
-    const trayId = input.value.trim();
-    const isValid = input.style.borderColor === 'rgb(40, 167, 69)';
-    if (trayId && isValid) {
-      validScannedDelinkTrays.push(trayId);
-    }
-  });
-  
-  // 2. ✅ Get ALL available tray IDs (excluding ONLY valid delink candidates)
-  const availableTrayIds = allRemainingTrays
-    .filter(tray => !validScannedDelinkTrays.includes(tray.tray_id))  
-      .map(tray => tray.tray_id)
-    .sort(); // Sort for consistent ordering
-  console.log('🎯 Available tray IDs for rejection:', availableTrayIds);
-
-  if (availableTrayIds.length === 0) {
-    return {
-      success: true,
-      distributedTrays: [],
-      iqfRejectionQty: 0,
-      totalDistributed: 0
-    };
-  }
-  
-  // 3. ✅ GET IQF REJECTION QUANTITY from the saved rejection data
-  let iqfRejectionQty = 0;
+  // ✅ CRITICAL FIX: Fetch actual allocated rejection trays from database instead of recalculating
   try {
     const stockLotId = document.getElementById('trayScanModal')?.dataset.stockLotId || lotId;
-    const rejectionResponse = await fetch(`/iqf/iqf_get_rejected_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`);
-    const rejectionData = await rejectionResponse.json();
+    console.log(`🎯 Fetching allocated rejection trays for lot: ${stockLotId}`);
     
-    if (rejectionData.success && rejectionData.rejection_rows) {
-      iqfRejectionQty = rejectionData.rejection_rows.reduce((sum, row) => {
-        return sum + (parseInt(row.qty) || 0);
-      }, 0);
-    }
+    // Call iqf_view_tray_list to get ACTUAL allocation from database
+    const allocResponse = await fetch(`/iqf/iqf_view_tray_list/?lot_id=${encodeURIComponent(stockLotId)}`);
+    const allocData = await allocResponse.json();
     
-    console.log('📊 IQF Rejection Quantity:', iqfRejectionQty);
-    
-  } catch (error) {
-    console.error('❌ Error fetching IQF rejection data:', error);
-    return {
-      success: false,
-      error: 'Failed to fetch IQF rejection quantity'
-    };
-  }
-  
-  if (iqfRejectionQty <= 0) {
-    return {
-      success: false,
-      error: 'No IQF rejection quantity found to distribute'
-    };
-  }
-  
-  // 4. ✅ GET DYNAMIC TRAY CAPACITY
-  let trayCapacity = null;
-  try {
-    const capacityResult = await fetchTrayCapacityDynamic(lotId);
-    if (!capacityResult.success) {
+    if (!allocData.success) {
+      console.error('❌ Error fetching allocated trays:', allocData.error);
       return {
         success: false,
-        error: `Tray capacity error: ${capacityResult.error}`
+        error: `Failed to fetch allocated trays: ${allocData.error}`
       };
     }
-    trayCapacity = capacityResult.tray_capacity;
+    
+    console.log('📊 API Response - batch_rejection:', allocData.batch_rejection);
+    console.log('📊 API Response - total_rejection_qty:', allocData.total_rejection_qty);
+    console.log('📊 API Response - trays:', allocData.trays);
+    
+    // If not batch rejection, return error
+    if (!allocData.batch_rejection) {
+      return {
+        success: false,
+        error: 'This is not a batch rejection allocation'
+      };
+    }
+    
+    const iqfRejectionQty = allocData.total_rejection_qty || 0;
+    const trayCapacity = allocData.tray_capacity || 12;
+    const allocatedTrays = allocData.trays || [];
+    
+    console.log('📊 IQF Rejection Qty:', iqfRejectionQty);
+    console.log('📊 Tray Capacity:', trayCapacity);
+    console.log('📊 Allocated trays count:', allocatedTrays.length);
+    
+    if (allocatedTrays.length === 0) {
+      return {
+        success: false,
+        error: 'No allocated trays found in database'
+      };
+    }
+    
+    // ✅ Convert API response to distributedTrays format
+    const distributedTrays = allocatedTrays.map((tray, idx) => ({
+      tray_id: tray.tray_id,
+      distributed_qty: tray.tray_qty,
+      is_top_tray: idx === 0  // Mark first tray as top tray if remainder
+    }));
+    
+    const totalDistributed = distributedTrays.reduce((sum, t) => sum + t.distributed_qty, 0);
+    
+    // ✅ VALIDATION: Sum of allocated quantities must equal total rejection qty
+    if (totalDistributed !== iqfRejectionQty) {
+      console.warn(`⚠️  MISMATCH: Database allocation sum (${totalDistributed}) != total rejection qty (${iqfRejectionQty})`);
+      console.warn(`   This may indicate incomplete allocation. Continuing anyway...`);
+      // Don't fail - allow frontend to display what was found
+    }
+    
+    console.log('✅ ACTUAL DISTRIBUTION FROM DATABASE:', {
+      iqfRejectionQty,
+      trayCapacity,
+      allocatedTrays: allocatedTrays.length,
+      distributedTrays,
+      totalDistributed
+    });
+    
+    return {
+      success: true,
+      iqfRejectionQty,
+      trayCapacity,
+      distributedTrays,
+      totalDistributed
+    };
+    
   } catch (error) {
+    console.error('❌ Error fetching database allocation:', error);
     return {
       success: false,
-      error: `Failed to fetch tray capacity: ${error.message}`
+      error: `Failed to fetch allocation: ${error.message}`
     };
   }
-  
-  // 5. ✅ FIXED DISTRIBUTION ALGORITHM - FIXED QUANTITIES, SHUFFLE TRAY IDs
-  const distributedTrays = [];
-  
-  // Calculate fixed distribution pattern (4, 12, 12, 12 for qty=40, capacity=12)
-  const remainder = iqfRejectionQty % trayCapacity;
-  const fullTraysNeeded = Math.floor(iqfRejectionQty / trayCapacity);
-  
-  const fixedQuantities = [];
-  if (remainder > 0) {
-    fixedQuantities.push(remainder); // First: 4 (Top Tray)
-  }
-  for (let i = 0; i < fullTraysNeeded; i++) {
-    fixedQuantities.push(trayCapacity); // Then: 12, 12, 12
-  }
-  
-  console.log('📊 Fixed quantities pattern:', fixedQuantities);
-  
-  // 6. ✅ Assign fixed quantities to available tray IDs
-  for (let i = 0; i < fixedQuantities.length && i < availableTrayIds.length; i++) {
-    distributedTrays.push({
-      tray_id: availableTrayIds[i],
-      distributed_qty: fixedQuantities[i],
-      is_top_tray: i === 0 && remainder > 0
-    });
-  }
-  
-  const totalDistributed = distributedTrays.reduce((sum, t) => sum + t.distributed_qty, 0);
-  
-  console.log('🎯 FIXED DISTRIBUTION RESULT:', {
-    iqfRejectionQty,
-    trayCapacity,
-    fixedQuantities,
-    availableTrayIds,
-    distributedTrays,
-    totalDistributed,
-    validScannedDelinkTrays
-  });
-  
-  return {
-    success: true,
-    iqfRejectionQty,
-    trayCapacity,
-    distributedTrays,
-    totalDistributed
-  };
 }
 
 // ✅ UPDATED: Render rejection table with FIXED QUANTITIES, SHUFFLED TRAY IDs
