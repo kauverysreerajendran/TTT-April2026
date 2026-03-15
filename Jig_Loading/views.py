@@ -53,7 +53,8 @@ class JigView(TemplateView):
         # Only show lots NOT completed (do not change row order), OR lots with half-filled trays from JigCompleted
         total_stock_qs = (
             TotalStockModel.objects.filter(brass_audit_accptance=True, Jig_Load_completed=False)
-            | TotalStockModel.objects.filter(brass_audit_few_cases_accptance=True, Jig_Load_completed=False)
+            # ✅ FIX: Only show partial-rejected lots that are released (onhold=False) — i.e. top tray scan done
+            | TotalStockModel.objects.filter(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False, Jig_Load_completed=False)
             | TotalStockModel.objects.filter(brass_audit_rejection=True, Jig_Load_completed=False)
             | TotalStockModel.objects.filter(jig_draft=True, Jig_Load_completed=False)  # Include partial draft lots
         )
@@ -103,7 +104,11 @@ class JigView(TemplateView):
                     jig_type = f"{jig_master.jig_capacity}-Jig"
                     jig_capacity = jig_master.jig_capacity
 
-            lot_qty = stock.total_stock or 0
+            # ✅ FIX: For partial-rejected lots, display brass_audit_accepted_qty (not total_stock)
+            if stock.brass_audit_few_cases_accptance and stock.brass_audit_accepted_qty and stock.brass_audit_accepted_qty > 0:
+                lot_qty = stock.brass_audit_accepted_qty
+            else:
+                lot_qty = stock.total_stock or 0
             no_of_trays = 0
             if tray_capacity and tray_capacity > 0:
                 no_of_trays = (lot_qty // tray_capacity) + (1 if lot_qty % tray_capacity else 0)
@@ -188,8 +193,29 @@ class TrayInfoView(APIView):
                     })
         else:
             # For incomplete lots, show allocated trays from JigLoadTrayId
-            trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id__batch_id=batch_id).values('tray_id', 'tray_quantity').order_by('tray_quantity')
-            tray_list = [{'tray_id': t['tray_id'], 'tray_quantity': t['tray_quantity']} for t in trays]
+            # ✅ FIX: Order top tray first, then by tray_id for consistent ordering
+            trays_qs = JigLoadTrayId.objects.filter(
+                lot_id=lot_id, batch_id__batch_id=batch_id
+            ).order_by('-top_tray', 'tray_id')
+
+            # ✅ FIX: For partial rejection lots, cap by brass_audit_accepted_qty
+            # This prevents extra trays (carried over from BrassTrayId) from showing
+            stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            target_qty = (
+                stock.brass_audit_accepted_qty
+                if (stock and stock.brass_audit_few_cases_accptance
+                    and stock.brass_audit_accepted_qty
+                    and stock.brass_audit_accepted_qty > 0)
+                else None
+            )
+
+            tray_list = []
+            cumulative = 0
+            for t in trays_qs.values('tray_id', 'tray_quantity', 'top_tray'):
+                if target_qty is not None and cumulative >= target_qty:
+                    break
+                tray_list.append({'tray_id': t['tray_id'], 'tray_quantity': t['tray_quantity']})
+                cumulative += (t['tray_quantity'] or 0)
         
         return Response({'trays': tray_list})
        
@@ -441,7 +467,11 @@ class JigAddModalDataView(TemplateView):
         modal_data['loaded_cases_qty'] = 0
         
         # Calculate effective_loaded_cases based on broken hooks
-        original_lot_qty = stock.total_stock or 0
+        # ✅ FIX: For partial-rejected lots (few_cases_accptance=True), use brass_audit_accepted_qty
+        if stock.brass_audit_few_cases_accptance and stock.brass_audit_accepted_qty and stock.brass_audit_accepted_qty > 0:
+            original_lot_qty = stock.brass_audit_accepted_qty
+        else:
+            original_lot_qty = stock.total_stock or 0
 
         # Fallback: For half-filled partial lots, stock.total_stock is 0 after the main jig
         # submission, but the real remaining quantity lives in JigCompleted.half_filled_tray_qty.

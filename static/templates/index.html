@@ -2,531 +2,530 @@
 
 <!-- Dashboard Styles -->
 <style>
-  :root {
-    --c1: #e9fbf9; /* teal tint 1 */
-    --c2: #dff8f6; /* teal tint 2 */
-    --c3: #d2f6f3; /* teal tint 3 */
-    --c4: #eafbf9; /* teal tint 4 */
-    --primary: #073b3a; /* deep teal text */
-    --accent: #008080; /* teal accent */
-    --text-muted: #5f7d7c;
-    --surface: #f4fbfb;
-    --card-bg: #ffffff;
-    --radius-lg: 18px;
-    --radius-md: 12px;
-  }
-
-  html,
-  body {
-    height: auto;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  /* Cover Banner */
-  .cover-banner {
-    height: 120px;
-    background: linear-gradient(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.04)), url(/static/assets/images/img7.jpg) center -68px / 100% auto no-repeat;
-    position: relative;
-    border-radius: var(--radius-lg);
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
-}
-  }
-
-  .cover-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 20px;
-  }
-
-  .cover-content {
-    text-align: center;
-    color: #ffffff;
-    z-index: 2;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  }
-
-  .cover-title {
-    font-size: 30px;
-    margin-bottom: 0.25rem;
-    letter-spacing: 0.6px;
-    color: #ffffff;
-    font-weight: 600;
-    background: #5151517f;
-    padding: 5px;
-    border-radius: 5px;
-  }
-
-  .cover-subtitle {
-    font-size: 0.85rem;
-    margin-bottom: 0.4rem;
-    color: var(--text-muted);
-    opacity: 1;
-  }
-
-  .cover-date {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  /* Main Module Card */
-  .module-card {
-    border-radius: 12px;
-    border: 1px solid rgba(44, 62, 80, 0.04);
-    box-shadow: 0 6px 18px rgba(44, 62, 80, 0.06);
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-    transition:
-      transform 0.28s ease,
-      box-shadow 0.28s ease;
-    background: var(--card-bg);
-    position: relative;
-    padding-bottom: 0.5rem;
-  }
-
-  .module-card::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: rgba(91, 108, 240, 0.2);
-    z-index: 1;
-  }
-
-  .module-card:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 12px 28px rgba(44, 62, 80, 0.08);
-  }
-
-  .module-header {
-    padding: 0.9rem 1.25rem;
-    color: var(--primary);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
-    background: var(--card-bg) !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  }
-
-  .module-header h3 {
-    margin: 0;
-    font-weight: 700;
-    font-size: 0.82rem;
-    color: var(--primary);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-  }
-
-  .module-header .module-icon {
-    font-size: 1.2rem;
-    color: var(--text-muted) !important;
-    opacity: 1;
-  }
-
-  .stat-cards-container {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.6rem;
-    padding: 0.75rem 1rem;
-  }
-
-  /* Stat Card */
-  .stat-card {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 0.65rem;
-    text-align: left;
-    border: 1px solid rgba(7, 59, 58, 0.04);
-    transition:
-      transform 0.18s ease,
-      box-shadow 0.18s ease;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 6px 18px rgba(7, 59, 58, 0.03);
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "label value" "unit unit";
-    gap: 0.25rem 0.6rem;
-  }
-
-  .stat-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  }
-
-  .stat-card:nth-child(4n + 1) {
-    background: var(--c1);
-  }
-  .stat-card:nth-child(4n + 2) {
-    background: var(--c2);
-  }
-  .stat-card:nth-child(4n + 3) {
-    background: var(--c3);
-  }
-  .stat-card:nth-child(4n + 4) {
-    background: var(--c4);
-  }
-
-  .stat-label {
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    font-weight: 600;
-    margin: 0;
-    text-transform: none;
-    letter-spacing: 0.2px;
-    grid-area: label;
-    align-self: center;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--primary);
-    margin: 0;
-    grid-area: value;
-    justify-self: end;
-  }
-
-  .stat-unit {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    grid-area: unit;
-    margin-top: 0.15rem;
-  }
-
-  /* Icon chip inside label */
-  .stat-label i {
-    width: 36px;
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    font-size: 1rem;
-    color: #fff;
-    flex-shrink: 0;
-  }
-
-  /* Per-card accent colors for icon chips */
-  .stat-card:nth-child(4n + 1) {
-    background: linear-gradient(180deg, rgba(6, 128, 128, 0.06), var(--c1));
-  }
-  .stat-card:nth-child(4n + 1) .stat-label i {
-    background: rgba(0, 128, 128, 0.95);
-  }
-
-  .stat-card:nth-child(4n + 2) {
-    background: linear-gradient(180deg, rgba(3, 150, 136, 0.04), var(--c2));
-  }
-  .stat-card:nth-child(4n + 2) .stat-label i {
-    background: rgba(3, 150, 136, 0.95);
-  }
-
-  .stat-card:nth-child(4n + 3) {
-    background: linear-gradient(180deg, rgba(0, 128, 128, 0.04), var(--c3));
-  }
-  .stat-card:nth-child(4n + 3) .stat-label i {
-    background: rgba(0, 120, 120, 0.95);
-  }
-
-  .stat-card:nth-child(4n + 4) {
-    background: linear-gradient(180deg, rgba(0, 140, 140, 0.04), var(--c4));
-  }
-  .stat-card:nth-child(4n + 4) .stat-label i {
-    background: rgba(0, 140, 140, 0.95);
-  }
-
-  .progress-bar-container {
-    width: 100%;
-    height: 5px;
-    background: rgba(0, 0, 0, 0.08);
-    border-radius: 4px;
-    margin-top: 0.75rem;
-    overflow: hidden;
-  }
-
-  .progress-bar {
-    height: 100%;
-    background: rgba(91, 108, 240, 0.65);
-    transition: width 0.6s ease;
-    border-radius: 4px;
-  }
-
-  /* Dashboard Header */
-  .dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .dashboard-header h2 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #2c3e50;
-    margin: 0;
-  }
-
-  .date-selector {
-    background: white;
-    border: 2px solid #ecf0f1;
-    border-radius: 10px;
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    color: #7f8c8d;
-  }
-
-  .date-selector:hover {
-    border-color: #008080;
-    color: #008080;
-  }
-
-  /* Carousel Navigation */
-  .carousel-nav {
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-top: 2rem;
-    flex-wrap: wrap;
-  }
-
-  .carousel-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #d1d5db;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border: none;
-  }
-
-  .carousel-dot.active {
-    background: var(--accent);
-    width: 24px;
-    border-radius: 4px;
-  }
-
-  /* Two-column layout: left modules, right graph panel */
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 380px;
-    gap: 1rem;
-    align-items: start;
-    margin-top: 0.5rem;
-  }
-
-  .left-modules {
-    min-width: 0;
-  }
-
-  .right-panel {
-    position: relative;
-  }
-
-  .graph-panel {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 8px 20px rgba(7, 59, 58, 0.04);
-  }
-
-  @media (max-width: 992px) {
-    .dashboard-grid {
-      grid-template-columns: 1fr;
+    :root {
+      --c1: #e9fbf9; /* teal tint 1 */
+      --c2: #dff8f6; /* teal tint 2 */
+      --c3: #d2f6f3; /* teal tint 3 */
+      --c4: #eafbf9; /* teal tint 4 */
+      --primary: #073b3a; /* deep teal text */
+      --accent: #008080; /* teal accent */
+      --text-muted: #5f7d7c;
+      --surface: #f4fbfb;
+      --card-bg: #ffffff;
+      --radius-lg: 18px;
+      --radius-md: 12px;
     }
-    .right-panel {
-      order: 2;
-    }
-    .left-modules {
-      order: 1;
-    }
-  }
 
-  /* Responsive */
-  @media (max-width: 768px) {
+    html,
+    body {
+      height: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* Cover Banner */
     .cover-banner {
-      height: 200px;
+      height: 120px;
+      background: linear-gradient(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.04)), url(/static/assets/images/img7.jpg) center -68px / 100% auto no-repeat;
+      position: relative;
+      border-radius: var(--radius-lg);
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  }
+    }
+
+    .cover-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 20px;
+    }
+
+    .cover-content {
+      text-align: center;
+      color: #ffffff;
+      z-index: 2;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
     }
 
     .cover-title {
-      font-size: 2rem;
-    }
-
-    .cover-title img {
-      height: 1.5rem;
+      font-size: 30px;
+      margin-bottom: 0.25rem;
+      letter-spacing: 0.6px;
+      color: #ffffff;
+      font-weight: 600;
+      background: #5151517f;
+      padding: 5px;
+      border-radius: 5px;
     }
 
     .cover-subtitle {
-      font-size: 1rem;
+      font-size: 0.85rem;
+      margin-bottom: 0.4rem;
+      color: var(--text-muted);
+      opacity: 1;
     }
 
-    .dashboard-header {
-      flex-direction: column;
-      align-items: flex-start;
+    .cover-date {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Main Module Card */
+    .module-card {
+      border-radius: 12px;
+      border: 1px solid rgba(44, 62, 80, 0.04);
+      box-shadow: 0 6px 18px rgba(44, 62, 80, 0.06);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      transition:
+        transform 0.28s ease,
+        box-shadow 0.28s ease;
+      background: var(--card-bg);
+      position: relative;
+      padding-bottom: 0.5rem;
+    }
+
+    .module-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: rgba(91, 108, 240, 0.2);
+      z-index: 1;
+    }
+
+    .module-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 28px rgba(44, 62, 80, 0.08);
+    }
+
+    .module-header {
+      padding: 0.9rem 1.25rem;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+      background: var(--card-bg) !important;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .module-header h3 {
+      margin: 0;
+      font-weight: 700;
+      font-size: 0.82rem;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .module-header .module-icon {
+      font-size: 1.2rem;
+      color: var(--text-muted) !important;
+      opacity: 1;
     }
 
     .stat-cards-container {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.5rem;
-      padding: 0.75rem;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.6rem;
+      padding: 0.75rem 1rem;
     }
-    .cover-banner {
-      height: 90px;
+
+    /* Stat Card */
+    .stat-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 0.65rem;
+      text-align: left;
+      border: 1px solid rgba(7, 59, 58, 0.04);
+      transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 6px 18px rgba(7, 59, 58, 0.03);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "label value" "unit unit";
+      gap: 0.25rem 0.6rem;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-card:nth-child(4n + 1) {
+      background: var(--c1);
+    }
+    .stat-card:nth-child(4n + 2) {
+      background: var(--c2);
+    }
+    .stat-card:nth-child(4n + 3) {
+      background: var(--c3);
+    }
+    .stat-card:nth-child(4n + 4) {
+      background: var(--c4);
+    }
+
+    .stat-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin: 0;
+      text-transform: none;
+      letter-spacing: 0.2px;
+      grid-area: label;
+      align-self: center;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
     }
 
     .stat-value {
       font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 0;
+      grid-area: value;
+      justify-self: end;
     }
 
-    .module-header h3 {
+    .stat-unit {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      grid-area: unit;
+      margin-top: 0.15rem;
+    }
+
+    /* Icon chip inside label */
+    .stat-label i {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
       font-size: 1rem;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .cover-banner {
-      height: 150px;
+      color: #fff;
+      flex-shrink: 0;
     }
 
-    .cover-title {
-      font-size: 1.6rem;
+    /* Per-card accent colors for icon chips */
+    .stat-card:nth-child(4n + 1) {
+      background: linear-gradient(180deg, rgba(6, 128, 128, 0.06), var(--c1));
+    }
+    .stat-card:nth-child(4n + 1) .stat-label i {
+      background: rgba(0, 128, 128, 0.95);
     }
 
-    .cover-title img {
-      height: 1.2rem;
+    .stat-card:nth-child(4n + 2) {
+      background: linear-gradient(180deg, rgba(3, 150, 136, 0.04), var(--c2));
+    }
+    .stat-card:nth-child(4n + 2) .stat-label i {
+      background: rgba(3, 150, 136, 0.95);
     }
 
-    .stat-cards-container {
-      grid-template-columns: 1fr;
+    .stat-card:nth-child(4n + 3) {
+      background: linear-gradient(180deg, rgba(0, 128, 128, 0.04), var(--c3));
     }
-  }
-
-  /* Empty State */
-  .empty-state {
-    text-align: center;
-    padding: 3rem;
-    color: #7f8c8d;
-  }
-
-  .empty-state i {
-    font-size: 3rem;
-    color: #bdc3c7;
-    margin-bottom: 1rem;
-  }
-
-  /* Carousel Styles */
-  .modules-container {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: visible;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    gap: 1rem;
-    padding-bottom: 1rem;
-  }
-
-  .module-card {
-    flex: 0 0 100%;
-    scroll-snap-align: start;
-  }
-
-  /* Graph Styles */
-  .graph-container {
-    padding: 1rem 2rem;
-    background: #f8f9fa;
-    border-radius: 0 0 20px 20px;
-  }
-
-  .graph-container h5 {
-    margin: 0 0 1rem 0;
-    font-size: 1rem;
-    color: #2c3e50;
-    text-align: center;
-  }
-
-  .mini-bar-chart {
-    display: flex;
-    justify-content: space-around;
-    height: 100px;
-    align-items: end;
-  }
-
-  .bar-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 60px;
-  }
-
-  .bar {
-    width: 40px;
-    background: linear-gradient(to top, var(--accent), rgba(91, 108, 240, 0.5));
-    border-radius: 5px 5px 0 0;
-    transition: height 0.5s ease;
-    min-height: 5px;
-  }
-
-  .bar-item span {
-    margin-top: 0.5rem;
-    font-size: 0.8rem;
-    color: #7f8c8d;
-  }
-
-  /* Animation */
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
+    .stat-card:nth-child(4n + 3) .stat-label i {
+      background: rgba(0, 120, 120, 0.95);
     }
-    to {
-      opacity: 1;
-      transform: translateY(0);
+
+    .stat-card:nth-child(4n + 4) {
+      background: linear-gradient(180deg, rgba(0, 140, 140, 0.04), var(--c4));
     }
-  }
+    .stat-card:nth-child(4n + 4) .stat-label i {
+      background: rgba(0, 140, 140, 0.95);
+    }
 
-  .module-card {
-    animation: slideIn 0.5s ease;
-  }
+    .progress-bar-container {
+      width: 100%;
+      height: 5px;
+      background: rgba(0, 0, 0, 0.08);
+      border-radius: 4px;
+      margin-top: 0.75rem;
+      overflow: hidden;
+    }
 
-  .stat-card {
-    animation: slideIn 0.5s ease;
-  }
+    .progress-bar {
+      height: 100%;
+      background: rgba(91, 108, 240, 0.65);
+      transition: width 0.6s ease;
+      border-radius: 4px;
+    }
 
-  .stat-card:nth-child(1) {
-    animation-delay: 0.1s;
-  }
-  .stat-card:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-  .stat-card:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-  .stat-card:nth-child(4) {
-    animation-delay: 0.4s;
-  }
+    /* Dashboard Header */
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .dashboard-header h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin: 0;
+    }
+
+    .date-selector {
+      background: white;
+      border: 2px solid #ecf0f1;
+      border-radius: 10px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      color: #7f8c8d;
+    }
+
+    .date-selector:hover {
+      border-color: #008080;
+      color: #008080;
+    }
+
+    /* Carousel Navigation */
+    .carousel-nav {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .carousel-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #d1d5db;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+    }
+
+    .carousel-dot.active {
+      background: var(--accent);
+      width: 24px;
+      border-radius: 4px;
+    }
+
+    /* Two-column layout: left modules, right graph panel */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr; /* make modules take full width */
+      gap: 1rem;
+      align-items: start;
+      margin-top: 0.5rem;
+    }
+
+    .left-modules {
+      min-width: 0;
+    }
+
+    .right-panel {
+      position: relative;
+    }
+
+    .graph-panel {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: 0 8px 20px rgba(7, 59, 58, 0.04);
+    }
+
+    @media (max-width: 992px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .right-panel {
+        order: 2;
+      }
+      .left-modules {
+        order: 1;
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .cover-banner {
+        height: 200px;
+      }
+
+      .cover-title {
+        font-size: 2rem;
+      }
+
+      .cover-title img {
+        height: 1.5rem;
+      }
+
+      .cover-subtitle {
+        font-size: 1rem;
+      }
+
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .stat-cards-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+        padding: 0.75rem;
+      }
+      .cover-banner {
+        height: 90px;
+      }
+
+      .stat-value {
+        font-size: 1.5rem;
+      }
+
+      .module-header h3 {
+        font-size: 1rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .cover-banner {
+        height: 150px;
+      }
+
+      .cover-title {
+        font-size: 1.6rem;
+      }
+
+      .cover-title img {
+        height: 1.2rem;
+      }
+
+      .stat-cards-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: #7f8c8d;
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      color: #bdc3c7;
+      margin-bottom: 1rem;
+    }
+
+    /* Carousel Styles */
+    .modules-container {
+      display: flex;
+      overflow-x: auto;
+      overflow-y: visible;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      gap: 1rem;
+      padding-bottom: 1rem;
+    }
+
+    .module-card {
+      flex: 0 0 100%;
+      scroll-snap-align: start;
+      direction: ltr; /* keep card content left-to-right */
+    }
+
+    /* Graph Styles */
+    .graph-container {
+      padding: 1rem 2rem;
+      background: #f8f9fa;
+      border-radius: 0 0 20px 20px;
+    }
+
+    .graph-container h5 {
+      margin: 0 0 1rem 0;
+      font-size: 1rem;
+      color: #2c3e50;
+      text-align: center;
+    }
+
+    .mini-bar-chart {
+      display: flex;
+      justify-content: space-around;
+      height: 100px;
+      align-items: end;
+    }
+
+    .bar-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 60px;
+    }
+
+    .bar {
+      width: 40px;
+      background: linear-gradient(to top, var(--accent), rgba(91, 108, 240, 0.5));
+      border-radius: 5px 5px 0 0;
+      transition: height 0.5s ease;
+      min-height: 5px;
+    }
+
+    .bar-item span {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: #7f8c8d;
+    }
+
+    /* Animation */
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .module-card {
+      animation: slideIn 0.5s ease;
+    }
+
+    .stat-card {
+      animation: slideIn 0.5s ease;
+    }
+
+    .stat-card:nth-child(1) {
+      animation-delay: 0.1s;
+    }
+    .stat-card:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .stat-card:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+    .stat-card:nth-child(4) {
+      animation-delay: 0.4s;
+    }
 </style>
 
 <div class="container-fluid px-2 px-md-4">
   <!-- Cover Banner -->
   <div class="cover-banner">
-    <div class="cover-overlay">
-
-    </div>
+    <div class="cover-overlay"></div>
   </div>
 
   <!-- Module Cards + Graph (two-column) -->
@@ -535,7 +534,7 @@
       <!-- Module Cards Container -->
       <div id="modulesContainer" class="modules-container">
         {% if dashboard_stats %} {% for stat in dashboard_stats %}
-        <div class="module-card">
+        <div class="module-card" data-label="{{ stat.label }}">
           <!-- Module Header with Color -->
           <div class="module-header" style="background: {{ stat.color }};">
             <div>
@@ -628,22 +627,30 @@
           {% elif stat.label == "Brass QC" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Accepted Count
+              </div>
               <div class="stat-value">{{ stat.accepted_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-close-circle"></i> Rejected Count
+              </div>
               <div class="stat-value">{{ stat.rejected_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Completed Count
+              </div>
               <div class="stat-value">{{ stat.completed_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
@@ -652,22 +659,30 @@
           {% elif stat.label == "Brass Audit" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Accepted Count
+              </div>
               <div class="stat-value">{{ stat.accepted_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-close-circle"></i> Rejected Count
+              </div>
               <div class="stat-value">{{ stat.rejected_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Completed Count
+              </div>
               <div class="stat-value">{{ stat.completed_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
@@ -676,22 +691,30 @@
           {% elif stat.label == "IQF" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Accepted Count
+              </div>
               <div class="stat-value">{{ stat.accepted_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-close-circle"></i> Rejected Count
+              </div>
               <div class="stat-value">{{ stat.rejected_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Completed Count
+              </div>
               <div class="stat-value">{{ stat.completed_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
@@ -700,22 +723,30 @@
           {% elif stat.label == "Jig Loading" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Jig Loaded</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Jig Loaded
+              </div>
               <div class="stat-value">{{ stat.loaded_qty }}</div>
               <div class="stat-unit">Completed</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-pencil-box"></i> In Draft</div>
+              <div class="stat-label">
+                <i class="mdi mdi-pencil-box"></i> In Draft
+              </div>
               <div class="stat-value">{{ stat.draft_qty }}</div>
               <div class="stat-unit">In Progress</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-clock-outline"></i> Remaining</div>
+              <div class="stat-label">
+                <i class="mdi mdi-clock-outline"></i> Remaining
+              </div>
               <div class="stat-value">{{ stat.remaining_qty }}</div>
               <div class="stat-unit">Yet to Load</div>
             </div>
@@ -724,22 +755,30 @@
           {% elif stat.label == "Jig Unloading" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Jigs Loaded</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Jigs Loaded
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Unloaded</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Unloaded
+              </div>
               <div class="stat-value">{{ stat.unloaded_qty }}</div>
               <div class="stat-unit">Processed</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-pencil-box"></i> In Draft</div>
+              <div class="stat-label">
+                <i class="mdi mdi-pencil-box"></i> In Draft
+              </div>
               <div class="stat-value">{{ stat.draft_qty }}</div>
               <div class="stat-unit">In Progress</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-clock-outline"></i> Remaining</div>
+              <div class="stat-label">
+                <i class="mdi mdi-clock-outline"></i> Remaining
+              </div>
               <div class="stat-value">{{ stat.remaining_qty }}</div>
               <div class="stat-unit">Yet to Unload</div>
             </div>
@@ -748,22 +787,30 @@
           {% elif stat.label == "Inprocess Inspection" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Jigs</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Jigs
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-eye-check"></i> Inspected</div>
+              <div class="stat-label">
+                <i class="mdi mdi-eye-check"></i> Inspected
+              </div>
               <div class="stat-value">{{ stat.inspected_qty }}</div>
               <div class="stat-unit">Assigned</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-clock-outline"></i> Pending</div>
+              <div class="stat-label">
+                <i class="mdi mdi-clock-outline"></i> Pending
+              </div>
               <div class="stat-value">{{ stat.pending_qty }}</div>
               <div class="stat-unit">In Pick Table</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Unloaded</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Unloaded
+              </div>
               <div class="stat-value">{{ stat.unloaded_qty }}</div>
               <div class="stat-unit">Completed</div>
             </div>
@@ -772,22 +819,30 @@
           {% elif stat.label == "Nickel Inspection" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Accepted Count
+              </div>
               <div class="stat-value">{{ stat.accepted_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-close-circle"></i> Rejected Count
+              </div>
               <div class="stat-value">{{ stat.rejected_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Completed Count
+              </div>
               <div class="stat-value">{{ stat.completed_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
@@ -796,22 +851,30 @@
           {% elif stat.label == "Nickel Audit" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Accepted Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Accepted Count
+              </div>
               <div class="stat-value">{{ stat.accepted_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-close-circle"></i> Rejected Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-close-circle"></i> Rejected Count
+              </div>
               <div class="stat-value">{{ stat.rejected_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed Count</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Completed Count
+              </div>
               <div class="stat-value">{{ stat.completed_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
@@ -820,22 +883,30 @@
           {% elif stat.label == "Spider Spindle" %}
           <div class="stat-cards-container">
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-table"></i> Total Lots in Pick Table</div>
+              <div class="stat-label">
+                <i class="mdi mdi-table"></i> Total Lots in Pick Table
+              </div>
               <div class="stat-value">{{ stat.total_qty }}</div>
               <div class="stat-unit">Lots</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-circle"></i> Released</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-circle"></i> Released
+              </div>
               <div class="stat-value">{{ stat.released_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-pause-circle"></i> On Hold</div>
+              <div class="stat-label">
+                <i class="mdi mdi-pause-circle"></i> On Hold
+              </div>
               <div class="stat-value">{{ stat.hold_qty }}</div>
               <div class="stat-unit">Count</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label"><i class="mdi mdi-check-all"></i> Completed</div>
+              <div class="stat-label">
+                <i class="mdi mdi-check-all"></i> Completed
+              </div>
               <div class="stat-value">{{ stat.completed_qty }}</div>
               <div class="stat-unit">Unloaded</div>
             </div>
@@ -941,10 +1012,7 @@
       </div>
     </div>
 
-    <!-- Right graph panel -->
-    <aside class="right-panel">
- 
-    </aside>
+    <!-- Right graph panel removed: modules now span full width -->
 
     <!-- Carousel Navigation Dots -->
     {% if dashboard_stats %}
@@ -962,18 +1030,25 @@
 
 <!-- Scripts -->
 <script nonce="{{ csp_nonce }}">
+  const container = document.querySelector(".modules-container");
+
+  function scrollToIndex(index) {
+    const cards = document.querySelectorAll(".module-card");
+    if (!cards[index]) return;
+    cards[index].scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+    updateActiveDot(index);
+  }
+
   // Smooth scroll navigation for carousel dots
   document.querySelectorAll(".carousel-dot").forEach((dot, index) => {
-    dot.addEventListener("click", () => {
-      const cards = document.querySelectorAll(".module-card");
-      if (cards[index]) {
-        cards[index].scrollIntoView({ behavior: "smooth", block: "nearest" });
-        updateActiveDot(index);
-      }
-    });
+    dot.addEventListener("click", () => scrollToIndex(index));
   });
 
-  // Update active dot based on scroll position
+  // Update active dot based on index
   function updateActiveDot(index) {
     document.querySelectorAll(".carousel-dot").forEach((dot, i) => {
       dot.classList.toggle("active", i === index);
@@ -981,11 +1056,25 @@
   }
 
   // Initialize first dot as active
+  // Try to make 'Day Planning' the initial active card if present
+  let initialIndex = -1;
+  const cards = Array.from(document.querySelectorAll(".module-card"));
+  cards.forEach((c, i) => {
+    if ((c.dataset.label || "").trim().toLowerCase() === "day planning") {
+      initialIndex = i;
+    }
+  });
+  if (initialIndex === -1) {
+    initialIndex = 0;
+  }
   if (document.querySelectorAll(".carousel-dot").length > 0) {
-    updateActiveDot(0);
+    // ensure dots reflect initial index
+    updateActiveDot(initialIndex);
+    // scroll to initial card after a short delay so layout stabilizes
+    setTimeout(() => scrollToIndex(initialIndex), 80);
   }
 
-  // Auto-slide functionality
+  // Auto-slide functionality (advances forward — works with RTL visual flow)
   let autoSlideInterval;
   function startAutoSlide() {
     autoSlideInterval = setInterval(() => {
@@ -996,10 +1085,10 @@
       let currentIndex = Array.from(dots).findIndex((dot) =>
         dot.classList.contains("active"),
       );
-      let nextIndex = (currentIndex - 1 + cards.length) % cards.length;
+      if (currentIndex === -1) currentIndex = 0;
+      let nextIndex = (currentIndex + 1) % cards.length;
 
-      cards[nextIndex].scrollIntoView({ behavior: "smooth", block: "nearest" });
-      updateActiveDot(nextIndex);
+      scrollToIndex(nextIndex);
     }, 5000); // Slide every 5 seconds
   }
 
@@ -1010,21 +1099,22 @@
   // Start auto-slide on page load
   startAutoSlide();
 
-  // Pause auto-slide on hover
-  const container = document.querySelector(".modules-container");
+  // Pause auto-slide on hover and update active dot on scroll
   if (container) {
     container.addEventListener("mouseenter", stopAutoSlide);
     container.addEventListener("mouseleave", startAutoSlide);
 
-    // Update active dot on scroll
     container.addEventListener("scroll", () => {
       const cards = document.querySelectorAll(".module-card");
+      const containerRect = container.getBoundingClientRect();
+      const centerX = containerRect.left + containerRect.width / 2;
       let closestIndex = 0;
       let closestDistance = Infinity;
 
       cards.forEach((card, index) => {
         const rect = card.getBoundingClientRect();
-        const distance = Math.abs(rect.left);
+        const cardCenter = rect.left + rect.width / 2;
+        const distance = Math.abs(cardCenter - centerX);
         if (distance < closestDistance) {
           closestDistance = distance;
           closestIndex = index;

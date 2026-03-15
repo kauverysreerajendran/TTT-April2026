@@ -984,31 +984,32 @@ class Brass_Audit_Accepted_form(APIView):
             
             total_stock_data.save()
             
-            # Create JigLoadTrayId records for all accepted trays
+            # ✅ FIX: Clear existing JigLoadTrayId for this lot then rebuild cleanly
+            JigLoadTrayId.objects.filter(lot_id=lot_id).delete()
+
+            # ✅ FIX: Create JigLoadTrayId records for accepted trays only
             accepted_trays = BrassAuditTrayId.objects.filter(
                 lot_id=lot_id,
                 rejected_tray=False,
                 delink_tray=False
-            )
+            ).order_by('-top_tray', 'id')  # Top tray first, then by entry order
             
             for tray in accepted_trays:
-                # Check if already created to avoid duplicates
-                if not JigLoadTrayId.objects.filter(tray_id=tray.tray_id, lot_id=lot_id).exists():
-                    JigLoadTrayId.objects.create(
-                        tray_id=tray.tray_id,
-                        lot_id=lot_id,
-                        batch_id=tray.batch_id,
-                        tray_quantity=tray.tray_quantity,
-                        tray_capacity=tray.tray_capacity,
-                        tray_type=tray.tray_type,
-                        top_tray=tray.top_tray,
-                        IP_tray_verified=tray.IP_tray_verified,
-                        new_tray=tray.new_tray,
-                        delink_tray=tray.delink_tray,
-                        rejected_tray=tray.rejected_tray,
-                        user=request.user,
-                        date=timezone.now()
-                    )
+                JigLoadTrayId.objects.create(
+                    tray_id=tray.tray_id,
+                    lot_id=lot_id,
+                    batch_id=tray.batch_id,
+                    tray_quantity=tray.tray_quantity,
+                    tray_capacity=tray.tray_capacity,
+                    tray_type=tray.tray_type,
+                    top_tray=tray.top_tray,
+                    IP_tray_verified=tray.IP_tray_verified,
+                    new_tray=tray.new_tray,
+                    delink_tray=tray.delink_tray,
+                    rejected_tray=tray.rejected_tray,
+                    user=request.user,
+                    date=timezone.now()
+                )
             return Response({"success": True})
         
         except TotalStockModel.DoesNotExist:
@@ -1411,7 +1412,10 @@ class BrassAudit_TrayRejectionAPIView(APIView):
                 total_stock_obj.brass_audit_onhold_picking = True
                 total_stock_obj.brass_audit_few_cases_accptance = True
                 total_stock_obj.brass_audit_rejection = False
-                update_fields = ['brass_audit_few_cases_accptance', 'brass_audit_onhold_picking', 'brass_audit_rejection']
+                # ✅ FIX: Update total_stock to accepted qty so Jig Loading shows correct quantity
+                accepted_qty = available_qty - total_qty
+                total_stock_obj.total_stock = accepted_qty
+                update_fields = ['brass_audit_few_cases_accptance', 'brass_audit_onhold_picking', 'brass_audit_rejection', 'total_stock']
             
             total_stock_obj.brass_audit_accepted_qty = available_qty - total_qty
             total_stock_obj.brass_audit_last_process_date_time = timezone.now()
@@ -3169,6 +3173,12 @@ def brass_audit_save_single_top_tray_scan(request):
             # ✅ UPDATED: Update TotalStockModel flags (works for both modes)
             stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
             if stock:
+                extra_save_fields = []
+                # ✅ FIX: For partial rejection lots, confirm total_stock = brass_audit_accepted_qty at release
+                if stock.brass_audit_few_cases_accptance and stock.brass_audit_accepted_qty and stock.brass_audit_accepted_qty > 0:
+                    stock.total_stock = stock.brass_audit_accepted_qty
+                    extra_save_fields = ['total_stock']
+                    print(f"✅ Updated total_stock to brass_audit_accepted_qty={stock.brass_audit_accepted_qty} for lot {lot_id}")
                 if is_delink_only:
                     # ✅ NEW: For delink-only, set appropriate flags
                     stock.brass_audit_accepted_tray_scan_status = True  # Mark as completed
@@ -3190,7 +3200,7 @@ def brass_audit_save_single_top_tray_scan(request):
                     'next_process_module', 
                     'last_process_module', 
                     'brass_audit_onhold_picking'
-                ])
+                ] + extra_save_fields)
 
         # ✅ UPDATED: Handle draft save
         if draft_save:
@@ -3233,30 +3243,50 @@ def brass_audit_save_single_top_tray_scan(request):
             })
 
         
-        # ✅ Create JigLoadTrayId records for all accepted trays (rejected_tray=False)
+        # ✅ FIX: Determine accepted qty cap for partial rejection lots
+        stock_for_jig = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        jig_target_qty = (
+            stock_for_jig.brass_audit_accepted_qty
+            if (stock_for_jig and stock_for_jig.brass_audit_few_cases_accptance
+                and stock_for_jig.brass_audit_accepted_qty
+                and stock_for_jig.brass_audit_accepted_qty > 0)
+            else None
+        )
+        print(f"ℹ️ [JigLoadTrayId] Creating for lot {lot_id}, accepted_qty cap: {jig_target_qty}")
+
+        # ✅ FIX: Clear all existing JigLoadTrayId for this lot then rebuild cleanly
+        deleted_count = JigLoadTrayId.objects.filter(lot_id=lot_id).delete()[0]
+        print(f"🗑️ [JigLoadTrayId] Cleared {deleted_count} existing records for lot {lot_id}")
+
+        # ✅ FIX: Create JigLoadTrayId records, capped at accepted_qty for partial rejection lots
         accepted_trays = BrassAuditTrayId.objects.filter(
             lot_id=lot_id,
             rejected_tray=False,
             delink_tray=False
-        )
+        ).order_by('-top_tray', 'id')  # Top tray first, then by scan entry order
+
+        jig_cumulative_qty = 0
         for tray in accepted_trays:
-            # Avoid duplicates
-            if not JigLoadTrayId.objects.filter(tray_id=tray.tray_id, lot_id=lot_id).exists():
-                JigLoadTrayId.objects.create(
-                    tray_id=tray.tray_id,
-                    lot_id=lot_id,
-                    batch_id=tray.batch_id,
-                    tray_quantity=tray.tray_quantity,
-                    tray_capacity=tray.tray_capacity,
-                    tray_type=tray.tray_type,
-                    top_tray=tray.top_tray,
-                    IP_tray_verified=tray.IP_tray_verified,
-                    new_tray=tray.new_tray,
-                    delink_tray=tray.delink_tray,
-                    rejected_tray=tray.rejected_tray,
-                    user=request.user,
-                    date=timezone.now()
-                )
+            if jig_target_qty is not None and jig_cumulative_qty >= jig_target_qty:
+                print(f"⚠️ [JigLoadTrayId] Stopping at tray {tray.tray_id}: limit {jig_target_qty} reached")
+                break
+            JigLoadTrayId.objects.create(
+                tray_id=tray.tray_id,
+                lot_id=lot_id,
+                batch_id=tray.batch_id,
+                tray_quantity=tray.tray_quantity,
+                tray_capacity=tray.tray_capacity,
+                tray_type=tray.tray_type,
+                top_tray=tray.top_tray,
+                IP_tray_verified=tray.IP_tray_verified,
+                new_tray=tray.new_tray,
+                delink_tray=tray.delink_tray,
+                rejected_tray=tray.rejected_tray,
+                user=request.user,
+                date=timezone.now()
+            )
+            jig_cumulative_qty += (tray.tray_quantity or 0)
+            print(f"✅ [JigLoadTrayId] Created: {tray.tray_id} qty={tray.tray_quantity}, cumulative={jig_cumulative_qty}")
         
         # ✅ UPDATED: Success response
         if is_delink_only:

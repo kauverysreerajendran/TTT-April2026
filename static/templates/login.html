@@ -98,7 +98,8 @@
         margin: 6vh auto;
         background: #ffffff;
         border-radius: 14px;
-        box-shadow: 0 30px 80px rgba(18, 52, 67, 0.20),
+        box-shadow:
+          0 30px 80px rgba(18, 52, 67, 0.2),
           0 8px 24px rgba(13, 148, 136, 0.06),
           inset 0 1px 0 rgba(255, 255, 255, 0.6);
         border: 1px solid rgba(10, 10, 10, 0.04);
@@ -520,7 +521,7 @@
                     alt="logo"
                   />
                 </div>
-                <p class="login-subtitle">Login to Track & Trace</p>
+                <p class="login-subtitle">Welcome to Login!</p>
                 {% if error %}
                 <div class="alert alert-danger" style="margin-bottom: 16px">
                   {{ error }}
@@ -574,14 +575,74 @@
                     />
                     <span
                       id="togglePassword"
+                      role="button"
+                      aria-label="Show or hide password"
+                      tabindex="0"
                       style="
                         position: absolute;
                         top: 50%;
                         right: 14px;
                         transform: translateY(-50%);
                         cursor: pointer;
+                        display: inline-flex;
+                        gap: 6px;
+                        align-items: center;
+                        z-index: 3;
                       "
-                    ></span>
+                    >
+                      <!-- Eye open (visible) -->
+ <!--                      <svg
+                        id="eyeOpen"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        style="display: inline; pointer-events: auto"
+                      >
+                        <path
+                          d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"
+                          stroke="#0d9488"
+                          stroke-width="1.2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="3"
+                          stroke="#0d9488"
+                          stroke-width="1.2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg> -->
+                      <!-- Eye closed (hidden) -->
+                      <svg
+                        id="eyeClosed"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        style="display: none; pointer-events: auto"
+                      >
+                        <path
+                          d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a22.79 22.79 0 015.06-6.06"
+                          stroke="#0d9488"
+                          stroke-width="1.2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M1 1l22 22"
+                          stroke="#0d9488"
+                          stroke-width="1.4"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
                   </div>
                   <div
                     class="mt-3"
@@ -595,6 +656,23 @@
               </div>
             </div>
             <div class="card-right" aria-hidden="true">
+              <h4
+                style="
+                    position: absolute;
+                    top: 30px;
+                    left: 215px;
+                    transform: translateX(-50%);
+                    z-index: 2;
+                    color: #646464 !important;
+                    margin: 0;
+                    padding: 8px 12px;
+                    background: rgba(0, 0, 0, 0.08);
+                    border-radius: 8px;
+                    font-weight: 600 !important;
+                "
+              >
+                Titan - Track &amp; Trace
+              </h4>
               <img
                 src="{% static 'assets/images/loginVec.png' %}"
                 alt="illustration"
@@ -645,43 +723,61 @@
         const cancelBtn = document.getElementById("cancelBtn");
         let visible = false;
 
-        togglePassword.addEventListener("click", function () {
-          visible = !visible;
-          if (visible) {
-            passwordInput.type = "text";
-            eyeOpen.style.display = "none";
-            eyeClosed.style.display = "inline";
-          } else {
-            passwordInput.type = "password";
+        // ensure icons reflect current password field state
+        if (passwordInput && eyeOpen && eyeClosed) {
+          if (passwordInput.type === "password") {
             eyeOpen.style.display = "inline";
             eyeClosed.style.display = "none";
+            visible = false;
+          } else {
+            eyeOpen.style.display = "none";
+            eyeClosed.style.display = "inline";
+            visible = true;
           }
-        });
+        }
 
-        // Cancel button clears inputs and resets password field
-        cancelBtn.addEventListener("click", function () {
-          usernameInput.value = "";
-          passwordInput.value = "";
-          passwordInput.type = "password";
-          visible = false;
-          eyeOpen.style.display = "inline";
-          eyeClosed.style.display = "none";
-        });
+        if (togglePassword) {
+          // primary toggle target (span) — toggle on click
+          togglePassword.addEventListener("click", function () {
+            visible = !visible;
+            if (visible) {
+              if (passwordInput) passwordInput.type = "text";
+              if (eyeOpen) eyeOpen.style.display = "none";
+              if (eyeClosed) eyeClosed.style.display = "inline";
+            } else {
+              if (passwordInput) passwordInput.type = "password";
+              if (eyeOpen) eyeOpen.style.display = "inline";
+              if (eyeClosed) eyeClosed.style.display = "none";
+            }
+          });
+          // Also attach clicks directly to the SVGs (some browsers deliver events to svg)
+          if (eyeOpen)
+            eyeOpen.addEventListener("click", () => togglePassword.click());
+          if (eyeClosed)
+            eyeClosed.addEventListener("click", () => togglePassword.click());
+          // allow keyboard activation
+          togglePassword.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              togglePassword.click();
+            }
+          });
+        }
+
+        // Cancel button clears inputs and resets password field (if present)
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", function () {
+            if (usernameInput) usernameInput.value = "";
+            if (passwordInput) passwordInput.value = "";
+            if (passwordInput) passwordInput.type = "password";
+            visible = false;
+            if (eyeOpen) eyeOpen.style.display = "inline";
+            if (eyeClosed) eyeClosed.style.display = "none";
+          });
+        }
       });
 
-      // ...existing code...
-      document.addEventListener("DOMContentLoaded", function () {
-        const passwordInput = document.getElementById("passwordInput");
-        const usernameInput = document.getElementById("usernameInput");
-        const cancelBtn = document.getElementById("cancelBtn");
-        // ...existing code...
-        cancelBtn.addEventListener("click", function () {
-          usernameInput.value = "";
-          passwordInput.value = "";
-          passwordInput.type = "password";
-        });
-      });
-      // ...existing code...
+      // ...existing code... (other DOMContentLoaded blocks removed to avoid conflicts)
     </script>
   </body>
 </html>
