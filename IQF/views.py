@@ -6636,49 +6636,66 @@ def get_iqf_available_trays_for_allocation(lot_id):
             # Fallback path: Build from upstream sources when IQFTrayId doesn't exist yet
             print(f"   [FALLBACK] No IQFTrayId records found, building from upstream sources...")
             
-            # Determine source based on stock configuration
-            stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            use_audit = bool(getattr(stock, 'send_brass_audit_to_iqf', False))
-            
-            # Build IQF-eligible tray IDs using same logic as iqf_get_remaining_trays
-            rejected_scan_tray_ids = set(
+            # ✅ FIXED: Use accepted trays from Brass QC that have been scanned in IQF
+            # Get IQF scanned rejected tray IDs first
+            iqf_scanned_tray_ids = set(
                 IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(tray_id='').values_list('tray_id', flat=True)
             )
-            if rejected_scan_tray_ids:
-                eligible_tray_ids = rejected_scan_tray_ids
-                print(f"   [FALLBACK] Using IQF rejected scan tray IDs: {len(eligible_tray_ids)} trays")
+            
+            # Filter BrassTrayId accepted trays to only include IQF scanned trays
+            brass_accepted_tray_ids = set(
+                BrassTrayId.objects.filter(
+                    lot_id=lot_id,
+                    rejected_tray=False,
+                    delink_tray=False,
+                    tray_id__in=iqf_scanned_tray_ids
+                ).exclude(tray_quantity__lte=0).values_list('tray_id', flat=True)
+            )
+            
+            if brass_accepted_tray_ids:
+                eligible_tray_ids = brass_accepted_tray_ids
+                print(f"   [FALLBACK] Using IQF-scanned accepted trays from BrassTrayId: {len(eligible_tray_ids)} trays")
             else:
-                if use_audit:
-                    upstream_ids = set(
-                        Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(rejected_tray_id='').values_list('rejected_tray_id', flat=True)
-                    )
-                    source_name = "Brass Audit"
+                # Legacy fallback: If no IQF-scanned BrassTrayId records, use IQF rejected scan tray IDs directly
+                if iqf_scanned_tray_ids:
+                    eligible_tray_ids = iqf_scanned_tray_ids
+                    print(f"   [FALLBACK] Using IQF rejected scan tray IDs: {len(eligible_tray_ids)} trays")
                 else:
-                    upstream_ids = set(
-                        Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(rejected_tray_id='').values_list('rejected_tray_id', flat=True)
-                    )
-                    source_name = "Brass QC"
-                
-                if upstream_ids:
-                    eligible_tray_ids = upstream_ids
-                    print(f"   [FALLBACK] Using {source_name} rejected scan tray IDs: {len(eligible_tray_ids)} trays")
-                else:
-                    # Final fallback to IP verified trays
-                    eligible_tray_ids = set(
-                        IQFTrayId.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True)
-                    )
-                    eligible_tray_ids |= set(
-                        DPTrayId_History.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True)
-                    )
+                    # Determine source based on stock configuration
+                    stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                    use_audit = bool(getattr(stock, 'send_brass_audit_to_iqf', False))
                     
-                    # If no IQF/DP records either, use all TrayId records for this lot (fresh lot scenario)
-                    if not eligible_tray_ids:
-                        eligible_tray_ids = set(
-                            TrayId.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True)
+                    if use_audit:
+                        upstream_ids = set(
+                            Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(rejected_tray_id='').values_list('rejected_tray_id', flat=True)
                         )
-                        print(f"   [FALLBACK] Using all TrayId records for fresh lot: {len(eligible_tray_ids)} trays")
+                        source_name = "Brass Audit"
                     else:
-                        print(f"   [FALLBACK] Using IP verified tray IDs: {len(eligible_tray_ids)} trays")
+                        upstream_ids = set(
+                            Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(rejected_tray_id='').values_list('rejected_tray_id', flat=True)
+                        )
+                        source_name = "Brass QC"
+                    
+                    if upstream_ids:
+                        eligible_tray_ids = upstream_ids
+                        print(f"   [FALLBACK] Using {source_name} rejected scan tray IDs: {len(eligible_tray_ids)} trays")
+                    else:
+                        # Final fallback to IP verified trays
+                        eligible_tray_ids = set(
+                            IQFTrayId.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True)
+                        )
+                        eligible_tray_ids |= set(
+                            DPTrayId_History.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True)
+                        )
+                        
+                        # If no IQF/DP records either, use all TrayId records for this lot (fresh lot scenario)
+                        if not eligible_tray_ids:
+                            eligible_tray_ids = set(
+                                TrayId.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True)
+                            )
+                            print(f"   [FALLBACK] Using all TrayId records for fresh lot: {len(eligible_tray_ids)} trays")
+                        else:
+                            print(f"   [FALLBACK] Using IP verified tray IDs: {len(eligible_tray_ids)} trays")
             
             # Filter and validate eligible tray IDs
             eligible_tray_ids = {t for t in eligible_tray_ids if t}
