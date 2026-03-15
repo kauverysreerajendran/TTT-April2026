@@ -173,6 +173,7 @@ class BrassAuditPickTableView(APIView):
                 'few_cases_accepted_Ip_stock': stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': stock_obj.accepted_tray_scan_status,
                 'BA_pick_remarks': stock_obj.BA_pick_remarks,
+                'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
                 'brass_qc_accptance': stock_obj.brass_qc_accptance,
                 'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
                 'brass_audit_rejection': stock_obj.brass_audit_rejection,
@@ -220,7 +221,7 @@ class BrassAuditPickTableView(APIView):
             if brass_audit_accepted_qty is not None and brass_audit_accepted_qty >= 0:
                 # Use brass_audit_accepted_qty (net qty after Brass Audit rejections)
                 data['display_accepted_qty'] = brass_audit_accepted_qty
-            elif brass_qc_accepted_qty and brass_qc_accepted_qty > 0:
+            elif brass_qc_accepted_qty > 0:
                 data['display_accepted_qty'] = brass_qc_accepted_qty
             else:
                 total_rejection_qty = 0
@@ -506,13 +507,17 @@ class BrassSaveIPPickRemarkAPIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             batch_id = data.get('batch_id')
+            lot_id = data.get('lot_id')
             remark = data.get('remark', '').strip()
             if not batch_id:
                 return JsonResponse({'success': False, 'error': 'Missing batch_id'}, status=400)
             mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
             if not mmc:
                 return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
-            batch_obj = TotalStockModel.objects.filter(batch_id=mmc).first()  
+            qs = TotalStockModel.objects.filter(batch_id=mmc)
+            if lot_id:
+                qs = qs.filter(lot_id=lot_id)
+            batch_obj = qs.first()
             if not batch_obj:
                 return JsonResponse({'success': False, 'error': 'TotalStockModel not found'}, status=404)
             batch_obj.BA_pick_remarks = remark
@@ -3898,6 +3903,7 @@ class BrassAuditCompletedView(APIView):
                 'few_cases_accepted_Ip_stock': stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': stock_obj.accepted_tray_scan_status,
                 'BA_pick_remarks': stock_obj.BA_pick_remarks,
+                'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
                 'brass_audit_accptance': stock_obj.brass_audit_accptance,  # ✅ This will now show True correctly
                 'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
                 'brass_audit_rejection': stock_obj.brass_audit_rejection,
@@ -3930,7 +3936,7 @@ class BrassAuditCompletedView(APIView):
             if brass_audit_accepted_qty is not None and brass_audit_accepted_qty >= 0:
                 # Use brass_audit_accepted_qty (net qty after Brass Audit rejections)
                 data['display_accepted_qty'] = brass_audit_accepted_qty
-            elif brass_qc_accepted_qty and brass_qc_accepted_qty > 0:
+            elif brass_qc_accepted_qty > 0:
                 data['display_accepted_qty'] = brass_qc_accepted_qty
             else:
                 total_rejection_qty = 0
@@ -5978,7 +5984,6 @@ class RejectTableTrayIdListAPIView(APIView):
                 "lot_rejection_comment": lot_rejection_comment
             })
         except Exception as e:
-            import traceback
             traceback.print_exc()
             return Response({"success": False, "error": str(e)}, status=500)
 

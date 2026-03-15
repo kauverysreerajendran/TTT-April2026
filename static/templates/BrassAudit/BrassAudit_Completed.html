@@ -1023,8 +1023,13 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <img src="{% static 'assets/icons/chat_icon.png' %}" alt="Chat Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
                       </span>
                     {% endif %}
+                    {% if data.Bq_pick_remarks %}
+                      <a href="#" title="{{ data.Bq_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                        <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                      </a>
+                    {% endif %}
                     </td>
-                   
+
                   </tr>
                   {% endfor%}
               
@@ -1871,7 +1876,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (result.success) {
               traysData = result.trays || [];
               rejectionSummary = result.rejection_summary || {};
-              isLotRejection = result.is_lot_rejection || false;
+              isLotRejection = result.is_lot_rejection ?? false;
               lotRejectionComment = result.lot_rejection_comment || '';
               console.log('✅ Fetched trays with rejection data:', traysData);
               console.log('📊 Rejection summary:', rejectionSummary);
@@ -1879,7 +1884,16 @@ document.addEventListener("DOMContentLoaded", function () {
           } catch (e) {
             console.error('❌ Error fetching tray data:', e);
           }
-    
+
+          function escHtml(str) {
+            return String(str)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+          }
+
           // ✅ FIXED: Build modal content - Only show section headers when trays exist
           function buildTableHTML(showValidationColumn = false) {
             let html = `
@@ -2141,7 +2155,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <tr style="background-color: #ffebee;">
                   <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; padding: 16px;">
                     <div style="color: #c62828; font-weight: bold; font-size: 14px; margin-bottom: 6px;">❌ LOT REJECTION</div>
-                    ${lotRejectionComment ? `<div style="color: #555; font-size: 12px;">${lotRejectionComment}</div>` : ''}
+                    ${lotRejectionComment ? `<div style="color: #555; font-size: 12px;">${escHtml(lotRejectionComment)}</div>` : ''}
                   </td>
                 </tr>
               `;

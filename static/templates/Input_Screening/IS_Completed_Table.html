@@ -928,6 +928,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     </span>
   {% endif %}
 
+  {% if data.dp_pick_remarks %}
+    <a href="#" title="{{ data.dp_pick_remarks }}" class="dp-remark-tooltip-trigger" style="margin-left: 5px;">
+      <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+    </a>
+  {% endif %}
+
 </td>
                    
                   </tr>

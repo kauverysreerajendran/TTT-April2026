@@ -465,14 +465,19 @@ class SaveIPPickRemarkAPIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             batch_id = data.get('batch_id')
+            lot_id = data.get('lot_id')
             remark = data.get('remark', '').strip()
             if not batch_id:
                 return JsonResponse({'success': False, 'error': 'Missing batch_id'}, status=400)
             mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
             if not mmc:
                 return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
-            # Update the latest TotalStockModel row for this batch
-            batch_obj = TotalStockModel.objects.filter(batch_id=mmc).order_by('-id').first()
+            qs = TotalStockModel.objects.filter(batch_id=mmc)
+            if lot_id:
+                qs = qs.filter(lot_id=lot_id)
+            else:
+                qs = qs.order_by('-id')
+            batch_obj = qs.first()
             if not batch_obj:
                 return JsonResponse({'success': False, 'error': 'TotalStockModel not found'}, status=404)
             batch_obj.IP_pick_remarks = remark
@@ -2837,6 +2842,7 @@ class IS_Completed_Table(APIView):
                 'few_cases_accepted_Ip_stock': total_stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': total_stock_obj.accepted_tray_scan_status,
                 'IP_pick_remarks': total_stock_obj.IP_pick_remarks,
+                'dp_pick_remarks': getattr(total_stock_obj.batch_id, 'dp_pick_remarks', None),
                 'ip_onhold_picking': total_stock_obj.ip_onhold_picking,
                 'total_stock': total_stock_obj.total_stock,
                 'wiping_status': total_stock_obj.wiping_status,
@@ -3014,6 +3020,7 @@ class IS_AcceptTable(APIView):
                 'few_cases_accepted_Ip_stock': total_stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': total_stock_obj.accepted_tray_scan_status,
                 'IP_pick_remarks': total_stock_obj.IP_pick_remarks,
+                'dp_pick_remarks': getattr(total_stock_obj.batch_id, 'dp_pick_remarks', None),
                 'ip_onhold_picking': total_stock_obj.ip_onhold_picking,
                 'total_stock': total_stock_obj.total_stock,
                 'wiping_status': total_stock_obj.wiping_status,
@@ -3160,6 +3167,7 @@ class IS_RejectTable(APIView):
                 'few_cases_accepted_Ip_stock': total_stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': total_stock_obj.accepted_tray_scan_status,
                 'IP_pick_remarks': total_stock_obj.IP_pick_remarks,
+                'dp_pick_remarks': getattr(total_stock_obj.batch_id, 'dp_pick_remarks', None),
                 'ip_onhold_picking': total_stock_obj.ip_onhold_picking,
                 'total_stock': total_stock_obj.total_stock,
                 'last_process_date_time': total_stock_obj.last_process_date_time,

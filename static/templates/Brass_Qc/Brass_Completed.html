@@ -1346,6 +1346,11 @@
                                     </span>
                                   {% endif %}
                                 {% endif %}
+                                {% if data.IP_pick_remarks %}
+                                  <a href="#" title="{{ data.IP_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                                    <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                                  </a>
+                                {% endif %}
                             </td>
                             <!-- Rejection Remarks Column -->
                             <td>

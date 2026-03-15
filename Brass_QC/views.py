@@ -1282,13 +1282,17 @@ class BrassSaveIPPickRemarkAPIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             batch_id = data.get('batch_id')
+            lot_id = data.get('lot_id')
             remark = data.get('remark', '').strip()
             if not batch_id:
                 return JsonResponse({'success': False, 'error': 'Missing batch_id'}, status=400)
             mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
             if not mmc:
                 return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
-            batch_obj = TotalStockModel.objects.filter(batch_id=mmc).first()  
+            qs = TotalStockModel.objects.filter(batch_id=mmc)
+            if lot_id:
+                qs = qs.filter(lot_id=lot_id)
+            batch_obj = qs.first()
             if not batch_obj:
                 return JsonResponse({'success': False, 'error': 'TotalStockModel not found'}, status=404)
             batch_obj.Bq_pick_remarks = remark
@@ -4948,6 +4952,7 @@ class BrassCompletedView(APIView):
                 'few_cases_accepted_Ip_stock': stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': stock_obj.accepted_tray_scan_status,
                 'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
+                'IP_pick_remarks': stock_obj.IP_pick_remarks,
                 'brass_qc_accptance': stock_obj.brass_qc_accptance,
                 'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
                 'brass_qc_rejection': stock_obj.brass_qc_rejection,

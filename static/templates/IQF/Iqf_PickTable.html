@@ -1871,8 +1871,18 @@
                         <img src="{% static 'assets/icons/chat_icon.png' %}" alt="Chat Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
                       </span>
                     {% endif %}
+                    {% if data.Bq_pick_remarks %}
+                      <a href="#" title="{{ data.Bq_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                        <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                      </a>
+                    {% endif %}
+                    {% if data.BA_pick_remarks %}
+                      <a href="#" title="{{ data.BA_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                        <i class="fa fa-info-circle" style="color: #6f42c1; font-size: 16px;"></i>
+                      </a>
+                    {% endif %}
                     </td>
-                   
+
                   </tr>
                   {% endfor%}
               
@@ -10183,6 +10193,7 @@ const table = document.getElementById("order-listing");
             var row = trigger.closest("tr");
             var trayScanLink = row ? row.querySelector('.tray-scan-btn') : null;
             var batchId = row ? row.getAttribute('data-batch-id') : null;
+            var lotId = row ? row.getAttribute('data-stock-lot-id') : null;
             if (!batchId) {
               Swal.fire('Error', 'Batch ID not found.', 'error');
               return;
@@ -10195,6 +10206,7 @@ const table = document.getElementById("order-listing");
               },
               body: JSON.stringify({
                 batch_id: batchId,
+                lot_id: lotId,
                 remark: remark
               })
             })

@@ -1173,7 +1173,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 </div>
                               </div>
                             </a>
-                 
+                            {% if data.Bq_pick_remarks %}
+                              <a href="#" title="{{ data.Bq_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                                <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                              </a>
+                            {% endif %}
+
                     </td>
                    
                   </tr>
@@ -5343,7 +5348,7 @@ function updateRejectionTrayTable(totalQty) {
 
 // ✅ COMPLETELY FIXED: Direct tray-to-quantity mapping (no redistribution)
 // ✅ COMPLETELY FIXED: handleTrayWiseRejection function with proper distribution logic
-function handleTrayWiseRejection() {
+function handleTrayWiseRejection(retryCount = 0) {
   const msgDiv = document.getElementById("batchRejectionMsg");
   const trayModal = document.getElementById("trayScanModal");
   const batchId = trayModal.dataset.batchId;
@@ -5441,12 +5446,20 @@ function handleTrayWiseRejection() {
         } else if (hasErrorMessage && !hasSuccessMessage) {
           isInvalid = true;
         } else if (isValidating) {
+          if (retryCount >= 10) {
+            if (msgDiv) {
+              msgDiv.style.color = "#d32f2f";
+              msgDiv.textContent = `Validation timed out for tray "${trayId}" in row ${index + 1}. Please try again.`;
+            }
+            document.getElementById("proceedButton").disabled = false;
+            return;
+          }
           if (msgDiv) {
             msgDiv.style.color = "#007bff";
             msgDiv.textContent = `Please wait, validating tray "${trayId}" in row ${index + 1}...`;
           }
-          // Retry automatically once validation completes
-          setTimeout(() => handleTrayWiseRejection(), 600);
+          // Retry automatically once validation completes (max 10 retries / ~6s)
+          setTimeout(() => handleTrayWiseRejection(retryCount + 1), 600);
           return;
         }
         
@@ -9110,6 +9123,7 @@ console.log('📝 Compact script loaded, waiting for DOM...');
             var row = trigger.closest("tr");
             var trayScanLink = row ? row.querySelector('.tray-scan-btn') : null;
             var batchId = row ? row.getAttribute('data-batch-id') : null;
+            var lotId = row ? row.getAttribute('data-stock-lot-id') : null;
             if (!batchId) {
               Swal.fire('Error', 'Batch ID not found.', 'error');
               return;
@@ -9122,6 +9136,7 @@ console.log('📝 Compact script loaded, waiting for DOM...');
               },
               body: JSON.stringify({
                 batch_id: batchId,
+                lot_id: lotId,
                 remark: remark
               })
             })

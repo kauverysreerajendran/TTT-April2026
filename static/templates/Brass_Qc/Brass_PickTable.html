@@ -1184,7 +1184,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 </div>
                               </div>
                           </a>
-                 
+                          {% if data.IP_pick_remarks %}
+                            <a href="#" title="{{ data.IP_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                              <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                            </a>
+                          {% endif %}
+
                     </td>
                    
                     </tr>
@@ -9774,6 +9779,7 @@ console.log('📝 Compact script loaded, waiting for DOM...');
             var row = trigger.closest("tr");
             var trayScanLink = row ? row.querySelector('.tray-scan-btn') : null;
             var batchId = row ? row.getAttribute('data-batch-id') : null;
+            var lotId = row ? row.getAttribute('data-stock-lot-id') : null;
             if (!batchId) {
               Swal.fire('Error', 'Batch ID not found.', 'error');
               return;
@@ -9786,6 +9792,7 @@ console.log('📝 Compact script loaded, waiting for DOM...');
               },
               body: JSON.stringify({
                 batch_id: batchId,
+                lot_id: lotId,
                 remark: remark
               })
             })

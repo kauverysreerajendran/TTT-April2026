@@ -2144,6 +2144,7 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
           }
           var row = trigger.closest("tr");
           var batchId = row ? row.getAttribute('data-batch-id') : null;
+          var lotId = row ? row.getAttribute('data-stock-lot-id') : null;
           if (!batchId) {
             Swal.fire('Error', 'Batch ID not found.', 'error');
             return;
@@ -2156,6 +2157,7 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
             },
             body: JSON.stringify({
               batch_id: batchId,
+              lot_id: lotId,
               remark: remark
             })
           })

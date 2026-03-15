@@ -2925,5 +2925,40 @@
          // Show spinner on beforeunload (already handled in your code)
          // Hide spinner on pageshow (already handled in your code)
       </script>
+      <!-- Previous-module remark tooltip handler (prev-remark-tooltip-trigger / dp-remark-tooltip-trigger) -->
+      <script nonce="{{ csp_nonce }}">
+      document.addEventListener("DOMContentLoaded", function () {
+        var _activeTip = null;
+        function _removeTip() {
+          if (_activeTip) { _activeTip.remove(); _activeTip = null; }
+        }
+        document.addEventListener("scroll", _removeTip, true);
+        window.addEventListener("resize", _removeTip);
+        document.querySelectorAll(".prev-remark-tooltip-trigger, .dp-remark-tooltip-trigger").forEach(function (el) {
+          var remarkText = el.getAttribute("title") || "";
+          if (remarkText) el.removeAttribute("title");  /* prevent native browser tooltip */
+          el.setAttribute("data-prev-remark", remarkText);
+          el.addEventListener("mouseenter", function () {
+            _removeTip();
+            var text = el.getAttribute("data-prev-remark") || "";
+            if (!text) return;
+            var tip = document.createElement("div");
+            tip.style.cssText = "position:fixed;background:#fff;border:1px solid #90b8d8;border-radius:8px;padding:10px 14px;box-shadow:0 4px 18px rgba(0,0,0,0.18);z-index:99999;max-width:280px;font-size:13px;color:#333;pointer-events:none;line-height:1.5;word-break:break-word;";
+            tip.innerHTML = "<span style='font-weight:700;color:#007bff;font-size:11px;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.6px;'>&#9432; Previous Remark</span>" + text;
+            document.body.appendChild(tip);
+            _activeTip = tip;
+            var r = el.getBoundingClientRect();
+            var tw = tip.offsetWidth, th = tip.offsetHeight;
+            var left = Math.min(r.left, window.innerWidth - tw - 10);
+            var top = r.bottom + 6;
+            if (top + th > window.innerHeight) { top = r.top - th - 6; }
+            tip.style.left = Math.max(8, left) + "px";
+            tip.style.top = top + "px";
+          });
+          el.addEventListener("mouseleave", _removeTip);
+          el.addEventListener("click", function (e) { e.preventDefault(); });
+        });
+      });
+      </script>
    </body>
 </html>
