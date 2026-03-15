@@ -1615,16 +1615,14 @@ function buildTableHTML(showValidationColumn = false) {
   
   let rowCounter; // Will be set after rejected trays are processed
   
-  // ✅ First, add all regular trays (with tray_id) - SORTED BY QUANTITY LOW TO HIGH
+  // ✅ Add all rejected & delinked trays - SORTED BY QUANTITY LOW TO HIGH
   if (traysData && traysData.length > 0) {
-    // Filter rejected trays and sort by quantity (low to high)
+    // Filter rejected AND delinked trays, sort by quantity then tray_id for stability
     const rejectedTrays = traysData
-      .filter(tray => tray.rejected_tray) // Only show rejected trays
+      .filter(tray => tray.rejected_tray || tray.delink_tray) // Show rejected + delinked
       .sort((a, b) => {
-        // ✅ NEW: Sort by quantity (low to high)
-        // Use same logic as display quantity to determine sort value
         let qtyA, qtyB;
-        
+
         // Calculate quantity for tray A
         if (acceptedIpStock && a.top_tray) {
           qtyA = a.tray_quantity;
@@ -1633,7 +1631,7 @@ function buildTableHTML(showValidationColumn = false) {
         } else {
           qtyA = a.tray_quantity;
         }
-        
+
         // Calculate quantity for tray B
         if (acceptedIpStock && b.top_tray) {
           qtyB = b.tray_quantity;
@@ -1642,44 +1640,31 @@ function buildTableHTML(showValidationColumn = false) {
         } else {
           qtyB = b.tray_quantity;
         }
-        
-        // Convert to numbers and sort low to high
+
+        // Sort low to high, then by tray_id for stability
         const numA = parseInt(qtyA) || 0;
         const numB = parseInt(qtyB) || 0;
-        
-        return numA - numB; // Low to high sorting
+        if (numA !== numB) return numA - numB;
+        return (a.tray_id || '').localeCompare(b.tray_id || '');
       });
 
     rejectedTrays.forEach((tray, index) => {
-      // ✅ FIXED: Assign S.no in proper order after sorting
-      const displaySNo = index + 1; // Sequential numbering: 1, 2, 3, etc.
-      
-      // Use ip_top_tray_qty for top tray, regular tray_quantity for others
+      const displaySNo = index + 1;
+
       let displayQuantity;
       if (acceptedIpStock && tray.top_tray) {
-        // For fully accepted, use tray_quantity from TrayId where top_tray=True
         displayQuantity = tray.tray_quantity;
       } else if (tray.ip_top_tray && tray.ip_top_tray_qty !== null) {
-        // For partial/rejected, use ip_top_tray_qty if present
         displayQuantity = tray.ip_top_tray_qty;
       } else {
         displayQuantity = tray.tray_quantity;
       }
-      
-      // ✅ Check delink_tray first, then rejected_tray
+
+      // Label: DELINKED has priority, otherwise REJECTED
       let statusTag = '';
       if (tray.delink_tray) {
-        // If tray is delinked, show DELINKED status (highest priority)
         statusTag = '<span style="background: #9e9e9e; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>';
-      } else if (fewCasesAcceptedIpStock) {
-        if (tray.rejected_tray) {
-          statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
-        } else {
-          statusTag = '<span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>';
-        }
-      } else if (acceptedIpStock && !tray.rejected_tray) {
-        statusTag = '<span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>';
-      } else if (rejectedIpStock && tray.rejected_tray) {
+      } else {
         statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
       }
       

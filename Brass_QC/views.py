@@ -543,6 +543,8 @@ class BrassPickTableView(APIView):
             Q(brass_qc_rejection=True, brass_onhold_picking=True)
             |
             Q(send_brass_audit_to_qc=True)
+            |
+            Q(next_process_module='Brass QC')  # ✅ FIX: Lots re-routed to Brass QC (e.g. from IQF) but send_brass_qc not set
         ).exclude(
             # ✅ FIX: Only exclude rejected Audit lots that are NOT being sent back to Brass QC
             Q(brass_audit_rejection=True) & ~Q(send_brass_audit_to_qc=True)
@@ -1280,13 +1282,17 @@ class BrassSaveIPPickRemarkAPIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             batch_id = data.get('batch_id')
+            lot_id = data.get('lot_id')
             remark = data.get('remark', '').strip()
             if not batch_id:
                 return JsonResponse({'success': False, 'error': 'Missing batch_id'}, status=400)
             mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
             if not mmc:
                 return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
-            batch_obj = TotalStockModel.objects.filter(batch_id=mmc).first()  
+            qs = TotalStockModel.objects.filter(batch_id=mmc)
+            if lot_id:
+                qs = qs.filter(lot_id=lot_id)
+            batch_obj = qs.first()
             if not batch_obj:
                 return JsonResponse({'success': False, 'error': 'TotalStockModel not found'}, status=404)
             batch_obj.Bq_pick_remarks = remark
@@ -4946,6 +4952,7 @@ class BrassCompletedView(APIView):
                 'few_cases_accepted_Ip_stock': stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': stock_obj.accepted_tray_scan_status,
                 'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
+                'IP_pick_remarks': stock_obj.IP_pick_remarks,
                 'brass_qc_accptance': stock_obj.brass_qc_accptance,
                 'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
                 'brass_qc_rejection': stock_obj.brass_qc_rejection,
@@ -5114,17 +5121,15 @@ class BrassTrayIdList_Complete_APIView(APIView):
         if not lot_id:
             return JsonResponse({'success': False, 'error': 'Missing lot_id or stock_lot_id'}, status=400)
         
-        # ✅ UPDATED: Base queryset - exclude trays rejected in Input Screening
+        # Base queryset - all trays for this lot with positive quantity
         base_queryset = BrassTrayId.objects.filter(
             tray_quantity__gt=0,
             lot_id=lot_id
-        ).exclude(
-            rejected_tray=True  # ✅ EXCLUDE trays rejected in Input Screening
         )
-        
+
         # Get rejected and accepted trays directly from BrassTrayId table
-        rejected_trays = base_queryset.filter(rejected_tray=True)
-        accepted_trays = base_queryset.filter(rejected_tray=False)
+        rejected_trays = base_queryset.filter(rejected_tray=True).order_by('id')
+        accepted_trays = base_queryset.filter(rejected_tray=False, delink_tray=False)
         
         print(f"Total trays in lot (excluding Input Screening rejected): {base_queryset.count()}")
         print(f"Rejected trays (Brass QC): {rejected_trays.count()}")

@@ -2723,7 +2723,7 @@ document.addEventListener("DOMContentLoaded", function () {
             console.error('❌ Error fetching tray data:', e);
           }
     
-          // ✅ FIXED: Build modal content - Only show section headers when trays exist
+          // Build modal content - PickTable shows ACCEPTED trays only
           function buildTableHTML(showValidationColumn = false) {
             let html = `
               <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
@@ -2737,20 +2737,23 @@ document.addEventListener("DOMContentLoaded", function () {
                 </thead>
                 <tbody>
             `;
-          
+
             let rowCounter = 1;
             let topTrayShown = false;
-          
-            // ✅ SECTION 1: ACCEPTED TRAYS ONLY - Only show if there are accepted trays
+
+            // PickTable: ACCEPTED trays only
             if (traysData && traysData.length > 0) {
               const acceptedTrays = traysData.filter(tray => !tray.rejected_tray && !tray.delink_tray);
-              
-              // ✅ FIXED: Only add header if there are accepted trays
+
               if (acceptedTrays.length > 0) {
                 html += `
-
+                  <tr style="background-color: #e8f5e8; font-weight: bold;">
+                    <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
+                      ✅ ACCEPTED TRAYS
+                    </td>
+                  </tr>
                 `;
-                
+
                 acceptedTrays.forEach((tray) => {
                   let displaySNo;
                   if (!topTrayShown && (tray.ip_top_tray || tray.top_tray)) {
@@ -2759,7 +2762,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   } else {
                     displaySNo = rowCounter;
                   }
-                  
+
                   let displayQuantity;
                   if (brassQcAccptance && tray.top_tray) {
                     displayQuantity = tray.tray_quantity;
@@ -2768,14 +2771,15 @@ document.addEventListener("DOMContentLoaded", function () {
                   } else {
                     displayQuantity = tray.tray_quantity;
                   }
-          
+
                   const rowClass = (tray.ip_top_tray || tray.top_tray) ? 'top-tray-row' : '';
-                  
+
                   html += `
                     <tr class="${rowClass}">
                       <td>${displaySNo}</td>
                       <td>
                         <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                        <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
                       </td>
                       <td>
                         <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
@@ -2796,177 +2800,27 @@ document.addEventListener("DOMContentLoaded", function () {
                   `;
                   rowCounter++;
                 });
-              }
-          
-              // ✅ SECTION 2: REJECTED/DELINKED/SHORTAGE TRAYS - Dynamic Header Based on Content
-              // Sort rejected/delinked trays by tray quantity ascending
-              const rejectedTrays = traysData
-                .filter(tray => tray.rejected_tray || tray.delink_tray)
-                .sort((a, b) => {
-                  // Use ip_top_tray_qty if present, else tray_quantity
-                  const qtyA = a.ip_top_tray && a.ip_top_tray_qty !== null ? a.ip_top_tray_qty : a.tray_quantity;
-                  const qtyB = b.ip_top_tray && b.ip_top_tray_qty !== null ? b.ip_top_tray_qty : b.tray_quantity;
-                  return (qtyA || 0) - (qtyB || 0);
-                });              
-              const hasShortage = rejectionSummary.shortage_rejections > 0;
-              
-              if (rejectedTrays.length > 0 || hasShortage) {
-                // Determine what types are present
-                const hasRejected = rejectedTrays.some(tray => tray.rejected_tray && !tray.delink_tray);
-                const hasDelinked = rejectedTrays.some(tray => tray.delink_tray);
-                
-                let headerText = '';
-                let headerColor = '';
-                let bgColor = '';
-                
-                // ✅ Dynamic header based on combinations
-                if (hasRejected && hasDelinked && hasShortage) {
-                  headerText = '❌ REJECTED, DELINKED & SHORTAGE';
-                  headerColor = '#c62828';
-                  bgColor = '#ffebee';
-                } else if (hasRejected && hasShortage && !hasDelinked) {
-                  headerText = '❌ REJECTED & SHORTAGE';
-                  headerColor = '#c62828';
-                  bgColor = '#ffebee';
-                } else if (hasDelinked && hasShortage && !hasRejected) {
-                  headerText = '🔗 DELINKED & SHORTAGE';
-                  headerColor = '#6c757d';
-                  bgColor = '#f8f9fa';
-                } else if (hasRejected && hasDelinked && !hasShortage) {
-                  headerText = '❌ REJECTED & DELINKED TRAYS';
-                  headerColor = '#c62828';
-                  bgColor = '#ffebee';
-                } else if (hasShortage && !hasRejected && !hasDelinked) {
-                  headerText = '📦 SHORTAGE';
-                  headerColor = '#ff9800';
-                  bgColor = '#fff3e0';
-                } else if (hasDelinked && !hasRejected && !hasShortage) {
-                  headerText = '🔗 DELINKED TRAYS';
-                  headerColor = '#6c757d';
-                  bgColor = '#f8f9fa';
-                } else if (hasRejected && !hasDelinked && !hasShortage) {
-                  headerText = '❌ REJECTED TRAYS';
-                  headerColor = '#c62828';
-                  bgColor = '#ffebee';
-                }
-                
+              } else {
                 html += `
-                  <tr style="background-color: ${bgColor}; font-weight: bold;">
-                    <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: ${headerColor}; padding: 8px;">
-                      ${headerText}
+                  <tr>
+                    <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; padding: 20px; color: #666;">
+                      <i class="fa fa-info-circle" style="margin-right: 8px;"></i>
+                      No accepted trays found for this lot.
                     </td>
                   </tr>
                 `;
-          
-                // Add rejected/delinked trays with tray IDs
-                rejectedTrays.forEach((tray) => {
-                  let displayQuantity;
-                  if (tray.ip_top_tray && tray.ip_top_tray_qty !== null) {
-                    displayQuantity = tray.ip_top_tray_qty;
-                  } else {
-                    displayQuantity = tray.tray_quantity;
-                  }
-          
-                  let statusTag = '';
-                  if (tray.delink_tray) {
-                    statusTag = '<span style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>';
-                  } else {
-                    statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
-                  }
-                  
-                  html += `
-                    <tr>
-                      <td>${rowCounter}</td>
-                      <td>
-                        <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-                        ${statusTag}
-                      </td>
-                      <td>
-                        <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
-                      </td>
-                      ${showValidationColumn ? `
-                        <td>
-                          <div class="validation-status">
-                            <div class="status-icon fail">
-                              <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                            </div>
-                            <div class="status-icon pass">
-                              <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                            </div>
-                          </div>
-                        </td>
-                      ` : ''}
-                    </tr>
-                  `;
-                  rowCounter++;
-                });
-          
-                // ✅ Handle SHORTAGE entries (if any)
-                if (hasShortage) {
-                  // ✅ UPDATED: Use correct endpoint name for shortage data
-                  fetch(`/brass_audit/get_shortage_rejections/?lot_id=${encodeURIComponent(stockLotId)}`)
-                    .then(res => res.json())
-                    .then(data => {
-                      if (data.success && data.shortage_rejections.length > 0) {
-                        data.shortage_rejections.forEach(shortage => {
-                          html += `
-                            <tr class="shortage-row">
-                              <td>${rowCounter}</td>
-                              <td>
-                                <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
-                                <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
-                              </td>
-                              <td>
-                                <input type="number" class="form-control" value="${shortage.quantity}" readonly style="width: 100%;" />
-                              </td>
-                              ${showValidationColumn ? `
-                                <td>
-                                  <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
-                                </td>
-                              ` : ''}
-                            </tr>
-                          `;
-                          rowCounter++;
-                        });
-                        
-                        // Update the table content
-                        html += '</tbody></table>';
-                        detailsDiv.innerHTML = html;
-                      }
-                    })
-                    .catch(e => {
-                      console.error('Error fetching SHORTAGE details:', e);
-                      // Fallback: Add basic SHORTAGE row
-                      for (let i = 0; i < rejectionSummary.shortage_rejections; i++) {
-                        html += `
-                          <tr class="shortage-row">
-                            <td>${rowCounter}</td>
-                            <td>
-                              <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
-                              <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
-                            </td>
-                            <td>
-                              <input type="number" class="form-control" value="?" readonly style="width: 100%;" />
-                            </td>
-                            ${showValidationColumn ? `
-                              <td>
-                                <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
-                              </td>
-                            ` : ''}
-                          </tr>
-                        `;
-                        rowCounter++;
-                      }
-                      html += '</tbody></table>';
-                      detailsDiv.innerHTML = html;
-                    });
-                  
-                  // Return early since we're handling async update
-                  return html;
-                }
               }
+            } else {
+              html += `
+                <tr>
+                  <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; padding: 20px; color: #666;">
+                    <i class="fa fa-info-circle" style="margin-right: 8px;"></i>
+                    No tray data found for this lot.
+                  </td>
+                </tr>
+              `;
             }
-            
+
             html += '</tbody></table>';
             return html;
           }
@@ -7191,7 +7045,7 @@ document.addEventListener("DOMContentLoaded", function() {
           btn.style.opacity = '0.5';
           btn.style.pointerEvents = 'none';
 
-          fetch("{% url 'jig_delete_batch' %}", {
+          fetch("{% url 'spider_jig_delete_batch' %}", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

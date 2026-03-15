@@ -928,6 +928,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     </span>
   {% endif %}
 
+  {% if data.dp_pick_remarks %}
+    <a href="#" title="{{ data.dp_pick_remarks }}" class="dp-remark-tooltip-trigger" style="margin-left: 5px;">
+      <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+    </a>
+  {% endif %}
+
 </td>
                    
                   </tr>
@@ -1560,8 +1566,8 @@ document.addEventListener("DOMContentLoaded", function () {
               // Top tray should come first
               if (a.top_tray && !b.top_tray) return -1;
               if (!a.top_tray && b.top_tray) return 1;
-              // If both or neither are top trays, maintain original order
-              return 0;
+              // Stable secondary sort by tray_id
+              return (a.tray_id || '').localeCompare(b.tray_id || '');
             });
             
             html += `
@@ -1630,11 +1636,12 @@ document.addEventListener("DOMContentLoaded", function () {
               </tr>
             `;
 
-            // Sort rejected trays by tray_quantity ascending
+            // Sort rejected trays by tray_quantity ascending, then tray_id for stability
             rejectedOnlyTrays.sort((a, b) => {
               const qtyA = parseInt(a.tray_quantity) || 0;
               const qtyB = parseInt(b.tray_quantity) || 0;
-              return qtyA - qtyB;
+              if (qtyA !== qtyB) return qtyA - qtyB;
+              return (a.tray_id || '').localeCompare(b.tray_id || '');
             });
       
             // Add rejected trays
@@ -1682,11 +1689,12 @@ document.addEventListener("DOMContentLoaded", function () {
               </tr>
             `;
 
-            // Sort delinked trays by tray_quantity ascending
+            // Sort delinked trays by tray_quantity ascending, then tray_id for stability
             delinkedTrays.sort((a, b) => {
               const qtyA = parseInt(a.tray_quantity) || 0;
               const qtyB = parseInt(b.tray_quantity) || 0;
-              return qtyA - qtyB;
+              if (qtyA !== qtyB) return qtyA - qtyB;
+              return (a.tray_id || '').localeCompare(b.tray_id || '');
             });
       
             // Add delinked trays

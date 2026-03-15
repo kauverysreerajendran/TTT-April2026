@@ -1346,6 +1346,11 @@
                                     </span>
                                   {% endif %}
                                 {% endif %}
+                                {% if data.IP_pick_remarks %}
+                                  <a href="#" title="{{ data.IP_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                                    <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                                  </a>
+                                {% endif %}
                             </td>
                             <!-- Rejection Remarks Column -->
                             <td>
@@ -2446,7 +2451,7 @@
      rowCounter++;
    }
    
-   acceptedTrays.filter(tray => !(tray.is_top_tray || tray.ip_top_tray || tray.top_tray)).forEach(tray => {
+   acceptedTrays.filter(tray => !(tray.is_top_tray || tray.ip_top_tray || tray.top_tray)).sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || '')).forEach(tray => {
      let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
      html += `
        <tr>
@@ -2468,11 +2473,12 @@
    // --- REJECTED TRAYS ---
    const rejectedTrays = traysData.filter(tray => tray.rejected_tray && !tray.delink_tray);
 
-   // ✅ Sort by tray quantity ascending
+   // Sort by tray quantity ascending, then by tray_id for stability
    const sortedRejectedTrays = rejectedTrays.slice().sort((a, b) => {
    const qtyA = a.ip_top_tray_qty ?? a.tray_quantity ?? 0;
    const qtyB = b.ip_top_tray_qty ?? b.tray_quantity ?? 0;
-   return qtyA - qtyB;
+   if (qtyA !== qtyB) return qtyA - qtyB;
+   return (a.tray_id || '').localeCompare(b.tray_id || '');
    });
 
    if (sortedRejectedTrays.length > 0) {
@@ -2534,6 +2540,7 @@
        </td>
      </tr>
    `;
+   delinkedTrays.sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || ''));
    delinkedTrays.forEach(tray => {
      let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
      html += `

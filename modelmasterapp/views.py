@@ -285,4 +285,31 @@ def delete_all_tables(request):
     for model in model_list:
         model.objects.all().delete()
     return JsonResponse({'status': 'success', 'message': 'All tables cleared.'})
-    
+
+
+from modelmasterapp.models import ModelMaster
+from django.views.decorators.http import require_GET as _require_GET
+
+@_require_GET
+def get_plating_images(request):
+    """Return images for a given plating_stk_no from ModelMaster."""
+    plating_stk_no = request.GET.get('plating_stk_no', '').strip()
+    if not plating_stk_no:
+        return JsonResponse({'images': []})
+
+    import re as _re
+    mm = ModelMaster.objects.prefetch_related('images').filter(plating_stk_no=plating_stk_no).first()
+
+    # Fallback: try numeric prefix match (e.g. '1805' matches '1805NAK02')
+    if not mm:
+        _m = _re.match(r'^(\d+)', plating_stk_no)
+        if _m:
+            mm = ModelMaster.objects.prefetch_related('images').filter(
+                plating_stk_no__startswith=_m.group(1)
+            ).first()
+
+    if mm and mm.images.exists():
+        image_urls = [img.master_image.url for img in mm.images.all() if img.master_image]
+        return JsonResponse({'images': image_urls})
+
+    return JsonResponse({'images': []})

@@ -146,8 +146,8 @@ class IQFPickTableView(APIView):
                 'iqf_rejection_qty': stock_obj.iqf_rejection_qty,
                 'iqf_accepted_qty': stock_obj.iqf_accepted_qty,
                 'IQF_pick_remarks': stock_obj.IQF_pick_remarks,
-                'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
-                'brass_qc_rejection': stock_obj.brass_qc_rejection,  # ✅ Direct access
+                'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
+                'BA_pick_remarks': stock_obj.BA_pick_remarks,
                 'brass_rejection_total_qty': stock_obj.brass_rejection_total_qty,
                 'brass_audit_rejection_qty': stock_obj.brass_audit_rejection_qty,
                 'brass_qc_few_cases_accptance': stock_obj.brass_qc_few_cases_accptance,
@@ -496,13 +496,17 @@ class IQFSaveIPPickRemarkAPIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             batch_id = data.get('batch_id')
+            lot_id = data.get('lot_id')
             remark = data.get('remark', '').strip()
             if not batch_id:
                 return JsonResponse({'success': False, 'error': 'Missing batch_id'}, status=400)
             mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
             if not mmc:
                 return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
-            batch_obj = TotalStockModel.objects.filter(batch_id=mmc).first()  
+            qs = TotalStockModel.objects.filter(batch_id=mmc)
+            if lot_id:
+                qs = qs.filter(lot_id=lot_id)
+            batch_obj = qs.first()
             if not batch_obj:
                 return JsonResponse({'success': False, 'error': 'TotalStockModel not found'}, status=404)
             batch_obj.IQF_pick_remarks = remark
@@ -578,6 +582,29 @@ class IQFTrayValidate_Complete_APIView(APIView):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 # 1. ADD THIS API VIEW TO YOUR views.py
+
+
+def _brass_fallback_tray_dict(b_tray, include_rejection_info=False):
+    """Build a tray dict from a BrassTrayId record for use as a fallback
+    when no IQFTrayId records exist (e.g. Brass QC lot rejection)."""
+    top = bool(getattr(b_tray, 'top_tray', False))
+    d = {
+        "tray_id": b_tray.tray_id,
+        "tray_quantity": 0,
+        "rejected_tray": True,
+        "delink_tray": False,
+        "iqf_reject_verify": False,
+        "new_tray": False,
+        "IP_tray_verified": False,
+        "top_tray": top,
+    }
+    if include_rejection_info:
+        d.update({
+            "is_top_tray": top,
+            "rejection_reason": "Brass QC Lot Rejection",
+            "rejection_reason_id": "",
+        })
+    return d
 
 
 @method_decorator(login_required, name='dispatch')
@@ -664,6 +691,15 @@ class IQFCompleteTableTrayIdListAPIView(APIView):
                     "IP_tray_verified": False,
                     "top_tray": top_tray
                 })
+
+            # Fallback: if no IQFTrayId rejected trays and no accepted trays found,
+            # use BrassTrayId rejected trays (handles Brass QC lot rejection case)
+            if not rejected_iqf_trays.exists() and not accepted_store_trays.exists():
+                brass_rejected_fallback = BrassTrayId.objects.filter(
+                    lot_id=lot_id, rejected_tray=True
+                ).order_by('-top_tray', 'id')
+                for b_tray in brass_rejected_fallback:
+                    all_trays.append(_brass_fallback_tray_dict(b_tray))
 
             # Delinked trays: persisted flags only (no inferred candidates)
             delinked_ids = set(
@@ -1105,6 +1141,15 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                         "rejection_reason": rej_info.get('rejection_reason', 'N/A'),
                         "rejection_reason_id": rej_info.get('rejection_reason_id', '')
                     })
+
+            # Fallback: if still no rejected trays, use BrassTrayId rejected trays
+            # (handles Brass QC lot rejection transferred to IQF with no IQFTrayId records)
+            if not rejected_trays:
+                brass_rejected_fallback = BrassTrayId.objects.filter(
+                    lot_id=lot_id, rejected_tray=True
+                ).order_by('-top_tray', 'id')
+                for b_tray in brass_rejected_fallback:
+                    rejected_trays.append(_brass_fallback_tray_dict(b_tray, include_rejection_info=True))
 
             # ============================
             # STEP 5: Get delinked trays
@@ -3042,6 +3087,24 @@ def iqf_get_rejected_tray_scan_data(request):
                 print(f"   - Total Qty: {total_qty}")
                 print(f"   - Reasons: {reason_texts}")
 
+        # Second fallback: Brass QC lot rejection (batch_rejection=True)
+        # Full lot rejections write Brass_QC_Rejection_ReasonStore, NOT Brass_QC_Rejected_TrayScan
+        if not rejection_rows:
+            batch_rej_store = Brass_QC_Rejection_ReasonStore.objects.filter(
+                lot_id=lot_id, batch_rejection=True
+            ).first()
+            if batch_rej_store:
+                total_qty = int(batch_rej_store.total_rejection_quantity or 0)
+                rejection_rows.append({
+                    'tray_id': '',
+                    'qty': total_qty,
+                    'reason': 'Lot Rejection',
+                    'reason_id': '',
+                    'brass_rejection_qty': total_qty
+                })
+                print(f"✅ [REJECTION SUMMARY] Fallback from Brass_QC_Rejection_ReasonStore (Lot Rejection):")
+                print(f"   - Total Qty: {total_qty}")
+
         # Accepted trays (unchanged)
         accepted_trays = []
         for obj in IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).select_related('user'):
@@ -3401,6 +3464,8 @@ class IQFCompletedTableView(APIView):
                 'iqf_rejection_qty': stock_obj.iqf_rejection_qty,
                 'iqf_accepted_qty': stock_obj.iqf_accepted_qty,
                 'IQF_pick_remarks': stock_obj.IQF_pick_remarks,
+                'Bq_pick_remarks': stock_obj.Bq_pick_remarks,
+                'BA_pick_remarks': stock_obj.BA_pick_remarks,
                 'brass_accepted_tray_scan_status': stock_obj.brass_accepted_tray_scan_status,
                 'brass_qc_rejection': stock_obj.brass_qc_rejection,
                 'brass_rejection_total_qty': stock_obj.brass_rejection_total_qty,
@@ -5747,6 +5812,8 @@ class IQFAcceptTableView(APIView):
                 'iqf_rejection_qty': getattr(stock_obj, 'iqf_rejection_qty', None),
                 'iqf_accepted_qty': stock_obj.iqf_accepted_qty,
                 'IQF_pick_remarks': getattr(stock_obj, 'IQF_pick_remarks', None),
+                'Bq_pick_remarks': getattr(stock_obj, 'Bq_pick_remarks', None),
+                'BA_pick_remarks': getattr(stock_obj, 'BA_pick_remarks', None),
                 'brass_accepted_tray_scan_status': getattr(stock_obj, 'brass_accepted_tray_scan_status', None),
                 'brass_qc_rejection': getattr(stock_obj, 'brass_qc_rejection', None),
                 'brass_rejection_total_qty': getattr(stock_obj, 'brass_rejection_total_qty', None),

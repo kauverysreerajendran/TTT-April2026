@@ -1425,46 +1425,7 @@ document.addEventListener("DOMContentLoaded", function () {
         `;
       
         let rowCounter = 1;
-      
-        // --- ACCEPTED TRAYS ---
-        const acceptedTrays = traysData.filter(tray => !tray.rejected_tray && !tray.delink_tray);
-        if (acceptedTrays.length > 0) {
-          html += `
-            <tr style="background-color: #e8f5e8; font-weight: bold;">
-              <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
-                ✅ ACCEPTED TRAYS
-              </td>
-            </tr>
-          `;
-          acceptedTrays.forEach(tray => {
-            html += `
-              <tr>
-                <td>${rowCounter}</td>
-                <td>
-                  <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-                  <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
-                </td>
-                <td>
-                  <input type="number" class="form-control" value="${tray.tray_quantity || ''}" readonly style="width: 100%;" />
-                </td>
-                ${showValidationColumn ? `
-                  <td>
-                    <div class="validation-status">
-                      <div class="status-icon fail">
-                        <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                      </div>
-                      <div class="status-icon pass">
-                        <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                      </div>
-                    </div>
-                  </td>
-                ` : ''}
-              </tr>
-            `;
-            rowCounter++;
-          });
-        }
-      
+
         // --- REJECTED TRAYS ---
         const rejectedTrays = traysData.filter(tray => tray.rejected_tray && !tray.delink_tray);
         if (rejectedTrays.length > 0) {

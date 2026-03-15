@@ -169,9 +169,26 @@ class InprocessInspectionView(TemplateView):
             
             # Process multiple lot_ids to get comma-separated field values (SAME AS JigCompletedTable)
             lot_ids_data = self.process_new_lot_ids(multiple_lot_ids)
-            
+            # Fallback: JIG-generated lot_ids don't exist in TotalStockModel; use JigCompleted.batch_id directly
+            if jig_detail.batch_id and all(v == 'No Plating Stock No' for v in (lot_ids_data.get('plating_stk_nos_list') or ['No Plating Stock No'])):
+                _m = ModelMasterCreation.objects.filter(batch_id=jig_detail.batch_id).select_related('model_stock_no', 'version').first()
+                if _m:
+                    _ver = 'No Version'
+                    if getattr(_m, 'version', None):
+                        _ver = getattr(_m.version, 'version_internal', None) or getattr(_m.version, 'version_name', 'No Version')
+                    _pl = getattr(_m, 'plating_stk_no', None) or 'No Plating Stock No'
+                    _po = getattr(_m, 'polishing_stk_no', None) or 'No Polishing Stock No'
+                    lot_ids_data = {
+                        'plating_stk_nos': [_pl] * len(multiple_lot_ids),
+                        'polishing_stk_nos': [_po] * len(multiple_lot_ids),
+                        'version_names': ', '.join([_ver] * len(multiple_lot_ids)),
+                        'plating_stk_nos_list': [_pl] * len(multiple_lot_ids),
+                        'polishing_stk_nos_list': [_po] * len(multiple_lot_ids),
+                        'version_names_list': [_ver] * len(multiple_lot_ids),
+                    }
+
             # Process model_cases using THE SAME batch_ids from lot_ids (CORRECTED LOGIC)
-            model_cases_data = self.process_model_cases_corrected(jig_detail.no_of_model_cases, multiple_lot_ids)
+            model_cases_data = self.process_model_cases_corrected(jig_detail.no_of_model_cases, multiple_lot_ids, jig_detail.batch_id)
             
             # Create enhanced jig_detail with multi-lot support
             enhanced_jig_detail = self.create_enhanced_jig_detail(jig_detail, lot_ids_data, model_cases_data)
@@ -260,7 +277,7 @@ class InprocessInspectionView(TemplateView):
         return []
 
     # FIRST INSTANCE - InprocessInspectionView
-    def process_model_cases_corrected(self, no_of_model_cases, lot_ids):
+    def process_model_cases_corrected(self, no_of_model_cases, lot_ids, jig_batch_id=None):
         """
         Process model_cases using the SAME batch_ids from lot_ids
         Updated to search both TotalStockModel and RecoveryStockModel
@@ -269,7 +286,7 @@ class InprocessInspectionView(TemplateView):
         print(f"   no_of_model_cases: {no_of_model_cases}")
         print(f"   lot_ids: {lot_ids}")
         
-        if not no_of_model_cases or not lot_ids:
+        if not lot_ids:
             print("   ❌ No model_cases or lot_ids provided, returning empty data")
             return {
                 'model_plating_stk_nos': '',
@@ -321,6 +338,38 @@ class InprocessInspectionView(TemplateView):
         print(f"   🔢 Using batch_ids: {batch_ids}")
         
         if not batch_ids:
+            if jig_batch_id:
+                print(f"   🔄 Direct fallback via JigCompleted.batch_id: {jig_batch_id}")
+                master = ModelMasterCreation.objects.filter(
+                    batch_id=jig_batch_id
+                ).select_related('version', 'model_stock_no').first()
+                if master:
+                    print(f"      ✅ Found ModelMasterCreation id={master.id}")
+                    version_value = "No Version"
+                    if master.version:
+                        version_value = getattr(master.version, 'version_internal', None) or getattr(master.version, 'version_name', 'No Version')
+                    plating_value = master.plating_stk_no or "No Plating Stock No"
+                    polishing_value = master.polishing_stk_no or "No Polishing Stock No"
+                    model_data = {
+                        'model_name': getattr(getattr(master, 'model_stock_no', None), 'model_no', None) or getattr(master, 'model_no', None) or "N/A",
+                        'plating_color': getattr(master, 'plating_color', None) or "No Plating Color",
+                        'polish_finish': getattr(master, 'polish_finish', None) or "N/A",
+                        'tray_type': getattr(master, 'tray_type', None) or "No Tray Type",
+                        'tray_capacity': getattr(master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(getattr(master, 'tray_type', None) or "No Tray Type")
+                    }
+                    models_data_list = [model_data] * len(lot_ids)
+                    plating_list = [plating_value] * len(lot_ids)
+                    polishing_list = [polishing_value] * len(lot_ids)
+                    version_list = [version_value] * len(lot_ids)
+                    return {
+                        'model_plating_stk_nos': ', '.join(plating_list),
+                        'model_polishing_stk_nos': ', '.join(polishing_list),
+                        'model_version_names': ', '.join(version_list),
+                        'model_plating_stk_nos_list': plating_list,
+                        'model_polishing_stk_nos_list': polishing_list,
+                        'model_version_names_list': version_list,
+                        'models_data': models_data_list
+                    }
             print("   ❌ No batch_ids found")
             return {
                 'model_plating_stk_nos': '',
@@ -341,7 +390,7 @@ class InprocessInspectionView(TemplateView):
         if model_batch_ids:
             model_masters = ModelMasterCreation.objects.filter(
                 id__in=model_batch_ids
-            ).select_related('version', 'model_stock_no', 'plating_color', 'polish_finish', 'tray_type')
+            ).select_related('version', 'model_stock_no')
             
             print(f"   🏭 Found {len(model_masters)} ModelMasterCreation records")
             
@@ -351,9 +400,9 @@ class InprocessInspectionView(TemplateView):
                 print(f"         plating_stk_no: {model.plating_stk_no}")
                 print(f"         polishing_stk_no: {model.polishing_stk_no}")
                 print(f"         version_internal: {getattr(model.version, 'version_internal', None) if model.version else 'None'}")
-                print(f"         plating_color: {getattr(model.plating_color, 'plating_color', None) if model.plating_color else 'None'}")
-                print(f"         polish_finish: {getattr(model.polish_finish, 'polish_finish', None) if model.polish_finish else 'None'}")
-                print(f"         tray_type: {getattr(model.tray_type, 'tray_type', None) if model.tray_type else 'None'}")
+                print(f"         plating_color: {model.plating_color}")
+                print(f"         polish_finish: {model.polish_finish}")
+                print(f"         tray_type: {model.tray_type}")
         
         # Fetch from RecoveryMasterCreation
         if recovery_batch_ids:
@@ -403,13 +452,13 @@ class InprocessInspectionView(TemplateView):
                 polishing_stk_nos.append(polishing_value)
                 version_names.append(version_value)
                 
-                # Build models_data for plating_color, polish_finish, tray info
+                # plating_color / polish_finish / tray_type are plain CharFields on ModelMasterCreation
                 model_data = {
-                    'model_name': getattr(master, 'model_no', None) or getattr(getattr(master, 'model_stock_no', None), 'model_no', None) or "N/A",
-                    'plating_color': getattr(getattr(master, 'plating_color', None), 'plating_color', None) or "No Plating Color",
-                    'polish_finish': getattr(getattr(master, 'polish_finish', None), 'polish_finish', None) or "N/A",
-                    'tray_type': getattr(getattr(master, 'tray_type', None), 'tray_type', None) or "No Tray Type",
-                    'tray_capacity': getattr(master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(getattr(getattr(master, 'tray_type', None), 'tray_type', "No Tray Type"))
+                    'model_name': getattr(getattr(master, 'model_stock_no', None), 'model_no', None) or getattr(master, 'model_no', None) or "N/A",
+                    'plating_color': getattr(master, 'plating_color', None) or "No Plating Color",
+                    'polish_finish': getattr(master, 'polish_finish', None) or "N/A",
+                    'tray_type': getattr(master, 'tray_type', None) or "No Tray Type",
+                    'tray_capacity': getattr(master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(getattr(master, 'tray_type', None) or "No Tray Type")
                 }
                 models_data.append(model_data)
                 
@@ -681,18 +730,13 @@ class InprocessInspectionView(TemplateView):
             jig_detail.polish_finish = models_data[0].get('polish_finish', 'N/A') if models_data else 'N/A'
             jig_detail.no_of_model_cases = [m.get('model_name', '') for m in models_data]  # For circles display
         else:
-            # Parse from draft_data if models_data is empty
-            plating_color = draft_data.get('nickel_bath_type', 'No Plating Color')
-            polish_finish = draft_data.get('polish_finish', 'N/A')
-            model_presents = draft_data.get('model_no', 'N/A')
+            # No models_data available — build best-effort from draft_data
+            model_presents = draft_data.get('model_no', None)
+            polish_finish = draft_data.get('polish_finish', None)
             
-            jig_detail.model_presents = model_presents
-            jig_detail.plating_color = plating_color
-            jig_detail.polish_finish = polish_finish
-            jig_detail.no_of_model_cases = [model_presents] if model_presents != 'N/A' else []
-            # If no models_data, try to extract from original no_of_model_cases (from draft_data)
-            jig_detail.model_presents = "No Model Info"
-            jig_detail.plating_color = "No Plating Color"
+            jig_detail.model_presents = model_presents or "No Model Info"
+            jig_detail.polish_finish = polish_finish or "N/A"
+            jig_detail.plating_color = "No Plating Color"  # overridden by TotalStockModel fallback below
             
             # CRITICAL FIX: Parse the original no_of_model_cases from draft_data if it exists
             # This preserves model data saved during jig loading
@@ -872,6 +916,20 @@ class InprocessInspectionView(TemplateView):
                                     images.append(img.master_image.url)
                                     print(f"   📸 Found image: {img.master_image.url}")
                         
+                        # Fallback: try ModelMasterCreation.images via JigCompleted.batch_id
+                        if not images:
+                            _jbc = getattr(jig_detail, 'batch_id', None)
+                            if _jbc:
+                                try:
+                                    _mmc = ModelMasterCreation.objects.filter(batch_id=_jbc).prefetch_related('images').first()
+                                    if _mmc:
+                                        for _img in _mmc.images.all():
+                                            if _img.master_image:
+                                                images.append(_img.master_image.url)
+                                                print(f"   📸 Found MMC image: {_img.master_image.url}")
+                                except Exception as _ie:
+                                    print(f"   ⚠️ MMC image lookup error: {_ie}")
+                        
                         if not images:
                             images = [static('assets/images/imagePlaceholder.png')]
                             print(f"   📸 No images found, using placeholder")
@@ -978,10 +1036,10 @@ class InprocessInspectionView(TemplateView):
                             
                     except Exception as e:
                         print(f"   ❌ Error getting batch data: {e}")
-                        self.set_default_values(jig_detail)
+                        self._apply_mmc_direct_fallback(jig_detail)
                 else:
-                    print(f"   ❌ No batch_id found, setting default values")
-                    self.set_default_values(jig_detail)
+                    print(f"   ❌ No batch_id from TotalStock — using MMC direct fallback")
+                    self._apply_mmc_direct_fallback(jig_detail)
             else:
                 # CRITICAL FIX: If no_of_model_cases is empty, but we have plating_stk_nos,
                 # populate models from the successfully extracted plating stock numbers
@@ -1045,6 +1103,56 @@ class InprocessInspectionView(TemplateView):
         
     
   
+    def _apply_mmc_direct_fallback(self, jig_detail):
+        """
+        Fallback: use JigCompleted.batch_id to get ModelMasterCreation directly.
+        Preserves plating_color/polish_finish/tray data already set from models_data.
+        """
+        jig_batch = getattr(jig_detail, 'batch_id', None)
+        if jig_batch:
+            try:
+                mmc = ModelMasterCreation.objects.filter(
+                    batch_id=jig_batch
+                ).prefetch_related('images').select_related('version', 'model_stock_no').first()
+                if mmc:
+                    imgs = [img.master_image.url for img in mmc.images.all() if img.master_image]
+                    if not imgs:
+                        imgs = [static('assets/images/imagePlaceholder.png')]
+                    if isinstance(getattr(jig_detail, 'model_images', None), dict):
+                        for mn in (jig_detail.no_of_model_cases or []):
+                            jig_detail.model_images[mn] = imgs
+                    else:
+                        jig_detail.model_images = {mn: imgs for mn in (jig_detail.no_of_model_cases or [])}
+                    tray_cap = getattr(mmc, 'tray_capacity', 0) or 0
+                    ver = 'No Version'
+                    if getattr(mmc, 'version', None):
+                        ver = getattr(mmc.version, 'version_internal', None) or getattr(mmc.version, 'version_name', 'No Version')
+                    jig_detail.unique_versions = [ver]
+                    jig_detail.unique_vendors = ['No Vendor']
+                    jig_detail.unique_locations = ['No Location']
+                    jig_detail.unique_tray_types = [getattr(mmc, 'tray_type', 'No Tray Type') or 'No Tray Type']
+                    jig_detail.unique_tray_capacities = [tray_cap]
+                    if tray_cap > 0 and getattr(jig_detail, 'total_cases_loaded', 0):
+                        jig_detail.calculated_no_of_trays = math.ceil(jig_detail.total_cases_loaded / tray_cap)
+                        jig_detail.primary_tray_capacity = tray_cap
+                    else:
+                        jig_detail.calculated_no_of_trays = 0
+                        jig_detail.primary_tray_capacity = 0
+                    print(f"   ✅ MMC direct fallback applied via batch_id={jig_batch}")
+                    return
+            except Exception as e:
+                print(f"   ⚠️ MMC direct fallback error: {e}")
+        for attr in ('unique_versions', 'unique_vendors', 'unique_locations',
+                     'unique_tray_types', 'unique_tray_capacities'):
+            if not hasattr(jig_detail, attr):
+                setattr(jig_detail, attr, [])
+        if not hasattr(jig_detail, 'calculated_no_of_trays'):
+            jig_detail.calculated_no_of_trays = 0
+        if not hasattr(jig_detail, 'primary_tray_capacity'):
+            jig_detail.primary_tray_capacity = 0
+        if not getattr(jig_detail, 'model_images', None):
+            jig_detail.model_images = {}
+
     def get_batch_data(self, batch_id, batch_model_class):
         """
         Get batch data for single model case from either ModelMasterCreation or RecoveryMasterCreation
@@ -1458,14 +1566,27 @@ def save_bath_number(request):
                 'message': 'JigCompleted not found'
             }, status=404)
         
+        bath_type = data.get('bath_type')
+
         # Get the BathNumbers instance
         try:
-            bath_obj = BathNumbers.objects.get(bath_number=bath_number)
+            qs = BathNumbers.objects.filter(bath_number=bath_number)
+            if bath_type:
+                qs = qs.filter(bath_type=bath_type)
+            bath_obj = qs.get()
         except BathNumbers.DoesNotExist:
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'message': 'Bath number not found'
             }, status=404)
+        except BathNumbers.MultipleObjectsReturned:
+            # Fallback: pick first active match
+            bath_obj = BathNumbers.objects.filter(bath_number=bath_number, is_active=True).first()
+            if not bath_obj:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Ambiguous bath number — please select again'
+                }, status=400)
         
         # Save the bath number to JigCompleted
         jig_detail.bath_numbers = bath_obj
@@ -1770,9 +1891,26 @@ class InprocessInspectionCompleteView(TemplateView):
             
             # Process multiple lot_ids to get comma-separated field values (SAME AS JigCompletedTable)
             lot_ids_data = self.process_new_lot_ids(multiple_lot_ids)
-            
+            # Fallback: JIG-generated lot_ids don't exist in TotalStockModel; use JigCompleted.batch_id directly
+            if jig_detail.batch_id and all(v == 'No Plating Stock No' for v in (lot_ids_data.get('plating_stk_nos_list') or ['No Plating Stock No'])):
+                _m = ModelMasterCreation.objects.filter(batch_id=jig_detail.batch_id).select_related('model_stock_no', 'version').first()
+                if _m:
+                    _ver = 'No Version'
+                    if getattr(_m, 'version', None):
+                        _ver = getattr(_m.version, 'version_internal', None) or getattr(_m.version, 'version_name', 'No Version')
+                    _pl = getattr(_m, 'plating_stk_no', None) or 'No Plating Stock No'
+                    _po = getattr(_m, 'polishing_stk_no', None) or 'No Polishing Stock No'
+                    lot_ids_data = {
+                        'plating_stk_nos': [_pl] * len(multiple_lot_ids),
+                        'polishing_stk_nos': [_po] * len(multiple_lot_ids),
+                        'version_names': ', '.join([_ver] * len(multiple_lot_ids)),
+                        'plating_stk_nos_list': [_pl] * len(multiple_lot_ids),
+                        'polishing_stk_nos_list': [_po] * len(multiple_lot_ids),
+                        'version_names_list': [_ver] * len(multiple_lot_ids),
+                    }
+
             # Process model_cases using THE SAME batch_ids from lot_ids (CORRECTED LOGIC)
-            model_cases_data = self.process_model_cases_corrected(jig_detail.no_of_model_cases, multiple_lot_ids)
+            model_cases_data = self.process_model_cases_corrected(jig_detail.no_of_model_cases, multiple_lot_ids, jig_detail.batch_id)
             
             # Create enhanced jig_detail with multi-lot support
             enhanced_jig_detail = self.create_enhanced_jig_detail(jig_detail, lot_ids_data, model_cases_data)
@@ -1960,16 +2098,16 @@ class InprocessInspectionCompleteView(TemplateView):
         return result
 
     # SECOND INSTANCE - Another class
-    def process_model_cases_corrected(self, no_of_model_cases, lot_ids):
+    def process_model_cases_corrected(self, no_of_model_cases, lot_ids, jig_batch_id=None):
         """
-        Process model_cases using the SAME batch_ids from lot_ids
+        Process model_cases using the SAME batch_ids from lot_ids (plating_color/polish_finish/tray_type are plain CharFields)
         Updated to search both TotalStockModel and RecoveryStockModel
         """
         print(f"\n🎲 process_model_cases_corrected called with:")
         print(f"   no_of_model_cases: {no_of_model_cases}")
         print(f"   lot_ids: {lot_ids}")
         
-        if not no_of_model_cases or not lot_ids:
+        if not lot_ids:
             print("   ❌ No model_cases or lot_ids provided, returning empty data")
             return {
                 'model_plating_stk_nos': '',
@@ -2021,6 +2159,38 @@ class InprocessInspectionCompleteView(TemplateView):
         print(f"   🔢 Using batch_ids: {batch_ids}")
         
         if not batch_ids:
+            if jig_batch_id:
+                print(f"   🔄 Direct fallback via JigCompleted.batch_id: {jig_batch_id}")
+                master = ModelMasterCreation.objects.filter(
+                    batch_id=jig_batch_id
+                ).select_related('version', 'model_stock_no').first()
+                if master:
+                    print(f"      ✅ Found ModelMasterCreation id={master.id}")
+                    version_value = "No Version"
+                    if master.version:
+                        version_value = getattr(master.version, 'version_internal', None) or getattr(master.version, 'version_name', 'No Version')
+                    plating_value = master.plating_stk_no or "No Plating Stock No"
+                    polishing_value = master.polishing_stk_no or "No Polishing Stock No"
+                    model_data = {
+                        'model_name': getattr(getattr(master, 'model_stock_no', None), 'model_no', None) or getattr(master, 'model_no', None) or "N/A",
+                        'plating_color': getattr(master, 'plating_color', None) or "No Plating Color",
+                        'polish_finish': getattr(master, 'polish_finish', None) or "N/A",
+                        'tray_type': getattr(master, 'tray_type', None) or "No Tray Type",
+                        'tray_capacity': getattr(master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(getattr(master, 'tray_type', None) or "No Tray Type")
+                    }
+                    models_data_list = [model_data] * len(lot_ids)
+                    plating_list = [plating_value] * len(lot_ids)
+                    polishing_list = [polishing_value] * len(lot_ids)
+                    version_list = [version_value] * len(lot_ids)
+                    return {
+                        'model_plating_stk_nos': ', '.join(plating_list),
+                        'model_polishing_stk_nos': ', '.join(polishing_list),
+                        'model_version_names': ', '.join(version_list),
+                        'model_plating_stk_nos_list': plating_list,
+                        'model_polishing_stk_nos_list': polishing_list,
+                        'model_version_names_list': version_list,
+                        'models_data': models_data_list
+                    }
             print("   ❌ No batch_ids found")
             return {
                 'model_plating_stk_nos': '',
@@ -2041,7 +2211,7 @@ class InprocessInspectionCompleteView(TemplateView):
         if model_batch_ids:
             model_masters = ModelMasterCreation.objects.filter(
                 id__in=model_batch_ids
-            ).select_related('version', 'model_stock_no', 'plating_color', 'polish_finish', 'tray_type')
+            ).select_related('version', 'model_stock_no')
             
             print(f"   🏭 Found {len(model_masters)} ModelMasterCreation records")
             
@@ -2051,9 +2221,9 @@ class InprocessInspectionCompleteView(TemplateView):
                 print(f"         plating_stk_no: {model.plating_stk_no}")
                 print(f"         polishing_stk_no: {model.polishing_stk_no}")
                 print(f"         version_internal: {getattr(model.version, 'version_internal', None) if model.version else 'None'}")
-                print(f"         plating_color: {getattr(model.plating_color, 'plating_color', None) if model.plating_color else 'None'}")
-                print(f"         polish_finish: {getattr(model.polish_finish, 'polish_finish', None) if model.polish_finish else 'None'}")
-                print(f"         tray_type: {getattr(model.tray_type, 'tray_type', None) if model.tray_type else 'None'}")
+                print(f"         plating_color: {model.plating_color}")
+                print(f"         polish_finish: {model.polish_finish}")
+                print(f"         tray_type: {model.tray_type}")
         
         # Fetch from RecoveryMasterCreation
         if recovery_batch_ids:
@@ -2103,13 +2273,13 @@ class InprocessInspectionCompleteView(TemplateView):
                 polishing_stk_nos.append(polishing_value)
                 version_names.append(version_value)
                 
-                # Build models_data for plating_color, polish_finish, tray info
+                # plating_color / polish_finish / tray_type are plain CharFields on ModelMasterCreation
                 model_data = {
-                    'model_name': getattr(master, 'model_no', None) or getattr(getattr(master, 'model_stock_no', None), 'model_no', None) or "N/A",
-                    'plating_color': getattr(getattr(master, 'plating_color', None), 'plating_color', None) or "No Plating Color",
-                    'polish_finish': getattr(getattr(master, 'polish_finish', None), 'polish_finish', None) or "N/A",
-                    'tray_type': getattr(getattr(master, 'tray_type', None), 'tray_type', None) or "No Tray Type",
-                    'tray_capacity': getattr(master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(getattr(getattr(master, 'tray_type', None), 'tray_type', "No Tray Type"))
+                    'model_name': getattr(getattr(master, 'model_stock_no', None), 'model_no', None) or getattr(master, 'model_no', None) or "N/A",
+                    'plating_color': getattr(master, 'plating_color', None) or "No Plating Color",
+                    'polish_finish': getattr(master, 'polish_finish', None) or "N/A",
+                    'tray_type': getattr(master, 'tray_type', None) or "No Tray Type",
+                    'tray_capacity': getattr(master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(getattr(master, 'tray_type', None) or "No Tray Type")
                 }
                 models_data.append(model_data)
                 
@@ -2329,11 +2499,61 @@ class InprocessInspectionCompleteView(TemplateView):
                     
             except Exception as e:
                 print(f"   ❌ Error getting batch data: {e}")
-                self.set_default_values(jig_detail)
+                self._apply_mmc_direct_fallback(jig_detail)
         else:
-            print(f"   ❌ No batch_id found, setting default values")
-            self.set_default_values(jig_detail)
-    
+            print(f"   ❌ No batch_id from TotalStock — using MMC direct fallback")
+            self._apply_mmc_direct_fallback(jig_detail)
+
+    def _apply_mmc_direct_fallback(self, jig_detail):
+        """
+        Fallback: use JigCompleted.batch_id to get ModelMasterCreation directly.
+        Preserves plating_color/polish_finish/tray data already set from models_data.
+        """
+        jig_batch = getattr(jig_detail, 'batch_id', None)
+        if jig_batch:
+            try:
+                mmc = ModelMasterCreation.objects.filter(
+                    batch_id=jig_batch
+                ).prefetch_related('images').select_related('version', 'model_stock_no').first()
+                if mmc:
+                    imgs = [img.master_image.url for img in mmc.images.all() if img.master_image]
+                    if not imgs:
+                        imgs = [static('assets/images/imagePlaceholder.png')]
+                    if isinstance(getattr(jig_detail, 'model_images', None), dict):
+                        for mn in (jig_detail.no_of_model_cases or []):
+                            jig_detail.model_images[mn] = imgs
+                    else:
+                        jig_detail.model_images = {mn: imgs for mn in (jig_detail.no_of_model_cases or [])}
+                    tray_cap = getattr(mmc, 'tray_capacity', 0) or 0
+                    ver = 'No Version'
+                    if getattr(mmc, 'version', None):
+                        ver = getattr(mmc.version, 'version_internal', None) or getattr(mmc.version, 'version_name', 'No Version')
+                    jig_detail.unique_versions = [ver]
+                    jig_detail.unique_vendors = ['No Vendor']
+                    jig_detail.unique_locations = ['No Location']
+                    jig_detail.unique_tray_types = [getattr(mmc, 'tray_type', 'No Tray Type') or 'No Tray Type']
+                    jig_detail.unique_tray_capacities = [tray_cap]
+                    if tray_cap > 0 and getattr(jig_detail, 'total_cases_loaded', 0):
+                        jig_detail.calculated_no_of_trays = math.ceil(jig_detail.total_cases_loaded / tray_cap)
+                        jig_detail.primary_tray_capacity = tray_cap
+                    else:
+                        jig_detail.calculated_no_of_trays = 0
+                        jig_detail.primary_tray_capacity = 0
+                    print(f"   ✅ MMC direct fallback applied via batch_id={jig_batch}")
+                    return
+            except Exception as e:
+                print(f"   ⚠️ MMC direct fallback error: {e}")
+        for attr in ('unique_versions', 'unique_vendors', 'unique_locations',
+                     'unique_tray_types', 'unique_tray_capacities'):
+            if not hasattr(jig_detail, attr):
+                setattr(jig_detail, attr, [])
+        if not hasattr(jig_detail, 'calculated_no_of_trays'):
+            jig_detail.calculated_no_of_trays = 0
+        if not hasattr(jig_detail, 'primary_tray_capacity'):
+            jig_detail.primary_tray_capacity = 0
+        if not getattr(jig_detail, 'model_images', None):
+            jig_detail.model_images = {}
+
     def get_dynamic_tray_capacity(self, tray_type_name):
         """
         Get tray capacity with custom override for Inprocess Inspection.
@@ -2363,6 +2583,63 @@ class InprocessInspectionCompleteView(TemplateView):
             print(f"⚠️ Error getting dynamic tray capacity: {e}")
             return 0
 
+    def _apply_mmc_direct_fallback(self, jig_detail):
+        """
+        Fallback: use JigCompleted.batch_id to get ModelMasterCreation directly.
+        Preserves plating_color/polish_finish/tray data already set from models_data.
+        Only fills in aux attrs (unique_*, calculated_no_of_trays, model_images).
+        """
+        jig_batch = getattr(jig_detail, 'batch_id', None)
+        if jig_batch:
+            try:
+                mmc = ModelMasterCreation.objects.filter(
+                    batch_id=jig_batch
+                ).prefetch_related('images').select_related('version', 'model_stock_no').first()
+                if mmc:
+                    # Get images from ModelMasterCreation.images
+                    imgs = [img.master_image.url for img in mmc.images.all() if img.master_image]
+                    if not imgs:
+                        imgs = [static('assets/images/imagePlaceholder.png')]
+                    
+                    # Update model_images dict
+                    if isinstance(getattr(jig_detail, 'model_images', None), dict):
+                        for mn in (jig_detail.no_of_model_cases or []):
+                            jig_detail.model_images[mn] = imgs
+                    else:
+                        jig_detail.model_images = {mn: imgs for mn in (jig_detail.no_of_model_cases or [])}
+                    
+                    # Set auxiliary attrs without overwriting plating_color/tray/polish
+                    tray_cap = getattr(mmc, 'tray_capacity', 0) or 0
+                    ver = 'No Version'
+                    if getattr(mmc, 'version', None):
+                        ver = getattr(mmc.version, 'version_internal', None) or getattr(mmc.version, 'version_name', 'No Version')
+                    jig_detail.unique_versions = [ver]
+                    jig_detail.unique_vendors = ['No Vendor']
+                    jig_detail.unique_locations = ['No Location']
+                    jig_detail.unique_tray_types = [getattr(mmc, 'tray_type', 'No Tray Type') or 'No Tray Type']
+                    jig_detail.unique_tray_capacities = [tray_cap]
+                    if tray_cap > 0 and getattr(jig_detail, 'total_cases_loaded', 0):
+                        jig_detail.calculated_no_of_trays = math.ceil(jig_detail.total_cases_loaded / tray_cap)
+                        jig_detail.primary_tray_capacity = tray_cap
+                    else:
+                        jig_detail.calculated_no_of_trays = 0
+                        jig_detail.primary_tray_capacity = 0
+                    print(f"   ✅ MMC direct fallback applied via batch_id={jig_batch}")
+                    return
+            except Exception as e:
+                print(f"   ⚠️ MMC direct fallback error: {e}")
+        # Absolute last resort — only set attrs not already present
+        for attr in ('unique_versions', 'unique_vendors', 'unique_locations',
+                     'unique_tray_types', 'unique_tray_capacities'):
+            if not hasattr(jig_detail, attr):
+                setattr(jig_detail, attr, [])
+        if not hasattr(jig_detail, 'calculated_no_of_trays'):
+            jig_detail.calculated_no_of_trays = 0
+        if not hasattr(jig_detail, 'primary_tray_capacity'):
+            jig_detail.primary_tray_capacity = 0
+        if not getattr(jig_detail, 'model_images', None):
+            jig_detail.model_images = {}
+
     def get_batch_data(self, batch_id, batch_model_class):
         """
         Get batch data for single model case from either ModelMasterCreation or RecoveryMasterCreation
@@ -2377,12 +2654,16 @@ class InprocessInspectionCompleteView(TemplateView):
                 'model_stock_no__tray_type', 
                 'location'
             ).prefetch_related(
-                'model_stock_no__images'
+                'model_stock_no__images',
+                'images'
             ).get(id=batch_id)
             
-            # Get model images
+            # Get model images — prefer ModelMasterCreation.images, fall back to model_stock_no.images
             images = []
-            if model_master.model_stock_no:
+            for img in model_master.images.all():
+                if img.master_image:
+                    images.append(img.master_image.url)
+            if not images and model_master.model_stock_no:
                 for img in model_master.model_stock_no.images.all():
                     if img.master_image:
                         images.append(img.master_image.url)
@@ -2395,31 +2676,24 @@ class InprocessInspectionCompleteView(TemplateView):
             if hasattr(model_master, 'version') and model_master.version:
                 version_name = getattr(model_master.version, 'version_name', None) or getattr(model_master.version, 'version_internal', 'No Version')
             
-            # Fetch plating_color from TotalStockModel (total stock model)
-            plating_color = ""
-            try:
-                tsm = TotalStockModel.objects.filter(batch_id=model_master.id).first()
-                if tsm and tsm.plating_color:
-                    plating_color = tsm.plating_color.plating_color
-            except Exception as e:
-                print(f"⚠️ Error fetching plating_color from TotalStockModel: {e}")
+            # plating_color is a plain CharField on ModelMasterCreation
+            plating_color = getattr(model_master, 'plating_color', None) or "No Plating Color"
             
-            # Fetch tray info from ModelMaster
-            tray_type = ""
-            if model_master.model_stock_no and model_master.model_stock_no.tray_type:
-                tray_type = model_master.model_stock_no.tray_type.tray_type
+            # Fetch tray info — tray_type is a plain CharField on ModelMasterCreation
+            tray_type = getattr(model_master, 'tray_type', None) or ""
+            tray_capacity = getattr(model_master, 'tray_capacity', None) or self.get_dynamic_tray_capacity(tray_type) or 0
             
             return {
                 'batch_id': batch_id,
                 'model_no': model_master.model_stock_no.model_no if model_master.model_stock_no else None,
                 'version_name': version_name,
                 'plating_color': plating_color,
-                'polish_finish': getattr(model_master, 'polish_finish', None) or "",
+                'polish_finish': getattr(model_master, 'polish_finish', None) or "No Polish Finish",
                 'plating_stk_no': getattr(model_master, 'plating_stk_no', None) or "No Plating Stock No",
                 'polishing_stk_no': getattr(model_master, 'polishing_stk_no', None) or "No Polishing Stock No",
                 'location_name': model_master.location.location_name if hasattr(model_master, 'location') and model_master.location else "No Location",
                 'tray_type': tray_type,
-                'tray_capacity': self.get_dynamic_tray_capacity(tray_type),
+                'tray_capacity': tray_capacity,
                 'vendor_internal': getattr(model_master, 'vendor_internal', None) or "No Vendor",
                 'model_images': images,
                 'calculated_no_of_trays': 0,

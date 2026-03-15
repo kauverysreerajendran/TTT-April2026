@@ -1871,8 +1871,18 @@
                         <img src="{% static 'assets/icons/chat_icon.png' %}" alt="Chat Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
                       </span>
                     {% endif %}
+                    {% if data.Bq_pick_remarks %}
+                      <a href="#" title="{{ data.Bq_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                        <i class="fa fa-info-circle" style="color: #007bff; font-size: 16px;"></i>
+                      </a>
+                    {% endif %}
+                    {% if data.BA_pick_remarks %}
+                      <a href="#" title="{{ data.BA_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
+                        <i class="fa fa-info-circle" style="color: #6f42c1; font-size: 16px;"></i>
+                      </a>
+                    {% endif %}
                     </td>
-                   
+
                   </tr>
                   {% endfor%}
               
@@ -2715,18 +2725,27 @@ document.addEventListener("DOMContentLoaded", function () {
                 <tbody>
             `;
           
-            // ✅ Sort traysData by tray_quantity ascending
-            const sortedTrays = traysData.slice().sort((a, b) => (a.tray_quantity || 0) - (b.tray_quantity || 0));
-          
+            // Sort: top tray first, then by tray_quantity asc, then by tray_id for stability
+            const topTray = traysData.find(t => t.is_top_tray || t.ip_top_tray || t.top_tray);
+            const otherTrays = traysData.filter(t => !(t.is_top_tray || t.ip_top_tray || t.top_tray));
+            otherTrays.sort((a, b) => {
+              const qtyDiff = (a.tray_quantity || 0) - (b.tray_quantity || 0);
+              if (qtyDiff !== 0) return qtyDiff;
+              return (a.tray_id || '').localeCompare(b.tray_id || '');
+            });
+            const sortedTrays = topTray ? [topTray, ...otherTrays] : otherTrays;
+
             sortedTrays.forEach((tray, idx) => {
+              const isTop = tray.is_top_tray || tray.ip_top_tray || tray.top_tray;
+              const displaySno = isTop ? '1 (Top Tray)' : (idx + 1);
               html += `
-                <tr>
-                  <td>${idx + 1}</td>
+                <tr${isTop ? ' class="top-tray-row"' : ''}>
+                  <td>${displaySno}</td>
                   <td>
                     <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
                   </td>
                   <td>
-                    <input type="number" class="form-control" value="${tray.tray_quantity || ''}" readonly style="width: 100%;" />
+                    <input type="number" class="form-control" value="${tray.tray_quantity ?? ''}" readonly style="width: 100%;" />
                   </td>
                   ${showValidationColumn ? `
                     <td>
@@ -10174,6 +10193,7 @@ const table = document.getElementById("order-listing");
             var row = trigger.closest("tr");
             var trayScanLink = row ? row.querySelector('.tray-scan-btn') : null;
             var batchId = row ? row.getAttribute('data-batch-id') : null;
+            var lotId = row ? row.getAttribute('data-stock-lot-id') : null;
             if (!batchId) {
               Swal.fire('Error', 'Batch ID not found.', 'error');
               return;
@@ -10186,6 +10206,7 @@ const table = document.getElementById("order-listing");
               },
               body: JSON.stringify({
                 batch_id: batchId,
+                lot_id: lotId,
                 remark: remark
               })
             })

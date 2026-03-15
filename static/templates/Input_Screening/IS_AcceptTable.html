@@ -1556,21 +1556,40 @@ function buildTableHTML(showValidationColumn = false) {
       <tbody>
   `;
   
-  let rowCounter = 2; // ✅ FIXED: Start from 2 since top tray is 1
-  
+  let rowCounter = 1;
+
   // ✅ First, add all regular trays (with tray_id)
   if (traysData && traysData.length > 0) {
-  traysData
+  const acceptedTrays = traysData
     .filter(tray => !tray.rejected_tray && !tray.delink_tray && tray.tray_id !== 'SHORTAGE') // Only accepted trays (exclude delinked)
-    .forEach((tray, index) => {
-      // ✅ FIXED: Proper S.no numbering
+    .sort((a, b) => {
+      // Top tray first
+      const aIsTop = a.ip_top_tray || a.top_tray;
+      const bIsTop = b.ip_top_tray || b.top_tray;
+      if (aIsTop && !bIsTop) return -1;
+      if (!aIsTop && bIsTop) return 1;
+      return (a.tray_id || '').localeCompare(b.tray_id || '');
+    });
+
+  if (acceptedTrays.length > 0) {
+    html += `
+      <tr style="background-color: #e8f5e8; font-weight: bold;">
+        <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
+          ✅ ACCEPTED TRAYS
+        </td>
+      </tr>
+    `;
+  }
+
+  acceptedTrays.forEach((tray, index) => {
+      // S.no numbering — top tray gets "(Top Tray)" suffix
       let displaySNo;
       if (tray.ip_top_tray || tray.top_tray) {
-        displaySNo = '1 (Top Tray)';
+        displaySNo = `${rowCounter} (Top Tray)`;
       } else {
         displaySNo = rowCounter;
-        rowCounter++; // Increment after assigning
       }
+      rowCounter++;
       
       // Use ip_top_tray_qty for top tray, regular tray_quantity for others
       // ...inside buildTableHTML()...

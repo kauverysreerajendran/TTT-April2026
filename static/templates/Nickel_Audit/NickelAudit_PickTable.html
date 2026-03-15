@@ -600,10 +600,10 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       Plating Color
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <!-- <th>
                       Category
                       <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
+                    </th> -->
                     <th>
                       Polish Finish
                       <i class="fa fa-filter" aria-hidden="true"></i>
@@ -750,7 +750,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
 
                     <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
-                    <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
+                    <!-- <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td> -->
                     <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
                     <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
                     <td {% if data.na_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type}}-{{data.tray_capacity}}</td>

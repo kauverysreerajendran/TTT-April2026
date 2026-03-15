@@ -637,10 +637,10 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       Plating Color
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <!--<th>
                       Category
                       <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
+                    </th>-->
                     <th>
                       Polish Finish
                       <i class="fa fa-filter" aria-hidden="true"></i>
@@ -752,7 +752,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td >{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
 
                     <td >{{ data.plating_color }}</td>
-                    <td >{{ data.category }}</td>
+                    <!--<td >{{ data.category }}</td>-->
                     <td >{{data.polish_finish}}</td>
                     <td >
                       {% if data.tray_type and data.tray_capacity %}
