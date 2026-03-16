@@ -180,6 +180,8 @@ class JigView(TemplateView):
                     'exists': match_idx is not None,
                     'tray_id': scanned_record.tray_id,
                     'tray_qty': scanned_record.tray_quantity or scanned_record.tray_capacity or 0,
+                    'batch_id': scanned_record.batch_id.batch_id,
+                    'lot_id': scanned_record.lot_id,
                     'original_position': (match_idx + 1) if match_idx is not None else None,
                 }
                 if match_idx is not None:
@@ -208,28 +210,40 @@ class TrayInfoView(APIView):
         jig_completed = JigCompleted.objects.filter(lot_id=lot_id, batch_id=batch_id).first()
         
         if jig_completed:
-            # For completed lots, only show half-filled trays (remaining to process)
+            # For completed lots, show trays in Jig Loading scan order:
+            # delink_tray_info (on-jig trays, scan order) followed by half_filled_tray_info (pick/overflow trays)
             tray_list = []
-            if jig_completed.half_filled_tray_info:
-                seen_tray_ids = set()
-                for tray in jig_completed.half_filled_tray_info:
-                    tray_id = tray.get('tray_id')
-                    if not tray_id or tray_id in seen_tray_ids:
-                        continue
-                    seen_tray_ids.add(tray_id)
-                    tray_list.append({
-                        'tray_id': tray_id,
-                        'tray_quantity': tray.get('cases')
-                    })
+            seen_tray_ids = set()
+            # Primary: delink_tray_info preserves the actual Jig Loading scan sequence
+            for tray in (jig_completed.delink_tray_info or []):
+                tray_id = tray.get('tray_id')
+                if not tray_id or tray_id in seen_tray_ids:
+                    continue
+                seen_tray_ids.add(tray_id)
+                tray_list.append({
+                    'tray_id': tray_id,
+                    'tray_quantity': tray.get('cases')
+                })
+            # Secondary: half_filled_tray_info (overflow/pick trays not on jig)
+            for tray in (jig_completed.half_filled_tray_info or []):
+                tray_id = tray.get('tray_id')
+                if not tray_id or tray_id in seen_tray_ids:
+                    continue
+                seen_tray_ids.add(tray_id)
+                tray_list.append({
+                    'tray_id': tray_id,
+                    'tray_quantity': tray.get('cases')
+                })
         else:
-            # For incomplete lots, show allocated trays from JigLoadTrayId
-            # ✅ FIX: Order top tray first, then by tray_id for consistent ordering
-            trays_qs = JigLoadTrayId.objects.filter(
-                lot_id=lot_id, batch_id__batch_id=batch_id
-            ).order_by('-top_tray', 'tray_id')
+            # For incomplete lots: check JigLoadingManualDraft first (preserves actual Jig Loading scan order).
+            # BrassAudit rebuilds JigLoadTrayId with its own ordering (-top_tray, id), so we cannot
+            # rely on JigLoadTrayId.id to reflect the Jig Loading scan sequence.
+            draft = JigLoadingManualDraft.objects.filter(
+                lot_id=lot_id, batch_id=batch_id
+            ).first()
+            draft_delink = (draft.delink_tray_info or []) if draft else []
 
             # ✅ FIX: For partial rejection lots, cap by brass_audit_accepted_qty
-            # This prevents extra trays (carried over from BrassTrayId) from showing
             stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
             target_qty = (
                 stock.brass_audit_accepted_qty
@@ -242,16 +256,79 @@ class TrayInfoView(APIView):
             tray_list = []
             cumulative = 0
             seen_tray_ids = set()
-            for t in trays_qs.values('tray_id', 'tray_quantity', 'top_tray'):
-                if target_qty is not None and cumulative >= target_qty:
-                    break
-                tray_id = t['tray_id']
-                if not tray_id or tray_id in seen_tray_ids:
-                    continue
-                seen_tray_ids.add(tray_id)
-                tray_qty = t['tray_quantity'] or 0
-                tray_list.append({'tray_id': tray_id, 'tray_quantity': tray_qty})
-                cumulative += tray_qty
+
+            if draft_delink:
+                # Draft exists: use its delink_tray_info which has the Jig Loading scan order
+                for tray in draft_delink:
+                    tray_id = tray.get('tray_id')
+                    if not tray_id or tray_id in seen_tray_ids:
+                        continue
+                    if target_qty is not None and cumulative >= target_qty:
+                        break
+                    seen_tray_ids.add(tray_id)
+                    tray_qty = tray.get('cases') or 0
+                    tray_list.append({'tray_id': tray_id, 'tray_quantity': tray_qty})
+                    cumulative += tray_qty
+            else:
+                # No draft: use TrayId insertion order as canonical original scan sequence.
+                # This keeps first scanned tray as top tray even if downstream modules reorder
+                # Brass/BrassAudit/JigLoad tables.
+                tray_sequence_rows = list(
+                    TrayId.objects.filter(
+                        lot_id=lot_id,
+                        batch_id__batch_id=batch_id
+                    ).order_by('id').values('tray_id', 'tray_quantity')
+                )
+
+                # Build latest quantity map from JigLoadTrayId (if duplicate rows exist,
+                # the last saved quantity for a tray_id wins).
+                latest_qty_by_tray_id = {}
+                for t in JigLoadTrayId.objects.filter(
+                    lot_id=lot_id,
+                    batch_id__batch_id=batch_id
+                ).order_by('id').values('tray_id', 'tray_quantity'):
+                    if t['tray_id']:
+                        latest_qty_by_tray_id[t['tray_id']] = t['tray_quantity']
+
+                if tray_sequence_rows:
+                    for t in tray_sequence_rows:
+                        if target_qty is not None and cumulative >= target_qty:
+                            break
+                        tray_id = t['tray_id']
+                        if not tray_id or tray_id in seen_tray_ids:
+                            continue
+                        seen_tray_ids.add(tray_id)
+                        tray_qty = latest_qty_by_tray_id.get(tray_id, t['tray_quantity']) or 0
+                        tray_list.append({'tray_id': tray_id, 'tray_quantity': tray_qty})
+                        cumulative += tray_qty
+                else:
+                    # Last fallback: if TrayId is unavailable for this lot, use latest unique
+                    # entries from JigLoadTrayId without tray_id sorting.
+                    rows = list(
+                        JigLoadTrayId.objects.filter(
+                            lot_id=lot_id,
+                            batch_id__batch_id=batch_id
+                        ).order_by('id').values('tray_id', 'tray_quantity')
+                    )
+                    latest_rows_reversed = []
+                    seen_latest = set()
+                    for t in reversed(rows):
+                        tray_id = t['tray_id']
+                        if not tray_id or tray_id in seen_latest:
+                            continue
+                        seen_latest.add(tray_id)
+                        latest_rows_reversed.append(t)
+
+                    for t in reversed(latest_rows_reversed):
+                        if target_qty is not None and cumulative >= target_qty:
+                            break
+                        tray_id = t['tray_id']
+                        if not tray_id or tray_id in seen_tray_ids:
+                            continue
+                        seen_tray_ids.add(tray_id)
+                        tray_qty = t['tray_quantity'] or 0
+                        tray_list.append({'tray_id': tray_id, 'tray_quantity': tray_qty})
+                        cumulative += tray_qty
 
         logger.info(
             "Jig TrayInfoView lot_id=%s batch_id=%s trays_returned=%s",
@@ -846,7 +923,13 @@ class JigAddModalDataView(TemplateView):
 
             if existing_trays:
                 # Previously scanned trays exist — show them
+                seen_tray_ids = set()
                 for tray in existing_trays:
+                    tray_key = (tray.tray_id or '').strip().upper()
+                    if tray_key and tray_key in seen_tray_ids:
+                        continue
+                    if tray_key:
+                        seen_tray_ids.add(tray_key)
                     delink_table.append({
                         'tray_id': tray.tray_id,
                         'tray_quantity': tray.tray_quantity,
@@ -1918,9 +2001,13 @@ class JigSubmitAPIView(APIView):
                                 total_effective += effective_for_this
                     logger.info(f"🔍 Tray distribution: Complete={len(delink_tray_info)} trays ({sum(t['cases'] for t in delink_tray_info)} cases), Pick={len(half_filled_tray_info)} trays ({sum(t['cases'] for t in half_filled_tray_info)} cases)")
                 else:
-                    # No broken hooks, all existing trays are delink
-                    existing_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch)
-                    delink_tray_info = [{'tray_id': t.tray_id, 'cases': t.tray_quantity} for t in existing_trays]
+                    # No broken hooks, all existing trays are delink.
+                    # ✅ FIX: Preserve the Jig Loading scan order from the submitted delink_tray_info.
+                    # The submitted delink_tray_info comes from the frontend delink table (actual scan sequence).
+                    # Only fall back to JigLoadTrayId if nothing was submitted (BrassAudit ordering is wrong).
+                    if not delink_tray_info:
+                        existing_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch).order_by('id')
+                        delink_tray_info = [{'tray_id': t.tray_id, 'cases': t.tray_quantity} for t in existing_trays]
                     half_filled_tray_info = []
                 
                 # Trays are already created during scanning, no need to create again

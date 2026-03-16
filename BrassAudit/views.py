@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.renderers import TemplateHTMLRenderer
 from django.shortcuts import render
-from django.db.models import OuterRef, Subquery, Exists, F, Sum
+from django.db.models import OuterRef, Subquery, Exists, F, Sum, Count
 from django.core.paginator import Paginator
 from django.templatetags.static import static
 import math
@@ -461,12 +461,67 @@ class BrassAudit_SaveIPCheckboxView(APIView):
             if not batch_id:
                 print(f"❌ [create_brass_tray_instances] No batch_id found for lot {lot_id}")
                 return
+
+            # Keep only one BrassAuditTrayId row per (lot_id, tray_id) before upsert.
+            duplicate_tray_rows = (
+                BrassAuditTrayId.objects.filter(lot_id=lot_id)
+                .exclude(tray_id__isnull=True)
+                .exclude(tray_id='')
+                .values('tray_id')
+                .annotate(row_count=Count('id'))
+                .filter(row_count__gt=1)
+            )
+            for duplicate in duplicate_tray_rows:
+                duplicate_qs = BrassAuditTrayId.objects.filter(
+                    lot_id=lot_id,
+                    tray_id=duplicate['tray_id']
+                ).order_by('-id')
+                row_to_keep = duplicate_qs.first()
+                if not row_to_keep:
+                    continue
+                had_top_tray = duplicate_qs.filter(top_tray=True).exists()
+                if had_top_tray and not row_to_keep.top_tray:
+                    row_to_keep.top_tray = True
+                    row_to_keep.save(update_fields=['top_tray'])
+                deleted_rows = duplicate_qs.exclude(id=row_to_keep.id).delete()[0]
+                if deleted_rows:
+                    print(f"🧹 [create_brass_tray_instances] Removed {deleted_rows} duplicate BrassAuditTrayId rows for tray {duplicate['tray_id']} in lot {lot_id}")
     
             created_count = 0
             updated_count = 0
+            processed_tray_ids = set()
     
             for tray in verified_trays:
-                # Only update if tray exists with lot_id IS NULL (placeholder tray)
+                if not getattr(tray, 'tray_id', None):
+                    continue
+                if tray.tray_id in processed_tray_ids:
+                    continue
+                processed_tray_ids.add(tray.tray_id)
+
+                # First preference: update existing row for same lot + tray.
+                brass_tray = BrassAuditTrayId.objects.filter(tray_id=tray.tray_id, lot_id=lot_id).first()
+                if brass_tray:
+                    print(f"🔄 [create_brass_tray_instances] Updating existing BrassAuditTrayId for lot_id={lot_id}, tray_id={tray.tray_id}")
+                    brass_tray.batch_id = batch_id
+                    brass_tray.date = timezone.now()
+                    brass_tray.user = self.request.user
+                    brass_tray.tray_quantity = tray.tray_quantity
+                    brass_tray.top_tray = tray.top_tray
+                    brass_tray.IP_tray_verified = True
+                    brass_tray.tray_type = tray.tray_type
+                    brass_tray.tray_capacity = tray.tray_capacity
+                    brass_tray.new_tray = False
+                    brass_tray.delink_tray = False
+                    brass_tray.rejected_tray = False
+                    brass_tray.save(update_fields=[
+                        'batch_id', 'date', 'user', 'tray_quantity',
+                        'top_tray', 'IP_tray_verified', 'tray_type', 'tray_capacity',
+                        'new_tray', 'delink_tray', 'rejected_tray'
+                    ])
+                    updated_count += 1
+                    continue
+
+                # Second preference: update placeholder row with NULL lot_id.
                 brass_tray = BrassAuditTrayId.objects.filter(tray_id=tray.tray_id, lot_id__isnull=True).first()
                 if brass_tray:
                     print(f"🔄 [create_brass_tray_instances] Updating BrassAuditTrayId with empty lot_id for tray_id: {tray.tray_id}")
@@ -490,7 +545,7 @@ class BrassAudit_SaveIPCheckboxView(APIView):
                     updated_count += 1
                     print(f"✅ [create_brass_tray_instances] Updated BrassTrayId for: {tray.tray_id} (top_tray: {tray.top_tray}, rejected: False)")
                 else:
-                    # Always create a new record for this lot_id and tray_id
+                    # Create only when no existing lot/placeholder row is found.
                     print(f"➕ [create_brass_tray_instances] Creating new BrassTrayId for tray_id: {tray.tray_id}")
                     brass_tray = BrassAuditTrayId(
                         tray_id=tray.tray_id,
@@ -510,6 +565,8 @@ class BrassAudit_SaveIPCheckboxView(APIView):
                     brass_tray.save()
                     created_count += 1
                     print(f"✅ [create_brass_tray_instances] Created new BrassTrayId for: {tray.tray_id} (top_tray: {tray.top_tray}, rejected: False)")
+
+            print(f"📊 [create_brass_tray_instances] Summary for lot {lot_id}: created={created_count}, updated={updated_count}, processed={created_count + updated_count}")
     
         except Exception as e:
             print(f"❌ [create_brass_tray_instances] Error creating/updating BrassTrayId instances: {str(e)}")
@@ -974,7 +1031,7 @@ class Brass_Audit_Accepted_form(APIView):
 
             total_stock_data.brass_audit_accepted_qty = physical_qty
             total_stock_data.send_brass_qc = False
-            total_stock_data.send_brass_audit_to_iqf = True
+            total_stock_data.send_brass_audit_to_iqf = False
             total_stock_data.total_stock = physical_qty
 
             # Update process modules
@@ -1436,7 +1493,7 @@ class BrassAudit_TrayRejectionAPIView(APIView):
                 total_stock_obj.send_brass_qc = False
             
             total_stock_obj.send_brass_audit_to_qc = False
-            total_stock_obj.send_brass_audit_to_iqf=True
+            total_stock_obj.send_brass_audit_to_iqf=False
             update_fields.extend(['brass_audit_accepted_qty', 'brass_audit_last_process_date_time','send_brass_audit_to_qc','send_brass_audit_to_iqf','send_brass_qc', 'last_process_date_time'])
             total_stock_obj.save(update_fields=update_fields)
 

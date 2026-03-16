@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.renderers import TemplateHTMLRenderer
 from django.shortcuts import render
-from django.db.models import OuterRef, Subquery, Exists, F
+from django.db.models import OuterRef, Subquery, Exists, F, Count
 from django.core.paginator import Paginator
 from django.templatetags.static import static
 import math
@@ -123,12 +123,46 @@ def transfer_brass_qc_data_to_brass_audit(lot_id, user):
         # Import Brass Audit models
         from BrassAudit.models import Brass_Audit_Accepted_TrayID_Store, Brass_Audit_Accepted_TrayScan
         
+        # Keep only one BrassTrayId row per (lot_id, tray_id) before transfer.
+        duplicate_tray_rows = (
+            BrassTrayId.objects.filter(lot_id=lot_id)
+            .exclude(tray_id__isnull=True)
+            .exclude(tray_id='')
+            .values('tray_id')
+            .annotate(row_count=Count('id'))
+            .filter(row_count__gt=1)
+        )
+        for duplicate in duplicate_tray_rows:
+            duplicate_qs = BrassTrayId.objects.filter(
+                lot_id=lot_id,
+                tray_id=duplicate['tray_id']
+            ).order_by('-id')
+            row_to_keep = duplicate_qs.first()
+            if not row_to_keep:
+                continue
+            had_top_tray = duplicate_qs.filter(top_tray=True).exists()
+            if had_top_tray and not row_to_keep.top_tray:
+                row_to_keep.top_tray = True
+                row_to_keep.save(update_fields=['top_tray'])
+            deleted_rows = duplicate_qs.exclude(id=row_to_keep.id).delete()[0]
+            if deleted_rows:
+                print(f"🧹 [TRANSFER] Removed {deleted_rows} duplicate BrassTrayId rows for tray {duplicate['tray_id']} in lot {lot_id}")
+
         # ✅ FIXED: Always use BrassTrayId as the source for transfer
         # Get all accepted BrassTrayId records (not rejected, not delinked)
-        brass_trays_source = BrassTrayId.objects.filter(
+        brass_trays_source_qs = BrassTrayId.objects.filter(
             lot_id=lot_id,
             rejected_tray=False
         ).exclude(delink_tray=True)
+
+        # Process one row per tray_id deterministically.
+        brass_trays_source = []
+        seen_tray_ids = set()
+        for tray in brass_trays_source_qs.order_by('tray_id', '-id'):
+            if tray.tray_id in seen_tray_ids:
+                continue
+            seen_tray_ids.add(tray.tray_id)
+            brass_trays_source.append(tray)
         
         # ✅ ENHANCED: Debug logging to show all trays before transfer
         all_trays_debug = BrassTrayId.objects.filter(lot_id=lot_id)
@@ -137,8 +171,8 @@ def transfer_brass_qc_data_to_brass_audit(lot_id, user):
             print(f"   📦 {tray.tray_id}: qty={tray.tray_quantity}, top_tray={tray.top_tray}, rejected={tray.rejected_tray}, delinked={tray.delink_tray}")
         
         # Check if we have any accepted trays to transfer
-        if brass_trays_source.exists():
-            print(f"✅ [TRANSFER] Found {brass_trays_source.count()} accepted trays in BrassTrayId for lot: {lot_id}")
+        if brass_trays_source:
+            print(f"✅ [TRANSFER] Found {len(brass_trays_source)} accepted trays in BrassTrayId for lot: {lot_id}")
             
             # ✅ FIXED: Clear any existing Brass Audit data for this lot AND any duplicate tray_ids
             # Step 1: Delete records by lot_id
@@ -251,7 +285,7 @@ def transfer_brass_qc_data_to_brass_audit(lot_id, user):
             auto_calculate_top_tray_brass_audit(lot_id)
             print(f"✅ [TRANSFER] Automatically calculated top tray for Brass Audit lot_id: {lot_id}")
             
-            print(f"✅ [TRANSFER] Successfully transferred {brass_trays_source.count()} trays from BrassTrayId to Brass Audit")
+            print(f"✅ [TRANSFER] Successfully transferred {len(brass_trays_source)} trays from BrassTrayId to Brass Audit")
             return True
         
         # ✅ FALLBACK: No accepted trays found in BrassTrayId (all rejected or delinked)
@@ -893,10 +927,42 @@ class BrassSaveIPCheckboxView(APIView):
                 print(f"❌ [create_brass_tray_instances] No batch_id found for lot {lot_id}")
                 return
 
+            # Keep only one BrassTrayId row per (lot_id, tray_id) before upsert.
+            duplicate_tray_rows = (
+                BrassTrayId.objects.filter(lot_id=lot_id)
+                .exclude(tray_id__isnull=True)
+                .exclude(tray_id='')
+                .values('tray_id')
+                .annotate(row_count=Count('id'))
+                .filter(row_count__gt=1)
+            )
+            for duplicate in duplicate_tray_rows:
+                duplicate_qs = BrassTrayId.objects.filter(
+                    lot_id=lot_id,
+                    tray_id=duplicate['tray_id']
+                ).order_by('-id')
+                row_to_keep = duplicate_qs.first()
+                if not row_to_keep:
+                    continue
+                had_top_tray = duplicate_qs.filter(top_tray=True).exists()
+                if had_top_tray and not row_to_keep.top_tray:
+                    row_to_keep.top_tray = True
+                    row_to_keep.save(update_fields=['top_tray'])
+                deleted_rows = duplicate_qs.exclude(id=row_to_keep.id).delete()[0]
+                if deleted_rows:
+                    print(f"🧹 [create_brass_tray_instances] Removed {deleted_rows} duplicate BrassTrayId rows for tray {duplicate['tray_id']} in lot {lot_id}")
+
             created_count = 0
             updated_count = 0
+            processed_tray_ids = set()
 
             for tray in verified_trays:
+                if not getattr(tray, 'tray_id', None):
+                    continue
+                if tray.tray_id in processed_tray_ids:
+                    continue
+                processed_tray_ids.add(tray.tray_id)
+
                 # ✅ FIXED: Check if record already exists for this lot_id AND tray_id
                 brass_tray = BrassTrayId.objects.filter(tray_id=tray.tray_id, lot_id=lot_id).first()
                 

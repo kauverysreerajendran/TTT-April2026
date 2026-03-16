@@ -56,6 +56,7 @@ class BrassTrayId(models.Model):
     class Meta:
         verbose_name = "Brass Tray ID"
         verbose_name_plural = "Brass Tray IDs"
+        unique_together = ['lot_id', 'tray_id']
 
 
 class Brass_QC_Rejection_Table(models.Model):

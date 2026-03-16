@@ -61,6 +61,7 @@ class IPTrayId(models.Model):
     class Meta:
         verbose_name = "IP Tray ID"
         verbose_name_plural = "IP Tray IDs"
+        unique_together = ['lot_id', 'tray_id']
 
 
 

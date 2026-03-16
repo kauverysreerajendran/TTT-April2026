@@ -84,12 +84,9 @@ class IQFPickTableView(APIView):
             iqf_rejection_qty=iqf_rejection_qty_subquery,
         ).filter(
             # ✅ Direct filtering on TotalStockModel fields (no more subquery filtering)
-            (
-                Q(brass_qc_rejection=True) |
-                Q(send_brass_audit_to_iqf=True) |
-                Q(brass_qc_few_cases_accptance=True, brass_onhold_picking=False)
-            )
+            Q(send_brass_audit_to_iqf=True)
         ).exclude(
+            Q(brass_audit_accptance=True) |
             Q(iqf_acceptance=True) | 
             Q(iqf_rejection=True) | 
             Q(send_brass_audit_to_iqf=True, brass_audit_onhold_picking=True)|

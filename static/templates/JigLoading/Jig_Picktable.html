@@ -3220,6 +3220,13 @@ document.addEventListener('DOMContentLoaded', function () {
     return;
   }
 
+  const scannedTrayMeta = {
+    exists: "{{ scanned_tray_meta.exists|yesno:'true,false' }}" === 'true',
+    tray_id: "{{ scanned_tray_meta.tray_id|default:''|escapejs }}",
+    batch_id: "{{ scanned_tray_meta.batch_id|default:''|escapejs }}",
+    lot_id: "{{ scanned_tray_meta.lot_id|default:''|escapejs }}"
+  };
+
   let scanArmed = false;
   let scanDebounceTimer = null;
 
@@ -3252,37 +3259,39 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
+      setScanStatus('', false);
+
       const rowSelector = `#order-listing tbody tr[data-batch-id="${data.batch_id}"][data-stock-lot-id="${data.lot_id}"]`;
       const row = document.querySelector(rowSelector);
-      const addJigBtn = row ? row.querySelector('.open-jig-modal-btn') : null;
-      const domAuditDisabled = !!(
-        (addJigBtn && (addJigBtn.disabled || addJigBtn.classList.contains('disabled')))
-        || (row && (row.dataset.jigHoldLot === 'true' || row.classList.contains('row-on-hold') || row.classList.contains('row-inactive')))
-      );
-      const auditEnabled = (typeof data.audit_button_enabled === 'boolean') ? data.audit_button_enabled : !domAuditDisabled;
+      const isAddJigFlow = !!document.getElementById('jigAddModal')?.classList.contains('open');
 
-      if (!auditEnabled) {
-        // Force page 1 + scanned tray pinning so this works even when tray belongs to another page.
+      if (!row) {
+        // Cross-page scan: route to page 1 and pin scanned row server-side.
         const url = new URL(window.location.href);
         url.searchParams.set('page', '1');
         url.searchParams.set('scanned_tray', data.tray_id);
+        if (isAddJigFlow) {
+          url.searchParams.set('scan_open_add_jig', '1');
+        } else {
+          url.searchParams.delete('scan_open_add_jig');
+        }
         window.location.assign(url.toString());
         return;
       }
 
-      setScanStatus('', false);
-      Swal.fire({
-        icon: 'info',
-        title: 'Tray Scan Confirmation',
-        html: `
-          <div style="text-align:left;line-height:1.6;">
-            <div><b>Tray ID:</b> ${data.tray_id}</div>
-            <div><b>Tray Qty:</b> ${data.tray_qty}</div>
-            <div><b>Original Position:</b> ${data.original_position || '-'}</div>
-          </div>
-        `,
-        confirmButtonText: 'OK',
-      });
+      // Same-page scan: restore previous then pin new scanned row at top.
+      if (typeof window.highlightAndMoveRowToTop === 'function') {
+        window.highlightAndMoveRowToTop(row, data.lot_id);
+      }
+
+      // If scan is in Add Jig flow, open corresponding Add Jig modal automatically.
+      if (isAddJigFlow) {
+        const addJigBtn = row.querySelector('.open-jig-modal-btn');
+        if (addJigBtn) {
+          addJigBtn.click();
+        }
+      }
+
       scanInput.value = '';
       scanInput.focus();
     } catch (err) {
@@ -3328,6 +3337,24 @@ document.addEventListener('DOMContentLoaded', function () {
       }, 0);
     }
   });
+
+  // Apply highlight for cross-page scanned row pinned by backend.
+  if (scannedTrayMeta.exists && scannedTrayMeta.batch_id && scannedTrayMeta.lot_id) {
+    const scannedRowSelector = `#order-listing tbody tr[data-batch-id="${scannedTrayMeta.batch_id}"][data-stock-lot-id="${scannedTrayMeta.lot_id}"]`;
+    const scannedRow = document.querySelector(scannedRowSelector);
+    if (scannedRow) {
+      scannedRow.classList.add('jig-row-action-highlight');
+      scanStatus.textContent = '';
+
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('scan_open_add_jig') === '1') {
+        const addJigBtn = scannedRow.querySelector('.open-jig-modal-btn');
+        if (addJigBtn) {
+          addJigBtn.click();
+        }
+      }
+    }
+  }
 });
 </script>
 
@@ -3584,18 +3611,16 @@ if (data.valid === true) {
 
         console.log('🧪 [Jig View Icon] Frontend received trays:', traysData);
 
-        // Safety dedupe for rendering: keep first occurrence by tray_id while preserving order.
-        const uniqueTraysData = Array.from(
-          new Map((traysData || []).map((t) => [t.tray_id, t])).values()
-        );
-        console.log('🧪 [Jig View Icon] Final rendered trays:', uniqueTraysData);
+        // Render in exact backend order; do not re-sort/re-order on client.
+        const orderedTraysData = traysData || [];
+        console.log('🧪 [Jig View Icon] Final rendered trays:', orderedTraysData);
 
         // Build Brass style table
         let html = `<table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
         <thead>
           <tr><th>S.no</th><th>Tray ID</th><th>Tray Qty</th></tr>
         </thead><tbody>`;
-        uniqueTraysData.forEach(function (tray, idx) {
+        orderedTraysData.forEach(function (tray, idx) {
           html += `<tr>
                    <td>${idx === 0 ? "1 (Top Tray)" : idx + 1}</td>
                    <td><input type="text" class="form-control" value="${
@@ -4337,6 +4362,17 @@ function applyBrokenHooksPostAdjustment() {
 function renderDelinkTableFromData(delinkTable) {
   const delinkTableSection = document.getElementById('delinkTableSection');
   if (!delinkTableSection) return;
+
+  // Safety dedupe: keep only first occurrence of non-empty tray IDs.
+  // Empty tray IDs are kept as-is for fresh scan slots.
+  const seenTrayIds = new Set();
+  const normalizedDelinkTable = (delinkTable || []).filter((tray) => {
+    const trayId = ((tray && tray.tray_id) || '').trim().toUpperCase();
+    if (!trayId) return true;
+    if (seenTrayIds.has(trayId)) return false;
+    seenTrayIds.add(trayId);
+    return true;
+  });
   
   // Clear existing content
   delinkTableSection.innerHTML = '';
@@ -4344,11 +4380,11 @@ function renderDelinkTableFromData(delinkTable) {
   // Update delink count in header (use the same element id used elsewhere)
   const delinkCount = document.getElementById('delinkTrayCount');
   if (delinkCount) {
-    delinkCount.textContent = delinkTable.length;
+    delinkCount.textContent = normalizedDelinkTable.length;
   }
   
   // Render tray inputs based on delink table data
-  delinkTable.forEach((tray, index) => {
+  normalizedDelinkTable.forEach((tray, index) => {
     const trayTab = document.createElement('div');
     trayTab.className = `tray-scan-tab ${tray.model_bg || 'model-bg-1'}`;
     

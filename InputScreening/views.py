@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.renderers import TemplateHTMLRenderer
 from django.shortcuts import render
-from django.db.models import OuterRef, Subquery, Exists, F
+from django.db.models import OuterRef, Subquery, Exists, F, Count
 from django.core.paginator import Paginator
 from django.templatetags.static import static
 from django.db import IntegrityError
@@ -410,6 +410,32 @@ class SaveIPCheckboxView(APIView):
             if not batch_id:
                 print(f"❌ [create_ip_tray_instances] No batch_id found for lot {lot_id}")
                 return
+
+            # Keep only one row per (lot_id, tray_id) before upsert to avoid historical duplicates.
+            duplicate_tray_rows = (
+                IPTrayId.objects.filter(lot_id=lot_id)
+                .exclude(tray_id__isnull=True)
+                .exclude(tray_id='')
+                .values('tray_id')
+                .annotate(row_count=Count('id'))
+                .filter(row_count__gt=1)
+            )
+            for duplicate in duplicate_tray_rows:
+                duplicate_qs = IPTrayId.objects.filter(
+                    lot_id=lot_id,
+                    tray_id=duplicate['tray_id']
+                ).order_by('-id')
+                row_to_keep = duplicate_qs.first()
+                if not row_to_keep:
+                    continue
+                # Preserve top_tray marker if any duplicate row had it.
+                had_top_tray = duplicate_qs.filter(top_tray=True).exists()
+                if had_top_tray and not row_to_keep.top_tray:
+                    row_to_keep.top_tray = True
+                    row_to_keep.save(update_fields=['top_tray'])
+                deleted_rows = duplicate_qs.exclude(id=row_to_keep.id).delete()[0]
+                if deleted_rows:
+                    print(f"🧹 [create_ip_tray_instances] Removed {deleted_rows} duplicate IPTrayId rows for tray {duplicate['tray_id']} in lot {lot_id}")
     
             # Create or Update IPTrayId instances for each verified tray
             created_count = 0
@@ -423,31 +449,45 @@ class SaveIPCheckboxView(APIView):
                     if not tray.tray_id:
                         print(f"❌ [create_ip_tray_instances] Skipping tray with empty tray_id")
                         continue
-            
-                    # ✅ ALWAYS CREATE: Do not check for existing IPTrayId, always create new
-                    ip_tray = IPTrayId(
-                        tray_id=tray.tray_id,
+
+                    ip_tray, created = IPTrayId.objects.update_or_create(
                         lot_id=lot_id,
-                        batch_id=batch_id,
-                        date=timezone.now(),
-                        user=self.request.user,
-                        tray_quantity=tray.tray_quantity or 0,
-                        top_tray=bool(tray.top_tray),
-                        IP_tray_verified=True,
-                        tray_type=getattr(tray, 'tray_type', '') or '',
-                        tray_capacity=getattr(tray, 'tray_capacity', 0) or 0,
-                        new_tray=False,
-                        delink_tray=False
+                        tray_id=tray.tray_id,
+                        defaults={
+                            'batch_id': batch_id,
+                            'date': timezone.now(),
+                            'user': self.request.user,
+                            'tray_quantity': tray.tray_quantity or 0,
+                            'top_tray': bool(tray.top_tray),
+                            'IP_tray_verified': True,
+                            'tray_type': getattr(tray, 'tray_type', '') or '',
+                            'tray_capacity': getattr(tray, 'tray_capacity', 0) or 0,
+                            'new_tray': False,
+                            'delink_tray': False,
+                            'rejected_tray': False,
+                        }
                     )
-                    ip_tray.save()
-                    print(f"✅ [create_ip_tray_instances] Created new IPTrayId for: {tray.tray_id}")
+                    if created:
+                        created_count += 1
+                        print(f"✅ [create_ip_tray_instances] Created IPTrayId for: {tray.tray_id}")
+                    else:
+                        updated_count += 1
+                        print(f"🔄 [create_ip_tray_instances] Updated IPTrayId for: {tray.tray_id}")
             
                 except IntegrityError as e:
+                    failed_count += 1
+                    failed_trays.append({'tray_id': tray.tray_id, 'error': str(e)})
                     print(f"❌ [create_ip_tray_instances] IntegrityError for tray {tray.tray_id}: {str(e)}")
                 except ValidationError as e:
+                    failed_count += 1
+                    failed_trays.append({'tray_id': tray.tray_id, 'error': str(e)})
                     print(f"❌ [create_ip_tray_instances] ValidationError for tray {tray.tray_id}: {str(e)}")
                 except Exception as e:
+                    failed_count += 1
+                    failed_trays.append({'tray_id': tray.tray_id, 'error': str(e)})
                     print(f"❌ [create_ip_tray_instances] Unexpected error for tray {tray.tray_id}: {str(e)}")
+
+            print(f"📊 [create_ip_tray_instances] Summary for lot {lot_id}: created={created_count}, updated={updated_count}, failed={failed_count}")
             if failed_trays:
                 print(f"❌ [create_ip_tray_instances] Failed trays details:")
                 for failed in failed_trays:
