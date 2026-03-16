@@ -1554,6 +1554,53 @@ class BQ_Accepted_form(APIView):
                 print(f"✅ [BQ_Accepted_form] Data transferred to Brass Audit for lot: {lot_id}")
             else:
                 print(f"⚠️ [BQ_Accepted_form] Failed to transfer data to Brass Audit for lot: {lot_id}")
+            # ===== IQF Pick creation for Brass QC rejected trays (same guarded logic as tray-scan flow) =====
+            try:
+                from IQF.models import IQFTrayId
+                from Brass_QC.models import Brass_QC_Rejected_TrayScan
+                # Collect rejected scans for this lot (ignore empty tray ids)
+                rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(
+                    lot_id=lot_id
+                ).exclude(rejected_tray_id__isnull=True).exclude(rejected_tray_id='')
+
+                tray_map = {}
+                for scan in rejected_scans:
+                    tray_id = (scan.rejected_tray_id or '').strip()
+                    try:
+                        qty = int(scan.rejected_tray_quantity or 0)
+                    except Exception:
+                        qty = 0
+                    if not tray_id or qty <= 0:
+                        continue
+                    tray_map[tray_id] = tray_map.get(tray_id, 0) + qty
+
+                if tray_map:
+                    total_rejected_qty = sum(tray_map.values())
+                    tray_count = len(tray_map)
+                    if total_rejected_qty > 0 and tray_count > 0:
+                        try:
+                            total_stock_data.send_brass_audit_to_iqf = True
+                            total_stock_data.save(update_fields=['send_brass_audit_to_iqf'])
+                        except Exception:
+                            pass
+
+                        created = 0
+                        for t_id, t_qty in tray_map.items():
+                            if not t_id or t_qty <= 0:
+                                continue
+                            if IQFTrayId.objects.filter(lot_id=lot_id, tray_id=t_id).exists():
+                                continue
+                            IQFTrayId.objects.create(
+                                lot_id=lot_id,
+                                tray_id=t_id,
+                                tray_quantity=t_qty,
+                                user=request.user,
+                                rejected_tray=True
+                            )
+                            created += 1
+                        print(f"✅ [BQ_Accepted_form] Created {created} IQFTrayId(s) for lot {lot_id} (rejected_qty={total_rejected_qty}, trays={tray_count})")
+            except Exception as e:
+                print(f"⚠️ [BQ_Accepted_form] IQF creation skipped due error: {e}")
             
             return Response({"success": True})
         
@@ -2088,6 +2135,39 @@ class BQTrayRejectionAPIView(APIView):
             update_fields.append('brass_qc_accepted_qty')
             
             total_stock_obj.save(update_fields=update_fields)
+            
+            # ✅ NEW: Create IQF Pick records for rejected trays (BRASS QC → IQF transition)
+            try:
+                from IQF.models import IQFTrayId
+                
+                # Only create IQF records for partial/full rejections that need IQF processing
+                if saved_rejections and (total_stock_obj.brass_qc_few_cases_accptance or total_stock_obj.brass_qc_rejection):
+                    # Set the IQF flag 
+                    total_stock_obj.send_brass_audit_to_iqf = True
+                    total_stock_obj.save(update_fields=['send_brass_audit_to_iqf'])
+                    
+                    # Create IQF records for all rejected trays
+                    iqf_created = 0
+                    for rejection in saved_rejections:
+                        tray_id = rejection.get('tray_id')
+                        qty = rejection.get('qty', 0)
+                        
+                        if tray_id and qty > 0:
+                            # Check if IQF record already exists 
+                            if not IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists():
+                                IQFTrayId.objects.create(
+                                    lot_id=lot_id,
+                                    tray_id=tray_id,
+                                    tray_quantity=qty,
+                                    user=request.user,
+                                    rejected_tray=True
+                                )
+                                iqf_created += 1
+                    
+                    print(f"✅ [BQTrayRejectionAPIView] Created {iqf_created} IQFTrayId records for rejected trays (lot: {lot_id})")
+                    
+            except Exception as e:
+                print(f"⚠️ [BQTrayRejectionAPIView] IQF creation error: {e}")
             
             # ✅ ENHANCED: Return detailed information about what was saved
             return Response({
@@ -4820,6 +4900,61 @@ def brass_save_accepted_tray_scan(request):
                     print(f"✅ [brass_save_accepted_tray_scan] Data transferred to Brass Audit for lot: {lot_id}")
                 else:
                     print(f"⚠️ [brass_save_accepted_tray_scan] Failed to transfer data to Brass Audit for lot: {lot_id}")
+
+                # ===== IQF Pick creation for Brass QC rejected trays =====
+                try:
+                    from IQF.models import IQFTrayId
+                    from Brass_QC.models import Brass_QC_Rejected_TrayScan
+                    # Collect rejected scans for this lot (ignore empty tray ids)
+                    rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(
+                        lot_id=lot_id
+                    ).exclude(rejected_tray_id__isnull=True).exclude(rejected_tray_id='')
+
+                    # Aggregate quantities by tray id and validate
+                    tray_map = {}
+                    for scan in rejected_scans:
+                        tray_id = (scan.rejected_tray_id or '').strip()
+                        try:
+                            qty = int(scan.rejected_tray_quantity or 0)
+                        except Exception:
+                            qty = 0
+                        if not tray_id or qty <= 0:
+                            continue
+                        tray_map[tray_id] = tray_map.get(tray_id, 0) + qty
+
+                    # Only create IQF records when there is positive reject qty and at least one tray id
+                    if tray_map:
+                        total_rejected_qty = sum(tray_map.values())
+                        tray_count = len(tray_map)
+                        if total_rejected_qty > 0 and tray_count > 0:
+                            # Mark stock to be visible to IQF pick table
+                            try:
+                                stock.send_brass_audit_to_iqf = True
+                                stock.save(update_fields=['send_brass_audit_to_iqf'])
+                            except Exception:
+                                # best-effort only; do not block main flow
+                                pass
+
+                            created = 0
+                            for t_id, t_qty in tray_map.items():
+                                # Safety checks: skip invalid entries
+                                if not t_id or t_qty <= 0:
+                                    continue
+                                # Avoid duplicates
+                                if IQFTrayId.objects.filter(lot_id=lot_id, tray_id=t_id).exists():
+                                    continue
+                                IQFTrayId.objects.create(
+                                    lot_id=lot_id,
+                                    tray_id=t_id,
+                                    tray_quantity=t_qty,
+                                    user=user,
+                                    rejected_tray=True
+                                )
+                                created += 1
+                            print(f"✅ [brass_save_accepted_tray_scan] Created {created} IQFTrayId(s) for lot {lot_id} (rejected_qty={total_rejected_qty}, trays={tray_count})")
+                except Exception as e:
+                    # Log but do not fail the primary flow
+                    print(f"⚠️ [brass_save_accepted_tray_scan] IQF creation skipped due error: {e}")
 
         return Response({'success': True, 'message': 'Accepted tray scan saved.'})
 

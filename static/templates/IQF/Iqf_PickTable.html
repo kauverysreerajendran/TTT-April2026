@@ -1407,11 +1407,7 @@
                     <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
                     <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
                       <span class="lot-qty" style="min-width: 30px; text-align: right">
-                        {% if data.send_brass_audit_to_iqf %}
-                          {{ data.brass_audit_rejection_qty }}
-                        {% else %}
-                          {{ data.brass_rejection_total_qty }}
-                        {% endif %}
+                        {{ data.brass_rejection_total_qty|default:'0' }}
                       </span>
                       <span style="display: inline-flex; align-items: center; gap: 4px;">
                         {% if not data.iqf_accepted_qty_verified %}
@@ -2669,8 +2665,9 @@ document.addEventListener("DOMContentLoaded", function () {
           }
 
           if (modalLotQty) {
-            modalLotQty.textContent = totalBatchQuantity || lotQty || '0';
-            console.log("✅ Set RW Qty to:", totalBatchQuantity || lotQty || '0');
+            // Prefer lotQty (rejection total) for RW display; fallback to physical totalBatchQuantity
+            modalLotQty.textContent = (lotQty && lotQty !== '0') ? lotQty : totalBatchQuantity || '0';
+            console.log("✅ Set RW Qty to:", (lotQty && lotQty !== '0') ? lotQty : totalBatchQuantity || '0');
           }
 
           if (modalMissingQty) {

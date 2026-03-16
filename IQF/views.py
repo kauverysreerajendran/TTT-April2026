@@ -198,68 +198,42 @@ class IQFPickTableView(APIView):
                 images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
 
-            # Add available_qty for each row
+            # Add available_qty and RW qty for each row
             lot_id = data.get('stock_lot_id')
             total_stock_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
             if total_stock_obj:
-                # ✅ HEALING LOGIC: If iqf_physical_qty is 0/None and no missing qty recorded, try to recover from Brass QC/Audit
-                # This fixes the bug where "assigned quantity" is lost after draft save
+                # Do NOT persist any healed physical qty here. Instead expose the rejected
+                # quantity as `rw_qty` and keep available_qty strictly from real physical qty.
                 current_physical_qty = total_stock_obj.iqf_physical_qty or 0
-                current_missing_qty = total_stock_obj.iqf_missing_qty or 0
-                
-                # Strict conditions: 
-                # 1. Physical qty is 0 or None
-                # 2. Missing qty is 0 or None (if user set missing, 0 physical is valid)
-                # 3. Not yet finalized (not fully accepted or rejected)
-                needs_healing = (
-                    current_physical_qty <= 0 and 
-                    current_missing_qty <= 0 and
-                    not total_stock_obj.iqf_acceptance and 
-                    not total_stock_obj.iqf_rejection
-                )
 
-                if needs_healing:
-                    try:
-                        # Determine source based on flag
-                        use_audit = getattr(total_stock_obj, 'send_brass_audit_to_iqf', False)
-                        
-                        if use_audit:
-                            reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-                        else:
-                            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-                        
-                        if reason_store and reason_store.total_rejection_quantity > 0:
-                            qty_to_heal = reason_store.total_rejection_quantity
-                            print(f"🚑 HEALING: Recovering iqf_physical_qty for {lot_id} -> {qty_to_heal}")
-                            
-                            # Persist the recovered quantity
-                            total_stock_obj.iqf_physical_qty = qty_to_heal
-                            total_stock_obj.iqf_missing_qty = 0
-                            total_stock_obj.save(update_fields=['iqf_physical_qty', 'iqf_missing_qty'])
-                            
-                            # Update local object for immediate use in this view
-                            total_stock_obj.iqf_physical_qty = qty_to_heal
-                    except Exception as e:
-                        print(f"⚠️ HEALING FAILED for {lot_id}: {str(e)}")
+                # Determine rejection total from appropriate reason store (do not save)
+                use_audit = getattr(total_stock_obj, 'send_brass_audit_to_iqf', False)
+                reason_store = None
+                try:
+                    if use_audit:
+                        reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                    else:
+                        reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                except Exception:
+                    reason_store = None
 
-                # Standard assignment using (possibly healed) value
-                if total_stock_obj.iqf_physical_qty and total_stock_obj.iqf_physical_qty > 0:
-                    data['available_qty'] = total_stock_obj.iqf_physical_qty
+                rw_qty = (reason_store.total_rejection_quantity if reason_store and getattr(reason_store, 'total_rejection_quantity', 0) else 0)
+
+                # available_qty should reflect actual physical qty (if any). If none, leave 0
+                if current_physical_qty and current_physical_qty > 0:
+                    data['available_qty'] = current_physical_qty
                 else:
-                    data['available_qty'] = data.get('brass_rejection_total_qty', 0)
+                    data['available_qty'] = 0
+
+                # expose RW qty separately
+                data['rw_qty'] = rw_qty
             else:
                 data['available_qty'] = 0
-            
-            # Add display_physical_qty for frontend
+                data['rw_qty'] = 0
+
+            # Add display_physical_qty for frontend (STRICT: only from iqf_physical_qty)
             iqf_physical_qty = data.get('iqf_physical_qty', 0)
-            if iqf_physical_qty and iqf_physical_qty > 0:
-                data['display_physical_qty'] = iqf_physical_qty
-            else:
-                # Use same logic as display_lot_qty for fallback
-                if data.get('send_brass_audit_to_iqf'):
-                    data['display_physical_qty'] = data.get('brass_audit_rejection_qty') or 0
-                else:
-                    data['display_physical_qty'] = data.get('brass_rejection_total_qty') or 0
+            data['display_physical_qty'] = iqf_physical_qty if (iqf_physical_qty and iqf_physical_qty > 0) else 0
         print("Processed lot_ids:", [data['stock_lot_id'] for data in master_data])
 
         context = {
@@ -294,17 +268,15 @@ def iqf_get_brass_rejection_quantities(request):
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
         use_audit = getattr(stock, 'send_brass_audit_to_iqf', False)
 
-        if use_audit:
-            # Use Brass_Audit tables
-            rejected_trays = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
-            reason_store_model = Brass_Audit_Rejection_ReasonStore
-        else:
-            # Use Brass_QC tables
-            rejected_trays = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
-            reason_store_model = Brass_QC_Rejection_ReasonStore
-
+        # ✅ FIXED: Always check BOTH Brass QC and Brass Audit rejection scans
+        # Brass QC rejections can be sent to IQF directly (our case)
+        # Brass Audit rejections can also be sent to IQF
+        
         rejection_qty_map = {}
-        for tray in rejected_trays:
+        
+        # Check Brass QC rejected trays (primary source for Brass QC → IQF flow)
+        brass_qc_rejected_trays = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+        for tray in brass_qc_rejected_trays:
             reason = tray.rejection_reason.rejection_reason.strip()
             qty = int(tray.rejected_tray_quantity) if tray.rejected_tray_quantity else 0
             if reason in rejection_qty_map:
@@ -312,14 +284,34 @@ def iqf_get_brass_rejection_quantities(request):
             else:
                 rejection_qty_map[reason] = qty
 
-        # If no tray-wise reasons, show lot_rejected_comment from reason_store_model
+        # Check Brass Audit rejected trays (secondary source for Brass Audit → IQF flow)
+        brass_audit_rejected_trays = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+        for tray in brass_audit_rejected_trays:
+            reason = tray.rejection_reason.rejection_reason.strip()
+            qty = int(tray.rejected_tray_quantity) if tray.rejected_tray_quantity else 0
+            if reason in rejection_qty_map:
+                rejection_qty_map[reason] += qty
+            else:
+                rejection_qty_map[reason] = qty
+        
+        # Get lot rejected comment and total from appropriate source
         lot_rejected_comment = ""
         total_rejection_quantity = 0
-        reason_store = reason_store_model.objects.filter(lot_id=lot_id).order_by('-id').first()
-        if reason_store:
-            total_rejection_quantity = reason_store.total_rejection_quantity or 0
+        
+        # Try Brass QC reason store first
+        brass_qc_reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+        if brass_qc_reason_store:
+            total_rejection_quantity = brass_qc_reason_store.total_rejection_quantity or 0
             if not rejection_qty_map:
-                lot_rejected_comment = reason_store.lot_rejected_comment or ""
+                lot_rejected_comment = brass_qc_reason_store.lot_rejected_comment or ""
+        
+        # Try Brass Audit reason store if no QC data
+        if total_rejection_quantity == 0:
+            brass_audit_reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+            if brass_audit_reason_store:
+                total_rejection_quantity = brass_audit_reason_store.total_rejection_quantity or 0
+                if not rejection_qty_map:
+                    lot_rejected_comment = brass_audit_reason_store.lot_rejected_comment or ""
 
         return Response({
             'success': True,
@@ -388,12 +380,8 @@ class IQFSaveIPCheckboxView(APIView):
                 return Response({"success": False, "error": "Lot ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             total_stock = TotalStockModel.objects.get(lot_id=lot_id)
-            total_stock.iqf_accepted_qty_verified = True
-            total_stock.last_process_module = "IQF"
-            total_stock.next_process_module = "Brass QC"
-            
-            
-            total_stock.save()
+            # Do not mark the lot as accepted until missing_qty validation passes
+            # (marking early caused the UI to show checked even when validation failed)
 
             # Use Brass_Audit or Brass_QC based on send_brass_audit_to_iqf
             if getattr(total_stock, 'send_brass_audit_to_iqf', False):
@@ -411,12 +399,6 @@ class IQFSaveIPCheckboxView(APIView):
                 except ValueError:
                     return Response({"success": False, "error": "Missing quantity must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-                if missing_qty == use_total_qty:
-                    return Response(
-                        {"success": False, "error": "Missing quantity cannot be equal to assigned quantity."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
                 if missing_qty > use_total_qty:
                     return Response(
                         {"success": False, "error": "Missing quantity must be less than assigned quantity."},
@@ -425,6 +407,11 @@ class IQFSaveIPCheckboxView(APIView):
 
                 total_stock.iqf_missing_qty = missing_qty
                 total_stock.iqf_physical_qty = use_total_qty - missing_qty
+
+            # All validations passed — now mark as accepted and persist changes
+            total_stock.iqf_accepted_qty_verified = True
+            total_stock.last_process_module = "IQF"
+            total_stock.next_process_module = "Brass QC"
             total_stock.save()
 
             # ✅ If send_brass_audit_to_iqf is True, create IQFTrayId from BrassAuditTrayId (rejected_tray=True)
@@ -987,6 +974,29 @@ class IQFPickCompleteTableTrayIdListAPIView(APIView):
                     }
                     all_trays.append(tray_data)
                     print(f"   ✅ IQF Rejection Tray {idx + 1}: ID={tray.tray_id}, Qty={tray.rejected_tray_quantity}, Reason={tray.rejection_reason.rejection_reason if tray.rejection_reason else 'N/A'}")
+
+            # 🔹 ADDITIONAL: Include IQFTrayId rejected records (created by Brass QC flow)
+            # Some flows create IQFTrayId entries directly; ensure they're represented in pick list
+            iqf_trayid_objs = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=True).order_by('id')
+            print(f"🔍 [IQFPickCompleteTableTrayIdListAPIView] Found {iqf_trayid_objs.count()} IQFTrayId rejected records")
+            for tray in iqf_trayid_objs:
+                if tray.tray_id and tray.tray_id not in existing_tray_ids:
+                    tray_data = {
+                        "tray_id": tray.tray_id,
+                        "tray_quantity": int(tray.tray_quantity) if tray.tray_quantity else 0,
+                        "rejected_tray": True,
+                        "rejection_reason": "N/A",
+                        "rejection_reason_id": "",
+                        "is_top_tray": tray.top_tray,
+                        "source": "iqf_trayid",
+                        "rejection_type": "IQFTrayId Rejection",
+                        "delink_tray": tray.delink_tray,
+                        "iqf_reject_verify": tray.iqf_reject_verify,
+                        "new_tray": tray.new_tray,
+                        "IP_tray_verified": tray.IP_tray_verified
+                    }
+                    all_trays.append(tray_data)
+                    print(f"   ✅ IQFTrayId record added: ID={tray.tray_id}, Qty={tray.tray_quantity}")
 
             # ✅ FIXED: Aggregate duplicate tray IDs by summing quantities
             print(f"🔍 [IQFPickCompleteTableTrayIdListAPIView] Before aggregation: {len(all_trays)} tray records")
