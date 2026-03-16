@@ -1928,14 +1928,47 @@ tr.row-inactive td:first-child {
 .hold-remark-icon img {
   vertical-align: middle;
 }
+
+.picktable-scan-btn {
+  background: #028084;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.picktable-scan-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #028084;
+  min-height: 18px;
+}
+
+.picktable-scan-status.error {
+  color: #dc3545;
+}
 </style>
 
 <div class="content-wrapper">
   <div class="col-12 grid-margin stretch-card">
     <div class="card-body" style="padding-bottom: 12px">
-      <h5 class="text-left mt-0 mb-4" style="font-weight: 700">
-        Jig Loading Pick Table
-      </h5>
+      <div class="d-flex align-items-center gap-2 mb-4" style="flex-wrap: wrap">
+        <h5 class="text-left mt-0 mb-0" style="font-weight: 700">
+          Jig Loading - Pick Table
+        </h5>
+        <button type="button" id="pickTableScanBtn" class="picktable-scan-btn">Scan</button>
+        <span id="pickTableScanStatus" class="picktable-scan-status"></span>
+        <input
+          type="text"
+          id="pickTableScanInput"
+          autocomplete="off"
+          style="position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px;"
+          aria-hidden="true"
+        />
+      </div>
       <div class="table-responsive">
         <table id="order-listing" class="table">
           <thead>
@@ -3178,6 +3211,126 @@ document.addEventListener('DOMContentLoaded', function () {
 })();
 </script>
 
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+  const scanBtn = document.getElementById('pickTableScanBtn');
+  const scanInput = document.getElementById('pickTableScanInput');
+  const scanStatus = document.getElementById('pickTableScanStatus');
+  if (!scanBtn || !scanInput || !scanStatus) {
+    return;
+  }
+
+  let scanArmed = false;
+  let scanDebounceTimer = null;
+
+  function setScanStatus(message, isError) {
+    scanStatus.textContent = message || '';
+    scanStatus.classList.toggle('error', !!isError);
+  }
+
+  function armScanMode() {
+    scanArmed = true;
+    scanInput.value = '';
+    setScanStatus('Please Scan', false);
+    scanInput.focus();
+  }
+
+  async function processScannedTray(rawTrayId) {
+    const trayId = (rawTrayId || '').trim().toUpperCase();
+    if (!trayId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/jig_loading/scan-tray-lookup/?tray_id=${encodeURIComponent(trayId)}`);
+      const data = await response.json();
+
+      if (!response.ok || !data.exists) {
+        setScanStatus('Invalid Tray ID', true);
+        scanInput.value = '';
+        scanInput.focus();
+        return;
+      }
+
+      const rowSelector = `#order-listing tbody tr[data-batch-id="${data.batch_id}"][data-stock-lot-id="${data.lot_id}"]`;
+      const row = document.querySelector(rowSelector);
+      const addJigBtn = row ? row.querySelector('.open-jig-modal-btn') : null;
+      const domAuditDisabled = !!(
+        (addJigBtn && (addJigBtn.disabled || addJigBtn.classList.contains('disabled')))
+        || (row && (row.dataset.jigHoldLot === 'true' || row.classList.contains('row-on-hold') || row.classList.contains('row-inactive')))
+      );
+      const auditEnabled = (typeof data.audit_button_enabled === 'boolean') ? data.audit_button_enabled : !domAuditDisabled;
+
+      if (!auditEnabled) {
+        // Force page 1 + scanned tray pinning so this works even when tray belongs to another page.
+        const url = new URL(window.location.href);
+        url.searchParams.set('page', '1');
+        url.searchParams.set('scanned_tray', data.tray_id);
+        window.location.assign(url.toString());
+        return;
+      }
+
+      setScanStatus('', false);
+      Swal.fire({
+        icon: 'info',
+        title: 'Tray Scan Confirmation',
+        html: `
+          <div style="text-align:left;line-height:1.6;">
+            <div><b>Tray ID:</b> ${data.tray_id}</div>
+            <div><b>Tray Qty:</b> ${data.tray_qty}</div>
+            <div><b>Original Position:</b> ${data.original_position || '-'}</div>
+          </div>
+        `,
+        confirmButtonText: 'OK',
+      });
+      scanInput.value = '';
+      scanInput.focus();
+    } catch (err) {
+      setScanStatus('Invalid Tray ID', true);
+      scanInput.value = '';
+      scanInput.focus();
+    }
+  }
+
+  scanBtn.addEventListener('click', function () {
+    armScanMode();
+  });
+
+  scanInput.addEventListener('keydown', function (event) {
+    if (!scanArmed) {
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      processScannedTray(scanInput.value);
+      return;
+    }
+  });
+
+  scanInput.addEventListener('input', function () {
+    if (!scanArmed) {
+      return;
+    }
+    if (scanDebounceTimer) {
+      clearTimeout(scanDebounceTimer);
+    }
+    scanDebounceTimer = setTimeout(function () {
+      if ((scanInput.value || '').trim().length >= 6) {
+        processScannedTray(scanInput.value);
+      }
+    }, 120);
+  });
+
+  scanInput.addEventListener('blur', function () {
+    if (scanArmed) {
+      setTimeout(function () {
+        scanInput.focus();
+      }, 0);
+    }
+  });
+});
+</script>
+
 
 <!-- Add Jig button - rendering (Modal Popup - Delink Information Table) -->
 <script nonce="{{ csp_nonce }}">
@@ -3424,16 +3577,25 @@ if (data.valid === true) {
           );
           const result = await resp.json();
           traysData = result.trays || [];
+          console.log('🧪 [Jig View Icon] API response trays:', traysData);
         } catch (e) {
           traysData = [];
         }
+
+        console.log('🧪 [Jig View Icon] Frontend received trays:', traysData);
+
+        // Safety dedupe for rendering: keep first occurrence by tray_id while preserving order.
+        const uniqueTraysData = Array.from(
+          new Map((traysData || []).map((t) => [t.tray_id, t])).values()
+        );
+        console.log('🧪 [Jig View Icon] Final rendered trays:', uniqueTraysData);
 
         // Build Brass style table
         let html = `<table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
         <thead>
           <tr><th>S.no</th><th>Tray ID</th><th>Tray Qty</th></tr>
         </thead><tbody>`;
-        traysData.forEach(function (tray, idx) {
+        uniqueTraysData.forEach(function (tray, idx) {
           html += `<tr>
                    <td>${idx === 0 ? "1 (Top Tray)" : idx + 1}</td>
                    <td><input type="text" class="form-control" value="${

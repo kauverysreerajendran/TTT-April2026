@@ -10,6 +10,7 @@ urlpatterns = [
     path('jig-add-modal-data/', JigAddModalDataView.as_view(), name='jig_add_modal_data'),
     path('delink-table/', DelinkTableAPIView.as_view(), name='delink_table_api'),
     path('validate-tray-id/', views.validate_tray_id, name='validate_tray_id'),
+    path('scan-tray-lookup/', views.scan_tray_lookup, name='scan_tray_lookup'),
     path('manual-draft/', JigLoadingManualDraftAPIView.as_view(), name='jig_loading_manual_draft'),
     path('manual-draft-fetch/', JigLoadingManualDraftFetchAPIView.as_view(), name='jig_loading_manual_draft_fetch'),
     path('jig-submit/', JigSubmitAPIView.as_view(), name='jig_submit'),

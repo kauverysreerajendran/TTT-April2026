@@ -161,6 +161,30 @@ class JigView(TemplateView):
         
         # Sort by Last Updated descending (newest first)
         master_data.sort(key=lambda x: x['brass_audit_last_process_date_time'] or datetime.min, reverse=True)
+
+        # Optional scan pinning: if a tray is scanned from any page, pin its row on page 1.
+        scanned_tray = (self.request.GET.get('scanned_tray') or '').strip()
+        context['scanned_tray_meta'] = {'exists': False}
+        if scanned_tray:
+            scanned_record = JigLoadTrayId.objects.filter(tray_id=scanned_tray).select_related('batch_id').first()
+            if scanned_record and scanned_record.batch_id:
+                match_idx = next(
+                    (
+                        idx for idx, row in enumerate(master_data)
+                        if row.get('batch_id') == scanned_record.batch_id.batch_id
+                        and row.get('stock_lot_id') == scanned_record.lot_id
+                    ),
+                    None
+                )
+                context['scanned_tray_meta'] = {
+                    'exists': match_idx is not None,
+                    'tray_id': scanned_record.tray_id,
+                    'tray_qty': scanned_record.tray_quantity or scanned_record.tray_capacity or 0,
+                    'original_position': (match_idx + 1) if match_idx is not None else None,
+                }
+                if match_idx is not None:
+                    pinned_row = master_data.pop(match_idx)
+                    master_data.insert(0, pinned_row)
         
         context['master_data'] = master_data
         
@@ -176,6 +200,7 @@ class JigView(TemplateView):
 # Tray Info API View
 class TrayInfoView(APIView):
     def get(self, request, *args, **kwargs):
+        logger = logging.getLogger(__name__)
         lot_id = request.GET.get('lot_id')
         batch_id = request.GET.get('batch_id')
         
@@ -186,9 +211,14 @@ class TrayInfoView(APIView):
             # For completed lots, only show half-filled trays (remaining to process)
             tray_list = []
             if jig_completed.half_filled_tray_info:
+                seen_tray_ids = set()
                 for tray in jig_completed.half_filled_tray_info:
+                    tray_id = tray.get('tray_id')
+                    if not tray_id or tray_id in seen_tray_ids:
+                        continue
+                    seen_tray_ids.add(tray_id)
                     tray_list.append({
-                        'tray_id': tray.get('tray_id'),
+                        'tray_id': tray_id,
                         'tray_quantity': tray.get('cases')
                     })
         else:
@@ -211,11 +241,24 @@ class TrayInfoView(APIView):
 
             tray_list = []
             cumulative = 0
+            seen_tray_ids = set()
             for t in trays_qs.values('tray_id', 'tray_quantity', 'top_tray'):
                 if target_qty is not None and cumulative >= target_qty:
                     break
-                tray_list.append({'tray_id': t['tray_id'], 'tray_quantity': t['tray_quantity']})
-                cumulative += (t['tray_quantity'] or 0)
+                tray_id = t['tray_id']
+                if not tray_id or tray_id in seen_tray_ids:
+                    continue
+                seen_tray_ids.add(tray_id)
+                tray_qty = t['tray_quantity'] or 0
+                tray_list.append({'tray_id': tray_id, 'tray_quantity': tray_qty})
+                cumulative += tray_qty
+
+        logger.info(
+            "Jig TrayInfoView lot_id=%s batch_id=%s trays_returned=%s",
+            lot_id,
+            batch_id,
+            len(tray_list)
+        )
         
         return Response({'trays': tray_list})
        
@@ -1236,6 +1279,74 @@ def validate_tray_id(request):
     else:
         # Do NOT allow new trays for delink table (only for half-filled section, handled elsewhere)
         return Response({'valid': False, 'message': 'Invalid Tray ID.'})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def scan_tray_lookup(request):
+    """
+    Validate a scanned tray id for Jig Loading pick table scan workflow.
+    Returns row identity and original table position for temporary reordering.
+    """
+    tray_id = (request.GET.get('tray_id') or '').strip()
+    if not tray_id:
+        return Response({'exists': False}, status=status.HTTP_400_BAD_REQUEST)
+
+    tray = JigLoadTrayId.objects.filter(tray_id=tray_id).select_related('batch_id').first()
+    if not tray or not tray.batch_id:
+        return Response({'exists': False}, status=status.HTTP_200_OK)
+
+    # Build the same base lot pool used by JigView so original_position matches pick-table order.
+    total_stock_qs = (
+        TotalStockModel.objects.filter(brass_audit_accptance=True, Jig_Load_completed=False)
+        | TotalStockModel.objects.filter(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False, Jig_Load_completed=False)
+        | TotalStockModel.objects.filter(brass_audit_rejection=True, Jig_Load_completed=False)
+        | TotalStockModel.objects.filter(jig_draft=True, Jig_Load_completed=False)
+    )
+    completed_with_half_filled = JigCompleted.objects.filter(
+        half_filled_tray_info__isnull=False
+    ).exclude(
+        half_filled_tray_info=[]
+    ).values_list('lot_id', flat=True)
+    if completed_with_half_filled:
+        total_stock_qs |= TotalStockModel.objects.filter(
+            lot_id__in=completed_with_half_filled,
+            Jig_Load_completed=True
+        )
+
+    order_rows = []
+    for stock in total_stock_qs:
+        order_rows.append({
+            'batch_id': stock.batch_id.batch_id if stock.batch_id else '',
+            'lot_id': stock.lot_id,
+            'last_updated': stock.brass_audit_last_process_date_time,
+            'jig_hold_lot': bool(getattr(stock, 'jig_hold_lot', False)),
+            'released_flag': bool(getattr(stock, 'released_flag', False)),
+        })
+    order_rows.sort(key=lambda x: x['last_updated'] or datetime.min, reverse=True)
+
+    match_idx = next(
+        (
+            idx for idx, row in enumerate(order_rows)
+            if row['batch_id'] == tray.batch_id.batch_id and row['lot_id'] == tray.lot_id
+        ),
+        None
+    )
+
+    audit_enabled = True
+    if match_idx is not None:
+        matched_row = order_rows[match_idx]
+        audit_enabled = not (matched_row['jig_hold_lot'] or matched_row['released_flag'])
+
+    return Response({
+        'tray_id': tray.tray_id,
+        'tray_qty': tray.tray_quantity or tray.tray_capacity or 0,
+        'original_position': (match_idx + 1) if match_idx is not None else None,
+        'batch_id': tray.batch_id.batch_id,
+        'lot_id': tray.lot_id,
+        'exists': True,
+        'audit_button_enabled': audit_enabled,
+    }, status=status.HTTP_200_OK)
 
 # Add Jig Btn - Delink Table View
 
