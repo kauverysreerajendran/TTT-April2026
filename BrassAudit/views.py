@@ -232,48 +232,59 @@ class BrassAuditPickTableView(APIView):
                 data['display_accepted_qty'] = ba_lot_qty
                 data['no_of_trays'] = ba_no_of_trays
             else:
-                # ── Priority 2: brass_audit_accepted_qty only when genuinely set (> 0) ──
-                # NOTE: brass_audit_accepted_qty defaults to 0 in TotalStockModel, so checking
-                # >= 0 would always be True for new lots — fixed here to > 0.
-                brass_audit_accepted_qty = data.get('brass_audit_accepted_qty')
-                if brass_audit_accepted_qty is not None and brass_audit_accepted_qty > 0:
-                    data['display_accepted_qty'] = brass_audit_accepted_qty
-                # ── Priority 3: brass_qc_accepted_qty (lots from Brass QC) ──
-                elif brass_qc_accepted_qty > 0:
-                    data['display_accepted_qty'] = brass_qc_accepted_qty
-                # ── Priority 4: iqf_accepted_qty (lots whose last stage was IQF) ──
-                elif data.get('iqf_accepted_qty', 0) > 0:
-                    data['display_accepted_qty'] = data.get('iqf_accepted_qty')
+                # ── Priority 2: IQF_Accepted_TrayID_Store (lots that passed through IQF) ──
+                # When a lot goes Brass QC → IQF → Brass Audit, the actual accepted
+                # quantities live in IQF_Accepted_TrayID_Store. These are authoritative
+                # and must take precedence over the stale brass_qc_accepted_qty.
+                iqf_accepted_trays = IQF_Accepted_TrayID_Store.objects.filter(
+                    lot_id=lot_id, is_save=True
+                )
+                if iqf_accepted_trays.exists():
+                    iqf_lot_qty = iqf_accepted_trays.aggregate(total=Sum('tray_qty'))['total'] or 0
+                    iqf_no_of_trays = iqf_accepted_trays.count()
+                    data['display_accepted_qty'] = iqf_lot_qty
+                    data['no_of_trays'] = iqf_no_of_trays
                 else:
-                    # ── Priority 5: compute from Brass QC rejection data ──
-                    total_rejection_qty = 0
-                    rejection_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
-                    if rejection_store and rejection_store.total_rejection_quantity:
-                        total_rejection_qty = rejection_store.total_rejection_quantity
-
-                    total_stock_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
-
-                    if total_stock_obj and total_rejection_qty > 0:
-                        data['display_accepted_qty'] = max(total_stock_obj.total_stock - total_rejection_qty, 0)
+                    # ── Priority 3: brass_audit_accepted_qty only when genuinely set (> 0) ──
+                    brass_audit_accepted_qty = data.get('brass_audit_accepted_qty')
+                    if brass_audit_accepted_qty is not None and brass_audit_accepted_qty > 0:
+                        data['display_accepted_qty'] = brass_audit_accepted_qty
+                    # ── Priority 4: brass_qc_accepted_qty (lots from Brass QC) ──
+                    elif brass_qc_accepted_qty > 0:
+                        data['display_accepted_qty'] = brass_qc_accepted_qty
+                    # ── Priority 5: iqf_accepted_qty from TotalStockModel ──
+                    elif data.get('iqf_accepted_qty', 0) > 0:
+                        data['display_accepted_qty'] = data.get('iqf_accepted_qty')
                     else:
-                        data['display_accepted_qty'] = 0
+                        # ── Priority 6: compute from Brass QC rejection data ──
+                        total_rejection_qty = 0
+                        rejection_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                        if rejection_store and rejection_store.total_rejection_quantity:
+                            total_rejection_qty = rejection_store.total_rejection_quantity
 
-                    # ── Priority 6: brass_physical_qty / total_stock last resort ──
-                    try:
-                        if data.get('display_accepted_qty', 0) == 0 and total_stock_obj:
-                            if getattr(total_stock_obj, 'brass_physical_qty', 0) and total_stock_obj.brass_physical_qty > 0:
-                                data['display_accepted_qty'] = total_stock_obj.brass_physical_qty
-                            elif getattr(total_stock_obj, 'total_stock', 0) and total_stock_obj.total_stock > 0:
-                                data['display_accepted_qty'] = total_stock_obj.total_stock
-                    except Exception:
-                        pass
+                        total_stock_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
 
-                # Compute no_of_trays from tray_capacity when BrassAuditTrayId records are absent
-                display_qty = data.get('display_accepted_qty', 0)
-                if tray_capacity > 0 and display_qty > 0:
-                    data['no_of_trays'] = math.ceil(display_qty / tray_capacity)
-                else:
-                    data['no_of_trays'] = 0
+                        if total_stock_obj and total_rejection_qty > 0:
+                            data['display_accepted_qty'] = max(total_stock_obj.total_stock - total_rejection_qty, 0)
+                        else:
+                            data['display_accepted_qty'] = 0
+
+                        # ── Priority 7: brass_physical_qty / total_stock last resort ──
+                        try:
+                            if data.get('display_accepted_qty', 0) == 0 and total_stock_obj:
+                                if getattr(total_stock_obj, 'brass_physical_qty', 0) and total_stock_obj.brass_physical_qty > 0:
+                                    data['display_accepted_qty'] = total_stock_obj.brass_physical_qty
+                                elif getattr(total_stock_obj, 'total_stock', 0) and total_stock_obj.total_stock > 0:
+                                    data['display_accepted_qty'] = total_stock_obj.total_stock
+                        except Exception:
+                            pass
+
+                    # Compute no_of_trays from tray_capacity when actual tray records are absent
+                    display_qty = data.get('display_accepted_qty', 0)
+                    if tray_capacity > 0 and display_qty > 0:
+                        data['no_of_trays'] = math.ceil(display_qty / tray_capacity)
+                    else:
+                        data['no_of_trays'] = 0
 
             brass_audit_physical_qty = data.get('brass_audit_physical_qty') or 0
             brass_rejection_total_qty = data.get('brass_rejection_total_qty') or 0
