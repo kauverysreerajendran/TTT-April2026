@@ -2,75 +2,67 @@
 <style>
   /* Base Styles for Popups */
   .avatar-group {
-    display: flex;
-    align-items: center;
-  }
+  display: flex;
+  align-items: center;
+}
 
-  .avatar {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    color: white;
-    font-weight: bold;
-    font-family: Arial, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: -3px;
-    z-index: 1;
-    box-shadow: 0 0 0 2px white;
-  }
+.avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: white;
+  font-weight: bold;
+  font-family: Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -3px;
+  z-index: 1;
+  box-shadow: 0 0 0 2px white;
+}
 
-  .avatar:first-child {
-    margin-left: 0;
-  }
+.avatar:first-child {
+  margin-left: 0;
+}
 
-  .blue {
-    background-color: #1e88e5;
-  } /* D */
-  .green {
-    background-color: #43a047;
-  } /* S */
-  .purple {
-    background-color: #8e24aa;
-  } /* T */
-  .orange {
-    background-color: #fb8c00;
-  } /* F */
-  .teal {
-    background-color: #4dd0e1;
-  } /* A */
-  .gray {
+.blue   { background-color: #1e88e5; } /* D */
+.green  { background-color: #43a047; } /* S */
+.purple { background-color: #8e24aa; } /* T */
+.orange { background-color: #fb8c00; } /* F */
+.teal   { background-color: #4dd0e1; } /* A */
+.gray   {
     background-color: #d3d3d3;
     color: #666;
     font-size: 20px;
     margin-left: 5px;
     width: 10px;
     height: 10px;
-  }
+}
 
-  .arrow {
+.arrow {
     font-size: 10px;
     line-height: 1;
     align-items: center;
     display: flex;
     justify-content: center;
     margin-top: -3px;
-  }
+}
 
-  #order-listing thead th {
-    height: 38px !important; /* Increase as needed */
-    background: #028084 !important; /* existing bg */
-    color: #e5fcff !important; /* existing color */
-    vertical-align: middle !important;
-  }
-  thead th {
-    height: 38px !important; /* Increase as needed */
-    background: #028084 !important; /* existing bg */
-    color: #e5fcff !important; /* existing color */
-    vertical-align: middle !important;
-  }
-  /* --- DP_PickTable: Match DP_Completed_Table style --- */
+#order-listing thead th {
+  height: 38px !important; /* Increase as needed */
+  background: #028084 !important; /* existing bg */
+  color: #e5fcff !important;      /* existing color */
+  vertical-align: middle !important;
+  
+}
+thead th {
+  height: 38px !important; /* Increase as needed */
+  background: #028084 !important; /* existing bg */
+  color: #e5fcff !important;      /* existing color */
+  vertical-align: middle !important;
+  
+}
+    /* --- DP_PickTable: Match DP_Completed_Table style --- */
   #order-listing {
     border-collapse: collapse;
   }
@@ -103,10 +95,7 @@
     background: white;
     box-shadow: -3px 0 10px rgba(0, 0, 0, 0.2);
     overflow-y: auto;
-    transition:
-      right 0.3s ease,
-      width 0.3s ease,
-      padding 0.3s ease;
+    transition: right 0.3s ease, width 0.3s ease, padding 0.3s ease;
     padding: 20px;
     font-family: Arial, sans-serif;
   }
@@ -203,10 +192,10 @@
       width: 100%;
       padding: 10px;
     }
-    .tray-scan-modal.open {
-      width: 100% !important; /* your desired expanded width */
-      margin-right: 0px !important;
-    }
+     .tray-scan-modal.open {
+    width: 100% !important; /* your desired expanded width */
+    margin-right: 0px !important;
+  }
     /* On very small screens, stacking is more appropriate */
     .tray-scan-modal.open {
       right: 0;
@@ -276,7 +265,7 @@
   thead th {
     position: sticky;
     top: 0;
-    background-color: #028084 !important;
+    background-color: #028084!important;
     color: #fff !important;
     z-index: 10;
     box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
@@ -335,7 +324,7 @@
     width: 600px;
     background: #fff;
     border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     padding: 20px;
     z-index: 10000;
     transition: right 0.3s ease;
@@ -383,7 +372,7 @@
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0,0,0,0.5);
     border: none;
     color: #fff;
     padding: 8px;
@@ -391,12 +380,8 @@
     border-radius: 50%;
     user-select: none;
   }
-  .prev {
-    left: 10px;
-  }
-  .next {
-    right: 10px;
-  }
+  .prev { left: 10px; }
+  .next { right: 10px; }
   @media (max-width: 767px) {
     .image-slider-modal {
       width: 100%;
@@ -405,27 +390,21 @@
       border-radius: 0;
       padding: 10px;
     }
-    .slider {
-      height: 250px;
-    }
-    .slide img {
-      height: 250px;
-    }
+    .slider { height: 250px; }
+    .slide img { height: 250px; }
   }
-  /* Add smooth transition for margin and scaling */
-  .avatar {
-    transition:
-      margin 0.3s ease,
-      transform 0.3s ease;
-  }
-  /* When hovering over the avatar group, adjust the margin to show full circles */
-  .avatar-group:hover .avatar:not(:first-child) {
-    margin-left: 5px;
-  }
-  /* Additionally, scale up individual avatar on hover */
-  .avatar:hover {
-    transform: scale(1.1);
-  }
+        /* Add smooth transition for margin and scaling */
+                            .avatar {
+                                transition: margin 0.3s ease, transform 0.3s ease;
+                            }
+                            /* When hovering over the avatar group, adjust the margin to show full circles */
+                            .avatar-group:hover .avatar:not(:first-child) {
+                                margin-left: 5px;
+                            }
+                            /* Additionally, scale up individual avatar on hover */
+                            .avatar:hover {
+                                transform: scale(1.1);
+                            }
   /* Rejection Popup Modal Styling */
   .new-popup-modal {
     display: none;
@@ -435,12 +414,10 @@
     width: 400px;
     background: #fff;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     padding: 20px;
     z-index: 10000;
-    transition:
-      right 0.3s ease,
-      opacity 0.3s ease;
+    transition: right 0.3s ease, opacity 0.3s ease;
   }
   .new-popup-modal.open {
     display: block;
@@ -464,7 +441,7 @@
     padding-bottom: 8px;
     border-bottom: 2px solid #117057;
     color: #117057;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 18px;
   }
   /* Rejection Content & Table Styles */
@@ -475,7 +452,7 @@
   .rejection-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   }
   .rejection-table th,
   .rejection-table td {
@@ -491,6 +468,7 @@
   .rejection-table tbody tr:nth-child(even) {
     background-color: #f8f8f8;
   }
+
 </style>
 
 <div class="content-wrapper">
@@ -546,110 +524,29 @@
                       Reject Reason
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
+                   
                   </tr>
                 </thead>
                 <tbody>
                   {% for data in rejected_data %}
-                  <tr
-                    class="highlighted-tray-scan"
-                    data-lot-id="{{data.lot_id}}"
-                  >
+                  <tr class="highlighted-tray-scan" data-lot-id="{{data.lot_id}}">
                     <td>{{forloop.counter}}</td>
                     <td>{{data.date_time}}</td>
-                    <!-- Model/Stock No - Image hover -->
-                    <td style="position: relative">
-                      <span class="model-hover-trigger" style="cursor: pointer"
-                        >{{data.model_no}}
-                        <div
-                          class="model-image-tooltip"
-                          style="
-                            position: absolute;
-                            left: 50%;
-                            top: 110%;
-                            transform: translateX(-50%);
-                            background: #fff;
-                            border: 1px solid #ccc;
-                            border-radius: 8px;
-                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                            padding: 12px 18px;
-                            z-index: 9999;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                            opacity: 0;
-                            pointer-events: none;
-                            transition: opacity 0.2s;
-                          "
-                        >
-                          <button
-                            class="img-scroll-left"
-                            style="
-                              background: none;
-                              border: none;
-                              font-size: 20px;
-                              cursor: pointer;
-                            "
-                          >
-                            &#8592;
-                          </button>
-                          <div
-                            class="img-gallery"
-                            style="
-                              display: flex;
-                              gap: 6px;
-                              overflow: hidden;
-                              width: 180px;
-                            "
-                          >
-                            <img
-                              src="/static/assets/images/imagePlaceholder.jpg"
-                              style="
-                                width: 55px;
-                                height: 55px;
-                                object-fit: cover;
-                                border-radius: 6px;
-                              "
-                            />
-                            <img
-                              src="/static/assets/images/imagePlaceholder.jpg"
-                              style="
-                                width: 55px;
-                                height: 55px;
-                                object-fit: cover;
-                                border-radius: 6px;
-                              "
-                            />
-                            <img
-                              src="/static/assets/images/imagePlaceholder.jpg"
-                              style="
-                                width: 55px;
-                                height: 55px;
-                                object-fit: cover;
-                                border-radius: 6px;
-                              "
-                            />
-                            <img
-                              src="/static/assets/images/dashboard.jpg"
-                              style="
-                                width: 55px;
-                                height: 55px;
-                                object-fit: cover;
-                                border-radius: 6px;
-                              "
-                            />
+                    <!-- Model/Stock No - Image hover -->  
+                    <td style="position: relative;">
+                      <span class="model-hover-trigger" style="cursor: pointer;">{{data.model_no}}
+                        <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s;">
+                          <button class="img-scroll-left" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8592;</button>
+                          <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
+                            <img src="/static/assets/images/imagePlaceholder.png" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                            <img src="/static/assets/images/imagePlaceholder.png" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                            <img src="/static/assets/images/imagePlaceholder.png" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                            <img src="/static/assets/images/dashboard.jpg" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+
                           </div>
 
-                          <button
-                            class="img-scroll-right"
-                            style="
-                              background: none;
-                              border: none;
-                              font-size: 20px;
-                              cursor: pointer;
-                            "
-                          >
-                            &#8594;
-                          </button>
+
+                          <button class="img-scroll-right" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8594;</button>
                         </div>
                       </span>
                     </td>
@@ -659,384 +556,323 @@
                     <td>{{data.location}}</td>
                     <td>{{data.tray_type}}-{{data.tray_capacity}}</td>
                     <td>{{data.no_of_tray}}</td>
-                    <td>{{data.reject_quantity}}</td>
                     <td>
-                      {% if data.rejection_reasons|length == 1 and
-                      data.rejection_reasons.0.is_batch %}
-                      <span style="font-weight: 600; color: #666"
-                        >Batch Rejection</span
-                      >
+                      {{data.reject_quantity}}
+                    </td>
+                    <td>
+                      {% if data.rejection_reasons|length == 1 and data.rejection_reasons.0.is_batch %}
+                        <span style="font-weight:600; color:#666;">Batch Rejection</span>
                       {% else %}
-                      <div
-                        class="avatar-group rejection-popup-trigger"
-                        style="cursor: pointer"
-                        data-lot-id="{{ data.lot_id }}"
-                      >
-                        {% for reason in data.rejection_reasons %} {% if
-                        reason.is_batch %}
-                        <div
-                          class="avatar {{ reason.color }}"
-                          title="{{ reason.full_text }}"
-                          style="
-                            font-size: 13px;
-                            min-width: 90px;
-                            justify-content: center;
-                          "
-                        >
-                          {{ reason.full_text }}
+                        <div class="avatar-group rejection-popup-trigger" style="cursor:pointer;" data-lot-id="{{ data.lot_id }}">
+                          {% for reason in data.rejection_reasons %}
+                            {% if reason.is_batch %}
+                              <div class="avatar {{ reason.color }}" title="{{ reason.full_text }}" style="font-size:13px;min-width:90px;justify-content:center;">{{ reason.full_text }}</div>
+                            {% else %}
+                              <div class="avatar {{ reason.color }}" title="{{ reason.full_text }}">{{ reason.first_letter }}</div>
+                            {% endif %}
+                          {% endfor %}
+                          <div class="avatar gray">
+                            <span class="arrow">&rsaquo;</span>
+                          </div>
                         </div>
-                        {% else %}
-                        <div
-                          class="avatar {{ reason.color }}"
-                          title="{{ reason.full_text }}"
-                        >
-                          {{ reason.first_letter }}
-                        </div>
-                        {% endif %} {% endfor %}
-                        <div class="avatar gray">
-                          <span class="arrow">&rsaquo;</span>
-                        </div>
-                      </div>
                       {% endif %}
                     </td>
+                    
                   </tr>
                   {% endfor %}
                 </tbody>
               </table>
               <!-- Rejection Popup Modal -->
-              <div id="rejectionPopupModal" class="new-popup-modal">
-                <span class="tray-scan-close" id="closeRejectionPopup"
-                  >&times;</span
-                >
-                <h3 class="modal-title">Rejection Details</h3>
-                <div class="rejection-content">
-                  <table class="rejection-table">
-                    <thead>
-                      <tr>
-                        <th>Rejected Reason</th>
-                        <th>Rejection Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody id="rejectionReasonTableBody">
-                      <!-- Will be filled by JS -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Pagination Section -->
-              <div class="pagination-wrapper">
-                <nav aria-label="Page navigation">
-                  <ul class="pagination justify-content-end mb-0">
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                      <a
-                        class="page-link"
-                        href="?page={{ page_obj.previous_page_number }}"
-                        >Previous</a
-                      >
-                    </li>
-                    {% else %}
-                    <li class="page-item disabled">
-                      <span class="page-link">Previous</span>
-                    </li>
-                    {% endif %} {% for num in paginator.page_range %} {% if
-                    page_obj.number == num %}
-                    <li class="page-item active">
-                      <span class="page-link">{{ num }}</span>
-                    </li>
-                    {% else %}
-                    <li class="page-item">
-                      <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-                    </li>
-                    {% endif %} {% endfor %} {% if page_obj.has_next %}
-                    <li class="page-item">
-                      <a
-                        class="page-link"
-                        href="?page={{ page_obj.next_page_number }}"
-                        >Next</a
-                      >
-                    </li>
-                    {% else %}
-                    <li class="page-item disabled">
-                      <span class="page-link">Next</span>
-                    </li>
-                    {% endif %}
-                  </ul>
-                </nav>
-              </div>
-            </div>
+                        <div id="rejectionPopupModal" class="new-popup-modal">
+                            <span class="tray-scan-close" id="closeRejectionPopup">&times;</span>
+                            <h3 class="modal-title">Rejection Details</h3>
+                            <div class="rejection-content">
+                              <table class="rejection-table">
+                                <thead>
+                                  <tr>
+                                    <th>Rejected Reason</th>
+                                    <th>Rejection Qty</th>
+                                  </tr>
+                                </thead>
+                                <tbody id="rejectionReasonTableBody">
+                                  <!-- Will be filled by JS -->
+                                </tbody>
+                              </table>
+                            </div>
+                        </div>
+            
+            <!-- Pagination Section -->
+          <div class="pagination-wrapper">
+            <nav aria-label="Page navigation">
+              <ul class="pagination justify-content-end mb-0">
+                {% if page_obj.has_previous %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                  </li>
+                {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">Previous</span>
+                  </li>
+                {% endif %}
+          
+                {% for num in paginator.page_range %}
+                  {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                  {% else %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                  {% endif %}
+                {% endfor %}
+          
+                {% if page_obj.has_next %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                  </li>
+                {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">Next</span>
+                  </li>
+                {% endif %}
+              </ul>
+            </nav>
+          </div>
           </div>
         </div>
       </div>
     </div>
-    <!-- Image Slider Modal (popup) -->
-    <div id="imageSliderModal" class="image-slider-modal">
-      <span id="closeImageSliderModal" class="modal-close">&times;</span>
-      <h3>Visual Aid</h3>
-      <div class="slider" id="slider">
-        <div class="slides" id="slidesContainer">
-          <div class="slide active">
-            <img
-              src="{% static 'assets/images/carousel/banner_1.jpg' %}"
-              alt="Slide 1"
-            />
-          </div>
-          <div class="slide">
-            <img
-              src="{% static 'assets/images/carousel/banner_2.jpg' %}"
-              alt="Slide 2"
-            />
-          </div>
-          <div class="slide">
-            <img
-              src="{% static 'assets/images/carousel/banner_3.jpg' %}"
-              alt="Slide 3"
-            />
-          </div>
-        </div>
-        <button class="prev" id="prevBtn">&#10094;</button>
-        <button class="next" id="nextBtn">&#10095;</button>
-      </div>
-    </div>
-    <!-- Image Slider Modal -->
-    <div id="imageSliderModal" class="image-slider-modal">
-      <span id="closeImageSliderModal" class="modal-close">&times;</span>
-      <div class="slider" id="slider">
-        <button class="prev" id="prevBtn">&#8592;</button>
-        <div class="slides"></div>
-        <button class="next" id="nextBtn">&#8594;</button>
-      </div>
-    </div>
-    {% block script %}
-    <!-- Table Sorting Script -->
-    <script nonce="{{ csp_nonce }}">
-      document.addEventListener("DOMContentLoaded", function () {
-        const table = document.getElementById("order-listing");
-        if (!table) return;
-        const headers = table.querySelectorAll("thead th");
-        const tbody = table.querySelector("tbody");
-        let sortDirection = {};
-        headers.forEach((header, index) => {
-          header.style.cursor = "pointer";
-          header.addEventListener("click", function () {
-            const rows = Array.from(tbody.querySelectorAll("tr"));
-            const dir = sortDirection[index] === "asc" ? "desc" : "asc";
-            sortDirection[index] = dir;
-            rows.sort((a, b) => {
-              const cellA = a.children[index].textContent.trim();
-              const cellB = b.children[index].textContent.trim();
-              const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
-              const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
-              if (valA < valB) return dir === "asc" ? -1 : 1;
-              if (valA > valB) return dir === "asc" ? 1 : -1;
-              return 0;
-            });
-            tbody.innerHTML = "";
-            rows.forEach((row) => tbody.appendChild(row));
-          });
-        });
-      });
-    </script>
-    <script nonce="{{ csp_nonce }}">
-      document.addEventListener("DOMContentLoaded", function () {
-        document
-          .querySelectorAll(".rejection-popup-trigger")
-          .forEach(function (trigger) {
-            trigger.addEventListener("click", function () {
-              var lotId = this.getAttribute("data-lot-id");
-              var modal = document.getElementById("rejectionPopupModal");
-              var tableBody = document.getElementById(
-                "rejectionReasonTableBody",
-              );
-              tableBody.innerHTML = '<tr><td colspan="2">Loading...</td></tr>';
-
-              // Fetch rejection data for this lot
-              fetch(
-                "/nickle_inspection/nickle_ip_get_rejected_tray_scan_data/?lot_id=" +
-                  encodeURIComponent(lotId),
-                {
-                  headers: {
-                    "X-Requested-With": "XMLHttpRequest",
-                  },
-                },
-              )
-                .then((response) => response.json())
-                .then((data) => {
-                  tableBody.innerHTML = "";
-                  if (data.success && data.rows.length > 0) {
-                    data.rows.forEach(function (row) {
-                      var tr = document.createElement("tr");
-                      tr.innerHTML = `<td>${row.reason}</td><td>${row.qty}</td>`;
-                      tableBody.appendChild(tr);
-                    });
-                  } else {
-                    tableBody.innerHTML =
-                      '<tr><td colspan="2">No rejection data found.</td></tr>';
-                  }
-                })
-                .catch(() => {
-                  tableBody.innerHTML =
-                    '<tr><td colspan="2">Error loading data.</td></tr>';
-                });
-
-              modal.classList.add("open");
-            });
-          });
-
-        var closeRejection = document.getElementById("closeRejectionPopup");
-        if (closeRejection) {
-          closeRejection.addEventListener("click", function () {
-            document
-              .getElementById("rejectionPopupModal")
-              .classList.remove("open");
-          });
-        }
-      });
-    </script>
-    <!-- Script for Model / Stock No - Image Mouse Hover -->
-    <script nonce="{{ csp_nonce }}">
-      document.addEventListener("DOMContentLoaded", function () {
-        document
-          .querySelectorAll(".model-hover-trigger")
-          .forEach(function (trigger) {
-            const tooltip = trigger.querySelector(".model-image-tooltip");
-            let currentIndex = 0;
-            let tooltipPinned = false;
-            const images = Array.from(
-              tooltip.querySelectorAll(".img-gallery img"),
-            );
-
-            function showImages(start) {
-              images.forEach((img, i) => {
-                img.style.display =
-                  i >= start && i < start + 3 ? "block" : "none";
-              });
-            }
-            showImages(currentIndex);
-
-            trigger.addEventListener("mouseenter", function () {
-              if (!tooltipPinned) {
-                tooltip.style.opacity = "1";
-                tooltip.style.pointerEvents = "auto";
-              }
-            });
-            trigger.addEventListener("mouseleave", function () {
-              if (!tooltipPinned) {
-                tooltip.style.opacity = "0";
-                tooltip.style.pointerEvents = "none";
-              }
-            });
-            tooltip.addEventListener("mouseenter", function () {
-              if (!tooltipPinned) {
-                tooltip.style.opacity = "1";
-                tooltip.style.pointerEvents = "auto";
-              }
-            });
-            tooltip.addEventListener("mouseleave", function () {
-              if (!tooltipPinned) {
-                tooltip.style.opacity = "0";
-                tooltip.style.pointerEvents = "none";
-              }
-            });
-
-            // Pin tooltip on click
-            trigger.addEventListener("click", function (e) {
-              e.preventDefault();
-              tooltipPinned = true;
-              tooltip.style.opacity = "1";
-              tooltip.style.pointerEvents = "auto";
-            });
-
-            // Unpin tooltip if user clicks outside
-            document.addEventListener("mousedown", function (e) {
-              if (!trigger.contains(e.target) && !tooltip.contains(e.target)) {
-                tooltipPinned = false;
-                tooltip.style.opacity = "0";
-                tooltip.style.pointerEvents = "none";
-              }
-            });
-
-            tooltip
-              .querySelector(".img-scroll-left")
-              .addEventListener("click", function (e) {
-                e.stopPropagation();
-                if (currentIndex > 0) {
-                  currentIndex--;
-                  showImages(currentIndex);
-                }
-              });
-            tooltip
-              .querySelector(".img-scroll-right")
-              .addEventListener("click", function (e) {
-                e.stopPropagation();
-                if (currentIndex < images.length - 3) {
-                  currentIndex++;
-                  showImages(currentIndex);
-                }
-              });
-
-            // Add click event to images for modal slider
-            images.forEach(function (img, idx) {
-              img.style.cursor = "pointer";
-              img.addEventListener("click", function (e) {
-                e.stopPropagation();
-                openImageSlider(
-                  images.map((i) => i.src),
-                  idx,
-                );
-              });
-            });
-          });
-
-        // Modal slider functions
-        const modal = document.getElementById("imageSliderModal");
-        const closeModal = document.getElementById("closeImageSliderModal");
-        const slidesContainer = modal.querySelector(".slides");
-        let sliderImages = [];
-        let currentSlide = 0;
-
-        function openImageSlider(srcArray, startIdx) {
-          sliderImages = srcArray;
-          slidesContainer.innerHTML = "";
-          sliderImages.forEach((src) => {
-            const slide = document.createElement("div");
-            slide.className = "slide";
-            const img = document.createElement("img");
-            img.src = src;
-            slide.appendChild(img);
-            slidesContainer.appendChild(slide);
-          });
-          currentSlide = startIdx;
-          showSlide(currentSlide);
-          modal.classList.add("open");
-        }
-
-        function showSlide(n) {
-          const slides = slidesContainer.querySelectorAll(".slide");
-          if (!slides.length) return;
-          currentSlide = (n + slides.length) % slides.length;
-          slides.forEach((slide, idx) => {
-            slide.classList.toggle("active", idx === currentSlide);
-          });
-        }
-
-        modal.querySelector("#prevBtn").addEventListener("click", function (e) {
-          e.stopPropagation();
-          showSlide(currentSlide - 1);
-        });
-        modal.querySelector("#nextBtn").addEventListener("click", function (e) {
-          e.stopPropagation();
-          showSlide(currentSlide + 1);
-        });
-        closeModal.addEventListener("click", function () {
-          modal.classList.remove("open");
-        });
-        modal.addEventListener("click", function (e) {
-          if (e.target === modal) modal.classList.remove("open");
-        });
-      });
-    </script>
-    {% endblock %} {% endblock content %}
   </div>
+  <!-- Image Slider Modal (popup) -->
+  <div id="imageSliderModal" class="image-slider-modal">
+    <span id="closeImageSliderModal" class="modal-close">&times;</span>
+    <h3>Visual Aid</h3>
+    <div class="slider" id="slider">
+      <div class="slides" id="slidesContainer">
+        <div class="slide active">
+          <img src="{% static 'assets/images/carousel/banner_1.jpg' %}" alt="Slide 1">
+        </div>
+        <div class="slide">
+          <img src="{% static 'assets/images/carousel/banner_2.jpg' %}" alt="Slide 2">
+        </div>
+        <div class="slide">
+          <img src="{% static 'assets/images/carousel/banner_3.jpg' %}" alt="Slide 3">
+        </div>
+      </div>
+      <button class="prev" id="prevBtn">&#10094;</button>
+      <button class="next" id="nextBtn">&#10095;</button>
+    </div>
+  </div>
+  <!-- Image Slider Modal -->
+  <div id="imageSliderModal" class="image-slider-modal">
+    <span id="closeImageSliderModal" class="modal-close">&times;</span>
+    <div class="slider" id="slider">
+      <button class="prev" id="prevBtn">&#8592;</button>
+      <div class="slides"></div>
+      <button class="next" id="nextBtn">&#8594;</button>
+    </div>
+  </div>
+  {% block script %}
+  <!-- Table Sorting Script -->
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function () {
+      const table = document.getElementById("order-listing");
+      if (!table) return;
+      const headers = table.querySelectorAll("thead th");
+      const tbody = table.querySelector("tbody");
+      let sortDirection = {};
+      headers.forEach((header, index) => {
+        header.style.cursor = "pointer";
+        header.addEventListener("click", function () {
+          const rows = Array.from(tbody.querySelectorAll("tr"));
+          const dir = sortDirection[index] === "asc" ? "desc" : "asc";
+          sortDirection[index] = dir;
+          rows.sort((a, b) => {
+            const cellA = a.children[index].textContent.trim();
+            const cellB = b.children[index].textContent.trim();
+            const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
+            const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
+            if (valA < valB) return dir === "asc" ? -1 : 1;
+            if (valA > valB) return dir === "asc" ? 1 : -1;
+            return 0;
+          });
+          tbody.innerHTML = "";
+          rows.forEach((row) => tbody.appendChild(row));
+        });
+      });
+    });
+  </script>
+                        <script nonce="{{ csp_nonce }}">
+                        document.addEventListener("DOMContentLoaded", function() {
+                          document.querySelectorAll('.rejection-popup-trigger').forEach(function(trigger) {
+                            trigger.addEventListener('click', function() {
+                              var lotId = this.getAttribute('data-lot-id');
+                              var modal = document.getElementById('rejectionPopupModal');
+                              var tableBody = document.getElementById('rejectionReasonTableBody');
+                              tableBody.innerHTML = '<tr><td colspan="2">Loading...</td></tr>';
+                        
+                              // Fetch rejection data for this lot
+                              fetch('/nickle_inspection/nickle_ip_get_rejected_tray_scan_data/?lot_id=' + encodeURIComponent(lotId), {
+                                headers: {
+                                  'X-Requested-With': 'XMLHttpRequest'
+                                }
+                              })
+                              .then(response => response.json())
+                              .then(data => {
+                                tableBody.innerHTML = '';
+                                if (data.success && data.rows.length > 0) {
+                                  data.rows.forEach(function(row) {
+                                    var tr = document.createElement('tr');
+                                    tr.innerHTML = `<td>${row.reason}</td><td>${row.qty}</td>`;
+                                    tableBody.appendChild(tr);
+                                  });
+                                } else {
+                                  tableBody.innerHTML = '<tr><td colspan="2">No rejection data found.</td></tr>';
+                                }
+                              })
+                              .catch(() => {
+                                tableBody.innerHTML = '<tr><td colspan="2">Error loading data.</td></tr>';
+                              });
+                        
+                              modal.classList.add("open");
+                            });
+                          });
+                        
+                          var closeRejection = document.getElementById('closeRejectionPopup');
+                          if (closeRejection) {
+                            closeRejection.addEventListener('click', function() {
+                              document.getElementById('rejectionPopupModal').classList.remove("open");
+                            });
+                          }
+                        });
+                        </script>
+<!-- Script for Model / Stock No - Image Mouse Hover -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.model-hover-trigger').forEach(function(trigger) {
+    const tooltip = trigger.querySelector('.model-image-tooltip');
+    let currentIndex = 0;
+    let tooltipPinned = false;
+    const images = Array.from(tooltip.querySelectorAll('.img-gallery img'));
+
+    function showImages(start) {
+      images.forEach((img, i) => {
+        img.style.display = (i >= start && i < start + 3) ? 'block' : 'none';
+      });
+    }
+    showImages(currentIndex);
+
+    trigger.addEventListener('mouseenter', function() {
+      if (!tooltipPinned) {
+        tooltip.style.opacity = '1';
+        tooltip.style.pointerEvents = 'auto';
+      }
+    });
+    trigger.addEventListener('mouseleave', function() {
+      if (!tooltipPinned) {
+        tooltip.style.opacity = '0';
+        tooltip.style.pointerEvents = 'none';
+      }
+    });
+    tooltip.addEventListener('mouseenter', function() {
+      if (!tooltipPinned) {
+        tooltip.style.opacity = '1';
+        tooltip.style.pointerEvents = 'auto';
+      }
+    });
+    tooltip.addEventListener('mouseleave', function() {
+      if (!tooltipPinned) {
+        tooltip.style.opacity = '0';
+        tooltip.style.pointerEvents = 'none';
+      }
+    });
+
+    // Pin tooltip on click
+    trigger.addEventListener('click', function(e) {
+      e.preventDefault();
+      tooltipPinned = true;
+      tooltip.style.opacity = '1';
+      tooltip.style.pointerEvents = 'auto';
+    });
+
+    // Unpin tooltip if user clicks outside
+    document.addEventListener('mousedown', function(e) {
+      if (!trigger.contains(e.target) && !tooltip.contains(e.target)) {
+        tooltipPinned = false;
+        tooltip.style.opacity = '0';
+        tooltip.style.pointerEvents = 'none';
+      }
+    });
+
+    tooltip.querySelector('.img-scroll-left').addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (currentIndex > 0) {
+        currentIndex--;
+        showImages(currentIndex);
+      }
+    });
+    tooltip.querySelector('.img-scroll-right').addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (currentIndex < images.length - 3) {
+        currentIndex++;
+        showImages(currentIndex);
+      }
+    });
+
+    // Add click event to images for modal slider
+    images.forEach(function(img, idx) {
+      img.style.cursor = 'pointer';
+      img.addEventListener('click', function(e) {
+        e.stopPropagation();
+        openImageSlider(images.map(i => i.src), idx);
+      });
+    });
+  });
+
+  // Modal slider functions
+  const modal = document.getElementById("imageSliderModal");
+  const closeModal = document.getElementById("closeImageSliderModal");
+  const slidesContainer = modal.querySelector(".slides");
+  let sliderImages = [];
+  let currentSlide = 0;
+
+  function openImageSlider(srcArray, startIdx) {
+    sliderImages = srcArray;
+    slidesContainer.innerHTML = '';
+    sliderImages.forEach(src => {
+      const slide = document.createElement('div');
+      slide.className = 'slide';
+      const img = document.createElement('img');
+      img.src = src;
+      slide.appendChild(img);
+      slidesContainer.appendChild(slide);
+    });
+    currentSlide = startIdx;
+    showSlide(currentSlide);
+    modal.classList.add('open');
+  }
+
+  function showSlide(n) {
+    const slides = slidesContainer.querySelectorAll('.slide');
+    if (!slides.length) return;
+    currentSlide = (n + slides.length) % slides.length;
+    slides.forEach((slide, idx) => {
+      slide.classList.toggle('active', idx === currentSlide);
+    });
+  }
+
+  modal.querySelector("#prevBtn").addEventListener("click", function(e) {
+    e.stopPropagation();
+    showSlide(currentSlide - 1);
+  });
+  modal.querySelector("#nextBtn").addEventListener("click", function(e) {
+    e.stopPropagation();
+    showSlide(currentSlide + 1);
+  });
+  closeModal.addEventListener("click", function() {
+    modal.classList.remove("open");
+  });
+  modal.addEventListener("click", function(e) {
+    if (e.target === modal) modal.classList.remove("open");
+  });
+});
+</script>
+{% endblock %} {% endblock content %}
 </div>

@@ -7271,8 +7271,8 @@ function populateTrayTableEnhanced(quantity, trayCapacity, lotIdList = [], mainL
         ${tray.trayNumber}${tray.isTopTray ? ' (Top Tray)' : ''}
       </td>
       <td style="padding:6px 4px;text-align:center; border-right:1px solid #bdbdbd; border-bottom:1px solid #bdbdbd;">
-        <input type="text" placeholder="Scan New Tray" 
-               data-lot-id="${tray.lotId}"
+        <input type="text" placeholder="Scan New Tray" maxlength="9"
+               data-lot-id="${tray.lotId}" inputmode="text"
                style="width:100%; border:1px solid #ccc; padding:4px; border-radius:4px; font-size:13px;" />
       </td>
       
@@ -7318,7 +7318,54 @@ function attachTrayQuantityValidationHandlers() {
     const trayIdInput = row.querySelector('input[type="text"]');
     const trayQtyInput = row.querySelector('input[type="number"]');
     if (trayIdInput) {
+      // Strict keydown handler - prevent ANY input > 9 characters
+      trayIdInput.addEventListener('keydown', function(e) {
+        const value = trayIdInput.value || '';
+        
+        // Allow special keys: backspace, delete, arrow keys, tab, select all
+        const allowedKeys = [
+          'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 
+          'ArrowUp', 'ArrowDown', 'Tab', 'Home', 'End'
+        ];
+        
+        // Allow Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+        if (e.ctrlKey || e.metaKey) {
+          if (['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) {
+            return; // Allow these combinations
+          }
+        }
+        
+        // If special key, allow it
+        if (allowedKeys.includes(e.key)) {
+          return;
+        }
+        
+        // If we already have 9 characters, prevent any new input
+        if (value.length >= 9) {
+          e.preventDefault();
+          return false;
+        }
+      });
+      
+      // Input handler for validation and auto-focus
       trayIdInput.addEventListener('input', function () {
+        // Enforce 9-character limit immediately
+        if (trayIdInput.value.length > 9) {
+          trayIdInput.value = trayIdInput.value.substring(0, 9);
+        }
+        
+        // Auto-focus to next field if 9 characters entered
+        if (trayIdInput.value.length === 9) {
+          requestAnimationFrame(() => {
+            const allInputs = [...document.querySelectorAll('.jig-loading-table tbody tr input[type="text"]')];
+            const currentIndex = allInputs.indexOf(trayIdInput);
+            
+            if (currentIndex >= 0 && currentIndex < allInputs.length - 1) {
+              allInputs[currentIndex + 1].focus();
+            }
+          });
+        }
+        
         // Trigger auto-save on tray ID input
         if (typeof triggerAutoSaveZone2 === 'function') {
           triggerAutoSaveZone2();

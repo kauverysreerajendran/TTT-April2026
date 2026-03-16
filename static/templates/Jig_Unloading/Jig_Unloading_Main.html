@@ -6556,8 +6556,8 @@ function populateTrayTableEnhanced(quantity, trayCapacity, lotIdList = [], mainL
         ${tray.trayNumber}${tray.isTopTray ? ' (Top Tray)' : ''}
       </td>
       <td style="padding:6px 4px;text-align:center; border-right:1px solid #bdbdbd; border-bottom:1px solid #bdbdbd;">
-        <input type="text" placeholder="Scan New Tray" 
-               data-lot-id="${tray.lotId}"
+        <input type="text" placeholder="Scan New Tray" maxlength="9"
+               data-lot-id="${tray.lotId}" inputmode="text"
                style="width:100%; border:1px solid #ccc; padding:4px; border-radius:4px; font-size:13px;" />
       </td>
       
@@ -6614,78 +6614,119 @@ function attachTrayQuantityValidationHandlers() {
     const trayIdInput = row.querySelector('input[type="text"]');
     const trayQtyInput = row.querySelector('input[type="number"]');
     if (trayIdInput) {
+      // STRICT INPUT CONTROL - Multiple layers of protection
+      
+      // 1. Keydown prevention for characters beyond 9
+      trayIdInput.addEventListener('keydown', function(e) {
+        const currentValue = trayIdInput.value;
+        const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End', 'Escape'];
+        
+        if (e.key.length === 1 && currentValue.length >= 9 && !allowedKeys.includes(e.key)) {
+          e.preventDefault();
+          return false;
+        }
+      });
+      
+      // 2. Input event - immediate truncation and validation
       trayIdInput.addEventListener('input', function () {
-        // Trigger auto-save on tray ID input
-        if (typeof triggerAutoSave === 'function') {
-          triggerAutoSave();
+        let trayId = trayIdInput.value;
+        
+        // IMMEDIATELY truncate if > 9 characters
+        if (trayId.length > 9) {
+          trayId = trayId.substring(0, 9);
+          trayIdInput.value = trayId;
         }
         
-        const trayId = trayIdInput.value.trim();
-        if (!trayId) {
-          trayIdInput.style.borderColor = '#dc3545';
-          trayIdInput.style.backgroundColor = '#fff5f5';
-          showTrayIdRequiredError(trayIdInput);
-          return;
-        }
-
-        // Prevent duplicate scans: if the same tray id already exists in another
-        // input cell in this modal, skip server validation and show a small message.
-        const tbody = trayIdInput.closest('tbody');
-        if (tbody) {
-          const otherInputs = Array.from(tbody.querySelectorAll('input[type="text"]'));
-          const duplicateFound = otherInputs.some(inp => inp !== trayIdInput && inp.value.trim().toLowerCase() === trayId.toLowerCase());
-          if (duplicateFound) {
-            showTrayValidationMessage(trayIdInput, 'Tray already scanned in another slot', false);
-            trayIdInput.style.borderColor = '#ffc107';
-            trayIdInput.style.backgroundColor = '#fff8e1';
-            return; // do not call server
+        trayId = trayId.trim();
+        
+        // Clear previous validation state immediately
+        removeTrayIdError(trayIdInput);
+        trayIdInput.style.borderColor = '#ccc';
+        trayIdInput.style.backgroundColor = '#fff';
+        
+        // IMMEDIATE validation when exactly 9 characters
+        if (trayId.length === 9) {
+          // Trigger auto-save
+          if (typeof triggerAutoSave === 'function') {
+            triggerAutoSave();
           }
-        }
+          
+          // Check for duplicates immediately
+          const tbody = trayIdInput.closest('tbody');
+          if (tbody) {
+            const otherInputs = Array.from(tbody.querySelectorAll('input[type="text"]'));
+            const duplicateFound = otherInputs.some(inp => inp !== trayIdInput && inp.value.trim().toLowerCase() === trayId.toLowerCase());
+            if (duplicateFound) {
+              showTrayValidationMessage(trayIdInput, 'Duplicate tray ID', false);
+              trayIdInput.style.borderColor = '#ffc107';
+              trayIdInput.style.backgroundColor = '#fff8e1';
+              trayIdInput.select();
+              return;
+            }
+          }
 
-        // ✅ FIX: Get lot_id from modal or row
-        const uploadModal = document.getElementById('uploadChildModal');
-        const lot_id = uploadModal ? uploadModal.getAttribute('data-current-lot-id') : '';
-        
-
-        fetch('/jig_unloading/validate_tray_id/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-          },
-          body: JSON.stringify({ 
-            tray_id: trayId,
-            lot_id: lot_id  // ✅ FIX: Include lot_id
+          // Get lot_id for validation
+          const uploadModal = document.getElementById('uploadChildModal');
+          const lot_id = uploadModal ? uploadModal.getAttribute('data-current-lot-id') : '';
+          
+          // IMMEDIATE server validation - no delay
+          fetch('/jig_unloading/validate_tray_id/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ 
+              tray_id: trayId,
+              lot_id: lot_id
+            })
           })
-        })
-        .then(res => res.json())
-        .then(data => {
-          removeTrayIdError(trayIdInput);
-          if (data.success) {
-            trayIdInput.style.borderColor = '#28a745';
-            trayIdInput.style.backgroundColor = '#f5fff5';
-            showTrayValidationMessage(trayIdInput, "Available", true);
-          } else {
+          .then(res => res.json())
+          .then(data => {
+            removeTrayIdError(trayIdInput);
+            if (data.success) {
+              trayIdInput.style.borderColor = '#28a745';
+              trayIdInput.style.backgroundColor = '#f5fff5';
+              showTrayValidationMessage(trayIdInput, "Available", true);
+              
+              // IMMEDIATE cursor movement - no delay or setTimeout
+              const allInputs = Array.from(row.closest('tbody').querySelectorAll('input[type="text"]'));
+              const currentIndex = allInputs.indexOf(trayIdInput);
+              if (currentIndex !== -1 && currentIndex < allInputs.length - 1) {
+                const nextInput = allInputs[currentIndex + 1];
+                requestAnimationFrame(() => nextInput.focus()); // Use requestAnimationFrame for immediate execution
+              }
+            } else {
+              trayIdInput.style.borderColor = '#dc3545';
+              trayIdInput.style.backgroundColor = '#fff5f5';
+              showTrayValidationMessage(trayIdInput, data.error || 'Invalid tray ID', false);
+              trayIdInput.select();
+            }
+          })
+          .catch(() => {
             trayIdInput.style.borderColor = '#dc3545';
             trayIdInput.style.backgroundColor = '#fff5f5';
-            showTrayValidationMessage(trayIdInput, data.error || 'Tray ID is invalid', false);
-          }
-          if (data.success) {
-            const allInputs = Array.from(row.closest('tbody').querySelectorAll('input[type="text"]'));
-            const currentIndex = allInputs.indexOf(trayIdInput);
-            if (currentIndex !== -1 && currentIndex < allInputs.length - 1) {
-              const nextInput = allInputs[currentIndex + 1];
-              setTimeout(() => nextInput.focus(), 100);
-            }
-          } else if (trayId.length === 9) {
-            setTimeout(() => trayIdInput.select(), 100);
-          }
-        })
-        .catch(() => {
-          trayIdInput.style.borderColor = '#dc3545';
-          trayIdInput.style.backgroundColor = '#fff5f5';
-          showTrayIdValidationError(trayIdInput, 'Network error during validation');
-        });
+            showTrayIdValidationError(trayIdInput, 'Network error');
+            trayIdInput.select();
+          });
+        }
+      });
+      
+      // 3. Paste event - strict control
+      trayIdInput.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        const currentValue = trayIdInput.value;
+        const availableSpace = 9 - currentValue.length;
+        
+        if (availableSpace > 0 && pastedText) {
+          const truncatedText = pastedText.substring(0, availableSpace);
+          const newValue = currentValue + truncatedText;
+          trayIdInput.value = newValue;
+          // Trigger input event for immediate validation
+          const inputEvent = new Event('input', { bubbles: true });
+          trayIdInput.dispatchEvent(inputEvent);
+        }
       });
     }
     
@@ -11674,10 +11715,6 @@ function autoTriggerTrayValidation(scannedTrayId) {
 window.autoTriggerTrayValidation = autoTriggerTrayValidation;
 </script>
 
-{% endblock %}
-
-{% endblock content %}
-
 <!-- Scan Button JavaScript -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function() {
@@ -11799,3 +11836,8 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 });
 </script>
+
+{% endblock %}
+
+{% endblock content %}
+

@@ -1454,56 +1454,65 @@ class Jig_Unloading_MainTable(TemplateView):
         return filtered_jigs
 
     def check_draft_status_for_jigs(self, jig_queryset):
-        """Check if any jig has draft records based on main_lot_id in new_lot_ids or lot_id_quantities"""
-        
-        # Get all main_lot_ids from saved drafts
-        draft_lot_ids = set(JigUnloadDraft.objects.values_list('main_lot_id', flat=True))
-        
-        print(f"🔍 Found {len(draft_lot_ids)} draft lot_ids: {draft_lot_ids}")
-        
+        """Check if any jig has draft records prioritizing draft_data['lot_id_quantities'].
+
+        This function will inspect each jig's `draft_data` JSON field first and look
+        for a `lot_id_quantities` dict. If present, keys of that dict are treated as
+        draft lot ids. Falls back to JigUnloadDraft.main_lot_id values only when
+        `lot_id_quantities` is not available.
+        """
+
         # Convert QuerySet to list explicitly
         jig_list = list(jig_queryset)
-        
-        # Check each jig's lot_ids against draft lot_ids
+
+        # Cache all saved draft main_lot_ids for fallback checks
+        saved_draft_main_lot_ids = set(JigUnloadDraft.objects.values_list('main_lot_id', flat=True))
+        print(f"🔍 Saved draft main_lot_ids (fallback): {saved_draft_main_lot_ids}")
+
         for jig_detail in jig_list:
             has_draft = False
-            
-            print(f"🔍 Checking jig {jig_detail.lot_id}:")
-            
-            # Check new_lot_ids array field
-            if hasattr(jig_detail, 'new_lot_ids') and jig_detail.new_lot_ids:
-                print(f"   - new_lot_ids: {jig_detail.new_lot_ids}")
-                for lot_id in jig_detail.new_lot_ids:
-                    if lot_id in draft_lot_ids:
-                        has_draft = True
-                        print(f"✅ DRAFT MATCH in new_lot_ids: {lot_id}")
-                        break
-            
-            # Check lot_id_quantities keys
-            if not has_draft and hasattr(jig_detail, 'lot_id_quantities') and jig_detail.lot_id_quantities:
-                print(f"   - lot_id_quantities keys: {list(jig_detail.lot_id_quantities.keys())}")
-                for lot_id in jig_detail.lot_id_quantities.keys():
-                    if lot_id in draft_lot_ids:
-                        has_draft = True
-                        print(f"✅ DRAFT MATCH in lot_id_quantities: {lot_id}")
-                        break
-            
-            # Check main lot_id as fallback
-            if not has_draft and hasattr(jig_detail, 'lot_id') and jig_detail.lot_id:
-                print(f"   - main lot_id: {jig_detail.lot_id}")
-                if jig_detail.lot_id in draft_lot_ids:
+
+            print(f"🔍 Zone 2 - Checking jig {getattr(jig_detail, 'jig_id', jig_detail.lot_id)}")
+
+            # Primary: Inspect draft_data JSON on the jig itself (prefer this)
+            draft_data = getattr(jig_detail, 'draft_data', None) or {}
+            lot_quantities = {}
+            if isinstance(draft_data, dict):
+                lot_quantities = draft_data.get('lot_id_quantities', {}) or {}
+
+            # Debug print keys when present
+            if lot_quantities:
+                print(f"lot_id_quantities keys: {list(lot_quantities.keys())}")
+                # If the jig's main lot_id is present in lot_id_quantities, mark draft
+                main_lot = getattr(jig_detail, 'lot_id', None)
+                if main_lot and main_lot in lot_quantities:
                     has_draft = True
-                    print(f"✅ DRAFT MATCH in main lot_id: {jig_detail.lot_id}")
-            
-            # Set BOTH flags to ensure template works
+                    print(f"✅ Zone 2 - JIG {getattr(jig_detail, 'jig_id', jig_detail.lot_id)} DRAFT FOUND")
+
+            # Secondary: check new_lot_ids array field if present and not already matched
+            if not has_draft and hasattr(jig_detail, 'new_lot_ids') and jig_detail.new_lot_ids:
+                print(f"   - new_lot_ids: {jig_detail.new_lot_ids}")
+                for lid in jig_detail.new_lot_ids:
+                    if lid in lot_quantities or lid in saved_draft_main_lot_ids:
+                        has_draft = True
+                        print(f"✅ DRAFT MATCH in new_lot_ids: {lid}")
+                        break
+
+            # Tertiary fallback: if lot_id_quantities absent, check saved drafts table
+            if not has_draft and not lot_quantities:
+                main_lot = getattr(jig_detail, 'lot_id', None)
+                print(f"   - main lot_id fallback: {main_lot}")
+                if main_lot and main_lot in saved_draft_main_lot_ids:
+                    has_draft = True
+                    print(f"✅ DRAFT MATCH in saved drafts for main lot_id: {main_lot}")
+
+            # Set BOTH flags to ensure template compatibility
             jig_detail.has_unload_draft = has_draft
             jig_detail.jig_unload_draft = has_draft
-            
-            if has_draft:
-                print(f"🎯 JIG {jig_detail.lot_id} MARKED AS DRAFT")
-            else:
-                print(f"❌ JIG {jig_detail.lot_id} NO DRAFT")
-        
+
+            if not has_draft and not lot_quantities:
+                print(f"❌ Zone 2 - JIG {getattr(jig_detail, 'jig_id', jig_detail.lot_id)} NO DRAFT")
+
         print(f"🔍 Draft check complete for {len(jig_list)} jigs")
         return jig_list  # Return the list, not queryset
 
