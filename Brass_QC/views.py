@@ -6023,7 +6023,7 @@ class PickTrayIdList_Complete_APIView(APIView):
             # Primary fallback: IQF_Accepted_TrayID_Store (show only trays accepted in IQF)
             if base_queryset.count() == 0:
                 from IQF.models import IQF_Accepted_TrayID_Store as _IQFAcceptedStore
-                _accepted_store_qs = _IQFAcceptedStore.objects.filter(lot_id=lot_id, is_save=True)
+                _accepted_store_qs = _IQFAcceptedStore.objects.filter(lot_id=lot_id)
                 if _accepted_store_qs.exists():
                     _sorted_recs = sorted(_accepted_store_qs, key=lambda r: (r.tray_qty or 0))
                     _fallback_data = []

@@ -99,6 +99,31 @@ def split(value, delimiter=','):
     """Splits the string by the given delimiter."""
     return value.split(delimiter)
 
+@register.filter
+def get_model_name(model_string):
+    """
+    Extracts model name from "model:qty" format.
+    Example: "1805YAK02/2N:80" -> "1805YAK02/2N"
+    Example: "1805NAR02:13" -> "1805NAR02"
+    """
+    if not model_string:
+        return model_string
+    # Split on ':' and return the first part (before quantity)
+    return model_string.split(':')[0] if ':' in str(model_string) else model_string
+
+@register.filter
+def get_model_qty(model_string):
+    """
+    Extracts quantity from "model:qty" format.
+    Example: "1805YAK02/2N:80" -> "80"
+    Example: "1805NAR02:13" -> "13"
+    """
+    if not model_string:
+        return 0
+    # Split on ':' and return the second part (quantity)
+    parts = str(model_string).split(':')
+    return parts[1] if len(parts) > 1 else 0
+
 
 @register.filter
 def strip(value):

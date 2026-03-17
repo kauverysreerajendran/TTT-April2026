@@ -2080,20 +2080,7 @@ tr.row-inactive td:first-child {
               </td>
               <!-- Plating Stk No -->
               <td>
-                {% if data.is_multi_model and data.model_list %}
-                  <!-- Multi-Model: Show Colored Circles -->
-                  <div class="model-circles-container" title="Multi-model lot: {{ data.model_list|join:', ' }}">
-                    {% for model in data.model_list %}
-                      <div class="model-circle-indicator" style="display: inline-block; margin-right: 6px;" title="{{ model }}">
-                        <div class="model-circle" style="background-color: {% cycle '#007bff' '#28a745' '#ffc107' '#6f42c1' '#dc3545' '#17a2b8' '#fd7e14' '#e83e8c' %}; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
-                          {{ forloop.counter }}
-                        </div>
-                        <div class="model-tooltip" style="position: absolute; background: #333; color: white; padding: 6px 10px; border-radius: 4px; font-size: 11px; white-space: nowrap; z-index: 1000; display: none; margin-top: 4px; opacity: 0.95;">{{ model }}</div>
-                      </div>
-                    {% endfor %}
-                  </div>
-                {% elif data.plating_stk_no %}
-                  <!-- Single Model: Show Text -->
+                {% if data.plating_stk_no %}
                   <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all">
                     {{ data.plating_stk_no|highlight_plating_color|safe }}
                   </span>

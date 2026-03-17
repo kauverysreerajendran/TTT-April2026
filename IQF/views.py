@@ -2816,11 +2816,18 @@ def iqf_view_tray_list(request):
         # FIX: Changed from > to >= to handle cases where rejection qty equals tray capacity exactly
         batch_rejection = total_rejection_qty >= tray_capacity if tray_capacity > 0 else False
         
+        # ✅ FIX: Also treat as rejection path when actual IQF_Rejected_TrayScan records exist,
+        # regardless of whether rejection qty < tray capacity (partial/single-tray rejection).
+        # Without this, rejection_qty=10 < tray_capacity=12 → batch_rejection=False → WRONG
+        # path returns IQF_Accepted_TrayID_Store entries as the "tray list" instead of rejections.
+        has_actual_rejection_scans = total_rejection_qty > 0 and IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).exists()
+
         print(f"[IQF_VIEW_TRAY_LIST] lot_id={lot_id}")
         print(f"[IQF_VIEW_TRAY_LIST] total_rejection_qty={total_rejection_qty}, tray_capacity={tray_capacity}")
         print(f"[IQF_VIEW_TRAY_LIST] batch_rejection = {total_rejection_qty} >= {tray_capacity} = {batch_rejection}")
+        print(f"[IQF_VIEW_TRAY_LIST] has_actual_rejection_scans = {has_actual_rejection_scans}")
 
-        if batch_rejection and total_rejection_qty > 0:
+        if (batch_rejection or has_actual_rejection_scans) and total_rejection_qty > 0:
             print(f"[IQF_VIEW_TRAY_LIST] ✅ BATCH REJECTION IDENTIFIED. Fetching/generating allocated rejection trays...")
             
             # Query actual allocated rejection trays stored during auto-allocation
@@ -2846,41 +2853,15 @@ def iqf_view_tray_list(request):
                 print(f"[IQF_VIEW_TRAY_LIST] Actual allocation: {allocated_tray_data} (sum={sum_allocated})")
                 
                 if sum_allocated != total_rejection_qty:
-                    print(f"[IQF_VIEW_TRAY_LIST] ⚠️ MISMATCH: sum={sum_allocated}, expected={total_rejection_qty}")
-                    print(f"[IQF_VIEW_TRAY_LIST] Regenerating expected distribution from all lot trays...")
-                    
-                    # ✅ FIXED: Use universal helper to find ALL lot trays for regeneration
-                    accepted_ids_for_regen = set(
-                        IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True)
-                    )
-                    all_lot_trays_regen = _get_all_lot_trays_for_iqf(lot_id)
-                    eligible_for_regen = [tid for tid in sorted(all_lot_trays_regen.keys()) if tid not in accepted_ids_for_regen]
-                    
-                    if eligible_for_regen and tray_capacity > 0:
-                        remainder_regen = total_rejection_qty % tray_capacity
-                        num_full_regen = total_rejection_qty // tray_capacity
-                        dist_regen = []
-                        if remainder_regen > 0:
-                            dist_regen.append(remainder_regen)
-                        for _ in range(num_full_regen):
-                            dist_regen.append(tray_capacity)
-                        tray_list = []
-                        for sno, (qty_r, tid_r) in enumerate(zip(dist_regen, eligible_for_regen), 1):
-                            tray_list.append({'sno': sno, 'tray_id': tid_r, 'tray_qty': qty_r})
-                            print(f"[IQF_VIEW_TRAY_LIST]   Regenerated Tray {sno}: {tid_r} → {qty_r}")
-                    else:
-                        # Fallback: show whatever is in DB even if incomplete
-                        for sno, (tray_id, tray_qty) in enumerate(allocated_tray_data.items(), 1):
-                            tray_list.append({'sno': sno, 'tray_id': tray_id, 'tray_qty': tray_qty})
-                            print(f"[IQF_VIEW_TRAY_LIST]   Tray {sno}: {tray_id} → {tray_qty}")
-                else:
-                    for sno, (tray_id, tray_qty) in enumerate(allocated_tray_data.items(), 1):
-                        tray_list.append({
-                            'sno': sno,
-                            'tray_id': tray_id,
-                            'tray_qty': tray_qty,
-                        })
-                        print(f"[IQF_VIEW_TRAY_LIST]   Tray {sno}: {tray_id} → {tray_qty}")
+                    print(f"[IQF_VIEW_TRAY_LIST] ⚠️ MISMATCH: sum={sum_allocated}, expected={total_rejection_qty}. Showing IQF_Rejected_TrayScan records only.")
+                # ✅ FIXED: Always show IQF_Rejected_TrayScan records only — no regeneration from non-IQF sources
+                for sno, (tray_id, tray_qty) in enumerate(allocated_tray_data.items(), 1):
+                    tray_list.append({
+                        'sno': sno,
+                        'tray_id': tray_id,
+                        'tray_qty': tray_qty,
+                    })
+                    print(f"[IQF_VIEW_TRAY_LIST]   Tray {sno}: {tray_id} → {tray_qty}")
             else:
                 # ✅ NEW: No DB records yet — GENERATE EXPECTED CONSOLIDATED DISTRIBUTION
                 print(f"[IQF_VIEW_TRAY_LIST] No IQF_Rejected_TrayScan records found yet")
@@ -2905,8 +2886,8 @@ def iqf_view_tray_list(request):
                         expected_distribution.append(tray_capacity)
                         print(f"[IQF_VIEW_TRAY_LIST]   Distribution[{len(expected_distribution)-1}]: {tray_capacity} qty")
                     
-                    # Get available tray IDs to assign to distribution (from ALL sources)
-                    all_lot_trays_gen = _get_all_lot_trays_for_iqf(lot_id)
+                    # Get available tray IDs to assign to distribution (IQF-scope: TrayId master only)
+                    all_lot_trays_gen = {t['tray_id']: t['tray_quantity'] for t in TrayId.objects.filter(lot_id=lot_id, delink_tray=False).values('tray_id', 'tray_quantity')}
                     available_tray_ids = sorted(all_lot_trays_gen.keys())
                     print(f"[IQF_VIEW_TRAY_LIST] Available tray IDs: {available_tray_ids}")
                     
@@ -6904,10 +6885,46 @@ def get_iqf_available_trays_for_allocation(lot_id):
                 print(f"   Available tray: {tray_data['tray_id']} qty={tray_data['tray_quantity']} cap={tray_data['tray_capacity']}")
         else:
             # Fallback path: Build from upstream sources when IQFTrayId doesn't exist yet
-            # ✅ FIXED: Use universal helper to find ALL lot trays from every source
-            print(f"   [FALLBACK] No IQFTrayId records found, using universal tray helper...")
-            
-            all_lot_trays_map = _get_all_lot_trays_for_iqf(lot_id)
+            # ✅ FIX: Use ONLY IQF-scope sources — trays that PHYSICALLY moved to IQF.
+            #    Do NOT include BrassTrayId / BrassAuditTrayId (they contain all Brass QC/Audit
+            #    trays for the lot regardless of whether they moved to IQF, causing non-IQF trays
+            #    like JB-A00021 to bleed into the rejection allocation pool).
+            print(f"   [FALLBACK] No IQFTrayId records found, using IQF-only tray sources...")
+
+            _iqf_only_map = {}
+
+            def _upd_iqf(tid, qty):
+                if tid:
+                    try:
+                        qty = int(qty or 0)
+                    except (ValueError, TypeError):
+                        qty = 0
+                    if qty > _iqf_only_map.get(tid, 0):
+                        _iqf_only_map[tid] = qty
+
+            # Source 1: TrayId master (authoritative qty reference, scoped to lot)
+            for t in TrayId.objects.filter(lot_id=lot_id, delink_tray=False).values('tray_id', 'tray_quantity'):
+                _upd_iqf(t['tray_id'], t['tray_quantity'])
+
+            # Source 5: Brass QC rejection scans — ONLY trays that physically moved to IQF
+            for rec in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(
+                rejected_tray_id__isnull=True
+            ).exclude(rejected_tray_id=''):
+                _upd_iqf(rec.rejected_tray_id, rec.rejected_tray_quantity)
+
+            # Source 6: Brass Audit rejection scans — ONLY trays that physically moved to IQF
+            for rec in Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(
+                rejected_tray_id__isnull=True
+            ).exclude(rejected_tray_id=''):
+                _upd_iqf(rec.rejected_tray_id, rec.rejected_tray_quantity)
+
+            # Source 7: IQF rejection scans already allocated
+            for rec in IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(
+                tray_id__isnull=True
+            ).exclude(tray_id=''):
+                _upd_iqf(rec.tray_id, rec.rejected_tray_quantity)
+
+            all_lot_trays_map = _iqf_only_map
             eligible_tray_ids = set(all_lot_trays_map.keys())
             
             # Remove accepted tray IDs from eligible list

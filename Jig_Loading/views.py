@@ -2223,6 +2223,19 @@ class JigSubmitAPIView(APIView):
                 complete_delink_tray_info = list(delink_tray_info) if delink_tray_info else []
                 complete_half_filled_tray_info = list(half_filled_tray_info) if half_filled_tray_info else []
 
+                # Enrich each tray in delink_tray_info with plating_stk_no from database
+                for tray in complete_delink_tray_info:
+                    if 'plating_stk_no' not in tray or not tray.get('plating_stk_no'):
+                        tray_id = tray.get('tray_id')
+                        jig_tray_record = JigLoadTrayId.objects.filter(
+                            tray_id=tray_id,
+                            lot_id=lot_id
+                        ).select_related('batch_id').first()
+                        if jig_tray_record and jig_tray_record.batch_id:
+                            tray['plating_stk_no'] = jig_tray_record.batch_id.plating_stk_no
+                        else:
+                            tray['plating_stk_no'] = plating_stock_num or ''
+
                 # Include tray rows from the combined lots so the "Complete" table shows all tray ids/qtys
                 # Only runs for non-splitting scenario (splitting path already fetches all lots above)
                 if is_multi_model and combined_lot_ids and (original_lot_qty == jig_capacity):
@@ -2234,9 +2247,15 @@ class JigSubmitAPIView(APIView):
                             # Append any trays scanned against the combined lot so
                             # they appear in the complete delink table view.
                             # Use lot_id only (no batch_id) since combined lots have their own batch
-                            combined_trays = JigLoadTrayId.objects.filter(lot_id=combined_lot)
+                            combined_trays = JigLoadTrayId.objects.filter(lot_id=combined_lot).select_related('batch_id')
                             for ct in combined_trays:
-                                complete_delink_tray_info.append({'tray_id': ct.tray_id, 'cases': ct.tray_quantity, 'lot_id': combined_lot})
+                                combined_plating_stk_no = ct.batch_id.plating_stk_no if ct.batch_id else ''
+                                complete_delink_tray_info.append({
+                                    'tray_id': ct.tray_id, 
+                                    'cases': ct.tray_quantity, 
+                                    'lot_id': combined_lot,
+                                    'plating_stk_no': combined_plating_stk_no  # Add model identifier
+                                })
                         except Exception as e:
                             logger.warning(f"⚠️ Could not include combined lot {combined_lot} in complete table: {e}")
                 
@@ -2365,27 +2384,42 @@ class JigSubmitAPIView(APIView):
                 plating_stock_num = batch.plating_stk_no if batch.plating_stk_no else (batch.model_stock_no.plating_stk_no if batch.model_stock_no else '')
 
                 # Prepare model cases data for multi-model submissions
+                # DETECTION: Check if multiple distinct models exist in delink_tray_info OR combined_lot_ids > 1
                 model_cases_data = ''
-                if is_multi_model and combined_lot_ids:
-                    # Build comma-separated model numbers with quantities
-                    model_cases_list = []
-                    for combined_lot in combined_lot_ids:
-                        try:
-                            # Get stock for this lot ID
-                            combined_stock = TotalStockModel.objects.filter(lot_id=combined_lot).select_related('batch_id').first()
-                            if combined_stock and combined_stock.batch_id:
-                                model_no = combined_stock.batch_id.plating_stk_no or ''
-                                # Get quantity for this lot from delink_tray_info
-                                lot_qty = sum(tray['cases'] for tray in complete_delink_tray_info 
-                                            if tray.get('lot_id') == combined_lot)
-                                if not lot_qty:
-                                    # If not found in delink info, use total stock
-                                    lot_qty = combined_stock.total_stock or 0
-                                model_cases_list.append(f"{model_no}:{lot_qty}")
-                                logger.info(f"  📦 Model {model_no}: {lot_qty} cases from lot {combined_lot}")
-                        except Exception as e:
-                            logger.warning(f"  ⚠️ Could not get data for combined lot {combined_lot}: {e}")
-                    model_cases_data = ','.join(model_cases_list)
+                distinct_models = {}  # model_name -> total_qty
+                
+                # First, extract models from delink_tray_info
+                for tray in complete_delink_tray_info:
+                    model_key = tray.get('plating_stk_no') or tray.get('model_no') or plating_stock_num
+                    if model_key:
+                        distinct_models[model_key] = distinct_models.get(model_key, 0) + tray.get('cases', 0)
+                
+                # Update is_multi_model based on actual distinct models found
+                if len(distinct_models) > 1:
+                    is_multi_model = True
+                
+                if is_multi_model:
+                    if combined_lot_ids:
+                        # Use combined_lot_ids method
+                        model_cases_list = []
+                        for combined_lot in combined_lot_ids:
+                            try:
+                                combined_stock = TotalStockModel.objects.filter(lot_id=combined_lot).select_related('batch_id').first()
+                                if combined_stock and combined_stock.batch_id:
+                                    model_no = combined_stock.batch_id.plating_stk_no or ''
+                                    lot_qty = sum(tray['cases'] for tray in complete_delink_tray_info 
+                                                if tray.get('lot_id') == combined_lot)
+                                    if not lot_qty:
+                                        lot_qty = combined_stock.total_stock or 0
+                                    model_cases_list.append(f"{model_no}:{lot_qty}")
+                                    logger.info(f"  📦 Model {model_no}: {lot_qty} cases from lot {combined_lot}")
+                            except Exception as e:
+                                logger.warning(f"  ⚠️ Could not get data for combined lot {combined_lot}: {e}")
+                        model_cases_data = ','.join(model_cases_list)
+                    else:
+                        # Use distinct_models method (fallback for manually mixed trays)
+                        model_cases_list = [f"{model}:{qty}" for model, qty in distinct_models.items()]
+                        model_cases_data = ','.join(model_cases_list)
                     logger.info(f"🔀 MULTI-MODEL data: {model_cases_data}")
 
                 # Create JigCompleted entry
@@ -2692,6 +2726,8 @@ class JigCompletedTable(TemplateView):
                     'jig_qr_id': jig_completed.jig_id,
                     'jig_loaded_date_time': jig_completed.updated_at,
                     'model_images': [img.master_image.url for img in stock.model_stock_no.images.all()] if stock.model_stock_no else [],
+                    'is_multi_model': jig_completed.is_multi_model,
+                    'no_of_model_cases': jig_completed.no_of_model_cases,
                 })
             except Exception as e:
                 print(f"Error processing JigCompleted record {jig_completed.id}: {e}")

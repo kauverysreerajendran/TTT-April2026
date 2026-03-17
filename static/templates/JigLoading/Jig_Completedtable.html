@@ -1098,6 +1098,53 @@
   .model-circle:nth-child(6) { background-color: #17a2b8; } /* Cyan */
   .model-circle:nth-child(7) { background-color: #fd7e14; } /* Orange */
   .model-circle:nth-child(8) { background-color: #e83e8c; } /* Pink */
+
+  /* ✅ Multi-Model Circle Indicators (Completed Table) */
+  .multi-model-circles-container {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .multi-model-circle {
+    position: relative;
+    display: inline-block;
+  }
+
+  .circle-indicator {
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .circle-indicator:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+  }
+
+  .multi-model-tooltip {
+    position: absolute;
+    background: #333;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .multi-model-circle:hover .multi-model-tooltip {
+    opacity: 1;
+    pointer-events: auto;
+  }
 </style>
 
 <div class="content-wrapper">
@@ -1228,42 +1275,43 @@
                     {{ jig.jig_loaded_date_time|date:"d-M-y" }}<br>
                     <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ jig.jig_loaded_date_time|date:"h:i A" }}</span>
                   </td>
-<!-- Plating Stock No - WITH tooltip (matching your desired format) -->
+<!-- Plating Stock No - WITH Multi-Model Circle Indicators -->
 <td>
-  {% if jig.lot_plating_stk_nos %}
-    {% if jig.lot_plating_stk_nos|length > 1 %}
-      <div class="model-circles">
-        {% for model in jig.lot_plating_stk_nos %}
-          <span class="model-circle" title="Model No: {{ model }}"></span>
-        {% endfor %}
-      </div>
-    {% else %}
-      <span class="model-hover-trigger" data-plating-stk-no="{{ jig.lot_plating_stk_nos.0 }}" style="cursor: pointer; word-break: break-all;">
-        {{ jig.lot_plating_stk_nos.0|highlight_plating_color|safe_html }}
-        <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
-          
-          <!-- Header with Info and Close buttons -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <button class="info-btn" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
-              Info
-            </button>
-            <button class="close-btn" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
-              Close
-            </button>
-          </div>
-          
-          <!-- Image gallery section -->
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <!-- Hide scroll buttons since only one image is shown -->
-            <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
-              <img src="{{ jig.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+  {% if jig.is_multi_model and jig.no_of_model_cases %}
+    <!-- ✅ Multi-Model: Show Colored Circles -->
+    <div class="multi-model-circles-container" data-lot-id="{{ jig.lot_id }}" title="Multi-model: {{ jig.no_of_model_cases }}">
+      {% with models=jig.no_of_model_cases|default:""|split:"," %}
+        {% for model in models %}
+          {% if model|length > 0 %}
+            {% with model_name=model|get_model_name model_qty=model|get_model_qty %}
+            <div class="multi-model-circle" 
+                 data-model="{{ model_name|safe }}" 
+                 data-model-qty="{{ model_qty }}"
+                 data-lot-id="{{ jig.lot_id }}"
+                 style="display: inline-block; margin-right: 6px; position: relative; cursor: pointer;">
+              <div class="circle-indicator" 
+                   style="width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: all 0.2s ease;"
+                   data-color-index="{{ forloop.counter0 }}">
+                {{ forloop.counter }}
+              </div>
+              <div class="multi-model-tooltip" 
+                   style="position: absolute; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 11px; white-space: nowrap; z-index: 1000; display: none; opacity: 0; transition: opacity 0.2s; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                <strong>{{ model_name|safe }}</strong><br>
+                <span style="font-size: 10px;">Qty: {{ model_qty }} | Tray: {{ jig.calculated_no_of_trays }}</span>
+              </div>
             </div>
-          </div>
-        </div>
-      </span>
-    {% endif %}
+            {% endwith %}
+          {% endif %}
+        {% endfor %}
+      {% endwith %}
+    </div>
+  {% elif jig.lot_plating_stk_nos %}
+    <!-- Single Model: Show Text -->
+    <span class="model-hover-trigger" data-plating-stk-no="{{ jig.lot_plating_stk_nos }}" style="cursor: pointer; word-break: break-all;">
+      {{ jig.lot_plating_stk_nos|highlight_plating_color|safe_html }}
+    </span>
   {% else %}
-    No Plating Stock No
+    <span style="color: #dc3545; font-weight: 600">Empty</span>
   {% endif %}
 </td>
 
@@ -1416,7 +1464,6 @@
               <div id="delinkTrayViewModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.18); z-index:30000; align-items:center; justify-content:center;">
                 <div style="background:#fff; border-radius:10px; padding:28px 32px 18px 32px; min-width:500px; max-width:90vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); position:relative;">
                   <span id="closeDelinkTrayViewModal" style="position:absolute; top:8px; right:16px; font-size:22px; font-weight:bold; color:#d9534f; cursor:pointer;">&times;</span>
-                  <h5 style="margin-bottom:16px; color:#028084;">Delink Tray IDs - Status Information</h5>
                   <div id="delinkTrayViewTable"></div>
                 </div>
               </div>
@@ -3046,6 +3093,18 @@ document.addEventListener("DOMContentLoaded", function() {
 <!-- Script for Delink Tray View Modal -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function () {
+  // Color palette for circles
+  const colorPalette = [
+    '#007bff', // Blue
+    '#28a745', // Green
+    '#ffc107', // Yellow
+    '#6f42c1', // Purple
+    '#dc3545', // Red
+    '#17a2b8', // Cyan
+    '#fd7e14', // Orange
+    '#e83e8c'  // Pink
+  ];
+
   // View icon click handler
   document.querySelectorAll('.view-details-btn').forEach(function(btn) {
     btn.addEventListener('click', async function(e) {
@@ -3077,7 +3136,32 @@ document.addEventListener("DOMContentLoaded", function () {
         return status === 'Delinked';
       });
       
-      let html = '<table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;"><thead><tr><th>S.No</th><th>Tray ID</th><th>Tray Qty</th><th>Status</th><!-- <th>Accountability</th> --></tr></thead><tbody>';
+      // ✅ Extract models from row data for color-coded header
+      const modelCirclesHTML = (() => {
+        const modelContainer = row.querySelector('.multi-model-circles-container');
+        if (modelContainer) {
+          const models = Array.from(modelContainer.querySelectorAll('.multi-model-circle'));
+          if (models.length > 1) {
+            let circlesHTML = '<div style="display:flex; gap:6px; margin-left:12px; align-items:center;">';
+            models.forEach((modelEl, idx) => {
+              const indicator = modelEl.querySelector('.circle-indicator');
+              const modelName = modelEl.getAttribute('data-model') || `Model ${idx + 1}`;
+              const color = indicator ? indicator.style.backgroundColor : colorPalette[idx % colorPalette.length];
+              circlesHTML += `<div style="width:20px; height:20px; border-radius:50%; background-color:${color}; display:flex; align-items:center; justify-content:center; color:white; font-size:9px; font-weight:600; box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="${modelName}"><strong>${idx + 1}</strong></div>`;
+            });
+            circlesHTML += '</div>';
+            return circlesHTML;
+          }
+        }
+        return '';
+      })();
+      
+      let html = `<div style="display:flex; align-items:center; margin-bottom:16px;">
+        <h5 style="margin:0; color:#028084;">Delink Tray IDs - Status Information</h5>
+        ${modelCirclesHTML}
+      </div>`;
+      
+      html += '<table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;"><thead><tr><th>S.No</th><th>Tray ID</th><th>Tray Qty</th><th>Status</th><!-- <th>Accountability</th> --></tr></thead><tbody>';
       if (delinkTrays.length === 0) {
         html += '<tr><td colspan="4" style="text-align:center;">No delinked trays found.</td></tr>';
       } else {
@@ -3119,6 +3203,57 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById('delinkTrayViewTable').innerHTML = '';
     });
   }
+});
+</script>
+
+<!-- ✅ Multi-Model Circle Indicators Script (Completed Table) -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  // Color palette for circles
+  const colorPalette = [
+    '#007bff', // Blue
+    '#28a745', // Green
+    '#ffc107', // Yellow
+    '#6f42c1', // Purple
+    '#dc3545', // Red
+    '#17a2b8', // Cyan
+    '#fd7e14', // Orange
+    '#e83e8c'  // Pink
+  ];
+
+  // Initialize multi-model circles with colors
+  const multiModelContainers = document.querySelectorAll('.multi-model-circles-container');
+  
+  multiModelContainers.forEach(container => {
+    const circles = container.querySelectorAll('.multi-model-circle');
+    
+    circles.forEach((circle, index) => {
+      const indicator = circle.querySelector('.circle-indicator');
+      const colorIndex = index % colorPalette.length;
+      
+      // Assign color to circle
+      if (indicator) {
+        indicator.style.backgroundColor = colorPalette[colorIndex];
+        indicator.setAttribute('data-color', colorPalette[colorIndex]);
+      }
+      
+      // Setup hover tooltip
+      const tooltip = circle.querySelector('.multi-model-tooltip');
+      if (tooltip) {
+        circle.addEventListener('mouseenter', function() {
+          tooltip.style.opacity = '1';
+          tooltip.style.pointerEvents = 'auto';
+        });
+        
+        circle.addEventListener('mouseleave', function() {
+          tooltip.style.opacity = '0';
+          tooltip.style.pointerEvents = 'none';
+        });
+      }
+    });
+  });
+
+  console.log(`✅ Multi-model circles initialized for ${multiModelContainers.length} rows`);
 });
 </script>
 

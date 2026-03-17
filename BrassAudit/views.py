@@ -114,6 +114,9 @@ class BrassAuditPickTableView(APIView):
             # Show existing Brass Audit lots that are on hold or partially processed
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=True)
         ).exclude(
+            # ✅ EXCLUSION: Exclude IQF-sourced lots (from IQF acceptance/few_cases_acceptance)
+            Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True)
+        ).exclude(
             # Exclude completed Brass Audit lots
             brass_audit_accptance=True
         ).exclude(
@@ -4880,25 +4883,12 @@ class PickTrayIdList_Complete_APIView(APIView):
             send_to_iqf = getattr(stock_obj, 'send_brass_audit_to_iqf', False) if stock_obj else False
             
             if send_to_iqf:
-                # ✅ REJECTION-RECOVERY PATH: Check IQF accepted data
-                from IQF.models import IQF_Accepted_TrayID_Store, IQFTrayId
-                
-                # Priority: Check IQF_Accepted_TrayID_Store first (persisted accepted data)
-                iqf_accepted_store = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id)
-                if iqf_accepted_store.exists():
-                    print(f"🔄 [PickTrayIdList_Complete_APIView] Found {iqf_accepted_store.count()} IQF accepted trays (rejection-recovery path)")
-                    base_transferred = iqf_accepted_store
-                    base_source = 'iqf_accepted_store'
-                else:
-                    # Fallback: Check IQFTrayId table for accepted trays
-                    iqf_trays = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
-                    if iqf_trays.exists():
-                        print(f"🔄 [PickTrayIdList_Complete_APIView] Found {iqf_trays.count()} IQF accepted trays from IQFTrayId")
-                        base_transferred = iqf_trays
-                        base_source = 'iqf_tray_id'
-                    else:
-                        base_transferred = None
-                        base_source = None
+                # ✅ EXCLUSION: IQF ACCEPTED TRAYS NOT SHOWN IN BRASS AUDIT
+                # When lot comes from IQF, only rejected trays appear in Brass Audit
+                # Explicitly skip IQF_Accepted_TrayID_Store and IQFTrayId accepted data
+                print(f"✅ [EXCLUSION] IQF lot detected: skipping IQF accepted trays (rejection-only path)")
+                base_transferred = None
+                base_source = None
             else:
                 # Normal path: Check Brass QC Accepted store for final saves
                 from Brass_QC.models import Brass_Qc_Accepted_TrayID_Store, Brass_Qc_Accepted_TrayScan
@@ -5230,8 +5220,8 @@ class PickTrayIdList_Complete_APIView(APIView):
                 for tray in trays_list:
                     tray_id = getattr(tray, 'tray_id', None)
                     if tray_id:
-                        # Skip trays delinked in BrassTrayId (handles duplicate record edge cases)
-                        is_delinked_brass = BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).exists()
+                        # Skip trays delinked in BrassTrayId (not applicable for IQF-accepted source)
+                        is_delinked_brass = False if base_source == 'iqf_accepted_store' else BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).exists()
                         print(f"   🔍 [TOP TRAY CHECK] tray_id={tray_id}: BrassTrayId delinked={is_delinked_brass}")
                         if is_delinked_brass:
                             print(f"   ⏩ SKIPPING {tray_id} (delinked in BrassTrayId)")
@@ -5318,7 +5308,8 @@ class PickTrayIdList_Complete_APIView(APIView):
                 
                 try:
                     # If BrassTrayId marks this tray as delinked, include it and mark delink_tray=True
-                    delinked_brass = BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).first()
+                    # Not applicable for IQF-accepted source — use IQF_Accepted_TrayID_Store qty directly
+                    delinked_brass = None if base_source == 'iqf_accepted_store' else BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).first()
                     if delinked_brass and not is_scanned_rejected:
                         print(f"   ℹ️ INCLUDING delinked tray: {tray_id} (delinked in BrassTrayId) - will be shown as delink_tray")
                         other_tray_qty = int(getattr(delinked_brass, 'tray_quantity', getattr(tray, 'tray_qty', getattr(tray, 'tray_quantity', 0))) or 0)
@@ -5369,19 +5360,26 @@ class PickTrayIdList_Complete_APIView(APIView):
                     continue
                 
                 try:
-                    # Prefer authoritative BrassAuditTrayId record if present (may carry updated qty / rejection flags)
-                    audit_tray = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).first()
-                    if audit_tray:
-                        other_tray_qty = int(audit_tray.tray_quantity or 0)
-                        rejected_flag = bool(audit_tray.rejected_tray)
-                        brass_rejected_flag = bool(getattr(audit_tray, 'brass_rejected_tray', False))
-                        delink_flag = bool(getattr(audit_tray, 'delink_tray', False))
-                    else:
-                        # Fallback: use qty from transferred object (tray) when no audit record exists
+                    # For IQF-accepted source: use IQF_Accepted_TrayID_Store qty directly, no BrassAuditTrayId override
+                    if base_source == 'iqf_accepted_store':
                         other_tray_qty = int(getattr(tray, 'tray_qty', getattr(tray, 'tray_quantity', 0)) or 0)
                         rejected_flag = False
                         brass_rejected_flag = False
                         delink_flag = False
+                    else:
+                        # Prefer authoritative BrassAuditTrayId record if present (may carry updated qty / rejection flags)
+                        audit_tray = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).first()
+                        if audit_tray:
+                            other_tray_qty = int(audit_tray.tray_quantity or 0)
+                            rejected_flag = bool(audit_tray.rejected_tray)
+                            brass_rejected_flag = bool(getattr(audit_tray, 'brass_rejected_tray', False))
+                            delink_flag = bool(getattr(audit_tray, 'delink_tray', False))
+                        else:
+                            # Fallback: use qty from transferred object (tray) when no audit record exists
+                            other_tray_qty = int(getattr(tray, 'tray_qty', getattr(tray, 'tray_quantity', 0)) or 0)
+                            rejected_flag = False
+                            brass_rejected_flag = False
+                            delink_flag = False
                 except Exception as e:
                     print(f"   ⚠️ Error checking BrassAuditTrayId for {tray_id}: {e}")
                     other_tray_qty = int(getattr(tray, 'tray_qty', getattr(tray, 'tray_quantity', 0)) or 0)
