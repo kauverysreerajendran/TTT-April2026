@@ -589,6 +589,11 @@ class BrassPickTableView(APIView):
             # Do NOT exclude lots that have completed IS acceptance (last=IS, next=Brass QC).
             Q(next_process_module='Input Screening') |
             (Q(last_process_module='Input Screening') & ~Q(next_process_module='Brass QC'))
+            ).exclude(
+            # ✅ FIX: Exclude incomplete/unvalidated lots with no actual data
+            # If a lot has no accepted quantity and hasn't been properly validated in IS, don't show it
+            Q(total_IP_accpeted_quantity__lte=0) & Q(brass_physical_qty__lte=0) & 
+            ~Q(accepted_tray_scan_status=True)
             ).distinct()
 
         # Apply sorting if requested
@@ -1645,15 +1650,15 @@ class BQBatchRejectionAPIView(APIView):
             if not lot_rejected_comment:
                 return Response({'success': False, 'error': 'Lot rejection remarks are required for batch rejection'}, status=400)
 
-            # Get ModelMasterCreation by batch_id string
-            mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
-            if not mmc:
-                return Response({'success': False, 'error': 'Batch not found'}, status=404)
-
-            # Get TotalStockModel using lot_id
+            # Get TotalStockModel using lot_id (we'll use its batch_id FK relationship)
             total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
             if not total_stock:
                 return Response({'success': False, 'error': 'TotalStockModel not found'}, status=404)
+
+            # ✅ CRITICAL FIX: Use total_stock.batch_id directly (FK relationship) instead of querying by string
+            mmc = total_stock.batch_id
+            if not mmc:
+                return Response({'success': False, 'error': 'No batch associated with this lot'}, status=404)
 
             # NEW: Process delink operations if missing quantity exists
             delink_operations_summary = {'delinked_trays': 0, 'top_tray_updated': False}
@@ -1794,13 +1799,83 @@ class BQBatchRejectionAPIView(APIView):
                 lot_rejected_comment=lot_rejected_comment
             )
 
+            # ─── Transfer rejected trays to IQF ──────────────────────────────
+            # Build tray→qty map from BrassTrayId (non-delinked), fall back to
+            # Brass_QC_Rejected_TrayScan for any missing quantities.
+            try:
+                from IQF.models import IQFTrayId as _IQFTrayId
+                print(f"[BATCH REJECTION IQF] Starting IQF transfer for lot {lot_id}")
+
+                _remaining = BrassTrayId.objects.filter(lot_id=lot_id)
+                if delink_tray_ids:
+                    _remaining = _remaining.exclude(tray_id__in=delink_tray_ids)
+
+                print(f"[BATCH REJECTION IQF] Found {_remaining.count()} remaining trays to transfer")
+
+                _tray_map = {t.tray_id: (t.tray_quantity if t.tray_quantity is not None else 0)
+                             for t in _remaining}
+                print(f"[BATCH REJECTION IQF] Tray map: {_tray_map}")
+
+                # Fallback: fill missing / zero qtys from scan records
+                for _scan in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(
+                        rejected_tray_id__isnull=True).exclude(rejected_tray_id=''):
+                    _tid = (_scan.rejected_tray_id or '').strip()
+                    if not _tid:
+                        continue
+                    try:
+                        _rq = int(_scan.rejected_tray_quantity or 0)
+                    except Exception:
+                        _rq = 0
+                    if _tray_map.get(_tid, 0) == 0 and _rq > 0:
+                        _tray_map[_tid] = _rq
+
+                print(f"[BATCH REJECTION IQF] Final tray map (after scan fallback): {_tray_map}")
+
+                _iqf_created = 0
+                for _tid, _tq in _tray_map.items():
+                    if not _tid:
+                        continue
+                    try:
+                        _qty_val = int(_tq)
+                    except Exception:
+                        _qty_val = 0
+                    
+                    if _IQFTrayId.objects.filter(lot_id=lot_id, tray_id=_tid).exists():
+                        print(f"[BATCH REJECTION IQF] Tray {_tid} already exists in IQFTrayId, skipping")
+                        continue
+                    
+                    print(f"[BATCH REJECTION IQF] Creating IQFTrayId: lot_id={lot_id}, tray_id={_tid}, qty={_qty_val}, rejected_tray=True")
+                    _IQFTrayId.objects.create(
+                        lot_id=lot_id,
+                        tray_id=_tid,
+                        tray_quantity=_qty_val,
+                        batch_id=mmc,
+                        user=request.user,
+                        rejected_tray=True
+                    )
+                    _iqf_created += 1
+
+                print(f"[BATCH REJECTION IQF] Created {_iqf_created} IQFTrayId record(s)")
+
+                # Mark the lot so it appears in the IQF pick table
+                total_stock.send_brass_audit_to_iqf = True
+                total_stock.save(update_fields=['send_brass_audit_to_iqf'])
+                print(f"✅ [BATCH REJECTION] IQF: created {_iqf_created} IQFTrayId(s), "
+                      f"set send_brass_audit_to_iqf=True for lot {lot_id}")
+            except Exception as _iqf_err:
+                import traceback
+                tb = traceback.format_exc()
+                print(f"❌ [BATCH REJECTION] IQF transfer failed: {_iqf_err}")
+                print(f"[BATCH REJECTION] Traceback:\n{tb}")
+            # ─────────────────────────────────────────────────────────────────
+
             # Prepare response message
             success_message = 'Batch rejection saved with remarks.'
             if missing_qty > 0 and delink_operations_summary['delinked_trays'] > 0:
                 success_message += f' {delink_operations_summary["delinked_trays"]} tray(s) delinked for missing quantity.'
 
             return Response({
-                'success': True, 
+                'success': True,
                 'message': success_message,
                 'delink_operations': delink_operations_summary,
                 'updated_trays': updated_trays_count,

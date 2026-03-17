@@ -2812,12 +2812,13 @@ def iqf_view_tray_list(request):
 
         # ✅ CRITICAL FIX: Determine batch_rejection by QUANTITY COMPARISON ONLY
         # NOT by reading database flag or by checking if records exist
-        # Rule: If total rejection qty > tray capacity, it MUST be batch rejection (consolidated)
-        batch_rejection = total_rejection_qty > tray_capacity if tray_capacity > 0 else False
+        # Rule: If total rejection qty >= tray capacity, it MUST be batch rejection (consolidated)
+        # FIX: Changed from > to >= to handle cases where rejection qty equals tray capacity exactly
+        batch_rejection = total_rejection_qty >= tray_capacity if tray_capacity > 0 else False
         
         print(f"[IQF_VIEW_TRAY_LIST] lot_id={lot_id}")
         print(f"[IQF_VIEW_TRAY_LIST] total_rejection_qty={total_rejection_qty}, tray_capacity={tray_capacity}")
-        print(f"[IQF_VIEW_TRAY_LIST] batch_rejection = {total_rejection_qty} > {tray_capacity} = {batch_rejection}")
+        print(f"[IQF_VIEW_TRAY_LIST] batch_rejection = {total_rejection_qty} >= {tray_capacity} = {batch_rejection}")
 
         if batch_rejection and total_rejection_qty > 0:
             print(f"[IQF_VIEW_TRAY_LIST] ✅ BATCH REJECTION IDENTIFIED. Fetching/generating allocated rejection trays...")

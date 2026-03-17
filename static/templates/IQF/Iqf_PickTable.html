@@ -3427,14 +3427,6 @@ async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
     console.log('📊 API Response - total_rejection_qty:', allocData.total_rejection_qty);
     console.log('📊 API Response - trays:', allocData.trays);
     
-    // If not batch rejection, return error
-    if (!allocData.batch_rejection) {
-      return {
-        success: false,
-        error: 'This is not a batch rejection allocation'
-      };
-    }
-    
     const iqfRejectionQty = allocData.total_rejection_qty || 0;
     const trayCapacity = allocData.tray_capacity || 12;
     const allocatedTrays = allocData.trays || [];
@@ -3443,10 +3435,13 @@ async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
     console.log('📊 Tray Capacity:', trayCapacity);
     console.log('📊 Allocated trays count:', allocatedTrays.length);
     
-    if (allocatedTrays.length === 0) {
+    // ✅ FIXED: If not batch rejection AND no allocated trays, return error
+    // But if trays ARE allocated (even if batch_rejection flag is False due to edge case),
+    // allow it to proceed - the trays already satisfy the qty
+    if (!allocData.batch_rejection && allocatedTrays.length === 0) {
       return {
         success: false,
-        error: 'No allocated trays found in database'
+        error: 'This is not a batch rejection allocation'
       };
     }
     
