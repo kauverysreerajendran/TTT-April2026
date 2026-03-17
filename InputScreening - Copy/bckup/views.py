@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.renderers import TemplateHTMLRenderer
 from django.shortcuts import render
-from django.db.models import OuterRef, Subquery, Exists, F, Count
+from django.db.models import OuterRef, Subquery, Exists, F
 from django.core.paginator import Paginator
 from django.templatetags.static import static
 from django.db import IntegrityError
@@ -109,9 +109,8 @@ class IS_PickTable(APIView):
             draft_tray_verify=draft_tray_verify_subquery,
             tray_scan_exists=tray_scan_exists,
 
-            # Use latest TotalStockModel row for this batch to avoid blank remarks from older records
             IP_pick_remarks=Subquery(
-                TotalStockModel.objects.filter(batch_id=OuterRef('pk')).order_by('-id').values('IP_pick_remarks')[:1]
+                TotalStockModel.objects.filter(batch_id=OuterRef('pk')).values('IP_pick_remarks')[:1]
             ),
             created_at=Subquery(
                 TotalStockModel.objects.filter(batch_id=OuterRef('pk')).values('created_at')[:1]
@@ -410,32 +409,6 @@ class SaveIPCheckboxView(APIView):
             if not batch_id:
                 print(f"❌ [create_ip_tray_instances] No batch_id found for lot {lot_id}")
                 return
-
-            # Keep only one row per (lot_id, tray_id) before upsert to avoid historical duplicates.
-            duplicate_tray_rows = (
-                IPTrayId.objects.filter(lot_id=lot_id)
-                .exclude(tray_id__isnull=True)
-                .exclude(tray_id='')
-                .values('tray_id')
-                .annotate(row_count=Count('id'))
-                .filter(row_count__gt=1)
-            )
-            for duplicate in duplicate_tray_rows:
-                duplicate_qs = IPTrayId.objects.filter(
-                    lot_id=lot_id,
-                    tray_id=duplicate['tray_id']
-                ).order_by('-id')
-                row_to_keep = duplicate_qs.first()
-                if not row_to_keep:
-                    continue
-                # Preserve top_tray marker if any duplicate row had it.
-                had_top_tray = duplicate_qs.filter(top_tray=True).exists()
-                if had_top_tray and not row_to_keep.top_tray:
-                    row_to_keep.top_tray = True
-                    row_to_keep.save(update_fields=['top_tray'])
-                deleted_rows = duplicate_qs.exclude(id=row_to_keep.id).delete()[0]
-                if deleted_rows:
-                    print(f"🧹 [create_ip_tray_instances] Removed {deleted_rows} duplicate IPTrayId rows for tray {duplicate['tray_id']} in lot {lot_id}")
     
             # Create or Update IPTrayId instances for each verified tray
             created_count = 0
@@ -449,45 +422,31 @@ class SaveIPCheckboxView(APIView):
                     if not tray.tray_id:
                         print(f"❌ [create_ip_tray_instances] Skipping tray with empty tray_id")
                         continue
-
-                    ip_tray, created = IPTrayId.objects.update_or_create(
-                        lot_id=lot_id,
+            
+                    # ✅ ALWAYS CREATE: Do not check for existing IPTrayId, always create new
+                    ip_tray = IPTrayId(
                         tray_id=tray.tray_id,
-                        defaults={
-                            'batch_id': batch_id,
-                            'date': timezone.now(),
-                            'user': self.request.user,
-                            'tray_quantity': tray.tray_quantity or 0,
-                            'top_tray': bool(tray.top_tray),
-                            'IP_tray_verified': True,
-                            'tray_type': getattr(tray, 'tray_type', '') or '',
-                            'tray_capacity': getattr(tray, 'tray_capacity', 0) or 0,
-                            'new_tray': False,
-                            'delink_tray': False,
-                            'rejected_tray': False,
-                        }
+                        lot_id=lot_id,
+                        batch_id=batch_id,
+                        date=timezone.now(),
+                        user=self.request.user,
+                        tray_quantity=tray.tray_quantity or 0,
+                        top_tray=bool(tray.top_tray),
+                        IP_tray_verified=True,
+                        tray_type=getattr(tray, 'tray_type', '') or '',
+                        tray_capacity=getattr(tray, 'tray_capacity', 0) or 0,
+                        new_tray=False,
+                        delink_tray=False
                     )
-                    if created:
-                        created_count += 1
-                        print(f"✅ [create_ip_tray_instances] Created IPTrayId for: {tray.tray_id}")
-                    else:
-                        updated_count += 1
-                        print(f"🔄 [create_ip_tray_instances] Updated IPTrayId for: {tray.tray_id}")
+                    ip_tray.save()
+                    print(f"✅ [create_ip_tray_instances] Created new IPTrayId for: {tray.tray_id}")
             
                 except IntegrityError as e:
-                    failed_count += 1
-                    failed_trays.append({'tray_id': tray.tray_id, 'error': str(e)})
                     print(f"❌ [create_ip_tray_instances] IntegrityError for tray {tray.tray_id}: {str(e)}")
                 except ValidationError as e:
-                    failed_count += 1
-                    failed_trays.append({'tray_id': tray.tray_id, 'error': str(e)})
                     print(f"❌ [create_ip_tray_instances] ValidationError for tray {tray.tray_id}: {str(e)}")
                 except Exception as e:
-                    failed_count += 1
-                    failed_trays.append({'tray_id': tray.tray_id, 'error': str(e)})
                     print(f"❌ [create_ip_tray_instances] Unexpected error for tray {tray.tray_id}: {str(e)}")
-
-            print(f"📊 [create_ip_tray_instances] Summary for lot {lot_id}: created={created_count}, updated={updated_count}, failed={failed_count}")
             if failed_trays:
                 print(f"❌ [create_ip_tray_instances] Failed trays details:")
                 for failed in failed_trays:
@@ -505,19 +464,13 @@ class SaveIPPickRemarkAPIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             batch_id = data.get('batch_id')
-            lot_id = data.get('lot_id')
             remark = data.get('remark', '').strip()
             if not batch_id:
                 return JsonResponse({'success': False, 'error': 'Missing batch_id'}, status=400)
             mmc = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
             if not mmc:
                 return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
-            qs = TotalStockModel.objects.filter(batch_id=mmc)
-            if lot_id:
-                qs = qs.filter(lot_id=lot_id)
-            else:
-                qs = qs.order_by('-id')
-            batch_obj = qs.first()
+            batch_obj = TotalStockModel.objects.filter(batch_id=mmc).first()  
             if not batch_obj:
                 return JsonResponse({'success': False, 'error': 'TotalStockModel not found'}, status=404)
             batch_obj.IP_pick_remarks = remark
@@ -1286,27 +1239,33 @@ def reject_check_tray_id_simple(request):
 
         # ✅ FIXED: Check if it's a new tray from TrayId table
         is_new_tray = getattr(tray_id_obj, 'new_tray', False)
-
-        # ✅ FIX: Cross-lot tray = NEW tray. If TrayId.lot_id ≠ current_lot → treat as new.
-        if not is_new_tray and tray_id_obj.lot_id:
-            if str(tray_id_obj.lot_id).strip() != str(current_lot_id).strip():
-                print(f"[Simple Validation] Cross-lot tray {tray_id} (belongs to {tray_id_obj.lot_id}) → treating as NEW for lot {current_lot_id}")
-                is_new_tray = True
-
-        # ✅ UPDATED: Handle new trays (genuinely new OR cross-lot)
+        
+        # ✅ UPDATED: For new trays, ALSO check if lot_id is empty
         if is_new_tray:
-            if tray_id_obj.lot_id and str(tray_id_obj.lot_id).strip() == str(current_lot_id).strip():
-                # Already in current lot → treat as existing tray
-                print(f"[Simple Validation] NEW tray already assigned to current lot {current_lot_id}")
-                is_new_tray = False
-            else:
-                # TRUE NEW TRAY (no lot_id) OR CROSS-LOT TRAY → treat as new
-                if tray_id_obj.lot_id:
-                    print(f"[Simple Validation] Cross-lot tray {tray_id}: {tray_id_obj.lot_id} → NEW for lot {current_lot_id}")
+            # ✅ NEW: Even if new_tray=True, check if lot_id is already assigned
+            if tray_id_obj.lot_id:
+                # Check if it's assigned to the current lot
+                if str(tray_id_obj.lot_id).strip() == str(current_lot_id).strip():
+                    # Already assigned to current lot - treat as existing tray for this lot
+                    print(f"[Simple Validation] NEW tray already assigned to current lot {current_lot_id}")
+                    # Continue with existing tray validation logic below
+                    is_new_tray = False  # Treat as existing tray for validation
                 else:
-                    print(f"[Simple Validation] TRUE NEW tray - new_tray=True and lot_id is empty")
-
-                # ✅ Validate tray type compatibility for new trays
+                    # Assigned to different lot - reject
+                    print(f"[Simple Validation] NEW tray assigned to different lot: {tray_id_obj.lot_id} != {current_lot_id}")
+                    return JsonResponse({
+                        'exists': False,
+                        'valid_for_rejection': False,
+                        'error': f'Tray already assigned to different lot: {tray_id_obj.lot_id}',
+                        'status_message': 'Different Lot',
+                        'tray_lot_id': str(tray_id_obj.lot_id),
+                        'current_lot_id': str(current_lot_id)
+                    })
+            else:
+                # ✅ TRUE NEW TRAY: new_tray=True AND lot_id is empty
+                print(f"[Simple Validation] TRUE NEW tray - new_tray=True and lot_id is empty")
+                
+                # ✅ NEW: Validate tray type compatibility for new trays
                 tray_type_validation = validate_tray_type_compatibility(tray_id_obj, current_lot_id)
                 if not tray_type_validation['is_compatible']:
                     return JsonResponse({
@@ -1318,26 +1277,7 @@ def reject_check_tray_id_simple(request):
                         'scanned_tray_type': tray_type_validation['scanned_tray_type'],
                         'expected_tray_type': tray_type_validation['expected_tray_type']
                     })
-
-                # ✅ Check if there are empty trays (qty=0, not delinked) in current lot — must reuse first
-                empty_trays_qs = IPTrayId.objects.filter(
-                    lot_id=current_lot_id,
-                    tray_quantity=0,
-                    delink_tray=False
-                )
-                if empty_trays_qs.exists():
-                    empty_tray_ids = list(empty_trays_qs.values_list('tray_id', flat=True))
-                    print(f"[Simple Validation] Empty trays found in lot {current_lot_id}: {empty_tray_ids}")
-                    return JsonResponse({
-                        'exists': True,
-                        'valid_for_rejection': True,
-                        'has_empty_tray': True,
-                        'empty_tray_ids': empty_tray_ids,
-                        'status_message': 'Empty tray available — reuse or delink first',
-                        'validation_type': 'new_tray_empty_available',
-                        'tray_type_compatible': True
-                    })
-
+                
                 return JsonResponse({
                     'exists': True,
                     'valid_for_rejection': True,
@@ -1353,7 +1293,7 @@ def reject_check_tray_id_simple(request):
             # ✅ FIX: Check if tray is delinked (lot_id=None, delink_tray=True) — delinked trays are reusable
             delinked_tray = IPTrayId.objects.filter(tray_id=tray_id, delink_tray=True, lot_id__isnull=True).first()
             if delinked_tray:
-                print(f"[Simple Validation] Delinked tray {tray_id} is from another lot — treating same as NEW tray")
+                print(f"[Simple Validation] Delinked tray {tray_id} is available for reuse")
                 # Validate tray type compatibility before allowing reuse
                 tray_type_validation = validate_tray_type_compatibility(tray_id_obj, current_lot_id)
                 if not tray_type_validation['is_compatible']:
@@ -1365,27 +1305,6 @@ def reject_check_tray_id_simple(request):
                         'tray_type_mismatch': True,
                         'scanned_tray_type': tray_type_validation['scanned_tray_type'],
                         'expected_tray_type': tray_type_validation['expected_tray_type']
-                    })
-                # ✅ FIX: Delinked tray from another lot = NEW tray in this context.
-                # Must apply same delink enforcement: if an empty tray exists in the current
-                # lot (qty=0, not yet delinked), the user must reuse or delink it before
-                # approving a foreign tray for rejection.
-                empty_trays_qs = IPTrayId.objects.filter(
-                    lot_id=current_lot_id,
-                    tray_quantity=0,
-                    delink_tray=False
-                )
-                if empty_trays_qs.exists():
-                    empty_tray_ids = list(empty_trays_qs.values_list('tray_id', flat=True))
-                    print(f"[Simple Validation] Empty trays found in current lot {current_lot_id}: {empty_tray_ids} — delink required")
-                    return JsonResponse({
-                        'exists': True,
-                        'valid_for_rejection': True,
-                        'has_empty_tray': True,
-                        'empty_tray_ids': empty_tray_ids,
-                        'status_message': 'Empty tray available — reuse or delink first',
-                        'validation_type': 'new_tray_empty_available',
-                        'tray_type_compatible': True
                     })
                 return JsonResponse({
                     'exists': True,
@@ -2916,7 +2835,6 @@ class IS_Completed_Table(APIView):
                 'few_cases_accepted_Ip_stock': total_stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': total_stock_obj.accepted_tray_scan_status,
                 'IP_pick_remarks': total_stock_obj.IP_pick_remarks,
-                'dp_pick_remarks': getattr(total_stock_obj.batch_id, 'dp_pick_remarks', None),
                 'ip_onhold_picking': total_stock_obj.ip_onhold_picking,
                 'total_stock': total_stock_obj.total_stock,
                 'wiping_status': total_stock_obj.wiping_status,
@@ -3094,7 +3012,6 @@ class IS_AcceptTable(APIView):
                 'few_cases_accepted_Ip_stock': total_stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': total_stock_obj.accepted_tray_scan_status,
                 'IP_pick_remarks': total_stock_obj.IP_pick_remarks,
-                'dp_pick_remarks': getattr(total_stock_obj.batch_id, 'dp_pick_remarks', None),
                 'ip_onhold_picking': total_stock_obj.ip_onhold_picking,
                 'total_stock': total_stock_obj.total_stock,
                 'wiping_status': total_stock_obj.wiping_status,
@@ -3104,11 +3021,11 @@ class IS_AcceptTable(APIView):
                 'brass_qc_accepted_qty_verified': total_stock_obj.brass_qc_accepted_qty_verified,
             }
 
-            # Calculate no_of_trays as the count of accepted trays
-            lot_id = data.get('stock_lot_id')
-            if lot_id:
-                accepted_tray_count = IPTrayId.objects.filter(lot_id=lot_id, rejected_tray=False, tray_quantity__gt=0).count()
-                data['no_of_trays'] = accepted_tray_count
+            # Calculate no_of_trays
+            total_stock = data.get('total_stock', 0)
+            tray_capacity = data.get('tray_capacity', 0)
+            if tray_capacity > 0:
+                data['no_of_trays'] = math.ceil(total_stock / tray_capacity)
             else:
                 data['no_of_trays'] = 0
             
@@ -3139,9 +3056,9 @@ class IS_AcceptTable(APIView):
                 if rejection_store and rejection_store.total_rejection_quantity:
                     total_rejection_qty = rejection_store.total_rejection_quantity
 
-                if total_stock_obj.total_stock > 0 and total_rejection_qty > 0:
-                    data['display_accepted_qty'] = max(total_stock_obj.total_stock - total_rejection_qty, 0)
-                    print(f"Calculated accepted qty for {lot_id}: {total_stock_obj.total_stock} - {total_rejection_qty} = {data['display_accepted_qty']}")
+                if total_stock > 0 and total_rejection_qty > 0:
+                    data['display_accepted_qty'] = max(total_stock - total_rejection_qty, 0)
+                    print(f"Calculated accepted qty for {lot_id}: {total_stock} - {total_rejection_qty} = {data['display_accepted_qty']}")
                 else:
                     data['display_accepted_qty'] = 0
 
@@ -3241,7 +3158,6 @@ class IS_RejectTable(APIView):
                 'few_cases_accepted_Ip_stock': total_stock_obj.few_cases_accepted_Ip_stock,
                 'accepted_tray_scan_status': total_stock_obj.accepted_tray_scan_status,
                 'IP_pick_remarks': total_stock_obj.IP_pick_remarks,
-                'dp_pick_remarks': getattr(total_stock_obj.batch_id, 'dp_pick_remarks', None),
                 'ip_onhold_picking': total_stock_obj.ip_onhold_picking,
                 'total_stock': total_stock_obj.total_stock,
                 'last_process_date_time': total_stock_obj.last_process_date_time,
@@ -3617,22 +3533,8 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
             continue
         
         # Check if NEW tray was used for non-SHORTAGE rejections
-        # ✅ FIX: Query IPTrayId with both tray_id AND lot_id, then read new_tray field directly.
-        # new_tray=True  → new rejection container (empty tray brought for collection) → free_up_space → delink
-        # new_tray=False → existing lot tray being rejected → remove from distribution → no delink
-        # Not found      → tray not tracked in IP for this lot; check if it's a delinked
-        #                  tray from another lot (TrayId.delink_tray=True) → treat as NEW → delink required
-        ip_tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
-        if ip_tray_obj is not None:
-            is_new_tray = bool(ip_tray_obj.new_tray)
-        else:
-            # Tray not found in this lot's IPTrayId → it is external to this lot.
-            # This covers: brand-new trays, cross-lot trays, delinked-from-another-lot trays.
-            # In all cases the rejected pieces move to an external container, which frees up
-            # space inside existing lot trays → an empty tray is created → delink required.
-            is_new_tray = True
-            print(f"DEBUG: '{tray_id}' not in IPTrayId for lot '{lot_id}' — external/cross-lot tray → treating as NEW")
-        print(f"DEBUG: IPTrayId lookup '{tray_id}' lot '{lot_id}' → found={ip_tray_obj is not None}, new_tray={getattr(ip_tray_obj, 'new_tray', 'N/A')}, is_new_tray={is_new_tray}")
+        is_new_tray = is_new_tray_by_id(tray_id)
+        print(f"DEBUG: is_new_tray_by_id('{tray_id}') = {is_new_tray}")
         
         if is_new_tray:
             print(f"DEBUG: ✅ NEW tray used - freeing up {rejected_qty} space in existing trays")
@@ -4185,30 +4087,27 @@ class TrayIdList_Complete_APIView(APIView):
         # ✅ FIX: Include delink trays from IP_Accepted_TrayID_Store
         # Delinked trays have lot_id=None in IPTrayId, so they are not returned by the base queryset.
         # The delink tray info is stored in IP_Accepted_TrayID_Store.delink_trays JSON field.
-        # Only include these delink entries when NOT showing accepted-only view, to avoid inflating
-        # the accepted trays count when the frontend requests accepted_ip_stock=True.
-        if not (accepted_ip_stock and not few_cases_accepted_ip_stock):
-            try:
-                accepted_store = IP_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_save=True).first()
-                if accepted_store and accepted_store.delink_trays:
-                    for delink_entry in accepted_store.delink_trays:
-                        delink_tray_id = delink_entry.get('tray_id', '')
-                        delink_tray_qty = delink_entry.get('tray_qty', 0)
-                        data.append({
-                            's_no': row_counter,
-                            'tray_id': delink_tray_id,
-                            'tray_quantity': delink_tray_qty,
-                            'position': row_counter - 1,
-                            'is_top_tray': False,
-                            'rejected_tray': False,
-                            'delink_tray': True,
-                            'rejection_details': [],
-                            'top_tray': False,
-                        })
-                        row_counter += 1
-                    print(f"Added {len(accepted_store.delink_trays)} delink trays from IP_Accepted_TrayID_Store")
-            except Exception as e:
-                print(f"Error fetching delink trays from IP_Accepted_TrayID_Store: {e}")
+        try:
+            accepted_store = IP_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_save=True).first()
+            if accepted_store and accepted_store.delink_trays:
+                for delink_entry in accepted_store.delink_trays:
+                    delink_tray_id = delink_entry.get('tray_id', '')
+                    delink_tray_qty = delink_entry.get('tray_qty', 0)
+                    data.append({
+                        's_no': row_counter,
+                        'tray_id': delink_tray_id,
+                        'tray_quantity': delink_tray_qty,
+                        'position': row_counter - 1,
+                        'is_top_tray': False,
+                        'rejected_tray': False,
+                        'delink_tray': True,
+                        'rejection_details': [],
+                        'top_tray': False,
+                    })
+                    row_counter += 1
+                print(f"Added {len(accepted_store.delink_trays)} delink trays from IP_Accepted_TrayID_Store")
+        except Exception as e:
+            print(f"Error fetching delink trays from IP_Accepted_TrayID_Store: {e}")
 
         # ✅ FIX: Include delinked trays used for rejection
         # Delinked trays have lot_id=None in IPTrayId, so they are missed by base queryset.
@@ -4237,15 +4136,10 @@ class TrayIdList_Complete_APIView(APIView):
                                 'rejection_reason_id': s.rejection_reason.rejection_reason_id if s.rejection_reason else None,
                                 'user': s.user.username if s.user else None
                             })
-                        # Quantity priority: IP_Rejected_TrayScan.rejected_tray_quantity (authoritative)
-                        # → IPTrayId.tray_quantity (only if scan qty missing) → 0
-                        scan_qty = rej_scans.first().rejected_tray_quantity if rej_scans.exists() else None
-                        ip_qty = getattr(tray_obj, 'tray_quantity', None) if tray_obj else None
-                        display_qty = scan_qty if scan_qty is not None else (ip_qty if ip_qty is not None else 0)
                         data.append({
                             's_no': row_counter,
                             'tray_id': rej_tray_id,
-                            'tray_quantity': display_qty,
+                            'tray_quantity': tray_obj.tray_quantity if tray_obj else (rej_scans.first().rejected_tray_quantity if rej_scans.exists() else 0),
                             'position': row_counter - 1,
                             'is_top_tray': False,
                             'rejected_tray': True,
@@ -4390,7 +4284,7 @@ def delink_selected_trays(request):
                             rejected_tray=True
                         ).update(
                             delink_tray=True,
-                            tray_quantity=0,
+                          
                         )
                         updated_ip_trays += updated_count_ip
                         
@@ -4399,7 +4293,6 @@ def delink_selected_trays(request):
                             tray_id__in=rejected_tray_ids
                         ).update(
                             delink_tray=True,
-                            tray_quantity=0,
                             lot_id=None,
                             batch_id=None,
                             scanned=False,
@@ -4436,15 +4329,13 @@ def delink_selected_trays(request):
             
             elif tray_ids:
                 # Original logic: Delink specific tray IDs (keep for backward compatibility)
-                tray_lot_id = data.get('lot_id', None)  # ✅ FIX: extract lot_id from request
                 for tray_id in tray_ids:
                     # ✅ UPDATE: Delink in IPTrayId table
-                    delink_tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=tray_lot_id).first()
+                    delink_tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=stock_lot_ids).first()
                     if delink_tray_obj:
                         delink_tray_obj.delink_tray = True
-                        delink_tray_obj.tray_quantity = 0
                         delink_tray_obj.save(update_fields=[
-                            'delink_tray', 'tray_quantity'
+                            'delink_tray'
                         ])
                         updated_ip_trays += 1
                         print(f"✅ Updated IPTrayId for tray_id: {tray_id}")
@@ -4455,7 +4346,6 @@ def delink_selected_trays(request):
                     original_tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
                     if original_tray_obj:
                         original_tray_obj.delink_tray = True
-                        original_tray_obj.tray_quantity = 0
                         original_tray_obj.lot_id = None
                         original_tray_obj.batch_id = None
                         original_tray_obj.scanned = False
@@ -4463,7 +4353,7 @@ def delink_selected_trays(request):
                         original_tray_obj.rejected_tray = False  # Reset rejected_tray to False
                         original_tray_obj.top_tray = False
                         original_tray_obj.save(update_fields=[
-                            'delink_tray', 'tray_quantity', 'lot_id', 'batch_id', 'scanned', 'IP_tray_verified', 'top_tray', 'rejected_tray'
+                            'delink_tray', 'lot_id', 'batch_id', 'scanned', 'IP_tray_verified', 'top_tray', 'rejected_tray'
                         ])
                         updated_original_trays += 1
                         print(f"✅ Updated TrayId for tray_id: {tray_id}")

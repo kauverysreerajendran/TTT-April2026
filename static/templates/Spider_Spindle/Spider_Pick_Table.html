@@ -1076,7 +1076,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
    <div class="col-12 grid-margin stretch-card">
       <div class="card">
          <div class="card-body" style="padding-bottom:12px;">
-            <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Spider Spindle Pick Table</h5>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+              <h5 class="text-left mt-0 mb-0" style="font-weight:700;">Spider Spindle Pick Table</h5>
+              <button id="openAddSpiderBtn" style="background:linear-gradient(135deg, #028084 0%, #00a89f 100%); color:#fff; border:none; border-radius:6px; padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.3s ease; display:flex; align-items:center; gap:8px; box-shadow:0 2px 8px rgba(2, 128, 132, 0.2);" onmouseover="this.style.boxShadow='0 4px 16px rgba(2, 128, 132, 0.4)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.boxShadow='0 2px 8px rgba(2, 128, 132, 0.2)'; this.style.transform='translateY(0)';">
+                <span style="font-size:16px;">➕</span> Add Spider
+              </button>
+            </div>
             <div class="table-responsive" style="overflow: scroll !important">
               <table id="order-listing" class="table">
                 <thead>
@@ -1309,7 +1314,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 class="btn btn-social-icon-text btn-twitter"
                                 style="background-color: #028084a8"
                             >
-                                <i class="fa fa-plus"></i>Add Jig
+                                <i class="fa fa-plus"></i>Add Spider
                             </button>
                         </a>
 
@@ -1525,7 +1530,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 
                   <!-- Footer Buttons -->
                   <div class="action-buttons">
-                    <button class="btn-twitter">Add Jig</button>
+                    <button class="btn-twitter">Add Spider</button>
                     <button class="btn-success">Submit</button>
                     <button class="btn-warning">Draft</button>
                     <button class="btn-danger">Cancel</button>
@@ -1653,9 +1658,266 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     <div id="holdRemarkError" style="color:red; font-size:13px; min-height:18px; margin-top:6px;"></div>
   </div>
 </div>
+
+<!-- ============================================================================ -->
+<!-- ADD SPIDER TRAY MODAL - Delink Tray for Reuse -->
+<!-- ============================================================================ -->
+<div id="addSpiderModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:25000; align-items:center; justify-content:center; animation: fadeIn 0.3s ease;">
+  <div style="background:#fff; border-radius:12px; padding:0; min-width:360px; max-width:500px; box-shadow:0 8px 32px rgba(0,0,0,0.25); position:relative; animation: slideUp 0.4s ease;">
+    <!-- Modal Header -->
+    <div style="background:linear-gradient(135deg, #028084 0%, #00a89f 100%); color:#fff; padding:20px 24px; border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:18px; font-weight:600;">Add Spider Tray</h3>
+      <button id="closeAddSpiderModal" style="background:none; border:none; color:#fff; font-size:26px; cursor:pointer; padding:0; width:30px; height:30px; display:flex; align-items:center; justify-content:center;">&times;</button>
+    </div>
+    
+    <!-- Modal Content -->
+    <div style="padding:24px;">
+      <div style="margin-bottom:18px;">
+        <label style="display:block; font-size:14px; font-weight:600; color:#333; margin-bottom:8px;">Scan Tray ID</label>
+        <input type="text" id="spiderTrayIdInput" placeholder="Enter or scan tray ID..." style="width:100%; padding:12px 14px; border:2px solid #ddd; border-radius:6px; font-size:15px; transition:all 0.3s; box-sizing:border-box;" />
+        <div id="spiderTrayError" style="color:#d9534f; font-size:13px; margin-top:6px; display:none;"></div>
+        <div id="spiderTraySuccess" style="color:#5cb85c; font-size:13px; margin-top:6px; display:none;"></div>
+      </div>
+
+      <!-- Loader -->
+      <div id="spiderScanLoader" style="display:none; text-align:center; margin:20px 0;">
+        <div style="border:4px solid #f3f3f3; border-top:4px solid #028084; border-radius:50%; width:40px; height:40px; animation:spin 1s linear infinite; margin:0 auto;"></div>
+        <p style="margin-top:10px; color:#666; font-size:14px;">Processing scan...</p>
+      </div>
+
+      <!-- Status Display -->
+      <div id="spiderScanStatus" style="display:none; padding:12px; border-radius:6px; margin-bottom:16px; font-size:14px;">
+        <div id="spiderStatusMessage" style="margin-bottom:6px;"></div>
+        <div id="spiderStatusDetails" style="font-size:12px; color:#666; margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <!-- Modal Footer -->
+    <div style="padding:0 24px 20px 24px; display:flex; gap:10px; justify-content:flex-end;">
+      <button id="cancelAddSpiderBtn" style="background:#f5f5f5; color:#333; border:1px solid #ddd; border-radius:6px; padding:10px 20px; font-size:14px; cursor:pointer; transition:all 0.2s;"> Cancel</button>
+      <button id="submitAddSpiderBtn" style="background:#028084; color:#fff; border:none; border-radius:6px; padding:10px 20px; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s;">Scan & Delink</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add animation keyframes -->
+<style>
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  #spiderTrayIdInput:focus {
+    outline: none !important;
+    border-color: #028084 !important;
+    box-shadow: 0 0 0 3px rgba(2, 128, 132, 0.1);
+  }
+  
+  #cancelAddSpiderBtn:hover {
+    background:#e5e5e5;
+  }
+  
+  #submitAddSpiderBtn:hover {
+    background:#026b6d;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(2, 128, 132, 0.3);
+  }
+</style>
+
 </div>
 
 {% block script %}
+
+<!-- ============================================================================ -->
+<!-- ADD SPIDER MODAL - Tray Delinking Logic -->
+<!-- ============================================================================ -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function() {
+  const modal = document.getElementById('addSpiderModal');
+  const openBtn = document.getElementById('openAddSpiderBtn');
+  const closeBtn = document.getElementById('closeAddSpiderModal');
+  const cancelBtn = document.getElementById('cancelAddSpiderBtn');
+  const submitBtn = document.getElementById('submitAddSpiderBtn');
+  const trayInput = document.getElementById('spiderTrayIdInput');
+  const errorDiv = document.getElementById('spiderTrayError');
+  const successDiv = document.getElementById('spiderTraySuccess');
+  const loaderDiv = document.getElementById('spiderScanLoader');
+  const statusDiv = document.getElementById('spiderScanStatus');
+  const statusMsg = document.getElementById('spiderStatusMessage');
+  const statusDetails = document.getElementById('spiderStatusDetails');
+  
+  let isProcessing = false;
+
+  // Open modal
+  function openAddSpiderModal() {
+    modal.style.display = 'flex';
+    trayInput.focus();
+    clearForm();
+  }
+
+  // Close modal
+  function closeAddSpiderModal() {
+    modal.style.display = 'none';
+    clearForm();
+  }
+
+  // Clear form fields
+  function clearForm() {
+    trayInput.value = '';
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+    successDiv.style.display = 'none';
+    successDiv.textContent = '';
+    loaderDiv.style.display = 'none';
+    statusDiv.style.display = 'none';
+    isProcessing = false;
+    trayInput.style.borderColor = '#ddd';
+  }
+
+  // Show error
+  function showError(message) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    successDiv.style.display = 'none';
+    trayInput.style.borderColor = '#d9534f';
+    isProcessing = false;
+    loaderDiv.style.display = 'none';
+  }
+
+  // Show success
+  function showSuccess(message, details = '') {
+    successDiv.textContent = message;
+    successDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    trayInput.style.borderColor = '#5cb85c';
+    isProcessing = false;
+    loaderDiv.style.display = 'none';
+    
+    if (details) {
+      statusDiv.style.display = 'block';
+      statusMsg.textContent = message;
+      statusDetails.textContent = details;
+      statusDetails.style.color = '#5cb85c';
+    }
+  }
+
+  // Show loader
+  function showLoader() {
+    loaderDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    statusDiv.style.display = 'none';
+    isProcessing = true;
+  }
+
+  // Scan and delink tray
+  async function scanAndDelinkTray() {
+    const trayId = trayInput.value.trim();
+    
+    // Validation
+    if (!trayId) {
+      showError('Please enter a tray ID');
+      trayInput.focus();
+      return;
+    }
+    
+    if (isProcessing) {
+      showError('Scan in progress... please wait');
+      return;
+    }
+    
+    showLoader();
+    
+    try {
+      const response = await fetch('/spider_spindle/delink-tray/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+        },
+        body: JSON.stringify({ tray_id: trayId })
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        showSuccess(
+          `✅ ${data.message}`,
+          `Tray: ${data.tray_id}\nPrevious Lot: ${data.previous_lot}\nTime: ${new Date().toLocaleTimeString()}`
+        );
+        
+        // Clear input after success
+        setTimeout(() => {
+          trayInput.value = '';
+          trayInput.focus();
+        }, 500);
+        
+        // Optional: Refresh table
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+        
+      } else {
+        showError(data.message || 'Failed to delink tray');
+        trayInput.focus();
+      }
+    } catch (error) {
+      console.error('❌ Error:', error);
+      showError(`Network error: ${error.message}`);
+      trayInput.focus();
+    }
+  }
+
+  // Event listeners
+  if (openBtn) {
+    openBtn.addEventListener('click', openAddSpiderModal);
+  }
+  
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeAddSpiderModal);
+  }
+  
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeAddSpiderModal);
+  }
+  
+  if (submitBtn) {
+    submitBtn.addEventListener('click', scanAndDelinkTray);
+  }
+  
+  // Enter key to scan
+  if (trayInput) {
+    trayInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && !isProcessing) {
+        scanAndDelinkTray();
+      }
+    });
+  }
+  
+  // Click outside modal to close
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        closeAddSpiderModal();
+      }
+    });
+  }
+  
+  // Expose functions globally
+  window.openAddSpiderModal = openAddSpiderModal;
+  window.closeAddSpiderModal = closeAddSpiderModal;
+});
+</script>
 
 <!-- Active row to be highlighted & Restores the highlighted row to its original position and removes the highlight bg when the tray scan modal is closed. -->
 <script nonce="{{ csp_nonce }}">

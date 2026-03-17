@@ -3626,12 +3626,14 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
         if ip_tray_obj is not None:
             is_new_tray = bool(ip_tray_obj.new_tray)
         else:
-            # Tray not found in this lot's IPTrayId → it is external to this lot.
-            # This covers: brand-new trays, cross-lot trays, delinked-from-another-lot trays.
-            # In all cases the rejected pieces move to an external container, which frees up
-            # space inside existing lot trays → an empty tray is created → delink required.
-            is_new_tray = True
-            print(f"DEBUG: '{tray_id}' not in IPTrayId for lot '{lot_id}' — external/cross-lot tray → treating as NEW")
+            # IPTrayId not found for this lot: check TrayId to detect a delinked-from-another-lot tray.
+            # A delinked tray from another lot behaves identically to a brand-new tray:
+            # it frees up capacity in the current lot's existing trays → creates an empty tray → delink required.
+            from modelmasterapp.models import TrayId as TrayIdModel
+            global_tray = TrayIdModel.objects.filter(tray_id=tray_id).first()
+            is_new_tray = True if (global_tray is None or bool(getattr(global_tray, 'new_tray', False)) or bool(getattr(global_tray, 'delink_tray', False))) else False
+            if is_new_tray:
+                print(f"DEBUG: '{tray_id}' not in IPTrayId for lot '{lot_id}' — cross-lot/delinked tray detected → treating as NEW")
         print(f"DEBUG: IPTrayId lookup '{tray_id}' lot '{lot_id}' → found={ip_tray_obj is not None}, new_tray={getattr(ip_tray_obj, 'new_tray', 'N/A')}, is_new_tray={is_new_tray}")
         
         if is_new_tray:
@@ -4237,15 +4239,10 @@ class TrayIdList_Complete_APIView(APIView):
                                 'rejection_reason_id': s.rejection_reason.rejection_reason_id if s.rejection_reason else None,
                                 'user': s.user.username if s.user else None
                             })
-                        # Quantity priority: IP_Rejected_TrayScan.rejected_tray_quantity (authoritative)
-                        # → IPTrayId.tray_quantity (only if scan qty missing) → 0
-                        scan_qty = rej_scans.first().rejected_tray_quantity if rej_scans.exists() else None
-                        ip_qty = getattr(tray_obj, 'tray_quantity', None) if tray_obj else None
-                        display_qty = scan_qty if scan_qty is not None else (ip_qty if ip_qty is not None else 0)
                         data.append({
                             's_no': row_counter,
                             'tray_id': rej_tray_id,
-                            'tray_quantity': display_qty,
+                            'tray_quantity': tray_obj.tray_quantity if tray_obj else (rej_scans.first().rejected_tray_quantity if rej_scans.exists() else 0),
                             'position': row_counter - 1,
                             'is_top_tray': False,
                             'rejected_tray': True,

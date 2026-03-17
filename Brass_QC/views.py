@@ -579,14 +579,17 @@ class BrassPickTableView(APIView):
             Q(send_brass_audit_to_qc=True)
             |
             Q(next_process_module='Brass QC')  # ✅ FIX: Lots re-routed to Brass QC (e.g. from IQF) but send_brass_qc not set
-        ).exclude(
-            # ✅ FIX: Only exclude rejected Audit lots that are NOT being sent back to Brass QC
+            ).exclude(
             Q(brass_audit_rejection=True) & ~Q(send_brass_audit_to_qc=True)
-        ).exclude(
-            # ✅ FIX: Only exclude true "ghost" lots (both physical AND accepted qty are 0)
-            # Don't exclude lots returning from Brass Audit where brass_physical_qty was reset to 0
+            ).exclude(
             Q(send_brass_audit_to_qc=True, brass_physical_qty=0, total_IP_accpeted_quantity=0)
-        ).distinct()
+            ).exclude(
+            # Exclude lots still being processed in IS (next step is IS, or last step was IS
+            # but NOT yet routed to Brass QC — i.e. still pending in IS workflow).
+            # Do NOT exclude lots that have completed IS acceptance (last=IS, next=Brass QC).
+            Q(next_process_module='Input Screening') |
+            (Q(last_process_module='Input Screening') & ~Q(next_process_module='Brass QC'))
+            ).distinct()
 
         # Apply sorting if requested
         if sort and sort in sort_field_mapping:

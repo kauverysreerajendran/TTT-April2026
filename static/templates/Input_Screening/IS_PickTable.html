@@ -7077,6 +7077,31 @@ function performTrayValidation(inputElement, errorSpan, trayId, lotId, rejection
       };
       
       if (data.exists && data.valid_for_rejection) {
+        // ✅ Empty tray enforcement: if an empty tray exists in current lot, user must reuse or delink it first
+        if (data.has_empty_tray && data.empty_tray_ids && data.empty_tray_ids.length > 0) {
+          const emptyTrayId = data.empty_tray_ids[0];
+          inputElement.style.borderColor = '#ffc107';
+          inputElement.style.backgroundColor = '#fff3cd';
+          inputElement._isValid = false;
+          window._ipEmptyTrayCtx = { inputElement, errorSpan, lotId, emptyTrayId };
+          if (errorSpan) {
+            errorSpan.innerHTML = `⚠️ Empty tray available: <strong>${emptyTrayId}</strong><br>
+              <button type="button" onclick="window.ipReuseEmptyTray()" style="margin-top:6px;margin-right:6px;padding:4px 10px;background:#28a745;color:#fff;border:none;border-radius:4px;cursor:pointer;">✅ Reuse ${emptyTrayId}</button>
+              <button type="button" onclick="window.ipDelinkAndUseNew()" style="margin-top:6px;padding:4px 10px;background:#dc3545;color:#fff;border:none;border-radius:4px;cursor:pointer;">🔗 Delink & Use New Tray</button>`;
+            errorSpan.style.display = 'block';
+            errorSpan.style.color = '#856404';
+            errorSpan.style.backgroundColor = '#fff3cd';
+            errorSpan.style.border = '1px solid #ffc107';
+            errorSpan.style.padding = '8px 10px';
+            errorSpan.style.borderRadius = '4px';
+            errorSpan.style.fontSize = '12px';
+            errorSpan.style.fontWeight = '500';
+            errorSpan.style.marginTop = '4px';
+          }
+          updateFormValidationState();
+          return;
+        }
+
         // Valid
         inputElement.style.borderColor = '#28a745';
         inputElement.style.backgroundColor = '#d4edda';
@@ -7232,6 +7257,59 @@ function moveToNextTrayInput(currentInput) {
   
   console.log('🔧 [moveToNextTrayInput] All trays scanned, staying at current input');
 }
+
+// ✅ Reuse the empty tray: set input value to the empty tray ID
+window.ipReuseEmptyTray = function() {
+  const ctx = window._ipEmptyTrayCtx;
+  if (!ctx) return;
+  const { inputElement, errorSpan, emptyTrayId } = ctx;
+  inputElement.value = emptyTrayId;
+  inputElement.style.borderColor = '#28a745';
+  inputElement.style.backgroundColor = '#d4edda';
+  inputElement._isValid = true;
+  if (errorSpan) {
+    errorSpan.innerHTML = `✅ Reusing empty tray: ${emptyTrayId}`;
+    errorSpan.style.color = '#155724';
+    errorSpan.style.backgroundColor = '#d4edda';
+    errorSpan.style.border = '1px solid #c3e6cb';
+  }
+  window._ipEmptyTrayCtx = null;
+  updateFormValidationState();
+  setTimeout(() => moveToNextTrayInput(inputElement), 200);
+};
+
+// ✅ Delink the empty tray in current lot, then approve the newly scanned cross-lot tray
+window.ipDelinkAndUseNew = function() {
+  const ctx = window._ipEmptyTrayCtx;
+  if (!ctx) return;
+  const { inputElement, errorSpan, lotId, emptyTrayId } = ctx;
+  const btn = errorSpan ? errorSpan.querySelector('button:last-child') : null;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Delinking...'; }
+  fetch('/inputscreening/delink_selected_trays/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify({ tray_ids: [emptyTrayId], lot_id: lotId })
+  })
+  .then(r => r.json())
+  .then(resp => {
+    inputElement.style.borderColor = '#28a745';
+    inputElement.style.backgroundColor = '#d4edda';
+    inputElement._isValid = true;
+    if (errorSpan) {
+      errorSpan.innerHTML = `✅ Delinked ${emptyTrayId} — new tray approved`;
+      errorSpan.style.color = '#155724';
+      errorSpan.style.backgroundColor = '#d4edda';
+      errorSpan.style.border = '1px solid #c3e6cb';
+    }
+    window._ipEmptyTrayCtx = null;
+    updateFormValidationState();
+    setTimeout(() => moveToNextTrayInput(inputElement), 200);
+  })
+  .catch(err => {
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 Delink & Use New Tray'; }
+    alert('Delink failed: ' + err.message);
+  });
+};
 
 // ✅ Comprehensive test function for the complete rejection → accepted top tray flow
 function testCompleteFlow() {

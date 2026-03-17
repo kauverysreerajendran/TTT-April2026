@@ -2,6 +2,44 @@ from django.db import models
 from modelmasterapp.models import *
 # Create your models here.
 
+class Spider_ID(models.Model):
+    """
+    Spider_ID Master Table
+    Stores unique Spider IDs for Zone 1 and Zone 2
+    """
+    ZONE_CHOICES = [
+        (1, 'Zone 1'),
+        (2, 'Zone 2'),
+    ]
+    
+    spider_code = models.CharField(
+        max_length=20,
+        unique=True,
+        null=False,
+        help_text="Unique Spider ID code (e.g., S098-0001, S144-0001)"
+    )
+    zone = models.IntegerField(
+        choices=ZONE_CHOICES,
+        null=False,
+        help_text="Zone identifier (1 or 2)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True, help_text="Is this Spider ID currently active?")
+
+    def __str__(self):
+        return f"{self.spider_code} - Zone {self.zone}"
+
+    class Meta:
+        verbose_name = "Spider ID"
+        verbose_name_plural = "Spider IDs"
+        ordering = ['zone', 'spider_code']
+        indexes = [
+            models.Index(fields=['zone']),
+            models.Index(fields=['spider_code']),
+        ]
+
+
 class Spider_TrayId(models.Model):
     """
     Nickel_AuditTrayId Model
