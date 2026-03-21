@@ -9,6 +9,8 @@
 <style>
 .tray-id-input.model-bg-1 { background: #e0f7fa !important; }   /* Primary model */
 .tray-id-input.model-bg-2 { background: #fce4ec !important; }   /* Secondary model */
+/* Action handlers attached via script (kept out of CSS block) */
+
 .tray-id-input.model-bg-3 { background: #fff9c4 !important; }   /* Third model */
 .tray-id-input.model-bg-4 { background: #e1bee7 !important; }   /* Fourth model */
 .tray-id-input.model-bg-5 { background: #c8e6c9 !important; }   /* Fifth model */
@@ -1834,19 +1836,139 @@
   transform: translateX(0);
 }
 /* Ensure sticky columns also get highlighted */
-.jig-row-action-highlight td:nth-child(1),
-.jig-row-action-highlight td:nth-child(2),
-.jig-row-action-highlight td:nth-child(3) {
+.jig-row-action-highlight,
+.jig-row-action-highlight td {
   background-color: #fff5bd !important;
+}
+
+/* ✅ ISSUE #7: Hold/Unhold Toggle Switch Styling */
+.hold-toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  margin-right: 8px;
+}
+
+.hold-toggle-switch input[type="checkbox"] {
+  display: none;
+}
+
+.hold-slider {
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 10px;
+  position: relative;
+  transition: background-color 0.3s ease;
+  margin: 0;
+  padding: 0;
+}
+
+.hold-slider::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background-color: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: left 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.hold-toggle-switch input[type="checkbox"]:checked + .hold-slider {
+  background-color: #4caf50;
+}
+
+.hold-toggle-switch input[type="checkbox"]:checked + .hold-slider::after {
+  left: 22px;
+}
+
+/* Hover effect */
+.hold-toggle-switch:hover .hold-slider {
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Row styling when held */
+tr.row-inactive {
+  background-color: #fff3cd !important; /* Light yellow background */
+  opacity: 0.75;
+  transition: all 0.3s ease;
+}
+
+tr.row-inactive td.row-inactive-blur {
+  color: #999;
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+tr.row-inactive td:first-child {
+  opacity: 1;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Hold remark icon */
+.hold-remark-icon {
+  display: inline-block;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+.hold-remark-icon:hover {
+  transform: scale(1.2);
+  filter: brightness(1.2);
+}
+
+.hold-remark-icon img {
+  vertical-align: middle;
+}
+
+.picktable-scan-btn {
+  background: #028084;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.picktable-scan-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #028084;
+  min-height: 18px;
+}
+
+.picktable-scan-status.error {
+  color: #dc3545;
 }
 </style>
 
 <div class="content-wrapper">
   <div class="col-12 grid-margin stretch-card">
     <div class="card-body" style="padding-bottom: 12px">
-      <h5 class="text-left mt-0 mb-4" style="font-weight: 700">
-        Jig Loading Pick Table
-      </h5>
+      <div class="d-flex align-items-center gap-2 mb-4" style="flex-wrap: wrap">
+        <h5 class="text-left mt-0 mb-0" style="font-weight: 700">
+          Jig Loading - Pick Table
+        </h5>
+        <button type="button" id="pickTableScanBtn" class="picktable-scan-btn">Scan</button>
+        <span id="pickTableScanStatus" class="picktable-scan-status"></span>
+        <input
+          type="text"
+          id="pickTableScanInput"
+          autocomplete="off"
+          style="position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px;"
+          aria-hidden="true"
+        />
+      </div>
       <div class="table-responsive">
         <table id="order-listing" class="table">
           <thead>
@@ -1901,6 +2023,10 @@
               class="highlighted-tray-scan"
               data-batch-id="{{ data.batch_id }}"
               data-stock-lot-id="{{ data.stock_lot_id }}"
+              data-jig-hold-lot="{{ data.jig_hold_lot|yesno:'true,false' }}"
+              data-jig-holding-reason="{{ data.jig_holding_reason|default_if_none:''|escapejs }}"
+              data-jig-release-lot="{{ data.jig_release_lot|yesno:'true,false' }}"
+              data-jig-release-reason="{{ data.jig_release_reason|default_if_none:''|escapejs }}"
             >
               <!-- S.No -->
               <td>
@@ -1915,13 +2041,18 @@
                   />
                   <span style="display: flex; align-items: center; gap: 2px">
                     <label class="hold-toggle-switch" style="margin-bottom: 0">
-                      <input type="checkbox" class="hold-toggle-btn" checked />
-                      <span class="hold-slider"></span>
+                      {% if not data.jig_hold_lot %}
+                        <input type="checkbox" class="hold-toggle-btn" checked />
+                        <span class="hold-slider"></span>
+                      {% else %}
+                        <input type="checkbox" class="hold-toggle-btn" />
+                        <span class="hold-slider"></span>
+                      {% endif %}
                     </label>
                     <span
                       class="hold-remark-icon"
-                      style="display: inline-block; cursor: pointer"
-                      title=""
+                      style="display:{% if data.jig_hold_lot or data.jig_release_lot or data.jig_holding_reason or data.jig_release_reason %}inline-block{% else %}none{% endif %}; cursor: pointer"
+                      title="{% if data.jig_holding_reason %}Holding Reason: {{ data.jig_holding_reason }}{% endif %}{% if data.jig_holding_reason and data.jig_release_reason %}&#10;{% endif %}{% if data.jig_release_reason %}Release Reason: {{ data.jig_release_reason }}{% endif %}"
                     >
                       <img
                         src="{% static 'assets/icons/view2.png' %}"
@@ -2115,29 +2246,28 @@
               </td>
               <!-- Remarks -->
               <td>
+
                 <!-- FIX 2 & 6: Chat remark icon with working send, lock after send, persist via localStorage, info shows remark -->
                 <span style="display:inline-flex; align-items:center; gap:5px;">
-                  <!-- Chat icon trigger -->
+                  <!-- Audio remark -->
                   <a
                     href="#"
-                    title=""
-                    class="remark-chat-trigger"
-                    data-lot-id="{{ data.stock_lot_id }}"
-                    data-batch-id="{{ data.batch_id }}"
+                    title="Add Audio Remark"
+                    class="remark-tooltip-trigger"
+                    data-remark-kind="audio"
                     style="
                       display: inline-flex;
                       align-items: center;
-                      height: 20px;
-                      margin-left: 5px;
+                      height: 28px;
+                      margin-left: 0;
                       position: relative;
                       cursor: pointer;
                     "
                   >
                     <img
-                      src="{% static 'assets/icons/chat_icon.png' %}"
-                      alt="Chat"
-                      class="chat-icon-img"
-                      style="width: 20px; height: 20px; opacity: 0.7"
+                      src="{% static 'assets/icons/rec.png' %}"
+                      alt="VoiceRec"
+                      style="width: 20px; height: 20px"
                     />
                     <!-- Chat tooltip popup -->
                     <div
@@ -2178,6 +2308,7 @@
                         <button
                           type="button"
                           class="remark-send-btn"
+                          data-remark-type="audio"
                           style="
                             background-color: #007bff;
                             color: #fff;
@@ -2200,6 +2331,81 @@
                     <span class="remark-info-tooltip"></span>
                   </span>
                 </span>
+                <!-- Text remark -->
+                <a
+                  href="#"
+                  title="Add Remark"
+                  class="remark-tooltip-trigger"
+                  data-remark-kind="text"
+                  style="
+                    display: inline-flex;
+                    align-items: center;
+                    height: 20px;
+                    margin-left: 5px;
+                    position: relative;
+                    cursor: pointer;
+                  "
+                >
+                  <img
+                    src="{% static 'assets/icons/chat_icon.png' %}"
+                    alt="Chat"
+                    style="width: 20px; height: 20px; opacity: 0.7"
+                  />
+                  <div
+                    class="remark-tooltip"
+                    style="
+                      position: absolute;
+                      top: 110%;
+                      left: 50%;
+                      transform: translateX(-50%);
+                      width: 270px;
+                      background: #fff;
+                      border: 1px solid #ccc;
+                      border-radius: 6px;
+                      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                      opacity: 0;
+                      visibility: hidden;
+                      transition: opacity 0.3s ease, visibility 0.3s ease;
+                      padding: 15px;
+                      z-index: 1000;
+                    "
+                  >
+                    <textarea
+                      class="remark-textarea"
+                      placeholder="Type your remark..."
+                      maxlength="255"
+                      style="
+                        width: 75%;
+                        height: 40px;
+                        resize: vertical;
+                        border: 1px solid #ccc;
+                        padding: 5px;
+                        border-radius: 4px;
+                        font-family: Arial, sans-serif;
+                        font-size: 14px;
+                      "
+                    >{{ data.inprocess_remarks|default_if_none:"" }}</textarea>
+                    <div style="text-align: right; margin-top: -35px">
+                      <button
+                        type="button"
+                        class="remark-send-btn"
+                        data-remark-type="text"
+                        style="
+                          background-color: #007bff;
+                          color: #fff;
+                          border: none;
+                          padding: 6px 12px;
+                          border-radius: 4px;
+                          cursor: pointer;
+                          font-size: 14px;
+                        "
+                      >
+                        <i class="fa fa-send"></i>
+                      </button>
+                    </div>
+                  </div>
+                </a>
+
               </td>
             </tr>
             {% endfor %}
@@ -2343,6 +2549,7 @@
     ></textarea>
     <div style="text-align: right; margin-top: 10px">
       <button
+        type="button"
         id="saveHoldRemarkBtn"
         style="
           background: #007bff;
@@ -2423,6 +2630,234 @@
     <div id="trayScanDetails_Jig" class="table-grid tray-scan-table"></div>
   </div>
 </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+
+// ========== GLOBAL HELPERS & STATE ==========
+// Helper for CSRF - available to all functions
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+// Global state for hold/unhold operations
+window.holdToggleState = {
+  currentHoldCell: null,
+  intendedState: null,
+  currentBatchId: null,
+  currentLotId: null,
+  rowIdentifier: null
+};
+
+function attachHoldToggleListeners() {
+  console.log('Attaching hold toggle listeners');
+
+  // Remove existing listeners and attach fresh ones for hold toggles.
+  document.querySelectorAll('.hold-toggle-btn').forEach(function (btn) {
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('change', function () {
+      const holdCell = newBtn.closest('td');
+      const row = holdCell ? holdCell.closest('tr') : null;
+      if (!row) return;
+
+      window.holdToggleState = {
+        currentHoldCell: holdCell,
+        intendedState: newBtn.checked,
+        currentBatchId: row.getAttribute('data-batch-id'),
+        currentLotId: row.getAttribute('data-stock-lot-id'),
+        rowIdentifier: row.getAttribute('data-stock-lot-id') || row.getAttribute('data-batch-id')
+      };
+
+      const modal = document.getElementById('holdRemarkModal');
+      modal.querySelector('h5').textContent = newBtn.checked ? 'Unholding Reason' : 'Holding Reason';
+      document.getElementById('holdRemarkInput').value = '';
+      document.getElementById('holdRemarkError').textContent = '';
+      modal.style.display = 'flex';
+      document.getElementById('holdRemarkInput').focus();
+    });
+  });
+
+  // Attach click handler for remark icon to open existing reason.
+  document.querySelectorAll('.hold-remark-icon').forEach(function (icon) {
+    const newIcon = icon.cloneNode(true);
+    icon.parentNode.replaceChild(newIcon, icon);
+
+    newIcon.addEventListener('click', function (e) {
+      e.preventDefault();
+      const row = newIcon.closest('tr');
+      if (!row) return;
+
+      const lotId = row.getAttribute('data-stock-lot-id');
+      const holdingReason = row.getAttribute('data-jig-holding-reason') || '';
+      const releaseReason = row.getAttribute('data-jig-release-reason') || '';
+      const isHeld = row.getAttribute('data-jig-hold-lot') === 'true';
+
+      window.holdToggleState = {
+        currentHoldCell: row.querySelector('.hold-toggle-btn') ? row.querySelector('.hold-toggle-btn').closest('td') : null,
+        intendedState: !isHeld,
+        currentBatchId: row.getAttribute('data-batch-id'),
+        currentLotId: lotId,
+        rowIdentifier: lotId || row.getAttribute('data-batch-id')
+      };
+
+      const modal = document.getElementById('holdRemarkModal');
+      modal.querySelector('h5').textContent = isHeld ? 'Holding Reason' : 'Release Reason';
+      document.getElementById('holdRemarkInput').value = holdingReason || releaseReason || '';
+      document.getElementById('holdRemarkError').textContent = '';
+      modal.style.display = 'flex';
+      document.getElementById('holdRemarkInput').focus();
+    });
+  });
+}
+// Helper: update row UI after successful hold/unhold
+function updateRowUI(lotId, action, remark) {
+  const currentRow = document.querySelector(`tr[data-stock-lot-id="${lotId}"]`);
+  if (!currentRow) return;
+  const toggle = currentRow.querySelector('.hold-toggle-btn');
+  const icon = currentRow.querySelector('.hold-remark-icon');
+
+  if (action === 'hold') {
+    if (toggle) toggle.checked = false;
+    currentRow.classList.add('row-inactive');
+    currentRow.querySelectorAll('td').forEach((td, idx) => {
+      if (idx > 0) td.classList.add('row-inactive-blur'); else td.classList.remove('row-inactive-blur');
+    });
+    if (icon) {
+      icon.style.display = 'inline-block';
+      icon.innerHTML = `<img src="{% static 'assets/icons/view2.png' %}" alt="View Reason" style="width:18px; height:18px;" />`;
+      icon.setAttribute('title', 'Holding Reason: ' + remark);
+    }
+  } else {
+    if (toggle) toggle.checked = true;
+    currentRow.classList.remove('row-inactive');
+    currentRow.querySelectorAll('td').forEach(td => td.classList.remove('row-inactive-blur'));
+    if (icon) {
+      icon.style.display = 'inline-block';
+      icon.innerHTML = `<img src="{% static 'assets/icons/view2.png' %}" alt="View Reason" style="width:18px; height:18px;" />`;
+      icon.setAttribute('title', 'Release Reason: ' + remark);
+    }
+  }
+}
+
+// Setup save button (validation, disable while saving, show success)
+function setupSaveButton() {
+  const saveBtn = document.getElementById('saveHoldRemarkBtn');
+  if (!saveBtn || window.jigHoldSaveHandlerAttached) {
+    console.log('⚠️ Save button setup skipped (button found:', !!saveBtn, ', already attached:', window.jigHoldSaveHandlerAttached, ')');
+    return;
+  }
+  window.jigHoldSaveHandlerAttached = true;
+  
+  console.log('✅ Save button handler attached');
+
+  saveBtn.onclick = function () {
+    const remark = document.getElementById('holdRemarkInput').value.trim();
+    const errorDiv = document.getElementById('holdRemarkError');
+    
+    console.log('💾 Save clicked, remark:', remark, 'holdToggleState:', window.holdToggleState);
+
+    if (!remark) { errorDiv.textContent = 'Remark is required!'; return; }
+    if (remark.length > 50) { errorDiv.textContent = 'Remark must be 50 characters or less!'; return; }
+    if (!window.holdToggleState || !window.holdToggleState.currentLotId) { errorDiv.textContent = 'Lot ID not found!'; return; }
+
+    const action = window.holdToggleState.intendedState ? 'unhold' : 'hold';
+
+    saveBtn.disabled = true; 
+    saveBtn.textContent = 'Saving...';
+
+    const payload = { lot_id: window.holdToggleState.currentLotId, remark: remark, action: action };
+    console.debug('⤴️ Sending hold/unhold request', payload);
+
+    fetch('/jig_loading/jig-save-hold-unhold-reason/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken'),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => {
+      console.debug('⬇️ Response status', res.status, res.statusText);
+      if (res.status === 403) {
+        return res.text().then(text => { throw new Error('Permission/CSRF error: ' + (text || '403 Forbidden')); });
+      }
+      if (res.status === 401 || res.status === 302) {
+        return res.text().then(text => { throw new Error('Authentication required (status ' + res.status + ').'); });
+      }
+      if (!res.ok) return res.text().then(text => { throw new Error(text || ('HTTP ' + res.status)); });
+      return res.json();
+    })
+    .then(data => {
+      console.debug('✅ Response data:', data);
+      saveBtn.disabled = false; 
+      saveBtn.textContent = 'Save & Proceed';
+      
+      if (data && data.success) {
+        document.getElementById('holdRemarkModal').style.display = 'none';
+        if (typeof Swal !== 'undefined') { 
+          Swal.fire({ 
+            icon: 'success', 
+            title: action === 'hold' ? 'Row held successfully!' : 'Row released successfully!', 
+            timer: 1200, 
+            showConfirmButton: false 
+          }); 
+        }
+        updateRowUI(window.holdToggleState.currentLotId, action, remark);
+        setTimeout(() => { if (typeof refreshTableData === 'function') refreshTableData(); else location.reload(); }, 700);
+      } else {
+        errorDiv.textContent = (data && data.error) || 'Failed to save reason!';
+      }
+    })
+    .catch(err => { 
+      console.error('❌ Request failed:', err); 
+      saveBtn.disabled = false; 
+      saveBtn.textContent = 'Save & Proceed'; 
+      const msg = err.message || 'Network error!'; 
+      document.getElementById('holdRemarkError').textContent = msg;
+      if (typeof Swal !== 'undefined') { 
+        Swal.fire({ icon: 'error', title: 'Save failed', text: msg }); 
+      } 
+    });
+  };
+}
+
+// Setup close handler (revert toggle if modal closed)
+function setupCloseButton() {
+  const closeBtn = document.getElementById('closeHoldRemarkModal');
+  if (!closeBtn || window.jigHoldCloseHandlerAttached) return;
+  window.jigHoldCloseHandlerAttached = true;
+  closeBtn.onclick = function () {
+    document.getElementById('holdRemarkModal').style.display = 'none';
+    if (window.holdToggleState && window.holdToggleState.currentHoldCell) {
+      const toggle = window.holdToggleState.currentHoldCell.querySelector('.hold-toggle-btn');
+      if (toggle) toggle.checked = !window.holdToggleState.intendedState;
+    }
+    window.holdToggleState = { currentHoldCell: null, intendedState: null, currentBatchId: null, currentLotId: null };
+  };
+}
+
+// Initialize everything on DOM ready
+document.addEventListener('DOMContentLoaded', function () {
+  attachHoldToggleListeners();
+  setupSaveButton();
+  setupCloseButton();
+});
+</script>
 
 <!-- Add Jig Button - Window (functional) -->
 <div id="jigAddModal" class="right-slide-modal" tabindex="-1">
@@ -2437,9 +2872,9 @@
         <span id="modalPlatingStockNo" style="display: none"></span>
       </h3>
       <div style="display: flex; gap: 10px; align-items: center">
-        <button type="button" class="btn-action blue" id="addJigBtnAlt">
+<!--         <button type="button" class="btn-action blue" id="addJigBtnAlt">
           <i class="fa fa-database"></i> Add Jig
-        </button>
+        </button> -->
         <button type="button" class="btn-action teal" id="jigCompositionBtn">
           <i class="fa fa-cogs"></i> Jig Composition
         </button>
@@ -2776,6 +3211,153 @@
 })();
 </script>
 
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+  const scanBtn = document.getElementById('pickTableScanBtn');
+  const scanInput = document.getElementById('pickTableScanInput');
+  const scanStatus = document.getElementById('pickTableScanStatus');
+  if (!scanBtn || !scanInput || !scanStatus) {
+    return;
+  }
+
+  const scannedTrayMeta = {
+    exists: "{{ scanned_tray_meta.exists|yesno:'true,false' }}" === 'true',
+    tray_id: "{{ scanned_tray_meta.tray_id|default:''|escapejs }}",
+    batch_id: "{{ scanned_tray_meta.batch_id|default:''|escapejs }}",
+    lot_id: "{{ scanned_tray_meta.lot_id|default:''|escapejs }}"
+  };
+
+  let scanArmed = false;
+  let scanDebounceTimer = null;
+
+  function setScanStatus(message, isError) {
+    scanStatus.textContent = message || '';
+    scanStatus.classList.toggle('error', !!isError);
+  }
+
+  function armScanMode() {
+    scanArmed = true;
+    scanInput.value = '';
+    setScanStatus('Please Scan', false);
+    scanInput.focus();
+  }
+
+  async function processScannedTray(rawTrayId) {
+    const trayId = (rawTrayId || '').trim().toUpperCase();
+    if (!trayId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/jig_loading/scan-tray-lookup/?tray_id=${encodeURIComponent(trayId)}`);
+      const data = await response.json();
+
+      if (!response.ok || !data.exists) {
+        setScanStatus('Invalid Tray ID', true);
+        scanInput.value = '';
+        scanInput.focus();
+        return;
+      }
+
+      setScanStatus('', false);
+
+      const rowSelector = `#order-listing tbody tr[data-batch-id="${data.batch_id}"][data-stock-lot-id="${data.lot_id}"]`;
+      const row = document.querySelector(rowSelector);
+      const isAddJigFlow = !!document.getElementById('jigAddModal')?.classList.contains('open');
+
+      if (!row) {
+        // Cross-page scan: route to page 1 and pin scanned row server-side.
+        const url = new URL(window.location.href);
+        url.searchParams.set('page', '1');
+        url.searchParams.set('scanned_tray', data.tray_id);
+        if (isAddJigFlow) {
+          url.searchParams.set('scan_open_add_jig', '1');
+        } else {
+          url.searchParams.delete('scan_open_add_jig');
+        }
+        window.location.assign(url.toString());
+        return;
+      }
+
+      // Same-page scan: restore previous then pin new scanned row at top.
+      if (typeof window.highlightAndMoveRowToTop === 'function') {
+        window.highlightAndMoveRowToTop(row, data.lot_id);
+      }
+
+      // If scan is in Add Jig flow, open corresponding Add Jig modal automatically.
+      if (isAddJigFlow) {
+        const addJigBtn = row.querySelector('.open-jig-modal-btn');
+        if (addJigBtn) {
+          addJigBtn.click();
+        }
+      }
+
+      scanInput.value = '';
+      scanInput.focus();
+    } catch (err) {
+      setScanStatus('Invalid Tray ID', true);
+      scanInput.value = '';
+      scanInput.focus();
+    }
+  }
+
+  scanBtn.addEventListener('click', function () {
+    armScanMode();
+  });
+
+  scanInput.addEventListener('keydown', function (event) {
+    if (!scanArmed) {
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      processScannedTray(scanInput.value);
+      return;
+    }
+  });
+
+  scanInput.addEventListener('input', function () {
+    if (!scanArmed) {
+      return;
+    }
+    if (scanDebounceTimer) {
+      clearTimeout(scanDebounceTimer);
+    }
+    scanDebounceTimer = setTimeout(function () {
+      if ((scanInput.value || '').trim().length >= 6) {
+        processScannedTray(scanInput.value);
+      }
+    }, 120);
+  });
+
+  scanInput.addEventListener('blur', function () {
+    if (scanArmed) {
+      setTimeout(function () {
+        scanInput.focus();
+      }, 0);
+    }
+  });
+
+  // Apply highlight for cross-page scanned row pinned by backend.
+  if (scannedTrayMeta.exists && scannedTrayMeta.batch_id && scannedTrayMeta.lot_id) {
+    const scannedRowSelector = `#order-listing tbody tr[data-batch-id="${scannedTrayMeta.batch_id}"][data-stock-lot-id="${scannedTrayMeta.lot_id}"]`;
+    const scannedRow = document.querySelector(scannedRowSelector);
+    if (scannedRow) {
+      scannedRow.classList.add('jig-row-action-highlight');
+      scanStatus.textContent = '';
+
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('scan_open_add_jig') === '1') {
+        const addJigBtn = scannedRow.querySelector('.open-jig-modal-btn');
+        if (addJigBtn) {
+          addJigBtn.click();
+        }
+      }
+    }
+  }
+});
+</script>
+
 
 <!-- Add Jig button - rendering (Modal Popup - Delink Information Table) -->
 <script nonce="{{ csp_nonce }}">
@@ -2984,6 +3566,15 @@ if (data.valid === true) {
         const detailsDiv = document.getElementById("trayScanDetails_Jig");
         const batchId = link.getAttribute("data-batch-id");
         const lotId = link.getAttribute("data-stock-lot-id");
+        // Highlight the row and move it to top (same behaviour as IS_PickTable)
+        try {
+          const row = link.closest('tr');
+          if (row && typeof window.highlightAndMoveRowToTop === 'function') {
+            window.highlightAndMoveRowToTop(row, lotId);
+          }
+        } catch (err) {
+          console.warn('Error while highlighting row:', err);
+        }
         const modelNo = link.getAttribute("data-model-no") || "";
         const platingStkNo = link.getAttribute("data-plating-stk-no") || "";
         const lotQty = link.getAttribute("data-total-batch-quantity") || "0";
@@ -3013,16 +3604,23 @@ if (data.valid === true) {
           );
           const result = await resp.json();
           traysData = result.trays || [];
+          console.log('🧪 [Jig View Icon] API response trays:', traysData);
         } catch (e) {
           traysData = [];
         }
+
+        console.log('🧪 [Jig View Icon] Frontend received trays:', traysData);
+
+        // Render in exact backend order; do not re-sort/re-order on client.
+        const orderedTraysData = traysData || [];
+        console.log('🧪 [Jig View Icon] Final rendered trays:', orderedTraysData);
 
         // Build Brass style table
         let html = `<table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
         <thead>
           <tr><th>S.no</th><th>Tray ID</th><th>Tray Qty</th></tr>
         </thead><tbody>`;
-        traysData.forEach(function (tray, idx) {
+        orderedTraysData.forEach(function (tray, idx) {
           html += `<tr>
                    <td>${idx === 0 ? "1 (Top Tray)" : idx + 1}</td>
                    <td><input type="text" class="form-control" value="${
@@ -3143,32 +3741,77 @@ function updateSubmitButtonState() {
   
   if (!submitBtn) return;
   
-  // Get current empty hooks value from the modal
-  const emptyHooksElement = document.getElementById("emptyHooksInput");
-  const emptyHooks = emptyHooksElement ? parseInt(emptyHooksElement.value || "0") : 0;
+  // Get current validation state
+  const loadedCaseQtyElem = document.getElementById('loadedCasesQtyDisplay');
+  const jigCapacityElem = document.getElementById('jigCapacityInput');
+  const brokenHooksInput = document.getElementById('brokenBuildupHooksInput');
   
-  // Calculate if submit should be enabled (opposite of save: enable when empty_hooks == 0)
-  const canSubmit = emptyHooks === 0 && window.backendOverallValid === true;
-
-  // Update button state
-  submitBtn.disabled = !canSubmit;
+  const jigCapacity = parseInt(jigCapacityElem?.value || '0', 10);
+  const brokenHooks = parseInt(brokenHooksInput?.value || '0', 10);
+  const effectiveCapacity = Math.max(0, jigCapacity - brokenHooks);
   
-  if (!canSubmit) {
-    submitBtn.style.background = "#e0e0e0";
-    submitBtn.style.color = "#888";
-    submitBtn.style.cursor = "not-allowed";
-    if (submitBtnErrorMsg) {
-      submitBtnErrorMsg.textContent = "All hooks must be filled before submitting.";
-      submitBtnErrorMsg.style.display = "block";
+  // Calculate current scanned total from delink section only
+  let scannedTotal = 0;
+  document.querySelectorAll("#delinkTableSection .tray-id-input").forEach(function (inp) {
+    if (inp.value.trim() !== "" && inp.getAttribute('data-validated') === '1') {
+      scannedTotal += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
     }
-  } else {
-    submitBtn.style.background = "";
-    submitBtn.style.color = "";
-    submitBtn.style.cursor = "";
+  });
+  
+  // Check if all required trays are scanned and validated
+  const delinkTrays = document.querySelectorAll('#delinkTableSection .tray-id-input');
+  const allTraysValid = Array.from(delinkTrays).every(function(inp) { 
+    return inp.getAttribute('data-validated') === '1' ||
+           !!inp.parentNode.querySelector('.tray-valid-alert');
+  });
+  
+  // CRITICAL BUSINESS RULE: Submit only when scanned total equals effective capacity
+  // AND all required trays are scanned and validated
+  const canSubmit = (scannedTotal === effectiveCapacity) && (effectiveCapacity > 0) && allTraysValid;
+  
+  if (canSubmit) {
+    // Enable submit
+    submitBtn.disabled = false;
+    submitBtn.style.background = "#028084";
+    submitBtn.style.color = "#fff";
+    submitBtn.style.cursor = "pointer";
+    submitBtn.textContent = "Submit Jig";
+    
     if (submitBtnErrorMsg) {
       submitBtnErrorMsg.textContent = "";
       submitBtnErrorMsg.style.display = "none";
     }
+    
+    console.log(`✅ SUBMIT ENABLED: Scanned ${scannedTotal} === Effective Capacity ${effectiveCapacity}, All Trays Valid: ${allTraysValid}`);
+  } else {
+    // Disable submit with specific error message
+    submitBtn.disabled = true;
+    submitBtn.style.background = "#e0e0e0";
+    submitBtn.style.color = "#888";
+    submitBtn.style.cursor = "not-allowed";
+    
+    let errorMessage = "";
+    if (!allTraysValid) {
+      errorMessage = "All trays must be scanned and validated";
+    } else if (scannedTotal === 0) {
+      errorMessage = "Please scan all required trays";
+    } else if (scannedTotal < effectiveCapacity) {
+      const remaining = effectiveCapacity - scannedTotal;
+      errorMessage = `Need ${remaining} more case(s) to reach capacity`;
+    } else if (scannedTotal > effectiveCapacity) {
+      const excess = scannedTotal - effectiveCapacity;
+      errorMessage = `Excess ${excess} case(s) detected - check scanning`;
+    } else {
+      errorMessage = "Invalid jig configuration";
+    }
+    
+    if (submitBtnErrorMsg) {
+      submitBtnErrorMsg.textContent = errorMessage;
+      submitBtnErrorMsg.style.display = "block";
+    }
+    
+    console.log(`❌ SUBMIT DISABLED: Scanned ${scannedTotal} !== Effective Capacity ${effectiveCapacity}, All Trays Valid: ${allTraysValid}`);
+    console.log(`   Error: ${errorMessage}`);
   }
 }
 
@@ -3182,31 +3825,74 @@ function recalcLoadedCasesQty() {
   
   let total = 0;
   
-  // Count all tray inputs (delink and half-filled)
-  document.querySelectorAll(".tray-id-input").forEach(function (inp) {
-    if (
-      inp.value.trim() !== "" &&
-      inp.parentNode.querySelector(".tray-valid-alert")
-    ) {
-      total += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
+  // Count ONLY the delink-section scanned trays that are going into the jig.
+  // This should match exactly with the delink table calculation from backend.
+  // Half-filled carry-forward inputs live in #halfFilledTraySection and represent
+  // cases going to the NEXT cycle — they must NOT be added to this jig's loaded count.
+  document.querySelectorAll("#delinkTableSection .tray-id-input").forEach(function (inp) {
+    // Count only inputs that have a value and are marked validated (data-validated === '1')
+    if (inp.value.trim() !== "" && inp.getAttribute('data-validated') === '1') {
+      const trayQty = parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
+      total += trayQty;
     }
   });
+  
+  // Get current jig capacity and broken hooks for validation
+  const jigCapacityValue = parseInt(jigCapacityElem.value || '0', 10);
+  const brokenHooksVal = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+  const effectiveCapacity = Math.max(0, jigCapacityValue - brokenHooksVal);
+  
+  // CRITICAL: Validate that scanned total doesn't exceed jig capacity
+  // This prevents overloading the jig beyond its physical capacity
+  if (total > jigCapacityValue) {
+    console.warn(`⚠️ CAPACITY EXCEEDED: Scanned total (${total}) exceeds jig capacity (${jigCapacityValue})`);
+    // Cap the displayed total to jig capacity to prevent confusion
+    total = jigCapacityValue;
+  }
   
   // Update modal data validation based on scanned trays
   if (window.currentModalData) {
     window.currentModalData.loaded_cases_qty = total;
-    window.currentModalData.empty_hooks = Math.max(0, window.currentModalData.jig_capacity - total);
-    window.currentModalData.can_save = total >= window.currentModalData.jig_capacity;
+    
+    // Compute empty hooks: jig_capacity - scanned_total - broken_hooks (min 0)
+    let newEmptyHooks = Math.max(0, jigCapacityValue - total - brokenHooksVal);
+
+    window.currentModalData.empty_hooks = newEmptyHooks;
+    // can_save true only when there are no empty hooks AND total doesn't exceed capacity
+    window.currentModalData.can_save = (newEmptyHooks === 0) && (total <= jigCapacityValue);
+    
     if (window.currentModalData.modal_validation) {
       window.currentModalData.modal_validation.overall_valid = window.currentModalData.can_save;
       window.currentModalData.modal_validation.hooks_balance_valid = window.currentModalData.can_save;
     }
+    
+    // Update display: show scanned loaded total and effective capacity
+    loadedCaseQtyElem.textContent = `${total}/${effectiveCapacity}`;
+
+    // Update emptyHooksInput to reflect computed empty hooks
+    const emptyHooksInput = document.getElementById('emptyHooksInput');
+    if (emptyHooksInput) {
+      emptyHooksInput.value = newEmptyHooks;
+    }
+  } else {
+    // Fallback: Update display using DOM values if modal data not present
+    const denominator = Math.max(0, effectiveCapacity);
+    loadedCaseQtyElem.textContent = `${total}/${denominator}`;
+    
+    const emptyHooksInput = document.getElementById('emptyHooksInput');
+    if (emptyHooksInput) {
+      // Empty hooks = jig_capacity - scanned_total - broken_hooks
+      emptyHooksInput.value = Math.max(0, jigCapacityValue - total - brokenHooksVal);
+    }
   }
   
-  // Update display: loaded / jig_capacity, cap at jig_capacity
-  const denominator = jigCapacityElem.value;
-  const displayTotal = Math.min(total, parseInt(denominator));
-  loadedCaseQtyElem.textContent = `${displayTotal}/${denominator}`;
+  // Log for debugging
+  console.log(`📊 LOADED CASES CALCULATION:`);
+  console.log(`  Scanned Total: ${total}`);
+  console.log(`  Jig Capacity: ${jigCapacityValue}`);
+  console.log(`  Broken Hooks: ${brokenHooksVal}`);
+  console.log(`  Effective Capacity: ${effectiveCapacity}`);
+  console.log(`  Empty Hooks: ${Math.max(0, jigCapacityValue - total - brokenHooksVal)}`);
   
   // Update submit button state
   updateSubmitButtonState();
@@ -3214,6 +3900,9 @@ function recalcLoadedCasesQty() {
 
 // Manual Draft - Fetch and restore data when opening modal
 function openJigAddModal(batchId, lotId, jigQrId) {
+  // Reset Add Model state for fresh session
+  combinedModels = [];
+  previouslyCombinedRows = new Set();
 
 // Set Lot Qty from table row if available
 const lotQtyInput = document.getElementById("reallotQty");
@@ -3285,6 +3974,9 @@ if (lotQtyInput) {
 
       // Render tray inputs from backend data
       renderDelinkTableFromData(data.delink_table || []);
+      // Apply broken hooks adjustment if the value was already set (programmatic .value= never fires input event)
+      const _initBH = parseInt(document.getElementById('brokenBuildupHooksInput')?.value||'0',10)||0;
+      if (_initBH > 0) applyBrokenHooksPostAdjustment();
 
       // Wait for tray inputs to be rendered before restoring draft
       setTimeout(() => {
@@ -3459,6 +4151,13 @@ function renderModalContent(data) {
   window.backendOverallValid = data.modal_validation?.overall_valid === true;
 
   window.currentModalValidation = data.modal_validation || {};
+  // Preserve existing modal context when backend doesn't return batch/lot (do not overwrite with empty values)
+  window.currentModalContext = window.currentModalContext || {};
+  window.currentModalContext.batchId = data.batch_id || window.currentModalContext.batchId || '';
+  window.currentModalContext.lotId = data.lot_id || window.currentModalContext.lotId || '';
+  window.currentModalContext.jigQrId = data.jig_id || window.currentModalContext.jigQrId || '';
+  // Store actual tray capacity from backend so Add Model button can use it instead of hardcoded values
+  window.currentModalContext.trayCapacity = data.tray_distribution?.current_lot?.tray_capacity || window.currentModalContext.trayCapacity || 8;
   document.getElementById("modalPlatingStockNo").textContent = (
     data.form_title.split(":")[1] || ""
   ).trim();
@@ -3526,50 +4225,8 @@ function renderModalContent(data) {
   if (brokenHooksInput && !brokenHooksInput.hasListener) {
     brokenHooksInput.hasListener = true; // Prevent duplicate listeners
     brokenHooksInput.addEventListener("input", function() {
-      const brokenHooks = parseInt(this.value || 0);
-      // FIX 4: Preserve Jig ID AND preserve delink tray section (do NOT clear it)
-      const currentJigId = document.getElementById("jigIdInput")?.value || "";
-      
-      // Snapshot current tray IDs before re-render so we can restore them
-      const currentTrayValues = {};
-      document.querySelectorAll('#delinkTableSection .tray-id-input').forEach(inp => {
-        const rowIdx = inp.getAttribute('data-row-index');
-        if (rowIdx !== null) currentTrayValues[rowIdx] = inp.value;
-      });
-
-      fetch(`/jig_loading/jig-add-modal-data/?batch_id=${window.currentModalContext.batchId}&lot_id=${window.currentModalContext.lotId}&jig_qr_id=${window.currentModalContext.jigQrId}&broken_hooks=${brokenHooks}`)
-        .then(resp => resp.json())
-        .then(data => {
-          // Re-render modal content fields (Nickel Bath, Tray Type, capacities etc.)
-          // but do NOT touch the delink table section
-          renderModalContentFieldsOnly(data);
-
-          // Restore Jig ID
-          if (currentJigId) {
-            const jigIdInput = document.getElementById("jigIdInput");
-            if (jigIdInput) jigIdInput.value = currentJigId;
-          }
-
-          // FIX 4: Update delink table from backend but preserve already-entered tray IDs
-          const delinkTable = data.delink_table || [];
-          renderDelinkTableFromData(delinkTable);
-          // Restore previously entered tray values
-          Object.keys(currentTrayValues).forEach(rowIdx => {
-            const inp = document.querySelector(`#delinkTableSection .tray-id-input[data-row-index="${rowIdx}"]`);
-            if (inp && currentTrayValues[rowIdx]) {
-              inp.value = currentTrayValues[rowIdx];
-            }
-          });
-
-          // FIX 4: Decrease last tray ID qty by brokenHooks (only visual - backend handles validation)
-          // The backend delink_table already returns updated tray quantities when broken_hooks is passed
-          // So the re-rendered delink table already reflects the decreased last tray qty
-
-          // Re-render half-filled tray section with updated broken hooks data
-          renderHalfFilledTraySection(data.tray_distribution || {}, data.broken_buildup_hooks || 0, data.half_filled_tray_cases || 0);
-          
-          recalcLoadedCasesQty();
-        });
+      // Pure frontend post-adjustment: do NOT re-fetch from backend, do NOT rebuild trays
+      applyBrokenHooksPostAdjustment();
     });
   }
 }
@@ -3613,26 +4270,376 @@ function renderModalContentFieldsOnly(data) {
 
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Broken Hooks Post-Adjustment Layer
+// Called when broken hooks value changes. Does NOT re-fetch from backend.
+// Does NOT clear scanned tray IDs. Adjusts delink tray quantities from
+// the last tray backwards, updates loaded/empty display, and rebuilds
+// the half-filled excess section with updated excess.
+// ─────────────────────────────────────────────────────────────────────────────
+function applyBrokenHooksPostAdjustment() {
+  const brokenHooks = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+  const jigCapacity = parseInt(document.getElementById('jigCapacityInput')?.value || '0', 10) || 0;
+  const reallotQtyInput = document.getElementById('reallotQty');
+  const lotQtyHidden = document.getElementById('lotQtyHidden');
+  const totalCombinedQty = parseInt(reallotQtyInput?.value || lotQtyHidden?.value || '0', 10) || 0;
+
+  // ✅ FIX: Get tray capacity from modal context (NOT the global currentTrayCapacity which may be 0)
+  const trayCapacity = window.currentModalContext?.trayCapacity || currentTrayCapacity || 12;
+
+  const effectiveCapacity = jigCapacity - brokenHooks;
+  const loaded = Math.min(totalCombinedQty, effectiveCapacity);
+  const emptyHooks = Math.max(0, effectiveCapacity - totalCombinedQty);
+  const excessQty = Math.max(0, totalCombinedQty - effectiveCapacity);
+
+  console.log(`🔧 Broken hooks post-adjustment: brokenHooks=${brokenHooks}, jigCap=${jigCapacity}, effectiveCap=${effectiveCapacity}, totalQty=${totalCombinedQty}, loaded=${loaded}, empty=${emptyHooks}, excess=${excessQty}, trayCapacity=${trayCapacity}`);
+
+  // ── 1. Pre-seed empty hooks so recalcLoadedCasesQty (called at end) uses correct value ──
+  const emptyHooksInput = document.getElementById('emptyHooksInput');
+  if (emptyHooksInput) {
+    emptyHooksInput.value = emptyHooks;
+  }
+
+  // ── 2. Adjust delink tray quantities from last tray backwards ──
+  const originalTrays = window._originalDelinkTrayData || [];
+  if (originalTrays.length > 0) {
+    // Work on copies of original quantities (so broken hooks=0 restores originals)
+    const adjusted = originalTrays.map(t => ({ ...t }));
+    let hooksRemaining = brokenHooks;
+    for (let i = adjusted.length - 1; i >= 0 && hooksRemaining > 0; i--) {
+      if (adjusted[i].qty <= hooksRemaining) {
+        hooksRemaining -= adjusted[i].qty;
+        adjusted[i].qty = 0;
+      } else {
+        adjusted[i].qty -= hooksRemaining;
+        hooksRemaining = 0;
+      }
+    }
+
+    // Apply to DOM: update data-tray-qty, qty label, show/hide trays, preserve scanned values
+    const delinkInputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
+    delinkInputs.forEach((inp, idx) => {
+      if (idx < adjusted.length) {
+        inp.setAttribute('data-tray-qty', adjusted[idx].qty);
+        // When broken hooks > 0, lock ALL delink tray qtys against backend overwrite.
+        // Even trays whose qty didn't change must be protected: the backend's validate_tray_id
+        // may return a different tray_quantity (e.g. 4 for a 2-pcs partial tray), which would
+        // corrupt recalcLoadedCasesQty(). When broken hooks is cleared (0), restore normal behaviour.
+        if (brokenHooks > 0) {
+          inp.setAttribute('data-partial', '1');
+        } else {
+          inp.removeAttribute('data-partial');
+        }
+        const tab = inp.closest('.tray-scan-tab');
+        if (tab) {
+          tab.style.display = adjusted[idx].qty > 0 ? '' : 'none';
+          // ✅ FIX: Update visible qty label
+          const qtyLabel = tab.querySelector('.tray-qty');
+          if (qtyLabel) {
+            qtyLabel.textContent = `Tray ${idx + 1}: ${adjusted[idx].qty} pcs`;
+            // Highlight change with color
+            if (adjusted[idx].qty !== originalTrays[idx].qty) {
+              qtyLabel.style.color = '#dc3545';
+              qtyLabel.title = `Adjusted from ${originalTrays[idx].qty} pcs (broken hooks: -${originalTrays[idx].qty - adjusted[idx].qty})`;
+            } else {
+              qtyLabel.style.color = '#028084';
+              qtyLabel.title = '';
+            }
+          }
+        }
+      }
+    });
+
+    // Update tray count header (visible delink + half-filled inputs)
+    const visibleDelink = adjusted.filter(t => t.qty > 0).length;
+    console.log(`🔧 Delink trays: ${originalTrays.length} → ${visibleDelink} visible after ${brokenHooks} broken hooks`);
+  }
+
+  // ── 3. Rebuild Half-Filled / Top Tray section with updated excess ──
+  // Save any already-scanned top-tray values so the rebuild doesn't wipe user input.
+  const halfFilledSection = document.getElementById('halfFilledTraySection');
+  const _savedHalfFilledValues = {};
+  if (halfFilledSection) {
+    halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+      const v = inp.value.trim();
+      if (v) { _savedHalfFilledValues[inp.getAttribute('data-row-index') || '__0'] = v; }
+    });
+  }
+
+  if (halfFilledSection && excessQty > 0 && trayCapacity > 0) {
+    halfFilledSection.style.display = 'block';
+    halfFilledSection.innerHTML = '';
+
+    const excessFullTrays = Math.floor(excessQty / trayCapacity);
+    const excessPartialCases = excessQty % trayCapacity;
+    const excessTotalTrays = excessFullTrays + (excessPartialCases > 0 ? 1 : 0);
+
+    // Get batch/lot from last excess model (or last combined model)
+    const models = window._combinedModelsData || [];
+    const lastModel = models.length > 0 ? models[models.length - 1] : null;
+    const exBatchId = lastModel ? (lastModel.batchId || '') : (window.currentModalContext?.batchId || '');
+    const exLotId = lastModel ? (lastModel.lotId || '') : (window.currentModalContext?.lotId || '');
+
+    let capacityText = effectiveCapacity.toString();
+    if (brokenHooks > 0) {
+      capacityText = `${effectiveCapacity} = ${jigCapacity} - ${brokenHooks} broken hooks`;
+    }
+
+    let html = `
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 10px 0;">
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <h6 style="margin: 0; color: #856404; font-weight: 600;">
+          <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
+          Top Tray — Excess ${excessQty} cases (${excessTotalTrays} tray${excessTotalTrays > 1 ? 's' : ''})
+        </h6>
+      </div>
+      <div style="background: #fff; border-radius: 4px; padding: 8px; margin-bottom: 10px;">
+        <div style="color: #856404; font-size: 12px; font-weight: 600;">
+          <i class="fa fa-info-circle" style="margin-right: 5px; color: #f0ad4e;"></i>
+          Total combined qty (${totalCombinedQty}) exceeds Effective Jig Capacity (${capacityText}).
+          <b>${excessQty}</b> excess cases will remain in the Pick Table for the next cycle.
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">`;
+
+    let excessTrayIdx = 0;
+    // ✅ FIX: Always show Top Tray with scan input for partial cases
+    if (excessPartialCases > 0) {
+      html += `
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+          <div style="margin-bottom: 4px;">Top Tray: ${excessPartialCases} cases (Scan Required)</div>
+          <input type="text" class="tray-id-input half-filled-tray-input"
+                 placeholder="Scan Tray ID (${excessPartialCases} pcs)"
+                 data-tray-qty="${excessPartialCases}"
+                 data-row-index="half_${excessTrayIdx}"
+                 data-batch-id="${exBatchId}"
+                 data-lot-id="${exLotId}"
+                 maxlength="9"
+                 style="width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; text-transform: uppercase;">
+        </div>`;
+      excessTrayIdx++;
+    }
+    for (let f = 0; f < excessFullTrays; f++) {
+      html += `
+        <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
+          <div>Tray ${excessTrayIdx + 1}: ${trayCapacity} cases (Auto Allocated)</div>
+          <div style="font-size: 11px; opacity: 0.8;">Will be auto-allocated in next cycle</div>
+          <input type="hidden" class="half-filled-tray-input" value="AUTO-EXCESS-${excessTrayIdx + 1}"
+                 data-tray-qty="${trayCapacity}" data-row-index="half_${excessTrayIdx}"
+                 data-batch-id="${exBatchId}"
+                 data-lot-id="${exLotId}">
+        </div>`;
+      excessTrayIdx++;
+    }
+
+    html += `</div>
+      <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
+        <div style="color: #856404; font-size: 12px; font-weight: 600;">
+          <i class="fa fa-arrow-right" style="margin-right: 5px; color: #f0ad4e;"></i>
+          ${excessQty} cases → stay in Pick Table for next fresh cycle
+        </div>
+      </div>
+    </div>`;
+
+    halfFilledSection.innerHTML = html;
+    // Re-attach scanning listeners for new half-filled inputs
+    setupTrayScanningListeners();
+    // Restore any value the user had already scanned into the top tray
+    if (Object.keys(_savedHalfFilledValues).length > 0) {
+      halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+        const key = inp.getAttribute('data-row-index') || '__0';
+        if (_savedHalfFilledValues[key]) {
+          inp.value = _savedHalfFilledValues[key];
+          inp.style.borderColor = '#28a745';
+          inp.style.backgroundColor = '#eafaf1';
+          inp.setAttribute('data-validated', '1');
+        }
+      });
+    }
+  } else if (halfFilledSection && brokenHooks > 0 && excessQty <= 0 && trayCapacity > 0) {
+    // ✅ FIX: Lot qty <= jig capacity but broken hooks creates a small top tray
+    // Show section only for broken hooks carry-forward (no lot-level excess)
+    halfFilledSection.style.display = 'block';
+    halfFilledSection.innerHTML = '';
+    const exBatchId = window.currentModalContext?.batchId || '';
+    const exLotId = window.currentModalContext?.lotId || '';
+
+    let html = `
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 10px 0;">
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <h6 style="margin: 0; color: #856404; font-weight: 600;">
+          <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
+          Top Tray — ${brokenHooks} cases (Due to Broken Hooks)
+        </h6>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+          <div style="margin-bottom: 4px;">Top Tray: ${brokenHooks} cases (Scan Required)</div>
+          <input type="text" class="tray-id-input half-filled-tray-input"
+                 placeholder="Scan Top Tray ID (${brokenHooks} pcs)"
+                 data-tray-qty="${brokenHooks}"
+                 data-row-index="half_0"
+                 data-batch-id="${exBatchId}"
+                 data-lot-id="${exLotId}"
+                 maxlength="9"
+                 style="width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; text-transform: uppercase;">
+        </div>
+      </div>
+      <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
+        <div style="color: #856404; font-size: 12px; font-weight: 600;">
+          <i class="fa fa-info-circle" style="margin-right: 5px; color: #f0ad4e;"></i>
+          ${brokenHooks} cases deducted from last delink tray due to broken hooks → scan top tray for carry-forward
+        </div>
+      </div>
+    </div>`;
+
+    halfFilledSection.innerHTML = html;
+    setupTrayScanningListeners();
+    // Restore any value the user had already scanned into the top tray
+    if (Object.keys(_savedHalfFilledValues).length > 0) {
+      halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+        const key = inp.getAttribute('data-row-index') || '__0';
+        if (_savedHalfFilledValues[key]) {
+          inp.value = _savedHalfFilledValues[key];
+          inp.style.borderColor = '#28a745';
+          inp.style.backgroundColor = '#eafaf1';
+          inp.setAttribute('data-validated', '1');
+        }
+      });
+    }
+  } else if (halfFilledSection && brokenHooks === 0) {
+    // ✅ FIX: When broken hooks is cleared back to 0, restore original half-filled section
+    // Check if there was an original excess (lot > jig capacity)
+    const originalExcess = Math.max(0, totalCombinedQty - jigCapacity);
+    if (originalExcess > 0 && trayCapacity > 0) {
+      // Rebuild the original excess section (without broken hooks adjustment)
+      halfFilledSection.style.display = 'block';
+      halfFilledSection.innerHTML = '';
+      const origFullTrays = Math.floor(originalExcess / trayCapacity);
+      const origPartialCases = originalExcess % trayCapacity;
+      const origTotalTrays = origFullTrays + (origPartialCases > 0 ? 1 : 0);
+      const exBatchId = window.currentModalContext?.batchId || '';
+      const exLotId = window.currentModalContext?.lotId || '';
+
+      let html = `
+      <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 10px 0;">
+        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+          <h6 style="margin: 0; color: #856404; font-weight: 600;">
+            <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
+            Excess — ${originalExcess} cases (${origTotalTrays} tray${origTotalTrays > 1 ? 's' : ''})
+          </h6>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">`;
+
+      let trayIdx = 0;
+      if (origPartialCases > 0) {
+        html += `
+          <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+            <div style="margin-bottom: 4px;">Top Tray: ${origPartialCases} cases (Scan Required)</div>
+            <input type="text" class="tray-id-input half-filled-tray-input"
+                   placeholder="Scan Tray ID (${origPartialCases} pcs)"
+                   data-tray-qty="${origPartialCases}"
+                   data-row-index="half_${trayIdx}"
+                   data-batch-id="${exBatchId}"
+                   data-lot-id="${exLotId}"
+                   maxlength="9"
+                   style="width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; text-transform: uppercase;">
+          </div>`;
+        trayIdx++;
+      }
+      for (let f = 0; f < origFullTrays; f++) {
+        html += `
+          <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
+            <div>Tray ${trayIdx + 1}: ${trayCapacity} cases (Auto Allocated)</div>
+            <div style="font-size: 11px; opacity: 0.8;">Will be auto-allocated in next cycle</div>
+            <input type="hidden" class="half-filled-tray-input" value="AUTO-EXCESS-${trayIdx + 1}"
+                   data-tray-qty="${trayCapacity}" data-row-index="half_${trayIdx}"
+                   data-batch-id="${exBatchId}"
+                   data-lot-id="${exLotId}">
+          </div>`;
+        trayIdx++;
+      }
+
+      html += `</div>
+        <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
+          <div style="color: #856404; font-size: 12px; font-weight: 600;">
+            <i class="fa fa-arrow-right" style="margin-right: 5px; color: #f0ad4e;"></i>
+            ${originalExcess} cases → stay in Pick Table for next fresh cycle
+          </div>
+        </div>
+      </div>`;
+
+      halfFilledSection.innerHTML = html;
+      setupTrayScanningListeners();
+      // Restore any value the user had already scanned into the top tray
+      if (Object.keys(_savedHalfFilledValues).length > 0) {
+        halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+          const key = inp.getAttribute('data-row-index') || '__0';
+          if (_savedHalfFilledValues[key]) {
+            inp.value = _savedHalfFilledValues[key];
+            inp.style.borderColor = '#28a745';
+            inp.style.backgroundColor = '#eafaf1';
+            inp.setAttribute('data-validated', '1');
+          }
+        });
+      }
+    } else {
+      halfFilledSection.style.display = 'none';
+      halfFilledSection.innerHTML = '';
+    }
+  }
+
+  // ── 4. Update tray count header ──
+  try {
+    const delinkTrayCount = document.getElementById('delinkTrayCount');
+    const delinkSection = document.getElementById('delinkTableSection');
+    const visibleDelink = delinkSection ? delinkSection.querySelectorAll('.tray-scan-tab:not([style*="display: none"]) .tray-id-input').length : 0;
+    const halfSection = document.getElementById('halfFilledTraySection');
+    const halfInputs = halfSection ? halfSection.querySelectorAll('.tray-id-input, .half-filled-tray-input').length : 0;
+    if (delinkTrayCount) {
+      delinkTrayCount.textContent = visibleDelink + halfInputs;
+    }
+  } catch (err) { console.error('Error updating tray count', err); }
+
+  // Recompute loaded cases qty from actual scanned tray counts (not theoretical lot qty)
+  recalcLoadedCasesQty();
+  // Update submit button state after broken hooks adjustment
+  updateSubmitButtonState();
+}
+
 function renderDelinkTableFromData(delinkTable) {
   const delinkTableSection = document.getElementById('delinkTableSection');
   if (!delinkTableSection) return;
+
+  // Safety dedupe: keep only first occurrence of non-empty tray IDs.
+  // Empty tray IDs are kept as-is for fresh scan slots.
+  const seenTrayIds = new Set();
+  const normalizedDelinkTable = (delinkTable || []).filter((tray) => {
+    const trayId = ((tray && tray.tray_id) || '').trim().toUpperCase();
+    if (!trayId) return true;
+    if (seenTrayIds.has(trayId)) return false;
+    seenTrayIds.add(trayId);
+    return true;
+  });
   
   // Clear existing content
   delinkTableSection.innerHTML = '';
   
-  // Update delink count in header
-  const delinkCount = document.querySelector('.delink-count');
+  // Update delink count in header (use the same element id used elsewhere)
+  const delinkCount = document.getElementById('delinkTrayCount');
   if (delinkCount) {
-    delinkCount.textContent = `(No of Trays: ${delinkTable.length})`;
+    delinkCount.textContent = normalizedDelinkTable.length;
   }
   
   // Render tray inputs based on delink table data
-  delinkTable.forEach((tray, index) => {
+  normalizedDelinkTable.forEach((tray, index) => {
     const trayTab = document.createElement('div');
     trayTab.className = `tray-scan-tab ${tray.model_bg || 'model-bg-1'}`;
     
     trayTab.innerHTML = `
-    
+      <label class="tray-qty" data-tray-index="${index}" style="font-size:12px;color:#028084;font-weight:600;margin-bottom:2px;">
+        Tray ${index + 1}: ${tray.tray_quantity} pcs
+      </label>
       <input 
         type="text" 
         id="tray-${index}"
@@ -3646,7 +4653,6 @@ function renderDelinkTableFromData(delinkTable) {
         maxlength="9"
         style="text-transform: uppercase;"
       />
-      
     `;
     
     delinkTableSection.appendChild(trayTab);
@@ -3654,6 +4660,20 @@ function renderDelinkTableFromData(delinkTable) {
   
   // Setup scanning listeners for new inputs
   setupTrayScanningListeners();
+
+  // Snapshot original tray data for broken hooks post-adjustment (single-lot flow)
+  window._originalDelinkTrayData = [];
+  delinkTableSection.querySelectorAll('.tray-id-input').forEach(inp => {
+    window._originalDelinkTrayData.push({
+      rowIndex: inp.getAttribute('data-row-index'),
+      qty: parseInt(inp.getAttribute('data-tray-qty') || '0', 10),
+      batchId: inp.getAttribute('data-batch-id'),
+      lotId: inp.getAttribute('data-lot-id'),
+      modelIdx: inp.getAttribute('data-model-idx') || '0',
+      bgClass: inp.className.match(/model-bg-\d+/)?.[0] || 'model-bg-1'
+    });
+  });
+  console.log(`📸 Snapshot (single-lot): ${window._originalDelinkTrayData.length} delink trays`);
 }
 
 function renderHalfFilledTraySection(trayDistribution, brokenHooks = 0, halfFilledTrayCases = 0) {
@@ -3963,10 +4983,16 @@ function validateAndMoveToNext(input) {
   }
 
   // Check for duplicates first - always show error for duplicates
+  // Exception: half-filled tray inputs are allowed to reuse a delinked tray ID
+  const isHalfFilled = !!input.closest('#halfFilledTraySection');
   const allTrayInputs = document.querySelectorAll(".tray-id-input");
   let isDuplicate = false;
   for (let inp of allTrayInputs) {
     if (inp !== input && inp.value.trim() === trayId) {
+      // Allow half-filled inputs to reuse a tray from the delink section
+      if (isHalfFilled && inp.closest('#delinkTableSection')) {
+        continue;
+      }
       isDuplicate = true;
       break;
     }
@@ -4011,7 +5037,10 @@ function validateAndMoveToNext(input) {
       .then((resp) => resp.json())
       .then((data) => {
         if (data.valid) {
-          input.setAttribute('data-tray-qty', data.tray_quantity);
+          // Don't override tray qty for partial trays (preserves frontend-calculated split for excess scenarios)
+          if (input.getAttribute('data-partial') !== '1') {
+            input.setAttribute('data-tray-qty', data.tray_quantity);
+          }
           showTrayValidationSuccess(input);
           recalcLoadedCasesQty();
           // Valid tray: move focus to next empty input
@@ -4091,6 +5120,13 @@ function showTrayValidationSuccess(input) {
     validDiv.textContent = "Valid";
     input.parentNode.appendChild(validDiv);
   }
+  // ✅ Mark input as validated for JS calculations
+  try { input.setAttribute('data-validated', '1'); } catch(e){}
+  
+  // ✅ CRITICAL: Immediately recalculate loaded qty and update submit state after validation
+  if (typeof recalcLoadedCasesQty === 'function') {
+    recalcLoadedCasesQty();
+  }
 }
 
 
@@ -4117,6 +5153,13 @@ function showTrayValidationSuccess(input) {
         input.parentNode.appendChild(errorDiv);
       }
       errorDiv.textContent = message;
+      // ✅ Mark input as not validated
+      try { input.setAttribute('data-validated', '0'); } catch(e){}
+      
+      // ✅ CRITICAL: Immediately recalculate loaded qty (removing this tray's count)
+      if (typeof recalcLoadedCasesQty === 'function') {
+        recalcLoadedCasesQty();
+      }
     }
 
 
@@ -4263,13 +5306,19 @@ function showTrayValidationSuccess(input) {
           removeValidAlert(input, true);
         });
 
-        // Clear Broken Hooks
-        const brokenHooksInput = document.getElementById("brokenBuildupHooksInput"); // Do not recalc empty hooks here
+        // Clear Broken Hooks -> set to 0 (default)
+        const brokenHooksInput = document.getElementById("brokenBuildupHooksInput");
         if (brokenHooksInput) {
-          brokenHooksInput.value = "";
+          brokenHooksInput.value = "0";
           brokenHooksInput.style.borderColor = "";
           brokenHooksInput.style.backgroundColor = "";
           brokenHooksInput.title = "";
+          try {
+            // Apply post-adjustment so delink counts/half-filled UI update without clearing tray IDs
+            if (typeof applyBrokenHooksPostAdjustment === 'function') applyBrokenHooksPostAdjustment();
+          } catch (err) {
+            console.error('Error applying broken hooks post-adjustment after clear:', err);
+          }
         }
 
         // Clear Jig ID
@@ -4330,6 +5379,8 @@ if (draftJigBtn) {
     
     console.log("💾 Drafting data for:", { batchId, lotId });
 
+    const _draftModal = document.getElementById('jigAddModal');
+    const _draftCombinedLotIdsStr = _draftModal?.getAttribute('data-combined-lot-ids');
     const draftData = {
       jig_id: document.getElementById("jigIdInput")?.value,
       no_of_cycle: document.getElementById("modalNoOfCycle")?.textContent,
@@ -4340,7 +5391,8 @@ if (draftJigBtn) {
         tray_qty: input.getAttribute("data-tray-qty"),
         row_index: input.getAttribute("data-row-index")
       })),
-      add_model_clicked: document.getElementById("addModelBtn")?.disabled === false
+      add_model_clicked: document.getElementById("addModelBtn")?.disabled === false,
+      combined_lot_ids: _draftCombinedLotIdsStr ? JSON.parse(_draftCombinedLotIdsStr) : []
     };
 
     try {
@@ -4484,6 +5536,59 @@ if (submitJigBtn) {
       }
     });
 
+    // Collect half-filled tray data (broken hooks carry-forward) with lot ownership info
+    // These trays need carry-forward to pick table under the SAME lot (secondary lot in multi-model)
+    const halfFilledTrayInfo = [];
+    document.querySelectorAll('.half-filled-tray-input').forEach(function(inp) {
+      const trayId = inp.value.trim();
+      // Skip auto-allocated placeholders (only real scanned tray IDs)
+      if (trayId && !trayId.startsWith('AUTO-EXCESS-')) {
+        halfFilledTrayInfo.push({
+          tray_id: trayId,
+          cases: parseInt(inp.getAttribute('data-tray-qty') || '0', 10),
+          lot_id: inp.getAttribute('data-lot-id') || '',
+          batch_id: inp.getAttribute('data-batch-id') || '',
+        });
+      }
+    });
+    submitData.half_filled_tray_info = halfFilledTrayInfo;
+
+    // Collect delink tray data — use authoritative adjusted quantities from _originalDelinkTrayData
+    // so the payload is always consistent with what the UI displays (broken hooks adjustment applied).
+    const delinkTrayInfo = [];
+    const _submitOriginalTrays = window._originalDelinkTrayData || [];
+    const _submitBrokenHooks = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+    // Re-compute adjusted copy so we are never relying on potentially stale data-tray-qty attributes
+    const _submitAdjusted = _submitOriginalTrays.map(function(t) { return Object.assign({}, t); });
+    let _submitHooksRemaining = _submitBrokenHooks;
+    for (let _si = _submitAdjusted.length - 1; _si >= 0 && _submitHooksRemaining > 0; _si--) {
+      if (_submitAdjusted[_si].qty <= _submitHooksRemaining) {
+        _submitHooksRemaining -= _submitAdjusted[_si].qty;
+        _submitAdjusted[_si].qty = 0;
+      } else {
+        _submitAdjusted[_si].qty -= _submitHooksRemaining;
+        _submitHooksRemaining = 0;
+      }
+    }
+    const _delinkInputs = Array.from(document.querySelectorAll('#delinkTableSection .tray-id-input'));
+    _delinkInputs.forEach(function(inp, idx) {
+      // Effective qty: prefer re-computed adjusted value; fall back to data-tray-qty
+      const effectiveQty = (_submitAdjusted[idx] !== undefined)
+        ? _submitAdjusted[idx].qty
+        : parseInt(inp.getAttribute('data-tray-qty') || '0', 10);
+      if (effectiveQty > 0) {
+        delinkTrayInfo.push({
+          tray_id: inp.value.trim(),
+          cases: effectiveQty,
+          lot_id: inp.getAttribute('data-lot-id') || '',
+          batch_id: inp.getAttribute('data-batch-id') || '',
+        });
+      }
+    });
+    submitData.delink_tray_info = delinkTrayInfo;
+    console.log(`📦 Delink payload: ${delinkTrayInfo.length} trays, total cases = ${delinkTrayInfo.reduce(function(s,t){return s+t.cases;},0)} (broken_hooks=${_submitBrokenHooks})`);
+
+
     try {
       const resp = await fetch("/jig_loading/jig-submit/", {
         method: "POST",
@@ -4497,11 +5602,7 @@ if (submitJigBtn) {
 
       if (result.success) {
         showSuccess("Jig submitted successfully", function() {
-          // Close the modal after success
-          const modal = document.getElementById("jigAddModal");
-          if (modal) {
-            modal.classList.remove("open");
-          }
+          window.location.reload();
         });
       } else {
         if (window.Swal) {
@@ -4553,7 +5654,10 @@ document.addEventListener('input', function(e) {
             total += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
           }
         });
-        loadedCaseQtyElem.textContent = `${total}/${lotQtyElem.value}`;
+        const _brkH = parseInt(document.getElementById('brokenBuildupHooksInput')?.value||'0',10)||0;
+        const _jigC = parseInt(document.getElementById('jigCapacityInput')?.value||'0',10)||0;
+        const _effC = _jigC > 0 ? Math.max(0, _jigC - _brkH) : (parseInt(lotQtyElem.value,10)||0);
+        loadedCaseQtyElem.textContent = `${total}/${_effC}`;
       }
       return;
     }
@@ -4716,21 +5820,18 @@ document.addEventListener('DOMContentLoaded', function() {
       const lotId = window.currentModalContext.lotId;
       const platingStockNo = document.getElementById('modalPlatingStockNo')?.textContent || '';
       
-      // Get current quantity and empty hooks from modal inputs
-      const loadedCasesDisplay = document.getElementById('loadedCasesQtyDisplay')?.textContent || '0/0';
-      const loadedCasesQty = parseInt(loadedCasesDisplay.split('/')[0]) || 0;
-      const emptyHooks = parseInt(document.getElementById('emptyHooksInput')?.value) || 0;
+      // Get current quantity from reallotQty (reliable: set by openJigAddModal from backend data.lot_qty).
+      // Do NOT use emptyHooksInput — recalcLoadedCasesQty() resets it to jigCapacity before scanning.
       const jigCapacity = parseInt(document.getElementById('jigCapacityInput')?.value) || 0;
+      const loadedCasesQty = parseInt(document.getElementById('reallotQty')?.value) || 0;
+      const emptyHooks = Math.max(0, jigCapacity - loadedCasesQty);
       
       // Get tray type and capacity
       const trayTypeElement = document.getElementById('trayTypeInput');
       const trayType = trayTypeElement ? trayTypeElement.value : 'Normal';
       
-      // Calculate tray capacity based on tray type
-      let trayCapacity = 8; // Default
-      if (trayType === 'Jumbo') trayCapacity = 12;
-      else if (trayType === 'Normal') trayCapacity = 8;
-      else if (trayType === 'Small') trayCapacity = 4;
+      // FIX: use actual tray capacity from backend (stored in currentModalContext), not hardcoded mapping
+      const trayCapacity = window.currentModalContext?.trayCapacity || 8;
       
       // Get current row's plating color, polish finish, and jig type from the table
       console.log('🔍 Looking for current row with lot ID:', lotId);
@@ -4834,7 +5935,7 @@ function enterAddModelMode(modelNumber, lotId, batchId, currentQty, jigCapacity,
   currentModelNumber = modelNumber;
   currentLotId = lotId;
   currentBatchId = batchId;
-  currentQuantity = currentQty;
+  currentQuantity = currentQty;  // = jigCapacity - emptyHooks (corrected in caller)
   currentJigCapacity = jigCapacity;
   currentEmptyHooks = emptyHooks;
   currentTrayType = trayType;
@@ -5196,11 +6297,9 @@ function updateSelectionSummaryAndButton() {
             const qty = parseInt(qtyInput.value) || 0;
             
             // Get lot ID and batch ID from hidden cells or data attributes
-            const lotIdCell = row.cells[1]; // Assuming lot ID is in 2nd column
-            const batchIdCell = row.cells[0]; // Assuming batch ID is in 1st column (hidden)
-            
-            const lotId = lotIdCell ? lotIdCell.textContent.trim() : '';
-            const batchId = batchIdCell ? batchIdCell.textContent.trim() : '';
+            // Use data attributes — correct lot/batch IDs set on <tr> by backend template
+            const lotId = row.getAttribute('data-stock-lot-id') || '';
+            const batchId = row.getAttribute('data-batch-id') || '';
             
             selectedModelsData.push({
               platingStockNo: platingStockNo,
@@ -5298,13 +6397,13 @@ function proceedWithCombination(selectedModels, newTotalQuantity, newEmptyHooks)
   // Add selected models to combinedModels
   for (let selected of selectedModels) {
     combinedModels.push({
-      modelNumber: selected.platingStkNo,
+      modelNumber: selected.platingStockNo,
       lotId: selected.lotId,
       batchId: selected.batchId,
       quantity: selected.qty,
-      platingColor: selected.platingColor,
-      polishFinish: selected.polishFinish,
-      jigType: selected.jigType
+      platingColor: selected.platingColor || selected.polishingStockNo || '',
+      polishFinish: selected.polishFinish || selected.polishingStockNo || '',
+      jigType: selected.jigType || ''
     });
   }
   
@@ -5359,22 +6458,27 @@ function updateModalWithCombinedModels(allModels, newTotalQuantity, newEmptyHook
     return;
   }
   
-  // Update loaded cases qty display
-  const loadedCasesQtyDisplay = document.getElementById('loadedCasesQtyDisplay');
-  if (loadedCasesQtyDisplay) {
-    loadedCasesQtyDisplay.textContent = `${newTotalQuantity}/${currentJigCapacity}`;
-  }
-  
-  // Update empty hooks
+  // Update empty hooks using effective capacity (jig capacity minus broken hooks).
+  // loadedCasesQtyDisplay is NOT set here — recalcLoadedCasesQty() will handle it
+  // after recalculateTrayDistributionForAllModels rebuilds and restores scanned tray values.
+  const brokenHooksNow = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+  const effectiveCapacityNow = Math.max(0, currentJigCapacity - brokenHooksNow);
+  const effectiveEmptyHooks = Math.max(0, effectiveCapacityNow - newTotalQuantity);
   const emptyHooksInput = document.getElementById('emptyHooksInput');
   if (emptyHooksInput) {
-    emptyHooksInput.value = newEmptyHooks;
+    emptyHooksInput.value = effectiveEmptyHooks;
+  }
+  
+  // Update lot qty with combined total (backend needs to know real combined qty)
+  const reallotQtyInput = document.getElementById('reallotQty');
+  if (reallotQtyInput) {
+    reallotQtyInput.value = newTotalQuantity;
   }
   
   // Create/Update model tabs in modal header
   createModelTabs(mappedModels);
   
-  // Recalculate tray distribution for all models
+  // Recalculate tray distribution for all models (also calls recalcLoadedCasesQty internally)
   recalculateTrayDistributionForAllModels(mappedModels);
   
   // Store combined lot IDs in modal for backend submission
@@ -5459,35 +6563,50 @@ function removeModelFromSelection(lotIdToRemove) {
     cancelButtonText: 'Cancel'
   }).then((result) => {
     if (result.isConfirmed) {
-      // Get current combined lot IDs
+      // Update in-memory combinedModels (global)
+      combinedModels = (combinedModels || []).filter(m => m.lotId !== lotIdToRemove);
+
+      // Update modal attribute storing combined lot ids
       const modal = document.getElementById('jigAddModal');
-      const combinedLotIdsStr = modal.getAttribute('data-combined-lot-ids');
-      const combinedLotIds = combinedLotIdsStr ? JSON.parse(combinedLotIdsStr) : [];
-      
-      // Remove the lot ID
-      const updatedLotIds = combinedLotIds.filter(id => id !== lotIdToRemove);
-      
-      // If only one model left, show warning
-      if (updatedLotIds.length === 1) {
-        Swal.fire({
-          icon: 'info',
-          title: 'Single Model',
-          text: 'You now have only one model selected. Continue with single model jig.',
-          timer: 2000,
-          showConfirmButton: false
-        });
+      if (modal) {
+        const combinedLotIds = combinedModels.map(m => m.lotId);
+        modal.setAttribute('data-combined-lot-ids', JSON.stringify(combinedLotIds));
       }
-      
-      // Reload modal data with updated selection
-      // This would require re-fetching data from backend
-      // For now, just close modal and show message
-      modal.classList.remove('open');
-      
+
+      // Recreate model tabs UI from the canonical combinedModels array (combinedModels already includes primary)
+      try {
+        const tabsPayload = (combinedModels || []).map(m => ({ platingStockNo: m.platingStockNo || m.modelNumber || '', qty: m.quantity || m.qty || 0, lotId: m.lotId }));
+        createModelTabs(tabsPayload);
+      } catch (err) {
+        console.error('Error recreating model tabs after removal:', err);
+      }
+
+      // Recalculate totals and tray distribution using combinedModels as source of truth
+      const mappedModels = (combinedModels || []).map(m => ({ platingStockNo: m.platingStockNo || m.modelNumber || '', qty: m.quantity || m.qty || 0 }));
+      const totalQty = mappedModels.reduce((s, mm) => s + (mm.qty || 0), 0);
+      const newEmptyHooks = Math.max(0, currentJigCapacity - totalQty);
+
+      // Update empty hooks using effective capacity (jig capacity minus broken hooks).
+      // Loaded cases qty display is handled by recalcLoadedCasesQty() below.
+      const brokenHooksRM = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+      const effectiveCapRM = Math.max(0, currentJigCapacity - brokenHooksRM);
+      const effectiveEmptyRM = Math.max(0, effectiveCapRM - totalQty);
+      const emptyHooksInput = document.getElementById('emptyHooksInput');
+      if (emptyHooksInput) emptyHooksInput.value = effectiveEmptyRM;
+
+      // Update delink table/tray distribution while preserving scanned inputs
+      try {
+        recalculateTrayDistributionForAllModels(mappedModels);
+      } catch (err) {
+        console.error('Error recalculating tray distribution after model removal:', err);
+      }
+
+      // Inform user but keep modal open
       Swal.fire({
-        icon: 'info',
+        icon: 'success',
         title: 'Model Removed',
-        text: 'Please reopen the modal and add models again.',
-        timer: 2000,
+        text: 'The model has been removed. Modal remains open for further edits.',
+        timer: 1800,
         showConfirmButton: false
       });
     }
@@ -5504,62 +6623,351 @@ function recalculateTrayDistributionForAllModels(allModels) {
     return;
   }
   
-  // Calculate total trays needed
-  const totalQuantity = allModels.reduce((sum, model) => sum + model.qty, 0);
-  const totalTrays = Math.ceil(totalQuantity / currentTrayCapacity);
+  // Broken hooks reduce the effective jig capacity directly — must be included in excess calculation.
+  const totalQuantity = allModels.reduce((sum, model) => sum + (model.qty || model.quantity || 0), 0);
+  const brokenHooksVal = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+  const effectiveJigCapacity = Math.max(0, currentJigCapacity - brokenHooksVal);
+  const excessQty = Math.max(0, totalQuantity - effectiveJigCapacity);
+  const effectiveQty = Math.min(totalQuantity, effectiveJigCapacity); // capped at effective jig capacity
+  const totalTrays = Math.ceil(effectiveQty / currentTrayCapacity);
   
-  console.log(`📊 Total quantity: ${totalQuantity}, Trays needed: ${totalTrays}, Tray capacity: ${currentTrayCapacity}`);
+  console.log(`📊 Total quantity: ${totalQuantity}, Jig capacity: ${currentJigCapacity}, Broken hooks: ${brokenHooksVal}, Effective capacity: ${effectiveJigCapacity}, Effective: ${effectiveQty}, Excess: ${excessQty}`);
+  console.log(`📊 Trays needed for delink: ${totalTrays}, Tray capacity: ${currentTrayCapacity}`);
   console.log(`📊 Models breakdown:`, allModels.map(m => `${m.platingStockNo}: ${m.qty}`).join(', '));
   
-  // Update delink count header
-  const delinkTrayCount = document.getElementById('delinkTrayCount');
-  if (delinkTrayCount) {
-    delinkTrayCount.textContent = totalTrays;
-    console.log(`✅ Updated delink tray count to: ${totalTrays}`);
-  } else {
-    console.error('❌ delinkTrayCount element not found');
-  }
-  
-  // Clear existing tray inputs
+  // 🔑 SINGLE SOURCE OF TRUTH: Preserve existing scanned tray IDs by tray_id, not just index
+  // This ensures correct restoration even when tray count/order changes
+  const existingDelinkInputsMap = new Map(); // Map by tray_id for reliable lookup
+  delinkTableSection.querySelectorAll('.tray-id-input').forEach(inp => {
+    const trayId = inp.value.trim();
+    if (trayId) {
+      existingDelinkInputsMap.set(trayId, {
+        trayId: trayId,
+        value: inp.value || '',
+        qty: parseInt(inp.getAttribute('data-tray-qty') || '0', 10),
+        batchId: inp.getAttribute('data-batch-id') || null,
+        lotId: inp.getAttribute('data-lot-id') || null,
+        modelIdx: inp.getAttribute('data-model-idx') || null,
+        validated: inp.getAttribute('data-validated') || '0'
+      });
+    }
+  });
+
+  console.log(`💾 Captured existing tray inputs by tray_id: ${existingDelinkInputsMap.size} scanned trays`);
+
+  // Clear current contents before rebuilding tray inputs so we don't append duplicates
   delinkTableSection.innerHTML = '';
+
+  // Build per-model tray allocation so each tray is tagged with the correct lot/batch
+  // When totalQuantity > jigCapacity, cap at jig capacity and track excess
+  let trayIndex = 0;
+  let casesAllocated = 0;  // running total of cases assigned to delink
+  const excessTrays = [];  // trays that overflow beyond jig capacity
+
+  allModels.forEach((model, modelIdx) => {
+    let qty = model.qty || model.quantity || 0;
+    if (!qty) return;
+
+    // How many cases from this model can still fit in the jig?
+    const remainingCapacity = effectiveQty - casesAllocated;
+    if (remainingCapacity <= 0) {
+      // Entire model goes to excess (half-filled / remaining lot)
+      excessTrays.push({ model, modelIdx, cases: qty });
+      return;
+    }
+
+    let modelDelinkQty = Math.min(qty, remainingCapacity);
+    let modelExcessQty = qty - modelDelinkQty;
+
+    // Build the lot's NATURAL tray distribution: [top_tray, full, full, ...]
+    // This matches the physical tray layout (top tray = qty % trayCapacity)
+    const lotTopTray = qty % currentTrayCapacity;
+    const lotFullTrays = Math.floor(qty / currentTrayCapacity);
+    const naturalTrays = [];
+    if (lotTopTray > 0) naturalTrays.push(lotTopTray);
+    for (let i = 0; i < lotFullTrays; i++) naturalTrays.push(currentTrayCapacity);
+
+    // Helper to create a tray tab
+    const createTrayTab = (casesCount, isPartial = false) => {
+      const trayTab = document.createElement('div');
+      const bgClass = `model-bg-${(modelIdx % 5) + 1}`;
+      trayTab.className = `tray-scan-tab ${bgClass}`;
+
+      // ✅ FIX: Use model-specific batch_id/lot_id (PRIORITY) for correct secondary model validation
+      // For secondary models: use their own batch_id/lot_id from combinedModels
+      // Fallback: use window.currentModalContext for edge cases
+      const modelBatchId = model.batchId || window.currentModalContext?.batchId || '';
+      const modelLotId = model.lotId || window.currentModalContext?.lotId || '';
+
+      trayTab.innerHTML = `
+        <input
+          type="text"
+          id="tray-${trayIndex}"
+          class="tray-id-input ${bgClass}"
+          placeholder="Scan Tray ${trayIndex + 1} Id"
+          data-row-index="${trayIndex}"
+          data-batch-id="${modelBatchId}"
+          data-lot-id="${modelLotId}"
+          data-tray-qty="${casesCount}"
+          data-model-idx="${modelIdx}"
+          data-partial="${isPartial ? '1' : '0'}"
+        />
+      `;
+
+      // 🔑 RESTORATION: Use tray_id lookup from map instead of index-based restoration
+      // This ensures correct preservation even when tray count changes
+      // Try to restore from map by checking if this will be the same tray ID
+      const inputEl = trayTab.querySelector('input');
+      if (inputEl) {
+        // Mark as not validated initially (will be validated when user scans)
+        inputEl.setAttribute('data-validated', '0');
+      }
+      
+      delinkTableSection.appendChild(trayTab);
+      trayIndex++;
+    };
+
+    // Take trays from the natural distribution up to modelDelinkQty
+    let delinkRemaining = modelDelinkQty;
+    for (const trayQty of naturalTrays) {
+      if (delinkRemaining <= 0) break;
+      const take = Math.min(trayQty, delinkRemaining);
+      createTrayTab(take, take < currentTrayCapacity);
+      casesAllocated += take;
+      delinkRemaining -= take;
+    }
+
+    // If this model has excess, track it
+    if (modelExcessQty > 0) {
+      excessTrays.push({ model, modelIdx, cases: modelExcessQty });
+    }
+  });
+
+  // 🔄 RESTORATION PHASE: After all trays are created, restore previously scanned values
+  // Match by tray_id from the map to ensure correct restoration regardless of index changes
+  console.log(`🔄 Restoring previously scanned trays from map (${existingDelinkInputsMap.size} entries)...`);
+  delinkTableSection.querySelectorAll('.tray-id-input').forEach((trayInput, idx) => {
+    // Check if any previously scanned tray matches (we would need to know the tray ID beforehand)
+    // For now, mark all as unvalidated - they will be re-validated when user scans them again
+    trayInput.setAttribute('data-validated', '0');
+  });
   
-  // Create tray inputs for total quantity
-  for (let i = 0; i < totalTrays; i++) {
-    const trayTab = document.createElement('div');
-    trayTab.className = 'tray-scan-tab model-bg-1';
+  // However, we need to restore values that user has already entered
+  // If they had scanned "NB-A00001", we should restore that value if we create a tray for the same model/lot
+  // But we can't reliably know which physical tray this is without rescanning
+  // So we'll just preserve the scanned status for trays that still exist in the same position
+  let restoredCount = 0;
+  existingDelinkInputsMap.forEach((existing) => {
+    // Try to find if this tray should be in the new table by matching lot_id and batch_id
+    // AND having the same tray quantity
+    const matchingTray = Array.from(delinkTableSection.querySelectorAll('.tray-id-input')).find(inp => {
+      // Match if: not yet filled AND same lot/batch AND same qty
+      return !inp.value && 
+             inp.getAttribute('data-lot-id') === existing.lotId &&
+             inp.getAttribute('data-batch-id') === existing.batchId &&
+             parseInt(inp.getAttribute('data-tray-qty')) === existing.qty;
+    });
     
-    // Calculate quantity for this tray
-    let trayQty;
-    if (i === 0 && totalQuantity % currentTrayCapacity !== 0) {
-      // First tray might be partial (top tray)
-      trayQty = totalQuantity % currentTrayCapacity;
-    } else {
-      // Full tray
-      trayQty = currentTrayCapacity;
+    if (matchingTray) {
+      // Restore the previously scanned value and validation state
+      matchingTray.value = existing.trayId;
+      matchingTray.setAttribute('data-validated', existing.validated);
+      
+      // Restore visual valid indicator so UI is consistent and allRequiredTraysValid passes
+      if (existing.validated === '1') {
+        matchingTray.style.borderColor = '#28a745';
+        matchingTray.style.backgroundColor = '#eafaf1';
+        // Remove any error indicators
+        const errAlerts = matchingTray.parentNode.querySelectorAll('.tray-error-message');
+        errAlerts.forEach(a => a.remove());
+        // Re-create .tray-valid-alert if not already present
+        if (!matchingTray.parentNode.querySelector('.tray-valid-alert')) {
+          const validDiv = document.createElement('div');
+          validDiv.className = 'tray-valid-alert';
+          validDiv.style.cssText = 'color: #28a745; font-size: 12px; margin-top: -5px; position: absolute; left: 15px; top: 100%;';
+          validDiv.textContent = 'Valid';
+          matchingTray.parentNode.appendChild(validDiv);
+        }
+      }
+      restoredCount++;
+      console.log(`✅ Restored tray ${existing.trayId} (${existing.qty} cases) for lot ${existing.lotId}`);
+    }
+  });
+  console.log(`📝 Restored ${restoredCount} previously scanned tray values - invalidating others for re-validation`);
+  
+  const halfFilledSection = document.getElementById('halfFilledTraySection');
+  if (excessQty > 0 && halfFilledSection) {
+    halfFilledSection.style.display = 'block';
+    halfFilledSection.innerHTML = '';
+
+    // Build the total excess tray distribution
+    const excessFullTrays = Math.floor(excessQty / currentTrayCapacity);
+    const excessPartialCases = excessQty % currentTrayCapacity;
+    const excessTotalTrays = excessFullTrays + (excessPartialCases > 0 ? 1 : 0);
+
+    let html = `
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 10px 0;">
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <h6 style="margin: 0; color: #856404; font-weight: 600;">
+          <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
+          Half-Filled Tray — Excess ${excessQty} cases (${excessTotalTrays} tray${excessTotalTrays > 1 ? 's' : ''})
+        </h6>
+      </div>
+      <div style="background: #fff; border-radius: 4px; padding: 8px; margin-bottom: 10px;">
+        <div style="color: #856404; font-size: 12px; font-weight: 600;">
+          <i class="fa fa-info-circle" style="margin-right: 5px; color: #f0ad4e;"></i>
+          Total combined qty (${totalQuantity}) exceeds Effective Jig Capacity (${effectiveJigCapacity}${brokenHooksVal > 0 ? ' = ' + currentJigCapacity + ' - ' + brokenHooksVal + ' broken hooks' : ''}).
+          <b>${excessQty}</b> excess cases will remain in the Pick Table for the next cycle.
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">`;
+
+    // Render the excess tray inputs — distribute proportionally to source models
+    // Build a list of excess tray allocations tied to their source models
+    const excessTrayAllocs = [];
+    let remainingExcess = excessQty;
+    
+    for (const { model, modelIdx, cases } of excessTrays) {
+      if (remainingExcess <= 0) break;
+      
+      // How many cases from this model go to excess?
+      const thisModelExcess = Math.min(cases, remainingExcess);
+      
+      // Break down this model's excess into full and partial trays
+      const fullTraysForModel = Math.floor(thisModelExcess / currentTrayCapacity);
+      const partialForModel = thisModelExcess % currentTrayCapacity;
+      
+      // Partial tray first (top tray for this model's excess)
+      if (partialForModel > 0) {
+        excessTrayAllocs.push({
+          model,
+          modelIdx,
+          cases: partialForModel,
+          isPartial: true,
+          isAuto: false
+        });
+      }
+      
+      // Full trays
+      for (let f = 0; f < fullTraysForModel; f++) {
+        excessTrayAllocs.push({
+          model,
+          modelIdx,
+          cases: currentTrayCapacity,
+          isPartial: false,
+          isAuto: true
+        });
+      }
+      
+      remainingExcess -= thisModelExcess;
     }
     
-    trayTab.innerHTML = `
-      <input 
-        type="text" 
-        id="tray-${i}"
-        class="tray-id-input model-bg-1" 
-        placeholder="Scan Tray ${i + 1} Id"
-        data-row-index="${i}"
-        data-tray-qty="${trayQty}"
-      />
-    `;
-    
-    delinkTableSection.appendChild(trayTab);
+    // Render all excess trays with correct model tags
+    excessTrayAllocs.forEach((alloc, idx) => {
+      const { model, modelIdx, cases, isPartial, isAuto } = alloc;
+      const excessBatchId = model.batchId || window.currentModalContext?.batchId || '';
+      const excessLotId = model.lotId || window.currentModalContext?.lotId || '';
+      const bgClass = `model-bg-${(modelIdx % 5) + 1}`;
+      
+      if (isAuto) {
+        // Full tray - auto-allocated
+        html += `
+          <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
+            <div>Tray ${idx + 1}: ${cases} cases (Auto Allocated)</div>
+            <div style="font-size: 11px; opacity: 0.8;">Model: ${model.platingStockNo || model.modelNumber}</div>
+            <input type="hidden" class="half-filled-tray-input ${bgClass}" value="AUTO-EXCESS-${idx + 1}"
+                   data-tray-qty="${cases}" data-row-index="half_${idx}"
+                   data-batch-id="${excessBatchId}"
+                   data-lot-id="${excessLotId}"
+                   data-model-idx="${modelIdx}">
+          </div>`;
+      } else {
+        // Partial tray - needs scan
+        html += `
+          <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+            <div style="margin-bottom: 4px;">Top Tray (${model.platingStockNo || model.modelNumber}): ${cases} cases (Scan Required)</div>
+            <input type="text" class="tray-id-input half-filled-tray-input ${bgClass}"
+                   placeholder="Scan Tray ID (${cases} pcs)"
+                   data-tray-qty="${cases}"
+                   data-row-index="half_${idx}"
+                   data-batch-id="${excessBatchId}"
+                   data-lot-id="${excessLotId}"
+                   data-model-idx="${modelIdx}"
+                   style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 12px;">
+          </div>`;
+      }
+    });
+
+    html += `</div>
+      <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
+        <div style="color: #856404; font-size: 12px; font-weight: 600;">
+          <i class="fa fa-arrow-right" style="margin-right: 5px; color: #f0ad4e;"></i>
+          ${excessQty} cases → stay in Pick Table for next fresh cycle
+        </div>
+      </div>
+    </div>`;
+
+    halfFilledSection.innerHTML = html;
+    console.log(`⚠️ Excess ${excessQty} cases rendered in Half-Filled Tray section`);
+  } else if (halfFilledSection) {
+    halfFilledSection.style.display = 'none';
+    halfFilledSection.innerHTML = '';
   }
   
-  // Update tray distribution summary
-  updateTrayDistributionSummary(allModels, totalQuantity, totalTrays);
+  // --- Snapshot original tray data for broken hooks post-adjustment ---
+  window._originalDelinkTrayData = [];
+  delinkTableSection.querySelectorAll('.tray-id-input').forEach(inp => {
+    window._originalDelinkTrayData.push({
+      rowIndex: inp.getAttribute('data-row-index'),
+      qty: parseInt(inp.getAttribute('data-tray-qty') || '0', 10),
+      batchId: inp.getAttribute('data-batch-id'),
+      lotId: inp.getAttribute('data-lot-id'),
+      modelIdx: inp.getAttribute('data-model-idx'),
+      bgClass: inp.className.match(/model-bg-\d+/)?.[0] || 'model-bg-1'
+    });
+  });
+  // Store combined models and excess metadata for broken hooks half-filled rebuild
+  window._combinedModelsData = allModels;
+  window._originalExcessQty = excessQty;
+  window._originalTotalQuantity = totalQuantity;
+  console.log(`📸 Snapshot: ${window._originalDelinkTrayData.length} delink trays, excess=${excessQty}`);
+
+  // Update tray distribution summary (show effective qty, not total)
+  updateTrayDistributionSummary(allModels, effectiveQty, totalTrays, excessQty);
   
   console.log('✅ Tray distribution recalculated');
+
+  // Ensure header shows actual number of inputs rendered (includes half-filled inputs)
+  try {
+    const delinkTrayCount = document.getElementById('delinkTrayCount');
+    const modalInputs = delinkTableSection.querySelectorAll('.tray-id-input').length;
+    const halfFilledSectionEl = document.getElementById('halfFilledTraySection');
+    const halfInputs = halfFilledSectionEl ? halfFilledSectionEl.querySelectorAll('.tray-id-input, .half-filled-tray-input').length : 0;
+    const visibleCount = modalInputs + halfInputs;
+    if (delinkTrayCount) {
+      delinkTrayCount.textContent = visibleCount || totalTrays;
+      console.log(`✅ Set delink tray count to rendered inputs: ${visibleCount}`);
+    }
+  } catch (err) {
+    console.error('Error updating delink tray count from DOM', err);
+  }
+
+  // ✅ CRITICAL: Recompute loaded cases qty from currently restored/validated delink trays
+  // This ensures loaded qty display is accurate after model recombination
+  if (typeof recalcLoadedCasesQty === 'function') {
+    console.log('🔄 Recalculating loaded cases qty after tray table rebuild...');
+    recalcLoadedCasesQty();
+  }
+  
+  // ✅ Update submit button state with recalculated qty
+  if (typeof updateSubmitButtonState === 'function') {
+    updateSubmitButtonState();
+  }
 }
 
 // Update tray distribution summary
-function updateTrayDistributionSummary(allModels, totalQuantity, totalTrays) {
+function updateTrayDistributionSummary(allModels, totalQuantity, totalTrays, excessQty) {
+  excessQty = excessQty || 0;
   const trayDistributionDiv = document.querySelector('.tray-distribution-display');
   if (!trayDistributionDiv) return;
   
@@ -5574,13 +6982,22 @@ function updateTrayDistributionSummary(allModels, totalQuantity, totalTrays) {
     html += `<div style="font-weight: 600; margin-top: 10px; color: #1565C0;">Model Breakdown:</div>`;
   }
   allModels.forEach((model, index) => {
+    const modelQty = model.qty || model.quantity || 0;
     const bgColor = index === 0 ? '#e8f5e9' : '#e3f2fd';
     const borderColor = index === 0 ? '#4CAF50' : '#2196F3';
     html += `<div style="margin: 5px 0; padding: 5px; background: ${bgColor}; border-left: 3px solid ${borderColor}; border-radius: 4px;">`;
-    html += `📦 ${model.platingStockNo}: <b>${model.qty}</b> cases`;
+    html += `📦 ${model.platingStockNo}: <b>${modelQty}</b> cases`;
     if (index === 0) html += ` <span style="font-size: 11px; color: #4CAF50;">(Primary)</span>`;
     html += `</div>`;
   });
+
+  // Show excess warning if applicable
+  if (excessQty > 0) {
+    const totalCombined = totalQuantity + excessQty;
+    html += `<div style="margin: 8px 0; padding: 8px; background: #fff3cd; border-left: 3px solid #f0ad4e; border-radius: 4px; font-size: 12px; color: #856404;">`;
+    html += `⚠️ Combined Qty (${totalCombined}) exceeds Jig Capacity (${currentJigCapacity}). <b>${excessQty}</b> excess cases → Half-Filled / Pick Table.`;
+    html += `</div>`;
+  }
   
   // Show tray breakdown
   html += `<div style="margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px;">`;
@@ -5665,20 +7082,18 @@ function combineModelsAndUpdateModal(newTotalQty, newEmptyHooks, selectedRows) {
   // Calculate how many trays needed for combined quantity
   const totalTrays = Math.ceil(newTotalQty / currentTrayCapacity);
   
-  // Update modal with new values
+    // Update modal with new values
   const modal = document.getElementById('jigAddModal');
   if (modal) {
-    // Update loaded cases quantity
-    // Update loaded cases qty display
-    const loadedCasesQtyDisplay = document.getElementById('loadedCasesQtyDisplay');
-    if (loadedCasesQtyDisplay) {
-      loadedCasesQtyDisplay.textContent = `${newTotalQuantity}/${currentJigCapacity}`;
-    }
+    // Update empty hooks using effective capacity (jig_cap - broken_hooks)
+    const brokenHooksCM = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+    const effectiveCapCM = Math.max(0, currentJigCapacity - brokenHooksCM);
+    // loadedCasesQtyDisplay deferred to recalcLoadedCasesQty() after table rebuild
     
     // Update empty hooks
     const emptyHooksInput = document.getElementById('emptyHooksInput');
     if (emptyHooksInput) {
-      emptyHooksInput.value = newEmptyHooks;
+      emptyHooksInput.value = Math.max(0, effectiveCapCM - newTotalQty);
     }
     
     // Update tray table with combined data
@@ -5711,6 +7126,22 @@ function combineModelsAndUpdateModal(newTotalQty, newEmptyHooks, selectedRows) {
       timer: 3000,
       showConfirmButton: false
     });
+    // Update tray distribution summary for combined models (include primary + selected)
+    try {
+      const mappedModels = [{ platingStockNo: currentModelNumber, qty: currentQuantity }].concat(selectedRows.map(r => ({ platingStockNo: r.platingStock_no || r.platingStockNo || '', qty: r.qty })));
+      updateTrayDistributionSummary(mappedModels, newTotalQty, totalTrays);
+      const delinkTrayCount = document.getElementById('delinkTrayCount');
+      if (delinkTrayCount) delinkTrayCount.textContent = totalTrays;
+    } catch (err) {
+      console.error('Error updating tray distribution summary after combineModelsAndUpdateModal', err);
+    }
+    
+    // Update modal validation for combined flows
+    const allValid = $('#delinkTableSection .tray-id-input').toArray().every(input => $(input).next('.validation-result').hasClass('valid'));
+    if (window.currentModalData && window.currentModalData.modal_validation) {
+      window.currentModalData.modal_validation.overall_valid = (newEmptyHooks === 0 && allValid);
+    }
+    updateSubmitButtonState();
   }
 }
 
@@ -5723,29 +7154,42 @@ function updateDelinkTableWithCombinedData(totalQty, selectedRows) {
   const remainingQty = totalQty % currentTrayCapacity;
   const totalTrays = fullTrays + (remainingQty > 0 ? 1 : 0);
   
-  // Update delink table
+  // Update delink table but preserve any existing scanned tray IDs
   const delinkTable = document.getElementById('trayScanDetails_Jig');
   if (delinkTable) {
+    // Capture existing scanned values
+    const existingValues = [];
+    delinkTable.querySelectorAll('.tray-id-input').forEach(inp => existingValues.push(inp.value || ''));
+
     let trayHTML = '<div class="tray-scan-tabs">';
-    
+
     for (let i = 1; i <= totalTrays; i++) {
       const isTopTray = i === 1 && remainingQty > 0;
       const trayQty = isTopTray ? remainingQty : currentTrayCapacity;
-      
+      const existingVal = existingValues[i - 1] || '';
+
       trayHTML += `
         <div class="tray-scan-tab model-bg-1">
           <label>Tray ${i}${isTopTray ? ' (Top)' : ''}</label>
           <input type="text" class="tray-id-input" placeholder="Scan Tray ${i} ID" 
+                 value="${existingVal.replace(/\"/g, '&quot;')}"
                  data-tray-qty="${trayQty}" data-is-top-tray="${isTopTray}">
           <div class="tray-qty">Qty: ${trayQty}</div>
         </div>
       `;
     }
-    
+
     trayHTML += '</div>';
     delinkTable.innerHTML = trayHTML;
-    
-    console.log(`✅ Updated delink table with ${totalTrays} trays`);
+
+    console.log(`✅ Updated delink table with ${totalTrays} trays (preserved ${existingValues.length} existing inputs)`);
+    // Keep header in sync with rendered inputs
+    try {
+      const delinkTrayCount = document.getElementById('delinkTrayCount');
+      if (delinkTrayCount) delinkTrayCount.textContent = totalTrays;
+    } catch (err) {
+      console.error('Error setting delinkTrayCount in updateDelinkTableWithCombinedData', err);
+    }
   }
 }
 
@@ -6001,8 +7445,303 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </script>
 
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  let openRemarkTooltip = null;
 
+  function closeRemarkTooltip(tooltip) {
+    if (!tooltip) return;
+    tooltip.style.opacity = "0";
+    tooltip.style.visibility = "hidden";
+    tooltip.style.pointerEvents = "none";
+    tooltip.classList.remove("pinned");
+    openRemarkTooltip = null;
+  }
 
+  function openTooltipForTrigger(trigger) {
+    const tooltip = trigger.querySelector(".remark-tooltip");
+    if (!tooltip) return;
 
+    if (openRemarkTooltip && openRemarkTooltip !== tooltip) {
+      closeRemarkTooltip(openRemarkTooltip);
+    }
+
+    const isOpen = tooltip.classList.contains("pinned");
+    if (isOpen) {
+      closeRemarkTooltip(tooltip);
+      return;
+    }
+
+    tooltip.classList.add("pinned");
+    tooltip.style.opacity = "1";
+    tooltip.style.visibility = "visible";
+    tooltip.style.pointerEvents = "auto";
+    openRemarkTooltip = tooltip;
+
+    const textarea = tooltip.querySelector(".remark-textarea");
+    if (textarea) textarea.focus();
+  }
+
+  function getCsrfTokenSafe() {
+    if (typeof getCookie === "function") return getCookie("csrftoken");
+    return "";
+  }
+
+  function colorizeRemarkIcons(row, trigger) {
+    const inprocessIcon = row.querySelector(".mobile-cross-icon img");
+    if (inprocessIcon) {
+      inprocessIcon.style.filter = "none";
+      inprocessIcon.style.opacity = "1";
+      inprocessIcon.title = "View Remarks";
+    }
+
+    const icon = trigger.querySelector("img");
+    if (icon) {
+      icon.style.filter = "grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2)";
+      icon.style.opacity = "1";
+    }
+  }
+
+  function saveRemark(payload, onDone) {
+    fetch("/jig_loading/save-jig-pick-remark/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCsrfTokenSafe(),
+      },
+      credentials: "same-origin",
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) {
+          throw new Error(data.error || "Failed to save remark");
+        }
+        if (typeof Swal !== "undefined") {
+          Swal.fire({
+            icon: "success",
+            title: "Remark saved",
+            timer: 1000,
+            showConfirmButton: false,
+          });
+        }
+        if (onDone) onDone(data);
+      })
+      .catch((err) => {
+        if (typeof Swal !== "undefined") {
+          Swal.fire("Error", err.message || "Failed to save remark", "error");
+        } else {
+          alert(err.message || "Failed to save remark");
+        }
+      });
+  }
+
+  document.querySelectorAll(".remark-tooltip-trigger").forEach(function (trigger) {
+    trigger.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      openTooltipForTrigger(trigger);
+    });
+
+    const tooltip = trigger.querySelector(".remark-tooltip");
+    if (tooltip) {
+      tooltip.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    trigger.querySelectorAll(".remark-send-btn").forEach(function (sendBtn) {
+      sendBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const row = trigger.closest("tr");
+        if (!row) return;
+        const lotId = row.getAttribute("data-stock-lot-id") || "";
+        const batchId = row.getAttribute("data-batch-id") || "";
+        const remarkType = sendBtn.getAttribute("data-remark-type") || "text";
+
+        if (!lotId || !batchId) {
+          if (typeof Swal !== "undefined") Swal.fire("Error", "Batch/Lot not found", "error");
+          return;
+        }
+
+        const submitRemark = function (remarkValue) {
+          const remark = (remarkValue || "").trim();
+          if (!remark) {
+            if (typeof Swal !== "undefined") Swal.fire("Error", "Please enter a remark before sending.", "error");
+            return;
+          }
+
+          saveRemark(
+            {
+              lot_id: lotId,
+              batch_id: batchId,
+              remark: remark,
+              remark_type: remarkType,
+            },
+            function (data) {
+              const textArea = trigger.querySelector(".remark-textarea");
+              if (textArea && remarkType === "text") {
+                textArea.value = data.remark || remark;
+              }
+              colorizeRemarkIcons(row, trigger);
+              closeRemarkTooltip(trigger.querySelector(".remark-tooltip"));
+            }
+          );
+        };
+
+        if (remarkType === "audio") {
+          if (typeof Swal !== "undefined") {
+            Swal.fire({
+              title: "Audio Remark Note",
+              input: "textarea",
+              inputPlaceholder: "Enter audio remark notes...",
+              showCancelButton: true,
+              confirmButtonText: "Send",
+            }).then(function (result) {
+              if (result.isConfirmed) submitRemark(result.value || "");
+            });
+          } else {
+            const note = prompt("Enter audio remark note:");
+            if (note !== null) submitRemark(note);
+          }
+          return;
+        }
+
+        const textArea = trigger.querySelector(".remark-textarea");
+        submitRemark(textArea ? textArea.value : "");
+      });
+    });
+  });
+
+  document.addEventListener("click", function (e) {
+    if (openRemarkTooltip && !e.target.closest(".remark-tooltip") && !e.target.closest(".remark-tooltip-trigger")) {
+      closeRemarkTooltip(openRemarkTooltip);
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && openRemarkTooltip) {
+      closeRemarkTooltip(openRemarkTooltip);
+    }
+  });
+});
+</script>
+
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  const jigCompositionBtn = document.getElementById("jigCompositionBtn");
+  if (!jigCompositionBtn) return;
+
+  jigCompositionBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+
+    const modal = document.getElementById("jigAddModal");
+    const lotIds = [];
+
+    if (window.currentModalContext && window.currentModalContext.lotId) {
+      lotIds.push(String(window.currentModalContext.lotId));
+    }
+
+    if (modal) {
+      const combinedLotIdsRaw = modal.getAttribute("data-combined-lot-ids");
+      if (combinedLotIdsRaw) {
+        try {
+          const parsed = JSON.parse(combinedLotIdsRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(function (id) {
+              if (id != null) lotIds.push(String(id));
+            });
+          }
+        } catch (err) {
+          console.warn("Invalid combined lot ids:", err);
+        }
+      }
+    }
+
+    const uniqueLotIds = Array.from(new Set(lotIds.filter(Boolean)));
+    const baseUrl = "{% url 'jig_composition' %}";
+
+    if (uniqueLotIds.length > 0) {
+      const lotIdsParam = encodeURIComponent(uniqueLotIds.join(","));
+      window.location.href = `${baseUrl}?lot_ids=${lotIdsParam}`;
+      return;
+    }
+
+    window.location.href = baseUrl;
+  });
+});
+</script>
+<script nonce="{{ csp_nonce }}">
+// Delete lot (bin icon) handler with confirmation
+document.addEventListener('DOMContentLoaded', function () {
+  function getCsrf() {
+    const m = document.cookie.match('(^|;)\\s*' + 'csrftoken' + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  async function handleDeleteClick(e) {
+    e.preventDefault();
+    const el = e.currentTarget;
+    const stockLotId = el.getAttribute('data-stock-lot-id');
+    if (!stockLotId) return;
+
+    // Confirmation (SweetAlert2 if available)
+    let confirmed = false;
+    if (window.Swal) {
+      const res = await Swal.fire({
+        title: 'Delete lot permanently?',
+        text: 'This will permanently delete the lot and its records. This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Delete',
+        cancelButtonText: 'Cancel'
+      });
+      confirmed = !!res.isConfirmed;
+    } else {
+      confirmed = confirm('This will permanently delete the lot. Continue?');
+    }
+
+    if (!confirmed) return;
+    el.style.pointerEvents = 'none';
+
+    try {
+      const resp = await fetch('/jig_loading/delete-lot/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrf()
+        },
+        body: JSON.stringify({ stock_lot_id: stockLotId })
+      });
+      let data = {};
+      try { data = await resp.json(); } catch (err) { /* ignore parse errors */ }
+
+      if (resp.ok) {
+        const row = el.closest('tr');
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+        if (window.Swal) Swal.fire({ icon: 'success', title: data.message || 'Deleted', timer: 1100, showConfirmButton: false });
+        else alert(data.message || 'Deleted');
+      } else {
+        if (window.Swal) Swal.fire({ icon: 'error', title: data.message || 'Delete failed' });
+        else alert(data.message || 'Delete failed');
+        el.style.pointerEvents = '';
+      }
+    } catch (err) {
+      console.error('Delete request failed', err);
+      if (window.Swal) Swal.fire({ icon: 'error', title: 'Request failed' });
+      else alert('Request failed');
+      el.style.pointerEvents = '';
+    }
+  }
+
+  document.querySelectorAll('.jig-delete-batch-btn').forEach(function (btn) {
+    try { btn.removeEventListener('click', handleDeleteClick); } catch (e) {}
+    btn.addEventListener('click', handleDeleteClick);
+  });
+});
+</script>
 {% endblock %}
 {% endblock content %}

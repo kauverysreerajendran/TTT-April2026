@@ -41,25 +41,43 @@ def auto_calculate_top_tray(lot_id):
     try:
         print(f"🔄 [auto_calculate_top_tray] Calculating top tray for lot_id: {lot_id}")
         
-        # Get all non-rejected BrassTrayId records for this lot, ordered by quantity (smallest first)
+        # Get all non-rejected BrassTrayId records for this lot
         all_brass_trays = BrassTrayId.objects.filter(
-            lot_id=lot_id, 
+            lot_id=lot_id,
             rejected_tray=False
-        ).order_by('tray_quantity')
-        
-        if all_brass_trays.exists():
-            # Reset all top_tray flags to False first
-            all_brass_trays.update(top_tray=False)
-            
-            # Set the first tray (smallest quantity) as top tray
-            top_tray = all_brass_trays.first()
-            top_tray.top_tray = True
-            top_tray.save(update_fields=['top_tray'])
-            
-            print(f"✅ [auto_calculate_top_tray] Set top_tray=True for {top_tray.tray_id} (qty: {top_tray.tray_quantity})")
+        )
+
+        if not all_brass_trays.exists():
+            print(f"⚠️ [auto_calculate_top_tray] No non-rejected trays found for lot_id: {lot_id}")
+            return False
+
+        # Prefer the source top_tray if it exists in BrassAudit (preserve origin)
+        try:
+            from BrassAudit.models import BrassAuditTrayId
+            source_top_tray_id = BrassAuditTrayId.objects.filter(lot_id=lot_id, top_tray=True).values_list('tray_id', flat=True).first()
+        except Exception:
+            source_top_tray_id = None
+
+        # Reset all top_tray flags first
+        all_brass_trays.update(top_tray=False)
+
+        if source_top_tray_id:
+            matched = all_brass_trays.filter(tray_id=source_top_tray_id).first()
+            if matched:
+                matched.top_tray = True
+                matched.save(update_fields=['top_tray'])
+                print(f"✅ [auto_calculate_top_tray] Preserved source top_tray for {matched.tray_id} (qty: {matched.tray_quantity})")
+                return True
+
+        # Fallback: choose the tray with the smallest quantity (remainder)
+        min_qty = all_brass_trays.order_by('tray_quantity').first()
+        if min_qty:
+            min_qty.top_tray = True
+            min_qty.save(update_fields=['top_tray'])
+            print(f"✅ [auto_calculate_top_tray] Set top_tray=True for {min_qty.tray_id} (qty: {min_qty.tray_quantity})")
             return True
         else:
-            print(f"⚠️ [auto_calculate_top_tray] No non-rejected trays found for lot_id: {lot_id}")
+            print(f"⚠️ [auto_calculate_top_tray] No candidate tray found for lot_id: {lot_id}")
             return False
             
     except Exception as e:
@@ -80,25 +98,42 @@ def auto_calculate_top_tray_brass_audit(lot_id):
         # Import BrassAudit models
         from BrassAudit.models import BrassAuditTrayId
         
-        # Get all non-rejected BrassAuditTrayId records for this lot, ordered by quantity (smallest first)
+        # Get all non-rejected BrassAuditTrayId records for this lot
         all_audit_trays = BrassAuditTrayId.objects.filter(
-            lot_id=lot_id, 
+            lot_id=lot_id,
             rejected_tray=False
-        ).order_by('tray_quantity')
-        
-        if all_audit_trays.exists():
-            # Reset all top_tray flags to False first
-            all_audit_trays.update(top_tray=False)
-            
-            # Set the first tray (smallest quantity) as top tray
-            top_tray = all_audit_trays.first()
-            top_tray.top_tray = True
-            top_tray.save(update_fields=['top_tray'])
-            
-            print(f"✅ [auto_calculate_top_tray_brass_audit] Set top_tray=True for {top_tray.tray_id} (qty: {top_tray.tray_quantity})")
+        )
+
+        if not all_audit_trays.exists():
+            print(f"⚠️ [auto_calculate_top_tray_brass_audit] No non-rejected trays found for lot_id: {lot_id}")
+            return False
+
+        # Prefer existing top_tray from BrassTrayId (preserve QC origin) if available
+        try:
+            matched_qc_top = BrassTrayId.objects.filter(lot_id=lot_id, top_tray=True).values_list('tray_id', flat=True).first()
+        except Exception:
+            matched_qc_top = None
+
+        # Reset all top_tray flags first
+        all_audit_trays.update(top_tray=False)
+
+        if matched_qc_top:
+            matched = all_audit_trays.filter(tray_id=matched_qc_top).first()
+            if matched:
+                matched.top_tray = True
+                matched.save(update_fields=['top_tray'])
+                print(f"✅ [auto_calculate_top_tray_brass_audit] Preserved QC top_tray for {matched.tray_id} (qty: {matched.tray_quantity})")
+                return True
+
+        # Fallback: choose the tray with the smallest quantity (remainder)
+        min_qty = all_audit_trays.order_by('tray_quantity').first()
+        if min_qty:
+            min_qty.top_tray = True
+            min_qty.save(update_fields=['top_tray'])
+            print(f"✅ [auto_calculate_top_tray_brass_audit] Set top_tray=True for {min_qty.tray_id} (qty: {min_qty.tray_quantity})")
             return True
         else:
-            print(f"⚠️ [auto_calculate_top_tray_brass_audit] No non-rejected trays found for lot_id: {lot_id}")
+            print(f"⚠️ [auto_calculate_top_tray_brass_audit] No candidate audit tray found for lot_id: {lot_id}")
             return False
             
     except Exception as e:
@@ -326,6 +361,9 @@ def send_brass_audit_back_to_brass_qc(lot_id, user):
         )
         
         # Read Brass Audit tray data BEFORE deleting it
+        # Capture source top tray id so we can enforce top_tray mapping after copy/recalc.
+        source_top_tray_id = BrassAuditTrayId.objects.filter(lot_id=lot_id, top_tray=True).values_list('tray_id', flat=True).first()
+
         # ✅ FIX: Only copy NON-REJECTED audit trays. For batch rejections, all trays are
         # marked rejected_tray=True BEFORE this function is called, so we correctly fall
         # through to the recalculation path.
@@ -357,11 +395,33 @@ def send_brass_audit_back_to_brass_qc(lot_id, user):
                 )
                 print(f"   📦 Copied tray: {audit_tray.tray_id} (qty={audit_tray.tray_quantity}, top_tray={audit_tray.top_tray})")
             print(f"✅ [REVERSE TRANSFER] Created {len(audit_trays)} new BrassTrayId records from Brass Audit data")
+            # Ensure top_tray mapping matches source explicitly (defensive)
+            try:
+                if source_top_tray_id:
+                    matched = BrassTrayId.objects.filter(lot_id=lot_id, tray_id=source_top_tray_id).first()
+                    if matched:
+                        BrassTrayId.objects.filter(lot_id=lot_id).update(top_tray=False)
+                        BrassTrayId.objects.filter(id=matched.id).update(top_tray=True)
+                        print(f"🎯 [REVERSE TRANSFER] Preserved SOURCE top_tray after copy: {matched.tray_id}")
+                else:
+                    trays_for_min = list(BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False))
+                    if trays_for_min:
+                        min_qty = min([t.tray_quantity for t in trays_for_min])
+                        for t in trays_for_min:
+                            if t.tray_quantity == min_qty:
+                                BrassTrayId.objects.filter(lot_id=lot_id).update(top_tray=False)
+                                BrassTrayId.objects.filter(id=t.id).update(top_tray=True)
+                                print(f"🎯 [REVERSE TRANSFER] Set TOP by min-qty after copy: {t.tray_id} (qty={t.tray_quantity})")
+                                break
+            except Exception as _e:
+                print(f"⚠️ [REVERSE TRANSFER] Error enforcing top_tray after copy: {_e}")
         else:
             # No audit trays — just reset existing BrassTrayId records, BUT recalculate their 
             # distributions based on the potentially reduced physical quantity!
             # We ONLY recalculate active (non-delinked) trays.
-            brass_trays = BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('tray_id')
+            # IMPORTANT: Do NOT order by tray_id here — preserve DB/insertion order so tray IDs
+            # are not rearranged when assigning distribution.
+            brass_trays = BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False)
             if brass_trays.exists():
                 # Re-calculate trays. If it was rejected in Audit, physical qty dropped.
                 available_qty = stock.brass_audit_physical_qty if getattr(stock, 'brass_audit_physical_qty', 0) > 0 else stock.brass_physical_qty
@@ -393,6 +453,36 @@ def send_brass_audit_back_to_brass_qc(lot_id, user):
                         remaining_qty = 0
                 
                 print(f"🔄 [REVERSE TRANSFER] Recalculated {brass_trays.count()} BrassTrayId records to match new physical qty: {available_qty}")
+                # Enforce TOP_TRAY mapping explicitly to avoid relying on iteration order
+                try:
+                    if source_top_tray_id:
+                        matched = BrassTrayId.objects.filter(lot_id=lot_id, tray_id=source_top_tray_id).first()
+                        if matched:
+                            BrassTrayId.objects.filter(lot_id=lot_id).update(top_tray=False)
+                            BrassTrayId.objects.filter(id=matched.id).update(top_tray=True)
+                            print(f"🎯 [REVERSE TRANSFER] Preserved SOURCE top_tray: {matched.tray_id}")
+                        else:
+                            trays_for_min = list(BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False))
+                            if trays_for_min:
+                                min_qty = min([t.tray_quantity for t in trays_for_min])
+                                for t in trays_for_min:
+                                    if t.tray_quantity == min_qty:
+                                        BrassTrayId.objects.filter(lot_id=lot_id).update(top_tray=False)
+                                        BrassTrayId.objects.filter(id=t.id).update(top_tray=True)
+                                        print(f"🎯 [REVERSE TRANSFER] Fallback TOP by min-qty: {t.tray_id} (qty={t.tray_quantity})")
+                                        break
+                    else:
+                        trays_for_min = list(BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False))
+                        if trays_for_min:
+                            min_qty = min([t.tray_quantity for t in trays_for_min])
+                            for t in trays_for_min:
+                                if t.tray_quantity == min_qty:
+                                    BrassTrayId.objects.filter(lot_id=lot_id).update(top_tray=False)
+                                    BrassTrayId.objects.filter(id=t.id).update(top_tray=True)
+                                    print(f"🎯 [REVERSE TRANSFER] Set TOP by min-qty: {t.tray_id} (qty={t.tray_quantity})")
+                                    break
+                except Exception as _e:
+                    print(f"⚠️ [REVERSE TRANSFER] Error enforcing top_tray mapping: {_e}")
             else:
                 print(f"⚠️ [REVERSE TRANSFER] No tray records found for lot {lot_id}")
         
@@ -1857,7 +1947,7 @@ class BQBatchRejectionAPIView(APIView):
 
                 print(f"[BATCH REJECTION IQF] Created {_iqf_created} IQFTrayId record(s)")
 
-                # Mark the lot so it appears in the IQF pick table
+                # Mark the lot so it appears in the IQF pick table (always, even for partial rejections)
                 total_stock.send_brass_audit_to_iqf = True
                 total_stock.save(update_fields=['send_brass_audit_to_iqf'])
                 print(f"✅ [BATCH REJECTION] IQF: created {_iqf_created} IQFTrayId(s), "
@@ -2013,6 +2103,11 @@ class BQTrayRejectionAPIView(APIView):
                 reason_store.rejection_reason.set(reasons)
                 
                 print(f"✅ [BQTrayRejectionAPIView] Created summary record: total_qty={total_qty}, reasons={len(reasons)}")
+
+            # Always move the lot to IQF Pick after any tray-level rejection (partial or full)
+            total_stock_obj.send_brass_audit_to_iqf = True
+            total_stock_obj.save(update_fields=['send_brass_audit_to_iqf'])
+            print(f"✅ [BQTrayRejectionAPIView] Set send_brass_audit_to_iqf=True for lot {lot_id} after tray rejection.")
 
             # ✅ Update TrayId records for ALL individual tray IDs
             unique_tray_ids = list(set([item['tray_id'] for item in saved_rejections]))
@@ -4451,9 +4546,9 @@ def brass_save_single_top_tray_scan(request):
                 if top_tray_obj:
                     old_qty = top_tray_obj.tray_quantity
                     top_tray_obj.top_tray = True
-                    top_tray_obj.tray_quantity = tray_qty
-                    top_tray_obj.save(update_fields=['top_tray', 'tray_quantity'])
-                    print(f"✅ [brass_save_single_top_tray_scan] Updated top tray: {tray_id}, old_qty={old_qty}, new_qty={tray_qty}")
+                    # STRICT: do NOT override existing tray_quantity — keep original
+                    top_tray_obj.save(update_fields=['top_tray'])
+                    print(f"✅ [brass_save_single_top_tray_scan] Marked top tray: {tray_id}, kept_qty={old_qty}")
                 else:
                     # Create new BrassTrayId for new tray
                     stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
@@ -4481,16 +4576,8 @@ def brass_save_single_top_tray_scan(request):
                     )
                     print(f"✅ [brass_save_single_top_tray_scan] Created new top tray: {tray_id}")
         
-                # Update all other trays (except rejected and top tray) to have tray_quantity = tray_capacity
-                all_trays_in_lot = BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
-                for tray in all_trays_in_lot:
-                    if tray.tray_id == tray_id or tray.delink_tray:
-                        continue
-                    old_qty = tray.tray_quantity
-                    tray.tray_quantity = tray.tray_capacity
-                    tray.top_tray = False
-                    tray.save(update_fields=['tray_quantity', 'top_tray'])
-                    print(f"   Updated BrassTrayId tray {tray.tray_id}: qty {old_qty}→{tray.tray_capacity}, top_tray=False")
+                # STRICT: Do not overwrite other tray quantities or adjust them to tray_capacity.
+                # Preserve original BrassTrayId.tray_quantity values.
 
             # ✅ UPDATED: Process delink trays (works for both normal and delink-only modes)
             for delink in delink_trays:

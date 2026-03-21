@@ -2037,7 +2037,7 @@
       </div>
       <footer class="footer">
          <span>
-         &copy; 2025 Pinesphere. All rights reserved.
+         &copy; 2026 Pinesphere. All rights reserved.
          </span>
       </footer>
       <!-- Script for Tray Identification Form -->
@@ -2201,8 +2201,8 @@
            debounceTimer = setTimeout(function() {
              const trayId = trayInput.value.trim();
              if (trayId !== "") {
-               // Call BaseAPIView with trayId as barcodeInput
-               fetch(`/base/?barcodeInput=${encodeURIComponent(trayId)}`, {
+                      // Call API to fetch lot/model details by model_no (previously incorrectly calling /base/)
+                      fetch(`/api/get-lot-by-model/?model_no=${encodeURIComponent(trayId)}`, {
                  method: "GET",
                  headers: {
                    "Accept": "application/json"
@@ -2764,8 +2764,8 @@
            debounceTimer = setTimeout(function() {
              const trayId = trayInput.value.trim();
              if (trayId !== "") {
-               // Call BaseAPIView with trayId as barcodeInput
-               fetch(`/base/?barcodeInput=${encodeURIComponent(trayId)}`, {
+                      // Call API to fetch lot/model details by model_no (previously incorrectly calling /base/)
+                      fetch(`/api/get-lot-by-model/?model_no=${encodeURIComponent(trayId)}`, {
                  method: "GET",
                  headers: {
                    "Accept": "application/json"

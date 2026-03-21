@@ -1359,7 +1359,9 @@
                     </span>
                     {% if data.send_brass_audit_to_iqf %}
                       <i class="fa fa-info-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Audit"></i>
-                      {% endif %}
+                    {% else %}
+                      <i class="fa fa-info-circle" style="color: #388e3c; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="QC"></i>
+                    {% endif %}
                   </td>  
                       <!-- <td>
                       4 <i class="fa fa-info-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="IQF"></i>
@@ -2722,11 +2724,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 <tbody>
             `;
           
-            // Sort: top tray first, then by tray_quantity asc, then by tray_id for stability
+            // Sort: top tray first, then by qty asc, then by tray_id for stability
             const topTray = traysData.find(t => t.is_top_tray || t.ip_top_tray || t.top_tray);
             const otherTrays = traysData.filter(t => !(t.is_top_tray || t.ip_top_tray || t.top_tray));
             otherTrays.sort((a, b) => {
-              const qtyDiff = (a.tray_quantity || 0) - (b.tray_quantity || 0);
+              const qtyDiff = (a.qty || 0) - (b.qty || 0);
               if (qtyDiff !== 0) return qtyDiff;
               return (a.tray_id || '').localeCompare(b.tray_id || '');
             });
@@ -2742,7 +2744,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
                   </td>
                   <td>
-                    <input type="number" class="form-control" value="${tray.tray_quantity ?? ''}" readonly style="width: 100%;" />
+                    <input type="number" class="form-control" value="${tray.qty ?? 0}" readonly style="width: 100%;" />
                   </td>
                   ${showValidationColumn ? `
                     <td>

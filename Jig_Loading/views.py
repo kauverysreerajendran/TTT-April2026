@@ -113,10 +113,20 @@ class JigView(TemplateView):
             if tray_capacity and tray_capacity > 0:
                 no_of_trays = (lot_qty // tray_capacity) + (1 if lot_qty % tray_capacity else 0)
 
-            # --- Fix: Use jig_draft for correct lot status ---
-            if getattr(stock, 'released_flag', False):
+            # Priority 1: HALF-FILLED (excess / partial jig) — check JigCompleted first
+            jig_completed = JigCompleted.objects.filter(lot_id=stock.lot_id).first()
+            if jig_completed and getattr(jig_completed, 'half_filled_tray_info', None):
+                lot_status = 'Partial Draft'
+                lot_status_class = 'lot-status-draft'
+                # Show only the remaining qty for half-filled/excess lots
+                lot_qty = jig_completed.half_filled_tray_qty or sum(t.get('cases', 0) for t in (jig_completed.half_filled_tray_info or []))
+
+            # Priority 2: RELEASED
+            elif getattr(stock, 'released_flag', False):
                 lot_status = 'Yet to Released'
                 lot_status_class = 'lot-status-yet-released'
+
+            # Priority 3: DRAFT
             elif getattr(stock, 'jig_draft', False):
                 # If this lot is part of another draft's combined_lot_ids, show as Partial Draft
                 if stock.lot_id in combined_lot_ids_set:
@@ -124,17 +134,11 @@ class JigView(TemplateView):
                 else:
                     lot_status = 'Draft'
                 lot_status_class = 'lot-status-draft'
+
+            # Default
             else:
-                # Check if this is a completed lot with half-filled trays (broken hooks remaining)
-                jig_completed = JigCompleted.objects.filter(lot_id=stock.lot_id).first()
-                if jig_completed and jig_completed.half_filled_tray_info:
-                    lot_status = 'Partial Draft'
-                    lot_status_class = 'lot-status-draft'
-                    # Update display_qty to show remaining broken hooks quantity
-                    lot_qty = jig_completed.half_filled_tray_qty or sum(t.get('cases', 0) for t in jig_completed.half_filled_tray_info)
-                else:
-                    lot_status = 'Yet to Start'
-                    lot_status_class = 'lot-status-yet'
+                lot_status = 'Yet to Start'
+                lot_status_class = 'lot-status-yet'
 
             # Recalculate no_of_trays after lot_qty may have been updated by lot status logic
             if tray_capacity and tray_capacity > 0:
@@ -809,21 +813,38 @@ class JigAddModalDataView(TemplateView):
         
         # --- Overflow Handling: Lot Qty > Jig Capacity ---
         if modal_data['original_lot_qty'] > modal_data['jig_capacity'] and modal_data['broken_buildup_hooks'] == 0:
-            # For excess lots, calculate delink fresh based on full lot qty, not using old trays
-            effective_loaded = modal_data['original_lot_qty']
-            leftover_cases = 0
-            
-            # Build delink_table with fresh distribution for full lot qty
-            modal_data['delink_table'] = self._prepare_existing_delink_table(lot_id, batch, effective_loaded, tray_capacity, broken_hooks, modal_data['jig_capacity'], force_fresh=True)
-            
-            # No half-filled tray for excess lots
+            # ✅ FIXED LOGIC — use only the jig capacity for the current cycle
+            total_qty = modal_data['original_lot_qty']
+            jig_capacity = modal_data['jig_capacity']
+
+            # tray_capacity should already be resolved above
+            # Effective loaded for current cycle is only the jig capacity
+            effective_loaded = jig_capacity
+
+            # Remaining (excess) cases go to half-filled section
+            excess_qty = total_qty - jig_capacity
+
+            # DELINK → only jig_capacity trays (fresh distribution)
+            modal_data['delink_table'] = self._prepare_existing_delink_table(
+                lot_id,
+                batch,
+                effective_loaded,
+                tray_capacity,
+                broken_hooks,
+                modal_data['jig_capacity'],
+                force_fresh=True
+            )
+
+            # HALF FILLED → distribute the excess_qty across trays (auto trays)
+            half_distribution = self._distribute_half_filled_trays(excess_qty, tray_capacity)
+
             modal_data['tray_distribution']['half_filled_lot'] = {
-                'total_cases': 0,
-                'distribution': None,
-                'total_trays': 0
+                'total_cases': excess_qty,
+                'distribution': half_distribution,
+                'total_trays': half_distribution.get('total_trays', 0) if half_distribution else 0
             }
-            
-            # Update Current Lot distribution to match full lot qty
+
+            # CURRENT LOT → only jig_capacity distribution
             delink_distribution = self._distribute_cases_to_trays(effective_loaded, tray_capacity)
             modal_data['tray_distribution']['current_lot'] = {
                 'total_cases': effective_loaded,
@@ -833,16 +854,15 @@ class JigAddModalDataView(TemplateView):
                 'distribution': delink_distribution,
                 'total_trays': delink_distribution.get('total_trays', 0)
             }
-            
-            modal_data['open_with_half_filled'] = False
+
+            modal_data['open_with_half_filled'] = True
             modal_data['loaded_cases_qty'] = f"0/{effective_loaded}"
-            modal_data['excess_message'] = f"Excess lot: {effective_loaded} cases"
+            modal_data['half_filled_tray_cases'] = excess_qty
+            modal_data['remaining_cases'] = excess_qty
+            modal_data['excess_message'] = f"{excess_qty} cases are in excess"
         else:
             modal_data['open_with_half_filled'] = False
-            # BUG 11 FIX: When broken hooks exist, the display count should only reflect
-            # the effective (scannable) cases — NOT the full original lot qty.
-            # Showing "0/98" when 5 hooks are broken and only 93 cases can be scanned is
-            # misleading. The half-filled tray's 5 cases are tracked separately.
+            # When broken hooks exist, show effective loaded cases; otherwise show original lot qty
             if modal_data['broken_buildup_hooks'] > 0:
                 modal_data['loaded_cases_qty'] = f"0/{modal_data['effective_loaded_cases']}"
             else:

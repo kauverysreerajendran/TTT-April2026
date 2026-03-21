@@ -36,6 +36,7 @@ from django.contrib.auth import authenticate, login, logout
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q
 
 class BaseAPIView(APIView):
     """
@@ -128,6 +129,88 @@ class BaseAPIView(APIView):
                 }, status=status.HTTP_404_NOT_FOUND)
 
         return Response(context, status=status.HTTP_200_OK)
+
+
+class GetLotByModelAPIView(APIView):
+    """API to fetch tray/lot/model details by model number or related identifiers."""
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, *args, **kwargs):
+        model_no = request.query_params.get('model_no')
+        if not model_no:
+            return Response({'error': 'model_no required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Search through related ModelMasterCreation / ModelMaster fields
+            trays = TrayId.objects.filter(
+                Q(batch_id__model_stock_no__model_no__icontains=model_no) |
+                Q(batch_id__plating_stk_no__icontains=model_no) |
+                Q(lot_id__icontains=model_no) |
+                Q(tray_id__iexact=model_no)
+            )
+            if not trays.exists():
+                return Response({'error': 'No data found'}, status=status.HTTP_404_NOT_FOUND)
+
+            tray = trays.first()
+
+            context = {}
+            context['tray_details'] = {
+                'tray_id': tray.tray_id,
+                'lot_id': tray.lot_id,
+                'tray_quantity': tray.tray_quantity,
+            }
+
+            # Use the related ModelMasterCreation (batch) directly
+            batch = tray.batch_id
+            if batch:
+                try:
+                    model_images = [img.master_image.url for img in batch.images.all()] if hasattr(batch, 'images') else []
+                    # Determine vendor/internal source string: prefer batch.vendor_internal (explicit),
+                    # otherwise try the related ModelMaster -> Vendor.vendor_internal
+                    vendor_internal_value = None
+                    if batch.vendor_internal:
+                        vendor_internal_value = batch.vendor_internal
+                    else:
+                        mm = getattr(batch, 'model_stock_no', None)
+                        if mm and getattr(mm, 'vendor_internal', None):
+                            # mm.vendor_internal is a FK to Vendor; prefer its vendor_internal field
+                            try:
+                                vendor_internal_value = mm.vendor_internal.vendor_internal
+                            except Exception:
+                                vendor_internal_value = str(mm.vendor_internal)
+
+                    context['model_master_details'] = {
+                        'model_stock_no': getattr(batch.model_stock_no, 'model_no', None),
+                        'polish_finish': batch.polish_finish,
+                        'plating_color': batch.plating_color,
+                        'version': getattr(batch.version, 'version_name', None),
+                        'vendor_internal': vendor_internal_value,
+                        'location': batch.location.location_name if batch.location else None,
+                        'model_images': model_images,
+                    }
+                except Exception as e:
+                    context['model_master_details'] = f"Error reading batch/model data: {e}"
+            else:
+                context['model_master_details'] = "No batch_id found for this TrayId"
+
+            try:
+                total_stock = TotalStockModel.objects.filter(lot_id=tray.lot_id).first()
+                if total_stock:
+                    context['total_stock_details'] = {
+                        'last_process_date_time': total_stock.last_process_date_time,
+                        'last_process_module': total_stock.last_process_module,
+                        'next_process_module': total_stock.next_process_module,
+                        'total_stock': total_stock.total_stock,
+                    }
+                else:
+                    context['total_stock_details'] = "TotalStockModel not found for this lot"
+            except Exception as e:
+                context['total_stock_details'] = f"Error fetching TotalStockModel: {e}"
+
+            return Response(context, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class LoginAPIView(APIView):
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]

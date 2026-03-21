@@ -6039,14 +6039,36 @@ class BrassAuditRejectTableView(APIView):
             data['rejection_reason_letters'] = first_letters
 
             # Calculate number of trays
-            total_stock = data.get('brass_audit_rejection_total_qty', 0)
+            brass_rejection_qty = data.get('brass_audit_rejection_total_qty') or 0
             tray_capacity = data.get('tray_capacity', 0)
             data['vendor_location'] = f"{data.get('vendor_internal', '')}_{data.get('location__location_name', '')}"
 
-            if tray_capacity > 0 and total_stock > 0:
-                data['no_of_trays'] = math.ceil(total_stock / tray_capacity)
+            # 🚨 FIX: HANDLE FULL LOT REJECTION (AQL CASE)
+            # If rejection qty is zero in the reason store (reverse transfer cleared it),
+            # fallback to using TrayId (completed table) quantities for UI display.
+            if brass_rejection_qty == 0 and data.get('stock_lot_id'):
+                try:
+                    print(f"🚨 FALLBACK TRIGGERED FOR LOT: {data.get('stock_lot_id')}")
+                    trays_qs = TrayId.objects.filter(lot_id=data.get('stock_lot_id')).exclude(delink_tray=True)
+                    total_qty = trays_qs.aggregate(total=Sum('tray_quantity'))['total'] or 0
+                    total_trays = trays_qs.count()
+                    print(f"✅ FALLBACK QTY: {total_qty}, TRAYS: {total_trays}")
+
+                    data['brass_audit_rejection_total_qty'] = total_qty
+                    # If tray_capacity available, compute no_of_trays; else use count of trays
+                    if tray_capacity > 0 and total_qty > 0:
+                        data['no_of_trays'] = math.ceil(total_qty / tray_capacity)
+                    else:
+                        data['no_of_trays'] = total_trays
+                except Exception as e:
+                    print(f"❌ Error during rejection fallback for {data.get('stock_lot_id')}: {e}")
+                    data['no_of_trays'] = 0
             else:
-                data['no_of_trays'] = 0
+                total_stock = brass_rejection_qty
+                if tray_capacity > 0 and total_stock > 0:
+                    data['no_of_trays'] = math.ceil(total_stock / tray_capacity)
+                else:
+                    data['no_of_trays'] = 0
 
             # Get model images
             batch_obj = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
@@ -6158,13 +6180,33 @@ class RejectTableTrayIdListAPIView(APIView):
             # If no trays found, check for batch (lot) rejection
             is_lot_rejection = False
             lot_rejection_comment = ''
+
             if not all_trays:
+                # First check explicit batch_rejection flag in store
                 batch_rejection_store = Brass_Audit_Rejection_ReasonStore.objects.filter(
                     lot_id=lot_id, batch_rejection=True
                 ).first()
                 if batch_rejection_store:
                     is_lot_rejection = True
                     lot_rejection_comment = batch_rejection_store.lot_rejected_comment or ''
+
+                # 🚨 FINAL FIX: If still no trays, fallback to TrayId (completed table)
+                if not all_trays:
+                    print(f"🚨 REJECT VIEW FALLBACK TRIGGERED FOR LOT: {lot_id}")
+                    trays_qs = TrayId.objects.filter(lot_id=lot_id).exclude(delink_tray=True).order_by('id')
+                    for index, tray in enumerate(trays_qs, start=1):
+                        qty_val = getattr(tray, 'tray_quantity', None) or getattr(tray, 'tray_capacity', None) or 0
+                        all_trays.append({
+                            "s_no": index,
+                            "tray_id": tray.tray_id,
+                            "tray_quantity": qty_val,
+                            "qty": qty_val,
+                            "is_top": getattr(tray, 'top_tray', False),
+                            "rejected": True,
+                            "delink": False,
+                            "source": "TrayId_fallback"
+                        })
+                    print(f"✅ REJECT VIEW FIXED: {len(all_trays)} trays loaded")
 
             return Response({
                 "success": True,

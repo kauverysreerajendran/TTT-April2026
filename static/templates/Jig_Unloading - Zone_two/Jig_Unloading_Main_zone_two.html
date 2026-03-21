@@ -3686,19 +3686,17 @@ document.addEventListener("DOMContentLoaded", function () {
               }
             } else {
               console.log(`❌ Zone 2 No images found for model ${modelNo}`);
-              const noImageIndicator = document.createElement('div');
-              noImageIndicator.textContent = 'No Images';
+              const noImageIndicator = document.createElement('img');
+              noImageIndicator.src = '/static/assets/images/model_images/Isometric%20view.jpg';
+              noImageIndicator.alt = 'Model';
               noImageIndicator.style.cssText = `
                 width: 50px;
                 height: 50px;
+                object-fit: contain;
                 background: #f8f9fa;
                 border: 1px solid #ddd;
                 border-radius: 6px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 10px;
-                color: #999;
+                display: inline-block;
               `;
               imagesContainer.appendChild(noImageIndicator);
             }
@@ -3788,11 +3786,39 @@ function showModelImages(modelNo, imagesJson) {
   try {
     const images = JSON.parse(imagesJson);
     if (images.length === 0) {
-      // If no images, directly navigate to visual aid with cleaned model number
+      // If no images, show a static Isometric view image in the modal (Zone 2)
+      const staticImg = '/static/assets/images/model_images/Isometric%20view.jpg';
+      let imageModal = document.getElementById('modelImageViewer');
+      if (!imageModal) {
+        imageModal = document.createElement('div');
+        imageModal.id = 'modelImageViewer';
+        imageModal.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+          background: rgba(0,0,0,0.9); z-index: 100000; display: none;
+          justify-content: center; align-items: center;
+        `;
+        document.body.appendChild(imageModal);
+      }
+
       const cleanModelNo = extractModelNumber(modelNo);
-      const visualAidUrl = `/adminportal/other_visualaid/?model_no=${encodeURIComponent(cleanModelNo)}`;
-      console.log(`🔗 Zone 2 No images found, navigating directly to Visual Aid for model: ${modelNo} -> ${cleanModelNo}`);
-      window.open(visualAidUrl, '_blank');
+      imageModal.innerHTML = `
+        <div style="position: relative; max-width: 90vw; max-height: 90vh; background: white; border-radius: 12px; padding: 20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0">Model: ${modelNo}</h3>
+            <div style="display:flex; gap:8px;">
+              <button id="openVisualAidBtnZone2" style="background:#007bff;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;">🔗 Open Visual Aid</button>
+              <button id="closeModelImageViewerZone2" style="background:#dc3545;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;">✕</button>
+            </div>
+          </div>
+          <div style="text-align:center;">
+            <img src="${staticImg}" alt="${modelNo}" style="max-width:100%; max-height:70vh; object-fit:contain;" onerror="this.src='/static/assets/images/imagePlaceholder.jpg'" />
+          </div>
+        </div>
+      `;
+
+      imageModal.style.display = 'flex';
+      document.getElementById('closeModelImageViewerZone2').onclick = function() { imageModal.style.display = 'none'; };
+      document.getElementById('openVisualAidBtnZone2').onclick = function() { window.open(`/adminportal/other_visualaid/?model_no=${encodeURIComponent(cleanModelNo)}`, '_blank'); };
       return;
     }
     
@@ -4417,6 +4443,30 @@ function populateUnloadTable(modelData, unloadedLotIds, modelColors = {}) {
       uploadModal.style.display = 'flex';
     }
 
+    // Extract optional model list string from the last-triggered unload button (for UI only)
+    let modelListString = null;
+    try {
+      const triggerBtn = document.querySelector('.unload-modal-trigger[data-last-triggered="true"]');
+      if (triggerBtn) {
+        modelListString = triggerBtn.getAttribute('data-model-list') || null;
+      } else {
+        // fallback: try to parse comma-separated model numbers from the model cell in the same row
+        const rows = document.querySelectorAll('#order-listing tbody tr');
+        for (const r of rows) {
+          if (r.querySelector('button') && r.querySelector('button').textContent.trim().toLowerCase().includes('unload')) {
+            const modelCell = r.children[1];
+            if (modelCell && modelCell.textContent && modelCell.textContent.includes(',')) {
+              modelListString = modelCell.textContent.trim();
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Zone 2 multi-model header extraction failed:', err);
+      modelListString = null;
+    }
+
     fetch('/JigUnloading_Zone2/JU_Zone_get_model_details/', {
       method: 'POST',
       headers: {
@@ -4434,6 +4484,25 @@ function populateUnloadTable(modelData, unloadedLotIds, modelColors = {}) {
       console.log('🔍 Zone 2 - API Response Structure:', data);
       
       if (data.success) {
+        // If there is a provided modelListString (UI-only), render it at top of modal
+        if (modelListString) {
+          try {
+            const uploadModalInner = document.getElementById('uploadChildModal');
+            if (uploadModalInner) {
+              let header = uploadModalInner.querySelector('#multiModelHeader');
+              if (!header) {
+                header = document.createElement('div');
+                header.id = 'multiModelHeader';
+                header.style.marginBottom = '10px';
+                uploadModalInner.insertBefore(header, uploadModalInner.firstChild);
+              }
+              const models = Array.isArray(modelListString) ? modelListString : String(modelListString).split(',');
+              let html = '<b>Multiple Models</b><br/>';
+              models.forEach((m, i) => { html += `Model ${i+1}: ${m.trim()}<br/>`; });
+              header.innerHTML = html;
+            }
+          } catch (err) { console.warn('Zone 2 failed to render multi-model header:', err); }
+        }
         // API response has data at root level, not nested under data.data
         const modelData = data.data || data;  // Handle both structures
         
@@ -10830,19 +10899,17 @@ document.addEventListener("DOMContentLoaded", function() {
                  }
                } else {
                  console.log(`❌ No images found for model ${modelNo}`);
-                 const noImageIndicator = document.createElement('div');
-                 noImageIndicator.textContent = 'No Images';
+                 const noImageIndicator = document.createElement('img');
+                 noImageIndicator.src = '/static/assets/images/model_images/Isometric%20view.jpg';
+                 noImageIndicator.alt = 'Model';
                  noImageIndicator.style.cssText = `
                    width: 50px;
                    height: 50px;
+                   object-fit: contain;
                    background: #f8f9fa;
                    border: 1px solid #ddd;
                    border-radius: 6px;
-                   display: flex;
-                   align-items: center;
-                   justify-content: center;
-                   font-size: 10px;
-                   color: #999;
+                   display: inline-block;
                  `;
                  imagesContainer.appendChild(noImageIndicator);
                }

@@ -1527,12 +1527,110 @@ def get_model_details(request):
         data = json.loads(request.body)
         model_number = data.get('model_number')
         lot_id = data.get('lot_id')
-        
-        if not model_number:
-            return JsonResponse({
-                'success': False,
-                'error': 'Model number is required'
-            })
+
+        # Helper to build model detail for a single model_number
+        def build_model_detail(mn, lot):
+            import re as _re_local
+            mmc = ModelMasterCreation.objects.filter(
+                plating_stk_no=mn
+            ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+
+            if not mmc:
+                _m = _re_local.match(r'^(\d+)', str(mn))
+                if _m:
+                    mmc = ModelMasterCreation.objects.filter(
+                        model_stock_no__model_no=_m.group(1)
+                    ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+
+            if not mmc and lot:
+                _tsm = TotalStockModel.objects.filter(lot_id=lot).select_related('batch_id').first()
+                if _tsm and _tsm.batch_id:
+                    mmc = ModelMasterCreation.objects.filter(
+                        id=_tsm.batch_id.id
+                    ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+
+            if not mmc and lot:
+                try:
+                    _rsm = RecoveryStockModel.objects.filter(lot_id=lot).select_related('batch_id').first()
+                    if _rsm and _rsm.batch_id:
+                        from Recovery_DP.models import RecoveryMasterCreation
+                        _rmc = RecoveryMasterCreation.objects.filter(
+                            id=_rsm.batch_id.id
+                        ).select_related('model_stock_no__tray_type', 'model_stock_no').first()
+                        if _rmc:
+                            mmc = _rmc
+                except Exception:
+                    pass
+
+            # tray type
+            tray_type = mmc.model_stock_no.tray_type.tray_type if mmc and mmc.model_stock_no.tray_type else 'Normal'
+            view_instance = Jig_Unloading_MainTable()
+            tray_capacity = view_instance.get_dynamic_tray_capacity(tray_type)
+
+            # plating color resolution
+            plating_color_name = None
+            total_stock_model = None
+            if lot:
+                total_stock_model = TotalStockModel.objects.filter(lot_id=lot).select_related('plating_color').first()
+            if mmc and getattr(mmc, 'plating_color', None):
+                plating_color_name = mmc.plating_color
+            elif total_stock_model and total_stock_model.plating_color:
+                plating_color_name = total_stock_model.plating_color.plating_color
+            else:
+                jig_detail = JigCompleted.objects.filter(lot_id=lot).first()
+                if jig_detail and getattr(jig_detail, 'plating_color', None):
+                    plating_color_name = jig_detail.plating_color
+
+            tray_id_color = '#dc3545' if plating_color_name == 'IPS' else '#006400'
+            tray_id_prefix = 'NR' if tray_type == 'Normal' else 'JR'
+
+            return {
+                'model_number': mn,
+                'lot_id': lot,
+                'tray_type': tray_type,
+                'tray_capacity': tray_capacity,
+                'plating_color': plating_color_name,
+                'plating_stk_no': getattr(mmc, 'plating_stk_no', None) or mn,
+                'tray_id_color': tray_id_color,
+                'tray_id_prefix': tray_id_prefix,
+                'model_name': mmc.model_stock_no.model_name if mmc and hasattr(mmc.model_stock_no, 'model_name') else mn
+            }
+
+        # If model_number not provided but lot_id is, try to find all models for that lot
+        if not model_number and lot_id:
+            models = []
+            jig = JigCompleted.objects.filter(lot_id=lot_id).first()
+            candidate_model_numbers = []
+            if jig:
+                # common fields used to hold multiple models
+                if getattr(jig, 'no_of_model_cases', None):
+                    candidate_model_numbers = list(jig.no_of_model_cases)
+                elif getattr(jig, 'new_lot_ids', None):
+                    candidate_model_numbers = list(jig.new_lot_ids)
+
+            # fallback: try TotalStockModel / RecoveryStockModel
+            if not candidate_model_numbers:
+                tsm = TotalStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+                if tsm and tsm.batch_id and getattr(tsm.batch_id, 'plating_stk_no', None):
+                    candidate_model_numbers = [tsm.batch_id.plating_stk_no]
+                else:
+                    try:
+                        rsm = RecoveryStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+                        if rsm and rsm.batch_id and getattr(rsm.batch_id, 'plating_stk_no', None):
+                            candidate_model_numbers = [rsm.batch_id.plating_stk_no]
+                    except Exception:
+                        candidate_model_numbers = []
+
+            unique_models = []
+            for m in candidate_model_numbers:
+                if m and m not in unique_models:
+                    unique_models.append(m)
+
+            # Build details for each model
+            for mn in unique_models:
+                models.append(build_model_detail(mn, lot_id))
+
+            return JsonResponse({'success': True, 'models': models, 'multiple_models': len(models) > 1})
         
         import re as _re
         # Fetch model details — try multiple strategies to find ModelMasterCreation
@@ -1674,9 +1772,12 @@ def get_model_details(request):
         
         print(f"[DEBUG] Zone 1 - Final model details: {model_details}")
         
+        # Return single model but include models array for backward compatibility
         return JsonResponse({
             'success': True,
-            **model_details  # Spread the model_details directly into the response
+            **model_details,
+            'models': [model_details],
+            'multiple_models': multiple_models
         })
         
     except json.JSONDecodeError:
