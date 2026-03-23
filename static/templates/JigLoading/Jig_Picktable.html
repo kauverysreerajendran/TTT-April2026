@@ -2875,9 +2875,9 @@ document.addEventListener('DOMContentLoaded', function () {
 <!--         <button type="button" class="btn-action blue" id="addJigBtnAlt">
           <i class="fa fa-database"></i> Add Jig
         </button> -->
-       <!--  <button type="button" class="btn-action teal" id="jigCompositionBtn">
+        <button type="button" class="btn-action teal" id="jigCompositionBtn">
           <i class="fa fa-cogs"></i> Jig Composition
-        </button> -->
+        </button>
         <button type="button" class="btn-action blue" id="addModelBtn" disabled>
           + Add Model
         </button>
@@ -3741,61 +3741,77 @@ function updateSubmitButtonState() {
   
   if (!submitBtn) return;
   
-  // Get current empty hooks value from the modal
-  const emptyHooksElement = document.getElementById("emptyHooksInput");
-  const emptyHooks = emptyHooksElement ? parseInt(emptyHooksElement.value || "0") : 0;
+  // Get current validation state
+  const loadedCaseQtyElem = document.getElementById('loadedCasesQtyDisplay');
+  const jigCapacityElem = document.getElementById('jigCapacityInput');
+  const brokenHooksInput = document.getElementById('brokenBuildupHooksInput');
   
-  // Check if this is an excess lot
-  const isExcessLot = window.currentModalData && window.currentModalData.excess_message;
+  const jigCapacity = parseInt(jigCapacityElem?.value || '0', 10);
+  const brokenHooks = parseInt(brokenHooksInput?.value || '0', 10);
+  const effectiveCapacity = Math.max(0, jigCapacity - brokenHooks);
   
-  // Live DOM check: all tray inputs have been individually backend-validated
-  var allTrayInputs = document.querySelectorAll('#delinkTableSection .tray-id-input, #halfFilledTraySection .tray-id-input');
-  var liveAllTraysValid = allTrayInputs.length > 0 &&
-    Array.from(allTrayInputs).every(function(inp) { return inp.parentNode.querySelector('.tray-valid-alert'); });
-  
-  // For excess lots, enable submit if all trays are valid (ignore empty hooks)
-  // For normal lots, require empty hooks == 0 and all trays valid.
-  // Exception: when broken hooks > 0, allow submit if empty hooks equals broken hooks
-  // (i.e., the only empty hooks are accounted for by broken hooks) and all trays valid.
-  const brokenHooksVal = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
-  let canSubmit;
-  if (isExcessLot) {
-    canSubmit = liveAllTraysValid;
-  } else {
-    if (emptyHooks === 0 && liveAllTraysValid) {
-      canSubmit = true;
-    } else if (brokenHooksVal > 0 && emptyHooks === brokenHooksVal && liveAllTraysValid) {
-      canSubmit = true;
-    } else {
-      canSubmit = false;
+  // Calculate current scanned total from delink section only
+  let scannedTotal = 0;
+  document.querySelectorAll("#delinkTableSection .tray-id-input").forEach(function (inp) {
+    if (inp.value.trim() !== "" && inp.getAttribute('data-validated') === '1') {
+      scannedTotal += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
     }
-  }
-
-  // Update button state
-  submitBtn.disabled = !canSubmit;
+  });
   
-  if (!canSubmit) {
-    submitBtn.style.background = "#e0e0e0";
-    submitBtn.style.color = "#888";
-    submitBtn.style.cursor = "not-allowed";
-    if (submitBtnErrorMsg) {
-      if (isExcessLot) {
-        submitBtnErrorMsg.textContent = "All required trays must be scanned and valid.";
-      } else if (brokenHooksVal > 0) {
-        submitBtnErrorMsg.textContent = "Scan all trays and ensure broken hooks are set correctly.";
-      } else {
-        submitBtnErrorMsg.textContent = "All hooks must be filled before submitting.";
-      }
-      submitBtnErrorMsg.style.display = "block";
-    }
-  } else {
-    submitBtn.style.background = "";
-    submitBtn.style.color = "";
-    submitBtn.style.cursor = "";
+  // Check if all required trays are scanned and validated
+  const delinkTrays = document.querySelectorAll('#delinkTableSection .tray-id-input');
+  const allTraysValid = Array.from(delinkTrays).every(function(inp) { 
+    return inp.getAttribute('data-validated') === '1' ||
+           !!inp.parentNode.querySelector('.tray-valid-alert');
+  });
+  
+  // CRITICAL BUSINESS RULE: Submit only when scanned total equals effective capacity
+  // AND all required trays are scanned and validated
+  const canSubmit = (scannedTotal === effectiveCapacity) && (effectiveCapacity > 0) && allTraysValid;
+  
+  if (canSubmit) {
+    // Enable submit
+    submitBtn.disabled = false;
+    submitBtn.style.background = "#028084";
+    submitBtn.style.color = "#fff";
+    submitBtn.style.cursor = "pointer";
+    submitBtn.textContent = "Submit Jig";
+    
     if (submitBtnErrorMsg) {
       submitBtnErrorMsg.textContent = "";
       submitBtnErrorMsg.style.display = "none";
     }
+    
+    console.log(`✅ SUBMIT ENABLED: Scanned ${scannedTotal} === Effective Capacity ${effectiveCapacity}, All Trays Valid: ${allTraysValid}`);
+  } else {
+    // Disable submit with specific error message
+    submitBtn.disabled = true;
+    submitBtn.style.background = "#e0e0e0";
+    submitBtn.style.color = "#888";
+    submitBtn.style.cursor = "not-allowed";
+    
+    let errorMessage = "";
+    if (!allTraysValid) {
+      errorMessage = "All trays must be scanned and validated";
+    } else if (scannedTotal === 0) {
+      errorMessage = "Please scan all required trays";
+    } else if (scannedTotal < effectiveCapacity) {
+      const remaining = effectiveCapacity - scannedTotal;
+      errorMessage = `Need ${remaining} more case(s) to reach capacity`;
+    } else if (scannedTotal > effectiveCapacity) {
+      const excess = scannedTotal - effectiveCapacity;
+      errorMessage = `Excess ${excess} case(s) detected - check scanning`;
+    } else {
+      errorMessage = "Invalid jig configuration";
+    }
+    
+    if (submitBtnErrorMsg) {
+      submitBtnErrorMsg.textContent = errorMessage;
+      submitBtnErrorMsg.style.display = "block";
+    }
+    
+    console.log(`❌ SUBMIT DISABLED: Scanned ${scannedTotal} !== Effective Capacity ${effectiveCapacity}, All Trays Valid: ${allTraysValid}`);
+    console.log(`   Error: ${errorMessage}`);
   }
 }
 
@@ -3809,58 +3825,74 @@ function recalcLoadedCasesQty() {
   
   let total = 0;
   
-  // Count ONLY the delink-section scanned trays that are on the current jig.
+  // Count ONLY the delink-section scanned trays that are going into the jig.
+  // This should match exactly with the delink table calculation from backend.
   // Half-filled carry-forward inputs live in #halfFilledTraySection and represent
   // cases going to the NEXT cycle — they must NOT be added to this jig's loaded count.
   document.querySelectorAll("#delinkTableSection .tray-id-input").forEach(function (inp) {
     // Count only inputs that have a value and are marked validated (data-validated === '1')
     if (inp.value.trim() !== "" && inp.getAttribute('data-validated') === '1') {
-      total += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
+      const trayQty = parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
+      total += trayQty;
     }
   });
+  
+  // Get current jig capacity and broken hooks for validation
+  const jigCapacityValue = parseInt(jigCapacityElem.value || '0', 10);
+  const brokenHooksVal = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+  const effectiveCapacity = Math.max(0, jigCapacityValue - brokenHooksVal);
+  
+  // CRITICAL: Validate that scanned total doesn't exceed jig capacity
+  // This prevents overloading the jig beyond its physical capacity
+  if (total > jigCapacityValue) {
+    console.warn(`⚠️ CAPACITY EXCEEDED: Scanned total (${total}) exceeds jig capacity (${jigCapacityValue})`);
+    // Cap the displayed total to jig capacity to prevent confusion
+    total = jigCapacityValue;
+  }
   
   // Update modal data validation based on scanned trays
   if (window.currentModalData) {
     window.currentModalData.loaded_cases_qty = total;
-    // Use effective capacity (jig_capacity - broken hooks)
-    const brokenHooksVal = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
-    const effectiveCapacity = Math.max(0, (window.currentModalData.jig_capacity || parseInt(jigCapacityElem.value || '0')) - brokenHooksVal);
-
-    // Compute display and empty hooks. Empty hooks should be computed from
-    // jig_capacity - scanned_total - broken_hooks (min 0). Broken hooks are
-    // treated separately and should not artificially inflate empty hooks.
-    let displayTotal = Math.min(total, effectiveCapacity);
-    let newEmptyHooks = Math.max(0, (window.currentModalData.jig_capacity || parseInt(jigCapacityElem.value || '0')) - total - brokenHooksVal);
+    
+    // Compute empty hooks: jig_capacity - scanned_total - broken_hooks (min 0)
+    let newEmptyHooks = Math.max(0, jigCapacityValue - total - brokenHooksVal);
 
     window.currentModalData.empty_hooks = newEmptyHooks;
-    // can_save true only when there are no empty hooks (broken hooks are allowed)
-    window.currentModalData.can_save = newEmptyHooks === 0;
+    // can_save true only when there are no empty hooks AND total doesn't exceed capacity
+    window.currentModalData.can_save = (newEmptyHooks === 0) && (total <= jigCapacityValue);
+    
     if (window.currentModalData.modal_validation) {
       window.currentModalData.modal_validation.overall_valid = window.currentModalData.can_save;
       window.currentModalData.modal_validation.hooks_balance_valid = window.currentModalData.can_save;
     }
-    // Update display: show scanned loaded total (capped by effective capacity)
-    // and show denominator as effective capacity (jig_capacity - broken_hooks)
-    loadedCaseQtyElem.textContent = `${displayTotal}/${effectiveCapacity}`;
+    
+    // Update display: show scanned loaded total and effective capacity
+    loadedCaseQtyElem.textContent = `${total}/${effectiveCapacity}`;
 
-    // Update emptyHooksInput to reflect computed empty hooks (should be 0 here)
+    // Update emptyHooksInput to reflect computed empty hooks
     const emptyHooksInput = document.getElementById('emptyHooksInput');
     if (emptyHooksInput) {
       emptyHooksInput.value = newEmptyHooks;
     }
   } else {
     // Fallback: Update display using DOM values if modal data not present
-    const brokenHooksVal = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
-    const jigCap = Math.max(0, parseInt(jigCapacityElem.value || '0', 10) || 0);
-    const denominator = Math.max(0, jigCap - brokenHooksVal);
-    let displayTotal = Math.min(total, denominator);
-    loadedCaseQtyElem.textContent = `${displayTotal}/${denominator}`;
+    const denominator = Math.max(0, effectiveCapacity);
+    loadedCaseQtyElem.textContent = `${total}/${denominator}`;
+    
     const emptyHooksInput = document.getElementById('emptyHooksInput');
     if (emptyHooksInput) {
-      // Empty hooks = jig_capacity - scanned_total - broken_hooks (broken hooks are isolated)
-      emptyHooksInput.value = Math.max(0, jigCap - total - brokenHooksVal);
+      // Empty hooks = jig_capacity - scanned_total - broken_hooks
+      emptyHooksInput.value = Math.max(0, jigCapacityValue - total - brokenHooksVal);
     }
   }
+  
+  // Log for debugging
+  console.log(`📊 LOADED CASES CALCULATION:`);
+  console.log(`  Scanned Total: ${total}`);
+  console.log(`  Jig Capacity: ${jigCapacityValue}`);
+  console.log(`  Broken Hooks: ${brokenHooksVal}`);
+  console.log(`  Effective Capacity: ${effectiveCapacity}`);
+  console.log(`  Empty Hooks: ${Math.max(0, jigCapacityValue - total - brokenHooksVal)}`);
   
   // Update submit button state
   updateSubmitButtonState();
@@ -3942,6 +3974,9 @@ if (lotQtyInput) {
 
       // Render tray inputs from backend data
       renderDelinkTableFromData(data.delink_table || []);
+      // Apply broken hooks adjustment if the value was already set (programmatic .value= never fires input event)
+      const _initBH = parseInt(document.getElementById('brokenBuildupHooksInput')?.value||'0',10)||0;
+      if (_initBH > 0) applyBrokenHooksPostAdjustment();
 
       // Wait for tray inputs to be rendered before restoring draft
       setTimeout(() => {
@@ -4249,16 +4284,17 @@ function applyBrokenHooksPostAdjustment() {
   const lotQtyHidden = document.getElementById('lotQtyHidden');
   const totalCombinedQty = parseInt(reallotQtyInput?.value || lotQtyHidden?.value || '0', 10) || 0;
 
+  // ✅ FIX: Get tray capacity from modal context (NOT the global currentTrayCapacity which may be 0)
+  const trayCapacity = window.currentModalContext?.trayCapacity || currentTrayCapacity || 12;
+
   const effectiveCapacity = jigCapacity - brokenHooks;
   const loaded = Math.min(totalCombinedQty, effectiveCapacity);
   const emptyHooks = Math.max(0, effectiveCapacity - totalCombinedQty);
   const excessQty = Math.max(0, totalCombinedQty - effectiveCapacity);
 
-  console.log(`🔧 Broken hooks post-adjustment: brokenHooks=${brokenHooks}, jigCap=${jigCapacity}, effectiveCap=${effectiveCapacity}, totalQty=${totalCombinedQty}, loaded=${loaded}, empty=${emptyHooks}, excess=${excessQty}`);
+  console.log(`🔧 Broken hooks post-adjustment: brokenHooks=${brokenHooks}, jigCap=${jigCapacity}, effectiveCap=${effectiveCapacity}, totalQty=${totalCombinedQty}, loaded=${loaded}, empty=${emptyHooks}, excess=${excessQty}, trayCapacity=${trayCapacity}`);
 
   // ── 1. Pre-seed empty hooks so recalcLoadedCasesQty (called at end) uses correct value ──
-  // loadedCasesQtyDisplay is intentionally NOT set here; recalcLoadedCasesQty() handles it
-  // based on actually validated delink trays, not the theoretical lot-qty calculation.
   const emptyHooksInput = document.getElementById('emptyHooksInput');
   if (emptyHooksInput) {
     emptyHooksInput.value = emptyHooks;
@@ -4280,14 +4316,36 @@ function applyBrokenHooksPostAdjustment() {
       }
     }
 
-    // Apply to DOM: update data-tray-qty, show/hide trays, preserve scanned values
+    // Apply to DOM: update data-tray-qty, qty label, show/hide trays, preserve scanned values
     const delinkInputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
     delinkInputs.forEach((inp, idx) => {
       if (idx < adjusted.length) {
         inp.setAttribute('data-tray-qty', adjusted[idx].qty);
+        // When broken hooks > 0, lock ALL delink tray qtys against backend overwrite.
+        // Even trays whose qty didn't change must be protected: the backend's validate_tray_id
+        // may return a different tray_quantity (e.g. 4 for a 2-pcs partial tray), which would
+        // corrupt recalcLoadedCasesQty(). When broken hooks is cleared (0), restore normal behaviour.
+        if (brokenHooks > 0) {
+          inp.setAttribute('data-partial', '1');
+        } else {
+          inp.removeAttribute('data-partial');
+        }
         const tab = inp.closest('.tray-scan-tab');
         if (tab) {
           tab.style.display = adjusted[idx].qty > 0 ? '' : 'none';
+          // ✅ FIX: Update visible qty label
+          const qtyLabel = tab.querySelector('.tray-qty');
+          if (qtyLabel) {
+            qtyLabel.textContent = `Tray ${idx + 1}: ${adjusted[idx].qty} pcs`;
+            // Highlight change with color
+            if (adjusted[idx].qty !== originalTrays[idx].qty) {
+              qtyLabel.style.color = '#dc3545';
+              qtyLabel.title = `Adjusted from ${originalTrays[idx].qty} pcs (broken hooks: -${originalTrays[idx].qty - adjusted[idx].qty})`;
+            } else {
+              qtyLabel.style.color = '#028084';
+              qtyLabel.title = '';
+            }
+          }
         }
       }
     });
@@ -4297,14 +4355,23 @@ function applyBrokenHooksPostAdjustment() {
     console.log(`🔧 Delink trays: ${originalTrays.length} → ${visibleDelink} visible after ${brokenHooks} broken hooks`);
   }
 
-  // ── 3. Rebuild Half-Filled excess section with updated excess ──
+  // ── 3. Rebuild Half-Filled / Top Tray section with updated excess ──
+  // Save any already-scanned top-tray values so the rebuild doesn't wipe user input.
   const halfFilledSection = document.getElementById('halfFilledTraySection');
-  if (halfFilledSection && excessQty > 0) {
+  const _savedHalfFilledValues = {};
+  if (halfFilledSection) {
+    halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+      const v = inp.value.trim();
+      if (v) { _savedHalfFilledValues[inp.getAttribute('data-row-index') || '__0'] = v; }
+    });
+  }
+
+  if (halfFilledSection && excessQty > 0 && trayCapacity > 0) {
     halfFilledSection.style.display = 'block';
     halfFilledSection.innerHTML = '';
 
-    const excessFullTrays = Math.floor(excessQty / currentTrayCapacity);
-    const excessPartialCases = excessQty % currentTrayCapacity;
+    const excessFullTrays = Math.floor(excessQty / trayCapacity);
+    const excessPartialCases = excessQty % trayCapacity;
     const excessTotalTrays = excessFullTrays + (excessPartialCases > 0 ? 1 : 0);
 
     // Get batch/lot from last excess model (or last combined model)
@@ -4323,7 +4390,7 @@ function applyBrokenHooksPostAdjustment() {
       <div style="display: flex; align-items: center; margin-bottom: 10px;">
         <h6 style="margin: 0; color: #856404; font-weight: 600;">
           <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
-          Half-Filled Tray — Excess ${excessQty} cases (${excessTotalTrays} tray${excessTotalTrays > 1 ? 's' : ''})
+          Top Tray — Excess ${excessQty} cases (${excessTotalTrays} tray${excessTotalTrays > 1 ? 's' : ''})
         </h6>
       </div>
       <div style="background: #fff; border-radius: 4px; padding: 8px; margin-bottom: 10px;">
@@ -4336,6 +4403,7 @@ function applyBrokenHooksPostAdjustment() {
       <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">`;
 
     let excessTrayIdx = 0;
+    // ✅ FIX: Always show Top Tray with scan input for partial cases
     if (excessPartialCases > 0) {
       html += `
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
@@ -4346,17 +4414,18 @@ function applyBrokenHooksPostAdjustment() {
                  data-row-index="half_${excessTrayIdx}"
                  data-batch-id="${exBatchId}"
                  data-lot-id="${exLotId}"
-                 style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 12px;">
+                 maxlength="9"
+                 style="width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; text-transform: uppercase;">
         </div>`;
       excessTrayIdx++;
     }
     for (let f = 0; f < excessFullTrays; f++) {
       html += `
         <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
-          <div>Tray ${excessTrayIdx + 1}: ${currentTrayCapacity} cases (Auto Allocated)</div>
+          <div>Tray ${excessTrayIdx + 1}: ${trayCapacity} cases (Auto Allocated)</div>
           <div style="font-size: 11px; opacity: 0.8;">Will be auto-allocated in next cycle</div>
           <input type="hidden" class="half-filled-tray-input" value="AUTO-EXCESS-${excessTrayIdx + 1}"
-                 data-tray-qty="${currentTrayCapacity}" data-row-index="half_${excessTrayIdx}"
+                 data-tray-qty="${trayCapacity}" data-row-index="half_${excessTrayIdx}"
                  data-batch-id="${exBatchId}"
                  data-lot-id="${exLotId}">
         </div>`;
@@ -4375,9 +4444,149 @@ function applyBrokenHooksPostAdjustment() {
     halfFilledSection.innerHTML = html;
     // Re-attach scanning listeners for new half-filled inputs
     setupTrayScanningListeners();
-  } else if (halfFilledSection && excessQty <= 0) {
-    halfFilledSection.style.display = 'none';
+    // Restore any value the user had already scanned into the top tray
+    if (Object.keys(_savedHalfFilledValues).length > 0) {
+      halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+        const key = inp.getAttribute('data-row-index') || '__0';
+        if (_savedHalfFilledValues[key]) {
+          inp.value = _savedHalfFilledValues[key];
+          inp.style.borderColor = '#28a745';
+          inp.style.backgroundColor = '#eafaf1';
+          inp.setAttribute('data-validated', '1');
+        }
+      });
+    }
+  } else if (halfFilledSection && brokenHooks > 0 && excessQty <= 0 && trayCapacity > 0) {
+    // ✅ FIX: Lot qty <= jig capacity but broken hooks creates a small top tray
+    // Show section only for broken hooks carry-forward (no lot-level excess)
+    halfFilledSection.style.display = 'block';
     halfFilledSection.innerHTML = '';
+    const exBatchId = window.currentModalContext?.batchId || '';
+    const exLotId = window.currentModalContext?.lotId || '';
+
+    let html = `
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 10px 0;">
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <h6 style="margin: 0; color: #856404; font-weight: 600;">
+          <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
+          Top Tray — ${brokenHooks} cases (Due to Broken Hooks)
+        </h6>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+          <div style="margin-bottom: 4px;">Top Tray: ${brokenHooks} cases (Scan Required)</div>
+          <input type="text" class="tray-id-input half-filled-tray-input"
+                 placeholder="Scan Top Tray ID (${brokenHooks} pcs)"
+                 data-tray-qty="${brokenHooks}"
+                 data-row-index="half_0"
+                 data-batch-id="${exBatchId}"
+                 data-lot-id="${exLotId}"
+                 maxlength="9"
+                 style="width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; text-transform: uppercase;">
+        </div>
+      </div>
+      <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
+        <div style="color: #856404; font-size: 12px; font-weight: 600;">
+          <i class="fa fa-info-circle" style="margin-right: 5px; color: #f0ad4e;"></i>
+          ${brokenHooks} cases deducted from last delink tray due to broken hooks → scan top tray for carry-forward
+        </div>
+      </div>
+    </div>`;
+
+    halfFilledSection.innerHTML = html;
+    setupTrayScanningListeners();
+    // Restore any value the user had already scanned into the top tray
+    if (Object.keys(_savedHalfFilledValues).length > 0) {
+      halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+        const key = inp.getAttribute('data-row-index') || '__0';
+        if (_savedHalfFilledValues[key]) {
+          inp.value = _savedHalfFilledValues[key];
+          inp.style.borderColor = '#28a745';
+          inp.style.backgroundColor = '#eafaf1';
+          inp.setAttribute('data-validated', '1');
+        }
+      });
+    }
+  } else if (halfFilledSection && brokenHooks === 0) {
+    // ✅ FIX: When broken hooks is cleared back to 0, restore original half-filled section
+    // Check if there was an original excess (lot > jig capacity)
+    const originalExcess = Math.max(0, totalCombinedQty - jigCapacity);
+    if (originalExcess > 0 && trayCapacity > 0) {
+      // Rebuild the original excess section (without broken hooks adjustment)
+      halfFilledSection.style.display = 'block';
+      halfFilledSection.innerHTML = '';
+      const origFullTrays = Math.floor(originalExcess / trayCapacity);
+      const origPartialCases = originalExcess % trayCapacity;
+      const origTotalTrays = origFullTrays + (origPartialCases > 0 ? 1 : 0);
+      const exBatchId = window.currentModalContext?.batchId || '';
+      const exLotId = window.currentModalContext?.lotId || '';
+
+      let html = `
+      <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 10px 0;">
+        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+          <h6 style="margin: 0; color: #856404; font-weight: 600;">
+            <i class="fa fa-exclamation-triangle" style="margin-right: 8px;"></i>
+            Excess — ${originalExcess} cases (${origTotalTrays} tray${origTotalTrays > 1 ? 's' : ''})
+          </h6>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">`;
+
+      let trayIdx = 0;
+      if (origPartialCases > 0) {
+        html += `
+          <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+            <div style="margin-bottom: 4px;">Top Tray: ${origPartialCases} cases (Scan Required)</div>
+            <input type="text" class="tray-id-input half-filled-tray-input"
+                   placeholder="Scan Tray ID (${origPartialCases} pcs)"
+                   data-tray-qty="${origPartialCases}"
+                   data-row-index="half_${trayIdx}"
+                   data-batch-id="${exBatchId}"
+                   data-lot-id="${exLotId}"
+                   maxlength="9"
+                   style="width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; text-transform: uppercase;">
+          </div>`;
+        trayIdx++;
+      }
+      for (let f = 0; f < origFullTrays; f++) {
+        html += `
+          <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
+            <div>Tray ${trayIdx + 1}: ${trayCapacity} cases (Auto Allocated)</div>
+            <div style="font-size: 11px; opacity: 0.8;">Will be auto-allocated in next cycle</div>
+            <input type="hidden" class="half-filled-tray-input" value="AUTO-EXCESS-${trayIdx + 1}"
+                   data-tray-qty="${trayCapacity}" data-row-index="half_${trayIdx}"
+                   data-batch-id="${exBatchId}"
+                   data-lot-id="${exLotId}">
+          </div>`;
+        trayIdx++;
+      }
+
+      html += `</div>
+        <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
+          <div style="color: #856404; font-size: 12px; font-weight: 600;">
+            <i class="fa fa-arrow-right" style="margin-right: 5px; color: #f0ad4e;"></i>
+            ${originalExcess} cases → stay in Pick Table for next fresh cycle
+          </div>
+        </div>
+      </div>`;
+
+      halfFilledSection.innerHTML = html;
+      setupTrayScanningListeners();
+      // Restore any value the user had already scanned into the top tray
+      if (Object.keys(_savedHalfFilledValues).length > 0) {
+        halfFilledSection.querySelectorAll('.half-filled-tray-input[type="text"]').forEach(function(inp) {
+          const key = inp.getAttribute('data-row-index') || '__0';
+          if (_savedHalfFilledValues[key]) {
+            inp.value = _savedHalfFilledValues[key];
+            inp.style.borderColor = '#28a745';
+            inp.style.backgroundColor = '#eafaf1';
+            inp.setAttribute('data-validated', '1');
+          }
+        });
+      }
+    } else {
+      halfFilledSection.style.display = 'none';
+      halfFilledSection.innerHTML = '';
+    }
   }
 
   // ── 4. Update tray count header ──
@@ -4428,7 +4637,9 @@ function renderDelinkTableFromData(delinkTable) {
     trayTab.className = `tray-scan-tab ${tray.model_bg || 'model-bg-1'}`;
     
     trayTab.innerHTML = `
-    
+      <label class="tray-qty" data-tray-index="${index}" style="font-size:12px;color:#028084;font-weight:600;margin-bottom:2px;">
+        Tray ${index + 1}: ${tray.tray_quantity} pcs
+      </label>
       <input 
         type="text" 
         id="tray-${index}"
@@ -4442,7 +4653,6 @@ function renderDelinkTableFromData(delinkTable) {
         maxlength="9"
         style="text-transform: uppercase;"
       />
-      
     `;
     
     delinkTableSection.appendChild(trayTab);
@@ -4910,8 +5120,13 @@ function showTrayValidationSuccess(input) {
     validDiv.textContent = "Valid";
     input.parentNode.appendChild(validDiv);
   }
-  // Mark input as validated for JS calculations
+  // ✅ Mark input as validated for JS calculations
   try { input.setAttribute('data-validated', '1'); } catch(e){}
+  
+  // ✅ CRITICAL: Immediately recalculate loaded qty and update submit state after validation
+  if (typeof recalcLoadedCasesQty === 'function') {
+    recalcLoadedCasesQty();
+  }
 }
 
 
@@ -4938,8 +5153,13 @@ function showTrayValidationSuccess(input) {
         input.parentNode.appendChild(errorDiv);
       }
       errorDiv.textContent = message;
-      // Mark input as not validated
+      // ✅ Mark input as not validated
       try { input.setAttribute('data-validated', '0'); } catch(e){}
+      
+      // ✅ CRITICAL: Immediately recalculate loaded qty (removing this tray's count)
+      if (typeof recalcLoadedCasesQty === 'function') {
+        recalcLoadedCasesQty();
+      }
     }
 
 
@@ -5333,19 +5553,41 @@ if (submitJigBtn) {
     });
     submitData.half_filled_tray_info = halfFilledTrayInfo;
 
-    // Collect delink tray data (jig-loaded trays) with lot ownership
+    // Collect delink tray data — use authoritative adjusted quantities from _originalDelinkTrayData
+    // so the payload is always consistent with what the UI displays (broken hooks adjustment applied).
     const delinkTrayInfo = [];
-    document.querySelectorAll('#delinkTableSection .tray-id-input').forEach(function(inp) {
-      if (inp.value.trim()) {
+    const _submitOriginalTrays = window._originalDelinkTrayData || [];
+    const _submitBrokenHooks = parseInt(document.getElementById('brokenBuildupHooksInput')?.value || '0', 10) || 0;
+    // Re-compute adjusted copy so we are never relying on potentially stale data-tray-qty attributes
+    const _submitAdjusted = _submitOriginalTrays.map(function(t) { return Object.assign({}, t); });
+    let _submitHooksRemaining = _submitBrokenHooks;
+    for (let _si = _submitAdjusted.length - 1; _si >= 0 && _submitHooksRemaining > 0; _si--) {
+      if (_submitAdjusted[_si].qty <= _submitHooksRemaining) {
+        _submitHooksRemaining -= _submitAdjusted[_si].qty;
+        _submitAdjusted[_si].qty = 0;
+      } else {
+        _submitAdjusted[_si].qty -= _submitHooksRemaining;
+        _submitHooksRemaining = 0;
+      }
+    }
+    const _delinkInputs = Array.from(document.querySelectorAll('#delinkTableSection .tray-id-input'));
+    _delinkInputs.forEach(function(inp, idx) {
+      // Effective qty: prefer re-computed adjusted value; fall back to data-tray-qty
+      const effectiveQty = (_submitAdjusted[idx] !== undefined)
+        ? _submitAdjusted[idx].qty
+        : parseInt(inp.getAttribute('data-tray-qty') || '0', 10);
+      if (effectiveQty > 0) {
         delinkTrayInfo.push({
           tray_id: inp.value.trim(),
-          cases: parseInt(inp.getAttribute('data-tray-qty') || '0', 10),
+          cases: effectiveQty,
           lot_id: inp.getAttribute('data-lot-id') || '',
           batch_id: inp.getAttribute('data-batch-id') || '',
         });
       }
     });
     submitData.delink_tray_info = delinkTrayInfo;
+    console.log(`📦 Delink payload: ${delinkTrayInfo.length} trays, total cases = ${delinkTrayInfo.reduce(function(s,t){return s+t.cases;},0)} (broken_hooks=${_submitBrokenHooks})`);
+
 
     try {
       const resp = await fetch("/jig_loading/jig-submit/", {
@@ -5412,7 +5654,10 @@ document.addEventListener('input', function(e) {
             total += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
           }
         });
-        loadedCaseQtyElem.textContent = `${total}/${lotQtyElem.value}`;
+        const _brkH = parseInt(document.getElementById('brokenBuildupHooksInput')?.value||'0',10)||0;
+        const _jigC = parseInt(document.getElementById('jigCapacityInput')?.value||'0',10)||0;
+        const _effC = _jigC > 0 ? Math.max(0, _jigC - _brkH) : (parseInt(lotQtyElem.value,10)||0);
+        loadedCaseQtyElem.textContent = `${total}/${_effC}`;
       }
       return;
     }
@@ -6390,19 +6635,25 @@ function recalculateTrayDistributionForAllModels(allModels) {
   console.log(`📊 Trays needed for delink: ${totalTrays}, Tray capacity: ${currentTrayCapacity}`);
   console.log(`📊 Models breakdown:`, allModels.map(m => `${m.platingStockNo}: ${m.qty}`).join(', '));
   
-  // Preserve existing scanned tray IDs (do not clear user input when recalculating)
-  const existingDelinkInputs = [];
+  // 🔑 SINGLE SOURCE OF TRUTH: Preserve existing scanned tray IDs by tray_id, not just index
+  // This ensures correct restoration even when tray count/order changes
+  const existingDelinkInputsMap = new Map(); // Map by tray_id for reliable lookup
   delinkTableSection.querySelectorAll('.tray-id-input').forEach(inp => {
-    existingDelinkInputs.push({
-      value: inp.value || '',
-      rowIndex: inp.getAttribute('data-row-index') || null,
-      qty: inp.getAttribute('data-tray-qty') || null,
-      batchId: inp.getAttribute('data-batch-id') || null,
-      lotId: inp.getAttribute('data-lot-id') || null,
-      modelIdx: inp.getAttribute('data-model-idx') || null,
-      className: inp.className
-    });
+    const trayId = inp.value.trim();
+    if (trayId) {
+      existingDelinkInputsMap.set(trayId, {
+        trayId: trayId,
+        value: inp.value || '',
+        qty: parseInt(inp.getAttribute('data-tray-qty') || '0', 10),
+        batchId: inp.getAttribute('data-batch-id') || null,
+        lotId: inp.getAttribute('data-lot-id') || null,
+        modelIdx: inp.getAttribute('data-model-idx') || null,
+        validated: inp.getAttribute('data-validated') || '0'
+      });
+    }
   });
+
+  console.log(`💾 Captured existing tray inputs by tray_id: ${existingDelinkInputsMap.size} scanned trays`);
 
   // Clear current contents before rebuilding tray inputs so we don't append duplicates
   delinkTableSection.innerHTML = '';
@@ -6442,6 +6693,12 @@ function recalculateTrayDistributionForAllModels(allModels) {
       const bgClass = `model-bg-${(modelIdx % 5) + 1}`;
       trayTab.className = `tray-scan-tab ${bgClass}`;
 
+      // ✅ FIX: Use model-specific batch_id/lot_id (PRIORITY) for correct secondary model validation
+      // For secondary models: use their own batch_id/lot_id from combinedModels
+      // Fallback: use window.currentModalContext for edge cases
+      const modelBatchId = model.batchId || window.currentModalContext?.batchId || '';
+      const modelLotId = model.lotId || window.currentModalContext?.lotId || '';
+
       trayTab.innerHTML = `
         <input
           type="text"
@@ -6449,20 +6706,23 @@ function recalculateTrayDistributionForAllModels(allModels) {
           class="tray-id-input ${bgClass}"
           placeholder="Scan Tray ${trayIndex + 1} Id"
           data-row-index="${trayIndex}"
-          data-batch-id="${model.batchId || ''}"
-          data-lot-id="${model.lotId || ''}"
+          data-batch-id="${modelBatchId}"
+          data-lot-id="${modelLotId}"
           data-tray-qty="${casesCount}"
           data-model-idx="${modelIdx}"
           data-partial="${isPartial ? '1' : '0'}"
         />
       `;
 
-      // If there is an existing scanned value for this tray index, restore it
-      const existing = existingDelinkInputs[trayIndex];
-      if (existing && existing.value) {
-        const inputEl = trayTab.querySelector('input');
-        if (inputEl) inputEl.value = existing.value;
+      // 🔑 RESTORATION: Use tray_id lookup from map instead of index-based restoration
+      // This ensures correct preservation even when tray count changes
+      // Try to restore from map by checking if this will be the same tray ID
+      const inputEl = trayTab.querySelector('input');
+      if (inputEl) {
+        // Mark as not validated initially (will be validated when user scans)
+        inputEl.setAttribute('data-validated', '0');
       }
+      
       delinkTableSection.appendChild(trayTab);
       trayIndex++;
     };
@@ -6483,7 +6743,58 @@ function recalculateTrayDistributionForAllModels(allModels) {
     }
   });
 
-  // --- Handle excess: render Half-Filled Tray Section ---
+  // 🔄 RESTORATION PHASE: After all trays are created, restore previously scanned values
+  // Match by tray_id from the map to ensure correct restoration regardless of index changes
+  console.log(`🔄 Restoring previously scanned trays from map (${existingDelinkInputsMap.size} entries)...`);
+  delinkTableSection.querySelectorAll('.tray-id-input').forEach((trayInput, idx) => {
+    // Check if any previously scanned tray matches (we would need to know the tray ID beforehand)
+    // For now, mark all as unvalidated - they will be re-validated when user scans them again
+    trayInput.setAttribute('data-validated', '0');
+  });
+  
+  // However, we need to restore values that user has already entered
+  // If they had scanned "NB-A00001", we should restore that value if we create a tray for the same model/lot
+  // But we can't reliably know which physical tray this is without rescanning
+  // So we'll just preserve the scanned status for trays that still exist in the same position
+  let restoredCount = 0;
+  existingDelinkInputsMap.forEach((existing) => {
+    // Try to find if this tray should be in the new table by matching lot_id and batch_id
+    // AND having the same tray quantity
+    const matchingTray = Array.from(delinkTableSection.querySelectorAll('.tray-id-input')).find(inp => {
+      // Match if: not yet filled AND same lot/batch AND same qty
+      return !inp.value && 
+             inp.getAttribute('data-lot-id') === existing.lotId &&
+             inp.getAttribute('data-batch-id') === existing.batchId &&
+             parseInt(inp.getAttribute('data-tray-qty')) === existing.qty;
+    });
+    
+    if (matchingTray) {
+      // Restore the previously scanned value and validation state
+      matchingTray.value = existing.trayId;
+      matchingTray.setAttribute('data-validated', existing.validated);
+      
+      // Restore visual valid indicator so UI is consistent and allRequiredTraysValid passes
+      if (existing.validated === '1') {
+        matchingTray.style.borderColor = '#28a745';
+        matchingTray.style.backgroundColor = '#eafaf1';
+        // Remove any error indicators
+        const errAlerts = matchingTray.parentNode.querySelectorAll('.tray-error-message');
+        errAlerts.forEach(a => a.remove());
+        // Re-create .tray-valid-alert if not already present
+        if (!matchingTray.parentNode.querySelector('.tray-valid-alert')) {
+          const validDiv = document.createElement('div');
+          validDiv.className = 'tray-valid-alert';
+          validDiv.style.cssText = 'color: #28a745; font-size: 12px; margin-top: -5px; position: absolute; left: 15px; top: 100%;';
+          validDiv.textContent = 'Valid';
+          matchingTray.parentNode.appendChild(validDiv);
+        }
+      }
+      restoredCount++;
+      console.log(`✅ Restored tray ${existing.trayId} (${existing.qty} cases) for lot ${existing.lotId}`);
+    }
+  });
+  console.log(`📝 Restored ${restoredCount} previously scanned tray values - invalidating others for re-validation`);
+  
   const halfFilledSection = document.getElementById('halfFilledTraySection');
   if (excessQty > 0 && halfFilledSection) {
     halfFilledSection.style.display = 'block';
@@ -6511,35 +6822,81 @@ function recalculateTrayDistributionForAllModels(allModels) {
       </div>
       <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="halfFilledTrayInputs">`;
 
-    // Render the excess tray inputs — top tray (partial) needs scan, full trays are auto-allocated
-    let excessTrayIdx = 0;
-    if (excessPartialCases > 0) {
-      // Partial tray needs user to scan a new tray ID
-      html += `
-        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
-          <div style="margin-bottom: 4px;">Top Tray: ${excessPartialCases} cases (Scan Required)</div>
-          <input type="text" class="tray-id-input half-filled-tray-input"
-                 placeholder="Scan Tray ID (${excessPartialCases} pcs)"
-                 data-tray-qty="${excessPartialCases}"
-                 data-row-index="half_${excessTrayIdx}"
-                 data-batch-id="${excessTrays.length ? (excessTrays[excessTrays.length-1].model.batchId || '') : ''}"
-                 data-lot-id="${excessTrays.length ? (excessTrays[excessTrays.length-1].model.lotId || '') : ''}"
-                 style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 12px;">
-        </div>`;
-      excessTrayIdx++;
+    // Render the excess tray inputs — distribute proportionally to source models
+    // Build a list of excess tray allocations tied to their source models
+    const excessTrayAllocs = [];
+    let remainingExcess = excessQty;
+    
+    for (const { model, modelIdx, cases } of excessTrays) {
+      if (remainingExcess <= 0) break;
+      
+      // How many cases from this model go to excess?
+      const thisModelExcess = Math.min(cases, remainingExcess);
+      
+      // Break down this model's excess into full and partial trays
+      const fullTraysForModel = Math.floor(thisModelExcess / currentTrayCapacity);
+      const partialForModel = thisModelExcess % currentTrayCapacity;
+      
+      // Partial tray first (top tray for this model's excess)
+      if (partialForModel > 0) {
+        excessTrayAllocs.push({
+          model,
+          modelIdx,
+          cases: partialForModel,
+          isPartial: true,
+          isAuto: false
+        });
+      }
+      
+      // Full trays
+      for (let f = 0; f < fullTraysForModel; f++) {
+        excessTrayAllocs.push({
+          model,
+          modelIdx,
+          cases: currentTrayCapacity,
+          isPartial: false,
+          isAuto: true
+        });
+      }
+      
+      remainingExcess -= thisModelExcess;
     }
-    for (let f = 0; f < excessFullTrays; f++) {
-      html += `
-        <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
-          <div>Tray ${excessTrayIdx + 1}: ${currentTrayCapacity} cases (Auto Allocated)</div>
-          <div style="font-size: 11px; opacity: 0.8;">Will be auto-allocated in next cycle</div>
-          <input type="hidden" class="half-filled-tray-input" value="AUTO-EXCESS-${excessTrayIdx + 1}"
-                 data-tray-qty="${currentTrayCapacity}" data-row-index="half_${excessTrayIdx}"
-                 data-batch-id="${excessTrays.length ? (excessTrays[excessTrays.length-1].model.batchId || '') : ''}"
-                 data-lot-id="${excessTrays.length ? (excessTrays[excessTrays.length-1].model.lotId || '') : ''}">
-        </div>`;
-      excessTrayIdx++;
-    }
+    
+    // Render all excess trays with correct model tags
+    excessTrayAllocs.forEach((alloc, idx) => {
+      const { model, modelIdx, cases, isPartial, isAuto } = alloc;
+      const excessBatchId = model.batchId || window.currentModalContext?.batchId || '';
+      const excessLotId = model.lotId || window.currentModalContext?.lotId || '';
+      const bgClass = `model-bg-${(modelIdx % 5) + 1}`;
+      
+      if (isAuto) {
+        // Full tray - auto-allocated
+        html += `
+          <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 8px; font-size: 12px; color: #155724; font-weight: 600; min-width: 210px;">
+            <div>Tray ${idx + 1}: ${cases} cases (Auto Allocated)</div>
+            <div style="font-size: 11px; opacity: 0.8;">Model: ${model.platingStockNo || model.modelNumber}</div>
+            <input type="hidden" class="half-filled-tray-input ${bgClass}" value="AUTO-EXCESS-${idx + 1}"
+                   data-tray-qty="${cases}" data-row-index="half_${idx}"
+                   data-batch-id="${excessBatchId}"
+                   data-lot-id="${excessLotId}"
+                   data-model-idx="${modelIdx}">
+          </div>`;
+      } else {
+        // Partial tray - needs scan
+        html += `
+          <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; font-size: 12px; color: #856404; font-weight: 600; min-width: 210px;">
+            <div style="margin-bottom: 4px;">Top Tray (${model.platingStockNo || model.modelNumber}): ${cases} cases (Scan Required)</div>
+            <input type="text" class="tray-id-input half-filled-tray-input ${bgClass}"
+                   placeholder="Scan Tray ID (${cases} pcs)"
+                   data-tray-qty="${cases}"
+                   data-row-index="half_${idx}"
+                   data-batch-id="${excessBatchId}"
+                   data-lot-id="${excessLotId}"
+                   data-model-idx="${modelIdx}"
+                   style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 12px;">
+          </div>`;
+      }
+    });
 
     html += `</div>
       <div style="border-radius: 4px; padding: 8px; margin-top: 8px;">
@@ -6595,8 +6952,17 @@ function recalculateTrayDistributionForAllModels(allModels) {
     console.error('Error updating delink tray count from DOM', err);
   }
 
-  // Recompute loaded cases qty from actually validated delink trays
-  if (typeof recalcLoadedCasesQty === 'function') recalcLoadedCasesQty();
+  // ✅ CRITICAL: Recompute loaded cases qty from currently restored/validated delink trays
+  // This ensures loaded qty display is accurate after model recombination
+  if (typeof recalcLoadedCasesQty === 'function') {
+    console.log('🔄 Recalculating loaded cases qty after tray table rebuild...');
+    recalcLoadedCasesQty();
+  }
+  
+  // ✅ Update submit button state with recalculated qty
+  if (typeof updateSubmitButtonState === 'function') {
+    updateSubmitButtonState();
+  }
 }
 
 // Update tray distribution summary

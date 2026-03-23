@@ -20,6 +20,9 @@ import json
 from django.db import transaction
 from django.core.paginator import Paginator
 from datetime import datetime, timezone as dt_timezone
+
+
+
 @method_decorator(login_required, name='dispatch') 
 class JigView(TemplateView):
     template_name = "JigLoading/Jig_Picktable.html"
@@ -113,20 +116,10 @@ class JigView(TemplateView):
             if tray_capacity and tray_capacity > 0:
                 no_of_trays = (lot_qty // tray_capacity) + (1 if lot_qty % tray_capacity else 0)
 
-            # Priority 1: HALF-FILLED (excess / partial jig) — check JigCompleted first
-            jig_completed = JigCompleted.objects.filter(lot_id=stock.lot_id).first()
-            if jig_completed and getattr(jig_completed, 'half_filled_tray_info', None):
-                lot_status = 'Partial Draft'
-                lot_status_class = 'lot-status-draft'
-                # Show only the remaining qty for half-filled/excess lots
-                lot_qty = jig_completed.half_filled_tray_qty or sum(t.get('cases', 0) for t in (jig_completed.half_filled_tray_info or []))
-
-            # Priority 2: RELEASED
-            elif getattr(stock, 'released_flag', False):
+            # --- Fix: Use jig_draft for correct lot status ---
+            if getattr(stock, 'released_flag', False):
                 lot_status = 'Yet to Released'
                 lot_status_class = 'lot-status-yet-released'
-
-            # Priority 3: DRAFT
             elif getattr(stock, 'jig_draft', False):
                 # If this lot is part of another draft's combined_lot_ids, show as Partial Draft
                 if stock.lot_id in combined_lot_ids_set:
@@ -134,11 +127,17 @@ class JigView(TemplateView):
                 else:
                     lot_status = 'Draft'
                 lot_status_class = 'lot-status-draft'
-
-            # Default
             else:
-                lot_status = 'Yet to Start'
-                lot_status_class = 'lot-status-yet'
+                # Check if this is a completed lot with half-filled trays (broken hooks remaining)
+                jig_completed = JigCompleted.objects.filter(lot_id=stock.lot_id).first()
+                if jig_completed and jig_completed.half_filled_tray_info:
+                    lot_status = 'Partial Draft'
+                    lot_status_class = 'lot-status-draft'
+                    # Update display_qty to show remaining broken hooks quantity
+                    lot_qty = jig_completed.half_filled_tray_qty or sum(t.get('cases', 0) for t in jig_completed.half_filled_tray_info)
+                else:
+                    lot_status = 'Yet to Start'
+                    lot_status_class = 'lot-status-yet'
 
             # Recalculate no_of_trays after lot_qty may have been updated by lot status logic
             if tray_capacity and tray_capacity > 0:
@@ -355,8 +354,18 @@ class TrayInfoView(APIView):
             batch_id,
             len(tray_list)
         )
-        
-        return Response({'trays': tray_list})
+
+        # Final dedupe enforcement (safeguard against duplicates from data sources)
+        final_tray_list = []
+        dedupe_set = set()
+        for tray in tray_list:
+            tray_id = (tray.get('tray_id') or '').strip()
+            if not tray_id or tray_id in dedupe_set:
+                continue
+            dedupe_set.add(tray_id)
+            final_tray_list.append(tray)
+
+        return Response({'trays': final_tray_list})
        
 # Tray Validation API View   
 class TrayValidateAPIView(APIView):
@@ -813,38 +822,21 @@ class JigAddModalDataView(TemplateView):
         
         # --- Overflow Handling: Lot Qty > Jig Capacity ---
         if modal_data['original_lot_qty'] > modal_data['jig_capacity'] and modal_data['broken_buildup_hooks'] == 0:
-            # ✅ FIXED LOGIC — use only the jig capacity for the current cycle
-            total_qty = modal_data['original_lot_qty']
-            jig_capacity = modal_data['jig_capacity']
-
-            # tray_capacity should already be resolved above
-            # Effective loaded for current cycle is only the jig capacity
-            effective_loaded = jig_capacity
-
-            # Remaining (excess) cases go to half-filled section
-            excess_qty = total_qty - jig_capacity
-
-            # DELINK → only jig_capacity trays (fresh distribution)
-            modal_data['delink_table'] = self._prepare_existing_delink_table(
-                lot_id,
-                batch,
-                effective_loaded,
-                tray_capacity,
-                broken_hooks,
-                modal_data['jig_capacity'],
-                force_fresh=True
-            )
-
-            # HALF FILLED → distribute the excess_qty across trays (auto trays)
-            half_distribution = self._distribute_half_filled_trays(excess_qty, tray_capacity)
-
+            # For excess lots, calculate delink fresh based on full lot qty, not using old trays
+            effective_loaded = modal_data['original_lot_qty']
+            leftover_cases = 0
+            
+            # Build delink_table with fresh distribution for full lot qty
+            modal_data['delink_table'] = self._prepare_existing_delink_table(lot_id, batch, effective_loaded, tray_capacity, broken_hooks, modal_data['jig_capacity'], force_fresh=True)
+            
+            # No half-filled tray for excess lots
             modal_data['tray_distribution']['half_filled_lot'] = {
-                'total_cases': excess_qty,
-                'distribution': half_distribution,
-                'total_trays': half_distribution.get('total_trays', 0) if half_distribution else 0
+                'total_cases': 0,
+                'distribution': None,
+                'total_trays': 0
             }
-
-            # CURRENT LOT → only jig_capacity distribution
+            
+            # Update Current Lot distribution to match full lot qty
             delink_distribution = self._distribute_cases_to_trays(effective_loaded, tray_capacity)
             modal_data['tray_distribution']['current_lot'] = {
                 'total_cases': effective_loaded,
@@ -854,15 +846,16 @@ class JigAddModalDataView(TemplateView):
                 'distribution': delink_distribution,
                 'total_trays': delink_distribution.get('total_trays', 0)
             }
-
-            modal_data['open_with_half_filled'] = True
+            
+            modal_data['open_with_half_filled'] = False
             modal_data['loaded_cases_qty'] = f"0/{effective_loaded}"
-            modal_data['half_filled_tray_cases'] = excess_qty
-            modal_data['remaining_cases'] = excess_qty
-            modal_data['excess_message'] = f"{excess_qty} cases are in excess"
+            modal_data['excess_message'] = f"Excess lot: {effective_loaded} cases"
         else:
             modal_data['open_with_half_filled'] = False
-            # When broken hooks exist, show effective loaded cases; otherwise show original lot qty
+            # BUG 11 FIX: When broken hooks exist, the display count should only reflect
+            # the effective (scannable) cases — NOT the full original lot qty.
+            # Showing "0/98" when 5 hooks are broken and only 93 cases can be scanned is
+            # misleading. The half-filled tray's 5 cases are tracked separately.
             if modal_data['broken_buildup_hooks'] > 0:
                 modal_data['loaded_cases_qty'] = f"0/{modal_data['effective_loaded_cases']}"
             else:
@@ -1467,8 +1460,6 @@ def scan_tray_lookup(request):
     }, status=status.HTTP_200_OK)
 
 # Add Jig Btn - Delink Table View
-
-
 class DelinkTableAPIView(APIView):
     """
     Returns tray rows for Delink Table based on tray type, lot qty, and jig capacity.
@@ -2407,7 +2398,34 @@ class JigSubmitAPIView(APIView):
                 # DETECTION: Check if multiple distinct models exist in delink_tray_info OR combined_lot_ids > 1
                 model_cases_data = ''
                 distinct_models = {}  # model_name -> total_qty
-                
+
+                # Deduplicate delink and half-filled trays so counts are accurate
+                def _dedupe_trays(trays):
+                    seen = set()
+                    deduped = []
+                    cumulative = 0
+                    target = effective_lot_qty if effective_lot_qty is not None else (jig_capacity - broken_hooks)
+                    for t in trays:
+                        tray_id = (t.get('tray_id') or '').strip()
+                        if not tray_id or tray_id in seen:
+                            continue
+                        seen.add(tray_id)
+                        case_count = int(t.get('cases', 0) or 0)
+                        if target is not None and cumulative >= target:
+                            break
+                        if target is not None and cumulative + case_count > target:
+                            case_count = target - cumulative
+                        cumulative += case_count
+                        deduped.append({
+                            'tray_id': tray_id,
+                            'cases': case_count,
+                            'plating_stk_no': t.get('plating_stk_no', '')
+                        })
+                    return deduped
+
+                complete_delink_tray_info = _dedupe_trays(complete_delink_tray_info)
+                complete_half_filled_tray_info = _dedupe_trays(complete_half_filled_tray_info)
+
                 # First, extract models from delink_tray_info
                 for tray in complete_delink_tray_info:
                     model_key = tray.get('plating_stk_no') or tray.get('model_no') or plating_stock_num

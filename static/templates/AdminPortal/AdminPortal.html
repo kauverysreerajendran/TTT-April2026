@@ -1317,12 +1317,12 @@
                     <th>Username</th>
                     <th>Full Name</th>
                     <th>Email</th>
-                    <th>User Category</th>
+                    <!-- <th>User Category</th> -->
                     <th>Department</th>
                     <th>Role</th>
                     <th>Manager</th>
                     <th>Status</th>
-                    <th>Modules</th>
+                    <!-- <th>Modules</th> -->
                     <th>Created</th>
                     <th>Actions</th>
                   </tr>
@@ -1879,12 +1879,12 @@ form.addEventListener("submit", async function (e) {
          <td>${user.username || ""}</td>
          <td>${user.first_name || ""} ${user.last_name || ""}</td>
          <td>${user.email || ""}</td>
-         <td>${user.user_category || user.group_name || ""}</td>
+         <!-- <td>${user.user_category || user.group_name || ""}</td> -->
          <td>${user.department || ""}</td>
          <td>${user.role || ""}</td>
          <td>${user.manager || ""}</td>
          <td>${user.employment_status || ""}</td>
-         <td>${modulesHtml}</td>
+         <!-- <td>${modulesHtml}</td> -->
          <td>${user.created || ""}</td>
          <td>${actionsHtml}</td>
        `;

@@ -1170,111 +1170,48 @@
          
          .flag-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-            gap: 28px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 22px;
+            align-items: start;
+            width: 100%;
+            max-height: 56vh; /* maximum visible grid height */
+            min-height: 220px; /* minimum visible grid height */
+            overflow-y: auto; /* allow internal scrolling */
+            padding-right: 8px; /* room for scrollbar */
          }
-         
-         .flag-card {
+
+         /* Group cards to match the provided layout image */
+         .group-card {
+            padding: 18px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(6,86,90,0.06);
+            background: #fbfdfc;
+            min-height: 80px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            text-align: center;
-            padding: 24px 18px;
-            background: linear-gradient(135deg, #ffffff 0%, #fafbfb 100%);
-            border-radius: 16px;
-            border: 1.5px solid #e5ebe9;
-            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-            group: true;
+            justify-content: flex-start;
          }
-         
-         .flag-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(13,148,136,0.04) 0%, rgba(6,182,212,0.04) 100%);
-            opacity: 0;
-            transition: opacity 0.35s ease;
-            pointer-events: none;
-            z-index: 0;
-         }
-         
-         .flag-card::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at 30% 30%, rgba(13,148,136,0.08) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.35s ease;
-            pointer-events: none;
-            z-index: 0;
-         }
-         
-         .flag-card:hover::before {
-            opacity: 1;
-         }
-         
-         .flag-card:hover::after {
-            opacity: 1;
-         }
-         
-         .flag-card:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 16px 32px rgba(13,148,136,0.18), 0 8px 16px rgba(6,182,212,0.12);
-            border-color: rgba(13,148,136,0.25);
-            background: linear-gradient(135deg, #ffffff 0%, #f5fbfa 100%);
-         }
-         
-         .flag-avatar {
-            width: 90px;
-            height: 90px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+
+         .group-header {
             font-weight: 800;
-            color: #fff;
-            background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%);
-            font-size: 24px;
-            margin-bottom: 16px;
-            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-            box-shadow: 0 8px 18px rgba(13,148,136,0.3), inset 0 -2px 4px rgba(0,0,0,0.1);
-            position: relative;
-            z-index: 2;
-            animation: float 3s ease-in-out infinite;
-         }
-         
-         .flag-avatar::before {
-            content: '';
-            position: absolute;
-            inset: 100%;
-            border: 2px solid rgba(13,148,136,0.2);
-            border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-         }
-         
-         .flag-card:hover .flag-avatar {
-            transform: scale(1.15) rotate(8deg);
-            box-shadow: 0 14px 28px rgba(13,148,136,0.4), inset 0 -2px 4px rgba(0,0,0,0.1);
-            animation: glow 1.5s ease-in-out infinite;
-         }
-         
-         .flag-name {
-            font-size: 0.98rem;
             color: #0c4f4a;
-            font-weight: 800;
-            line-height: 1.6;
-            position: relative;
-            z-index: 2;
-            letter-spacing: -0.2px;
+            margin-bottom: 10px;
+            font-size: 0.98rem;
+            text-align: left;
          }
+
+         .group-list { list-style: none; padding: 0; margin: 0; display:block; }
+         .group-item { padding: 6px 0; color:#164f4b; font-weight:600; font-size:0.92rem; text-align:left; }
+         .group-sub { color:#2f6a66; font-weight:500; font-size:0.88rem; display:block; margin-top:2px }
+
+         .shade-1 { background: linear-gradient(180deg, #fbfdfc 0%, #f7fffe 100%); }
+         .shade-2 { background: linear-gradient(180deg, #fcfeff 0%, #f9fdfd 100%); }
+         .shade-3 { background: linear-gradient(180deg, #ffffff 0%, #fbfdfe 100%); }
+
+         /* Small avatar-based cards kept for backward compatibility */
+         .flag-card { display:none; }
          
-         .flag-modal-close {
+          .flag-modal-close {
             background: transparent;
             border: 1.5px solid #d5dede;
             color: #6b8a88;
@@ -1312,14 +1249,19 @@
             box-shadow: 0 4px 12px rgba(13,148,136,0.15);
          }
          
-         @media (max-width: 480px) {
-            .flag-modal { max-width: 94vw; border-radius: 20px; }
-            .flag-avatar { width: 75px; height: 75px; font-size: 20px; }
-            .flag-grid { gap: 20px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-            .flag-modal-header { padding: 28px 20px; }
-            .flag-modal-body { padding: 28px 20px; }
-            .flag-modal-title { font-size: 1.3rem; }
+         @media (max-width: 1024px) {
+            .flag-grid { grid-template-columns: repeat(2, 1fr); gap:16px; }
          }
+
+         @media (max-width: 420px) {
+            .flag-grid { grid-template-columns: 1fr; gap:12px; }
+            .group-card { padding: 12px 10px; border-radius: 10px; }
+         }
+
+         /* scroll controls */
+         .modal-scroll-controls { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 220000; display:flex; flex-direction:column; gap:8px }
+         .scroll-btn { width:38px; height:34px; border-radius:8px; border:1px solid rgba(13,148,136,0.08); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow: 0 6px 12px rgba(6,86,90,0.02); }
+         .scroll-btn:active{ transform: translateY(1px); }
          </style>
 
          <div id="flagGalleryBackdrop" class="flag-modal-backdrop" aria-hidden="true">
@@ -1340,10 +1282,12 @@
                      <button id="flagModalClose" class="flag-modal-close">✕ Close</button>
                   </div>
                </div>
-               <div class="flag-modal-body">
+               <div class="flag-modal-body" id="flagModalBody">
                   <div class="flag-grid" id="flagGrid">
-                     <!-- JS will populate member cards -->
+                     <!-- JS will populate grouped cards -->
                   </div>
+
+  
                </div>
             </div>
          </div>
@@ -1355,67 +1299,67 @@
             const closeBtn = document.getElementById('flagModalClose');
             const flagGrid = document.getElementById('flagGrid');
 
-            const members = [
-               {name: 'User 1', color: '#0d9488'},
-               {name: 'User 2', color: '#06b6d4'},
-               {name: 'User 3', color: '#0891b2'},
-               {name: 'User 4', color: '#2dd4bf'},
-               {name: 'User 5', color: '#14b8a6'},
-               {name: 'User 6', color: '#08a88a'}
-            ];
+            const groups = [
+               { title: 'Project Owner', shade: 'shade-1', bgColor: '#e6f7f2', items: [{label:'', name:'Narasimman'}] },
+               { title: 'Project Mentor', shade: 'shade-2', bgColor: '#f0f7ff', items: [{label:'', name:'NVS'}] },
+               { title: 'SPOCs', shade: 'shade-3', bgColor: '#fff8f1', items: [{label:'ISCM', name:'Praywin Henry'}, {label:'CTS', name:'Varun Gopu'}] },
 
-            function initials(name){return name.split(' ').map(s=>s[0]||'').slice(0,2).join('').toUpperCase()}
-            
-            function adjustBrightness(color, percent) {
-               const num = parseInt(color.replace('#',''), 16);
-               const amt = Math.round(2.55 * percent);
-               const R = Math.min(255, (num >> 16) + amt);
-               const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
-               const B = Math.min(255, (num & 0x0000FF) + amt);
-               return '#' + (0x1000000 + R*0x10000 + G*0x100 + B).toString(16).slice(1);
-            }
+               { title: 'Pilot', shade: 'shade-1', bgColor: '#f2fbf9', items: [
+                  {label:'Lead', name:'Perchiappan'},
+                  {label:'Polishing/ Recovery', name:'Prakash'},
+                  {label:'Logistics', name:'Amaresha'},
+                  {label:'PPC', name:'Savarimuthu / Karthikeswaran'},
+                  {label:'Electroplating', name:'Santhosh Kumar'},
+                  {label:'Quality', name:'Manigandan G'},
+                  /* {label:'IQF', name:'?'} */
+               ] },
+
+               { title: 'EP Shopfloor', shade: 'shade-2', bgColor: '#fffaf6', items: [{label:'', name:'Karthik'}, {label:'', name:'Bhaskar'}] },
+
+               { title: 'CTS', shade: 'shade-3', bgColor: '#f6fbff', items: [{label:'', name:'Naveen Chandrakar'}, {label:'', name:'Balaji T'}, {label:'', name:'Athif Ahamed'}] },
+
+                  { title: 'Vendor - Pinesphere', shade: 'shade-2', bgColor: '#fffaf6', items: [
+                     {label:'CEO', name:'Surendiran'},
+                     {label:'CTO', name:'Vasanth'},
+                     {label:'Developer', name:'Kauverysree'},
+                     {label:'Developer', name:'Athithya'},
+                     {label:'QC', name:'Thara Sayeena'}
+                  ] },
+
+                  { title: 'Visual Aids', shade: 'shade-1', bgColor: '#f7fff9', items: [{label:'Lead', name:'Ramkumar'}, {label:'PED', name:'Chethana'}, {label:'IQF', name:'Rakshith'}, {label:'Pol', name:'Prakash'}, {label:'Plating', name:'D Srini'}] }
+            ];
 
             function buildGrid(){
                flagGrid.innerHTML = '';
-               members.forEach((m, idx) => {
+               groups.forEach((g, idx) => {
                   const card = document.createElement('div');
-                  card.className='flag-card';
-                  card.style.animationDelay = (idx * 0.05) + 's';
-                  
-                  const avatar = document.createElement('div');
-                  avatar.className='flag-avatar';
-                  avatar.textContent = initials(m.name);
-                  avatar.style.backgroundImage = `linear-gradient(135deg, ${m.color} 0%, ${adjustBrightness(m.color, 40)} 100%)`;
-                  
-                  // Add SVG vector badge
-                  const svgBadge = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                  svgBadge.setAttribute('viewBox', '0 0 100 100');
-                  svgBadge.setAttribute('style', 'position: absolute; width: 22px; height: 22px; bottom: -2px; right: -2px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));');
-                  
-                  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                  circle.setAttribute('cx', '50');
-                  circle.setAttribute('cy', '50');
-                  circle.setAttribute('r', '48');
-                  circle.setAttribute('fill', m.color);
-                  
-                  const checkmark = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                  checkmark.setAttribute('d', 'M35,50 L45,60 L65,40');
-                  checkmark.setAttribute('stroke', 'white');
-                  checkmark.setAttribute('stroke-width', '8');
-                  checkmark.setAttribute('fill', 'none');
-                  checkmark.setAttribute('stroke-linecap', 'round');
-                  checkmark.setAttribute('stroke-linejoin', 'round');
-                  
-                  svgBadge.appendChild(circle);
-                  svgBadge.appendChild(checkmark);
-                  avatar.appendChild(svgBadge);
-                  
-                  const nm = document.createElement('div');
-                  nm.className='flag-name';
-                  nm.textContent = m.name;
-                  
-                  card.appendChild(avatar);
-                  card.appendChild(nm);
+                  card.className = 'group-card ' + (g.shade || 'shade-1');
+                  card.style.animationDelay = (idx * 0.03) + 's';
+                  // apply unique background color when provided
+                  if(g.bgColor){
+                     // simple gradient using the provided hex color
+                     card.style.background = `linear-gradient(180deg, ${g.bgColor} 0%, rgba(255,255,255,0.85) 100%)`;
+                     card.style.borderColor = 'rgba(0,0,0,0.04)';
+                  }
+
+                  const header = document.createElement('div');
+                  header.className = 'group-header';
+                  header.textContent = g.title;
+                  card.appendChild(header);
+
+                  const list = document.createElement('ul');
+                  list.className = 'group-list';
+                  g.items.forEach(it => {
+                     const li = document.createElement('li');
+                     li.className = 'group-item';
+                     if(it.label && it.label.length){
+                        li.innerHTML = '<strong>' + it.label + '</strong>' + (it.name? ' – ' + it.name : '');
+                     } else {
+                        li.textContent = it.name;
+                     }
+                     list.appendChild(li);
+                  })
+                  card.appendChild(list);
                   flagGrid.appendChild(card);
                })
             }
@@ -1436,6 +1380,15 @@
             if(closeBtn) closeBtn.addEventListener('click', closeModal);
             backdrop.addEventListener('click', function(e){ if(e.target === backdrop) closeModal(); });
             document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && backdrop.style.display === 'flex') closeModal(); });
+
+            // Scroll controls for modal body
+            const modalBody = document.getElementById('flagModalBody');
+            const scrollUp = document.getElementById('scrollUp');
+            const scrollDown = document.getElementById('scrollDown');
+            function scrollByAmount(amount){ if(modalBody) modalBody.scrollBy({top: amount, left:0, behavior:'smooth'}); }
+            if(scrollUp) scrollUp.addEventListener('click', ()=> scrollByAmount(-160));
+            if(scrollDown) scrollDown.addEventListener('click', ()=> scrollByAmount(160));
+
          })();
          </script>
       <div class="container-fluid page-body-wrapper" style="overflow: hidden;">
@@ -2011,7 +1964,7 @@
                            <div class="module-highlight next-module mb-1" id="nextProcessModule" style="padding:5px 12px;font-size:0.93rem;">None</div>
                         </td>
                      </tr>
-                     <tr>
+                     <!-- <tr>
                         <th style="padding:6px 8px;">Images</th>
                         <td style="padding:6px 8px;">
                            <div class="barcode-image-section text-center" id="modelImagesContainer" style="gap:2px;">
@@ -2020,7 +1973,7 @@
                               <img src="{% static 'assets/images/dashboard.jpg' %}" alt="Sample 3" class="barcode-img-preview mx-1" style="max-width:60px;max-height:60px;border-radius:6px;" />
                            </div>
                         </td>
-                     </tr>
+                     </tr> -->
                   </tbody>
                </table>
             </form>
