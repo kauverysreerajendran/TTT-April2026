@@ -116,11 +116,8 @@ class BrassAuditPickTableView(APIView):
         ).exclude(
             # ✅ EXCLUSION: Exclude IQF-sourced lots (from IQF acceptance/few_cases_acceptance)
             Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True)
-        ).exclude(
-            # Exclude completed Brass Audit lots
-            brass_audit_accptance=True
-        ).exclude(
-            # Exclude rejected Brass Audit lots  
+        ).exclude(  # Jig Loading relies on accepted lots; do not exclude completed Brass Audit lots here
+            # Exclude rejected Brass Audit lots
             brass_audit_rejection=True
         ).exclude(
             # Exclude completed few cases lots that are not on hold

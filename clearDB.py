@@ -52,7 +52,7 @@ def load_trays():
     Create trays for prefixes NR, JR, ND, JD, NL, JL, NB, JB (default 500 each).
     """
     prefixes = ['NR', 'JR', 'ND', 'JD', 'NL', 'JL', 'NB', 'JB']
-    per_prefix = 3000  # default count
+    per_prefix = 500  # default count
 
     normal_tt = TrayType.objects.filter(tray_type__iexact='Normal').first()
     jumbo_tt = TrayType.objects.filter(tray_type__iexact='Jumbo').first()
