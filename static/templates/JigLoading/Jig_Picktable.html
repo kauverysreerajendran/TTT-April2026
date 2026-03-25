@@ -62,7 +62,7 @@
   border: 1px solid #ffff;
   border-radius: 6px;
   padding: 10px 8px;
-  font-size: 14px;
+  font-size: 12px;
   background: #fff;
   margin-bottom: 4px;
 }
@@ -71,6 +71,18 @@
   border-color: #028084;
   background: #e2fbff75;
   outline: none;
+}
+
+/* Placeholder styling: subtle blend of white and grey */
+.tray-id-input::placeholder,
+.tray-id-input::-webkit-input-placeholder,
+.tray-id-input:-ms-input-placeholder,
+.tray-id-input::-moz-placeholder {
+  /* base white tint */
+  color: rgba(255,255,255,0.75) !important;
+  /* overlay a soft grey via text-shadow to create a blended appearance */
+  text-shadow: 0 0 0 rgba(128,128,128,0.45);
+  opacity: 1; /* ensure consistent rendering across browsers */
 }
 .tray-scan-tab .tray-qty {
   font-size: 12px;
@@ -317,18 +329,15 @@
     background: white;
   }
 
-  /* Light blue background for Jig ID, Broken Hooks, and Tray ID inputs */
+  /* Subtle multi-stop linear-gradient for Jig ID, Broken Hooks, and Tray ID inputs */
   #jigIdInput,
   #brokenBuildupHooksInput,
   .tray-id-input {
-    background: #d5f4f4cf !important !important;
-  }
-
-  /* Light blue background for Jig ID, Broken Hooks, and Tray ID inputs */
-  #jigIdInput,
-  #brokenBuildupHooksInput,
-  .tray-id-input {
-    background: #e2fbff75 !important;
+    background: 
+      #c5f7ffdb;
+      border: 1px solid #cccece !important;
+    border-radius: 10px !important;
+     /* Add a subtle box-shadow for depth */
   }
 
   .delink-section {
@@ -1990,6 +1999,7 @@ tr.row-inactive td:first-child {
 </style>
 
 <div class="content-wrapper">
+  
   <div class="col-12 grid-margin stretch-card">
     <div class="card-body" style="padding-bottom: 12px">
       <div class="d-flex align-items-center gap-2 mb-4" style="flex-wrap: wrap">
@@ -2070,11 +2080,10 @@ tr.row-inactive td:first-child {
                 <div style="display: flex; align-items: center; gap: 3px">
                   <input
                     type="checkbox"
-                    class="model-select-checkbox"
-                    data-model-no="{{ data.model_stock_no__model_no }}"
-                    data-stock-lot-id="{{ data.stock_lot_id }}"
-                    data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
-                    style="display: none; border: 2px solid #dc3545"
+                    class="add-model-checkbox"
+                    data-lot-id="{{ data.stock_lot_id }}"
+                    data-qty="{{ data.display_qty }}"
+                    style="display: none;"
                   />
                   <span style="display: flex; align-items: center; gap: 2px">
                     <label class="hold-toggle-switch" style="margin-bottom: 0">
@@ -2872,10 +2881,7 @@ tr.row-inactive td:first-child {
           <input
             type="number"
             id="brokenBuildupHooksInput"
-            min="0"
-            max="5"
             style="width: 100%"
-            oninput="validateBrokenHooksInput(this)"
           />
         </div>
       </div>
@@ -3200,6 +3206,11 @@ document.addEventListener('DOMContentLoaded', function () {
   if (window.jigInitBound) return;
   window.jigInitBound = true;
 
+  // ==========================================================
+  // 🔥 GLOBAL STATE FOR BROKEN HOOKS (SAFE)
+  // ==========================================================
+  window.currentBrokenHooks = window.currentBrokenHooks || 0;
+
   const idMap = {
     lotQtyInput: document.getElementById('reallotQty') || document.getElementById('lotQtyInput'),
     jigCapacityInput: document.getElementById('jigCapacityInput') || document.getElementById('jigCapacityInput'),
@@ -3237,7 +3248,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     try {
-      const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lotId)}&batch_id=${encodeURIComponent(batchId)}&jig_capacity=${encodeURIComponent(jigCapacity)}`;
+      // Include any secondary_lots stored by Add Model selection (multi-model flow)
+      try {
+        const q = new URLSearchParams();
+        q.set('lot_id', lotId);
+        q.set('batch_id', batchId);
+        q.set('jig_capacity', jigCapacity);
+        const stored = localStorage.getItem('secondary_lots');
+        if (stored) {
+          q.set('multi_model', '1');
+          q.set('secondary_lots', stored);
+        }
+        var url = `/jig_loading/init-jig-load/?${q.toString()}`;
+      } catch (e) {
+        var url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lotId)}&batch_id=${encodeURIComponent(batchId)}&jig_capacity=${encodeURIComponent(jigCapacity)}`;
+      }
       const resp = await fetch(url, { credentials: 'same-origin' });
       if (!resp.ok) throw new Error('Init API failed');
       const data = await resp.json();
@@ -3288,7 +3313,29 @@ document.addEventListener('DOMContentLoaded', function () {
       if (typeof window.updateLoadedDisplay === 'function') {
         window.updateLoadedDisplay(data.draft.loaded_cases_qty || 0, data.draft.jig_capacity || 0);
       }
-      if (idMap.brokenHooksInput) idMap.brokenHooksInput.value = data.draft.broken_hooks || 0;
+      // Enable Add Model button when lot qty < jig capacity
+      try {
+        const addModelBtn = document.getElementById('addModelBtn');
+        const lotQty = parseInt(data.draft.original_lot_qty || 0) || 0;
+        const jigCap = parseInt(data.draft.jig_capacity || 0) || 0;
+        if (addModelBtn) {
+          if (lotQty < jigCap) {
+            addModelBtn.removeAttribute('disabled');
+            addModelBtn.title = 'Add secondary model(s)';
+          } else {
+            addModelBtn.setAttribute('disabled', 'disabled');
+            addModelBtn.title = 'Lot equals jig capacity';
+          }
+        }
+      } catch (e) { console.warn('Add Model enable check failed', e); }
+      if (idMap.brokenHooksInput) {
+        // Preserve any live preview value set by the user (window.currentBrokenHooks)
+        if (window.currentBrokenHooks !== undefined) {
+          idMap.brokenHooksInput.value = window.currentBrokenHooks;
+        } else {
+          idMap.brokenHooksInput.value = data.draft.broken_hooks || 0;
+        }
+      }
       if (idMap.emptyHooksInput) idMap.emptyHooksInput.value = data.draft.jig_cases_remaining_count || 0;
       // delink tray count will be set after we pick the authoritative source (draft.delink_tray_info or trays)
 
@@ -3459,28 +3506,100 @@ document.addEventListener('DOMContentLoaded', function () {
     fallback.addEventListener('click', function (e) { e.preventDefault(); const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.add('open'); });
   }
   /* ---------- Half-tray & Extra-tray rendering helpers ---------- */
+
+  // ==========================================================
+  // 🔥 FIX: FORCE DELINK UPDATE FROM API RESPONSE
+  // ==========================================================
+  function updateDelinkUI(delinkData) {
+    if (!delinkData) {
+      console.log('[DELINK_SKIP] No data');
+      return;
+    }
+    console.log('[DELINK_UPDATE]', delinkData);
+    const inputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
+    inputs.forEach((input, index) => {
+      if (delinkData[index]) {
+        const newQty = delinkData[index].qty || delinkData[index];
+        // ✅ UPDATE DATA ATTRIBUTE
+        input.setAttribute('data-expected-qty', newQty);
+        // ✅ UPDATE UI TEXT (Qty label)
+        const qtyDiv = input.closest('.tray-scan-tab')?.querySelector('.tray-qty');
+        if (qtyDiv) {
+          qtyDiv.innerText = `Qty: ${newQty}`;
+        }
+      }
+    });
+  }
+
+  // Patch: Only update delink UI, do not re-render full DOM
   function refreshTrayCalculation() {
     try {
       const lot = window.currentJigLotId;
       const batch = window.currentJigBatchId;
-      if (!lot || !batch) return; // nothing to refresh yet
-
-      const brokenHooks = document.getElementById('brokenBuildupHooksInput')?.value || 0;
+      if (!lot || !batch) return;
+      const brokenHooks = parseInt(window.currentBrokenHooks || 0) || 0;
+      console.log('[BH_API_SEND]', brokenHooks);
       const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lot)}&batch_id=${encodeURIComponent(batch)}&broken_hooks=${encodeURIComponent(brokenHooks)}`;
-
       fetch(url)
         .then(res => res.json())
         .then(data => {
-          if (typeof renderDelink === 'function' && data.delink_tray_info) renderDelink(data.delink_tray_info);
+          updateDelinkUI(data.delink_tray_info); // 🔥 FIX
           renderTrays('half', data.half_filled_tray_info || []);
           renderTrays('extra', data.extra_trays || []);
           renderTrays('excess', data.excess_info || null);
-
           const halfWrap = document.getElementById('halfFilledTraySection');
           if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
+          try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
         })
         .catch(err => console.warn('refreshTrayCalculation error', err));
     } catch (e) { console.warn(e); }
+  }
+
+  // ==========================================================
+  // 🔥 INSTANT LOCAL BH UI UPDATE (NO API DELAY)
+  // ==========================================================
+  function applyBHLocally(bh) {
+    const inputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
+    if (!inputs.length) return;
+    let last = inputs[inputs.length - 1];
+    let currentQty = parseInt(last.getAttribute('data-expected-qty')) || 0;
+    let newQty = Math.max(0, currentQty - bh);
+    // update instantly
+    last.setAttribute('data-expected-qty', newQty);
+    const qtyDiv = last.closest('.tray-scan-tab')?.querySelector('.tray-qty');
+    if (qtyDiv) {
+      qtyDiv.innerText = `Qty: ${newQty}`;
+    }
+    console.log('[BH_LOCAL_APPLIED]', currentQty, '→', newQty);
+  }
+
+  // Patch input event for instant update and backend sync
+  const bhInput = document.getElementById('brokenBuildupHooksInput');
+  if (bhInput) {
+    bhInput.addEventListener('input', function () {
+      const bh = parseInt(this.value) || 0;
+      applyBHLocally(bh);   // 🔥 INSTANT UI
+      clearTimeout(window.bhTimer);
+      window.bhTimer = setTimeout(() => {
+        window.currentBrokenHooks = bh;
+        refreshTrayCalculation(); // backend sync
+      }, 300);
+    });
+  }
+
+  // ==========================================================
+  // 🔥 RESTORE INPUT AFTER DOM REBUILD
+  // ==========================================================
+  function restoreBrokenHooksInput() {
+    try {
+      const input = document.getElementById('brokenBuildupHooksInput');
+      if (!input) {
+        console.warn('[BH] Input not found after render');
+        return;
+      }
+      input.value = parseInt(window.currentBrokenHooks || 0) || 0;
+      console.log('[BH_RESTORED]', input.value);
+    } catch (e) { console.warn('restoreBrokenHooksInput error', e); }
   }
 
   function renderTrays(mode, data) {
@@ -3498,8 +3617,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const modelNoRaw = window.CURRENT_MODEL_NO || '';
         const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
         const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan here';
+        const halfLabel = modelNo ? `Scan ${modelNo}` : 'Scan Top Tray ID';
         node.innerHTML = `
-          <label>Scan Top Tray ID</label>
+          <label>${halfLabel}</label>
           <input id="halfTrayScanInput" type="text" placeholder="${placeholder}" class="tray-id-input">
           <div class="tray-qty">Qty: ${effective}</div>
           <div style="font-size:12px;color:#666;margin-top:6px;">Original: ${tray.original_qty || tray.qty || 0} — Broken Hooks: ${tray.broken_hooks || 0}</div>
@@ -3546,8 +3666,9 @@ document.addEventListener('DOMContentLoaded', function () {
           const modelNoRaw = window.CURRENT_MODEL_NO || '';
           const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
           const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
+          const labelText = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
           div.innerHTML = `
-            <label>Scan Tray ID</label>
+            <label>${labelText}</label>
             <input type="text" class="tray-id-input" placeholder="${placeholder}">
             <div class="tray-qty">Qty: ${tray.qty} ${tray.top_tray ? '(Top Tray)' : ''}</div>
           `;
@@ -3584,8 +3705,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const modelNoRaw = window.CURRENT_MODEL_NO || '';
         const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
         const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
+        const labelText = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
         div.innerHTML = `
-          <label>Scan Tray ID</label>
+          <label>${labelText}</label>
           <input type="text" class="tray-id-input" placeholder="${placeholder}">
           <div class="tray-qty">Qty: ${tray.qty} ${tray.top_tray ? '(Top Tray)' : ''}</div>
         `;
@@ -3594,19 +3716,208 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) { console.warn('renderExcessSection error', e); }
   }
 
-  const bhInput = document.getElementById('brokenBuildupHooksInput');
-  if (bhInput) {
-    bhInput.addEventListener('input', function () {
-      const val = parseInt(this.value || 0) || 0;
-      const cap = window.jigCapacity || 0;
-      const max = cap === 98 ? 5 : cap === 144 ? 10 : 0;
-      if (val > max) this.value = max;
-      refreshTrayCalculation();
-    });
+  // Broken hooks: use keyup for correct timing, avoid 'input' listener that races with re-renders
+  let bhTimer = null;
+
+  document.addEventListener('keyup', function (e) {
+    try {
+      if (e && e.target && e.target.id === 'brokenBuildupHooksInput') {
+        // capture raw value immediately
+        const raw = e.target.value;
+        console.log('[BH_RAW_INPUT]', raw);
+        const broken = parseInt(raw, 10);
+        if (isNaN(broken)) return;
+        // debounce assignment to avoid spamming API while typing
+        clearTimeout(bhTimer);
+        bhTimer = setTimeout(() => {
+          window.currentBrokenHooks = broken;
+          console.log('[BH_CAPTURED_CORRECT]', broken);
+        }, 50);
+      }
+    } catch (err) { /* ignore */ }
+  });
+
+  // Trigger recalculation on change (user finished editing)
+  document.addEventListener('change', function (e) {
+    try {
+      if (e && e.target && e.target.id === 'brokenBuildupHooksInput') {
+        console.log('[BH_CHANGE_TRIGGER]');
+        if (typeof refreshTrayCalculation === 'function') refreshTrayCalculation();
+      }
+    } catch (err) { /* ignore */ }
+  });
+
+  // Debug: monitor live value to detect external overrides
+  setInterval(() => {
+    try {
+      const el = document.getElementById('brokenBuildupHooksInput');
+      if (el) console.log('[BH_LIVE_VALUE]', el.value);
+    } catch (e) { }
+  }, 1000);
+
+  // ===============================
+  // HARD RESET: Clear all modal UI state before rendering new lot
+  // ===============================
+  function resetJigModalState() {
+    console.log('[RESET] Clearing previous lot UI');
+    // Clear inputs
+    $('#brokenBuildupHooksInput').val(0);
+    $('#jigIdInput').val('');
+    // Clear delink UI
+    $('#delinkTableSection').html('');
+    $('#delinkTrayCount').text(0);
+    // Clear half-filled section
+    $('#halfFilledTraySection').html('').hide();
+    // Optionally clear internal state
+    window.currentLotId = null;
   }
 
 });
 </script>
+
+
+<!-- UI State Reset and Modal Lifecycle Fixes -->
+<script nonce="{{ csp_nonce }}">
+// --- UI State Reset Function ---
+function resetJigModalState() {
+  // Clear Broken Hooks input
+  const bhInput = document.getElementById('brokenBuildupHooksInput');
+  if (bhInput) bhInput.value = '';
+  // Clear Jig ID input
+  const jigIdInput = document.getElementById('jigIdInput');
+  if (jigIdInput) jigIdInput.value = '';
+  // Empty delink tray container
+  const delinkTrayContainer = document.getElementById('delinkTrayContainer');
+  if (delinkTrayContainer) delinkTrayContainer.innerHTML = '';
+  // Reset delink tray count
+  const delinkTrayCount = document.getElementById('delinkTrayCount');
+  if (delinkTrayCount) delinkTrayCount.textContent = '0';
+  // Empty and hide half-filled tray section
+  const halfFilledSection = document.getElementById('halfFilledTraySection');
+  if (halfFilledSection) {
+    halfFilledSection.style.display = 'none';
+    halfFilledSection.innerHTML = '';
+  }
+  // Clear tray scan DOM (.tray-scan-tabs)
+  const trayScanTabs = document.querySelectorAll('.tray-scan-tabs');
+  trayScanTabs.forEach(tab => tab.innerHTML = '');
+  console.log('[RESET] Jig modal state reset');
+}
+
+// --- Patch openJigModal to call reset ---
+// Assume openJigModal is defined elsewhere in the script block
+// We'll monkey-patch or wrap it if needed
+if (typeof openJigModal === 'function') {
+  const _origOpenJigModal = openJigModal;
+  window.openJigModal = function(lotId, batchId) {
+    resetJigModalState();
+    console.log('[MODAL_OPEN]', lotId);
+    return _origOpenJigModal.apply(this, arguments);
+  };
+}
+
+// --- Patch renderTrayUI to clear containers at start ---
+if (typeof renderTrayUI === 'function') {
+  const _origRenderTrayUI = renderTrayUI;
+  window.renderTrayUI = function(data) {
+    console.log('[RENDER_START]', data);
+    // Clear delink tray container
+    const delinkTrayContainer = document.getElementById('delinkTrayContainer');
+    if (delinkTrayContainer) delinkTrayContainer.innerHTML = '';
+    // Clear and hide half-filled tray section
+    const halfFilledSection = document.getElementById('halfFilledTraySection');
+    if (halfFilledSection) {
+      halfFilledSection.style.display = 'none';
+      halfFilledSection.innerHTML = '';
+    }
+    return _origRenderTrayUI.apply(this, arguments);
+  };
+}
+
+// --- Patch renderHalfFilled to strictly control rendering ---
+if (typeof renderHalfFilled === 'function') {
+  const _origRenderHalfFilled = renderHalfFilled;
+  window.renderHalfFilled = function(data) {
+    const excess_qty = (data && typeof data.excess_qty !== 'undefined') ? Number(data.excess_qty) : 0;
+    const halfFilledSection = document.getElementById('halfFilledTraySection');
+    if (excess_qty <= 0) {
+      if (halfFilledSection) {
+        halfFilledSection.style.display = 'none';
+        halfFilledSection.innerHTML = '';
+      }
+      console.log('[HALF_FILLED] hidden (excess_qty <= 0)');
+      return;
+    }
+    if (halfFilledSection) halfFilledSection.style.display = '';
+    console.log('[HALF_FILLED] shown (excess_qty =', excess_qty, ')');
+    return _origRenderHalfFilled.apply(this, arguments);
+  };
+}
+// --- Close button handler: reset state and refresh full page on close ---
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.close-btn');
+  if (!btn) return;
+  try {
+    if (typeof resetJigModalState === 'function') resetJigModalState();
+  } catch (err) {
+    console.warn('[CLOSE_BTN] reset failed', err);
+  }
+  // refresh the whole screen to ensure no frontend state persists
+  try { window.location.reload(); } catch (e) { console.warn('reload failed', e); }
+});
+</script>
+
+<!-- Multi-model selection handlers -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+  // Hook Add Model button to close modal and open JigView with exclusion
+  try {
+    const modalAddBtn = document.getElementById('addModelBtn');
+    if (modalAddBtn) {
+      modalAddBtn.addEventListener('click', function (ev) {
+        try {
+          const primary = window.CURRENT_LOT_ID || window.currentJigLotId || '';
+          const batch = window.currentJigBatchId || window.CURRENT_BATCH_ID || '';
+          if (!primary) {
+            console.warn('Primary lot missing, cannot open Add Model list');
+            return;
+          }
+          const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.remove('open');
+          const url = `/jig_loading/JigView/?exclude_lot_id=${encodeURIComponent(primary)}&primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(batch)}`;
+          window.location.href = url;
+        } catch (e) { console.warn('Add Model click failed', e); }
+      });
+    }
+  } catch (e) { /* ignore */ }
+
+  const params = new URLSearchParams(window.location.search);
+  const isAddModel = params.has('exclude_lot_id') || params.has('primary_lot_id') || params.has('primary_lot');
+  if (!isAddModel) return;
+
+  // Reveal per-row checkbox (keeps table structure intact)
+  document.querySelectorAll('.add-model-checkbox').forEach(cb => cb.style.display = 'inline-block');
+
+  // Direct selection: save and go back when checkbox checked
+  document.querySelectorAll('.add-model-checkbox').forEach(cb => {
+    cb.addEventListener('change', function () {
+      if (!this.checked) return;
+      const selectedLot = {
+        lot_id: this.dataset.lotId || this.getAttribute('data-stock-lot-id'),
+        qty: parseInt(this.dataset.qty || 0)
+      };
+      console.log('[ADD_MODEL] Selected:', selectedLot);
+      let existing = [];
+      try { existing = JSON.parse(localStorage.getItem('secondary_lots') || '[]'); } catch (e) { existing = []; }
+      existing.push(selectedLot);
+      try { localStorage.setItem('secondary_lots', JSON.stringify(existing)); } catch (e) { console.warn('localStorage failed', e); }
+      console.log('[ADD_MODEL] Redirecting back to Jig Modal');
+      try { window.history.back(); } catch (e) { window.location.href = '/jig_loading/JigView/'; }
+    });
+  });
+});
+</script>
+
+
 
 {% endblock %}
 {% endblock content %}

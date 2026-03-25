@@ -25,6 +25,11 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from rest_framework import exceptions
+from BrassAudit.models import Brass_Audit_Accepted_TrayID_Store
+from BrassAudit.views import brass_audit_get_accepted_tray_scan_data
+from modelmasterapp.models import TotalStockModel
+from modelmasterapp.models import ModelMasterCreation
+
 
 @method_decorator(login_required, name='dispatch')
 class JigView(TemplateView):
@@ -37,13 +42,30 @@ class JigView(TemplateView):
 		try:
 			from modelmasterapp.models import TotalStockModel
 			master_data = []
-			qs = TotalStockModel.objects.filter(brass_audit_accptance=True).select_related('batch_id').order_by('-brass_audit_last_process_date_time')[:200]
+			# Build base queryset without slicing so we can safely apply exclusions
+			base_qs = TotalStockModel.objects.filter(brass_audit_accptance=True).select_related('batch_id')
+			# Optional exclusion: when JigView is opened to "Add Model", exclude the primary lot
+			exclude_lot = self.request.GET.get('exclude_lot_id')
+			primary_lot = self.request.GET.get('primary_lot_id') or self.request.GET.get('primary_lot')
+			try:
+				total_before = base_qs.count()
+				logging.info(f"[JIG PICK] Total before exclude: {total_before}")
+			except Exception:
+				logging.info("[JIG PICK] Unable to count base_qs before exclude")
+			if exclude_lot:
+				base_qs = base_qs.exclude(lot_id=exclude_lot)
+			try:
+				final_count = base_qs.count()
+				logging.info(f"[JIG PICK] Excluding lot: {exclude_lot} (primary: {primary_lot}) -> Final count: {final_count}")
+			except Exception:
+				logging.info("[JIG PICK] Unable to count base_qs after exclude")
+			# Apply ordering and slicing last
+			qs = base_qs.order_by('-brass_audit_last_process_date_time')[:200]
 			for stock in qs:
 				batch = getattr(stock, 'batch_id', None)
 				# Try to count accepted trays transferred/stored for this lot
 				no_of_trays = 0
 				try:
-					from BrassAudit.models import Brass_Audit_Accepted_TrayID_Store
 					no_of_trays = Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=stock.lot_id, is_save=True).count()
 					if no_of_trays == 0:
 						no_of_trays = Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=stock.lot_id).count()
@@ -70,7 +92,6 @@ class JigView(TemplateView):
 
 				# Populate jig_capacity from JigLoadingMaster when available
 				try:
-					from modelmasterapp.models import ModelMasterCreation
 					model_obj = getattr(batch, 'model_stock_no', None) if batch else None
 					if model_obj:
 						master = JigLoadingMaster.objects.filter(model_stock_no=model_obj).first()
@@ -80,6 +101,7 @@ class JigView(TemplateView):
 					pass
 				master_data.append(data)
 			context['master_data'] = master_data
+			# master_data provided to template; no extra JSON needed
 		except Exception:
 			logging.exception('Failed to populate master_data for Jig pick')
 		return context
@@ -132,7 +154,6 @@ class InitJigLoad(APIView):
 		# determine lot qty similar to JigView
 		lot_qty = 0
 		try:
-			from modelmasterapp.models import TotalStockModel
 			stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
 			if stock:
 				lot_qty = getattr(stock, 'brass_audit_accepted_qty', None) or getattr(stock, 'brass_audit_physical_qty', None) or getattr(stock, 'total_stock', 0)
@@ -145,7 +166,6 @@ class InitJigLoad(APIView):
 			else:
 				# try to fetch jig_capacity from JigLoadingMaster via batch->model mapping
 				try:
-					from modelmasterapp.models import ModelMasterCreation
 					batch = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
 					model_obj = getattr(batch, 'model_stock_no', None) if batch else None
 					if model_obj:
@@ -182,7 +202,6 @@ class InitJigLoad(APIView):
 		# If TrayInfoView returned no trays, try BrassAudit fallback directly to synthesize trays
 		if not trays:
 			try:
-				from BrassAudit.views import brass_audit_get_accepted_tray_scan_data
 				# brass_audit_get_accepted_tray_scan_data expects a Django HttpRequest
 				resp = brass_audit_get_accepted_tray_scan_data(request._request)
 				if hasattr(resp, 'data'):
@@ -230,7 +249,6 @@ class InitJigLoad(APIView):
 			# determine tray capacity from batch/model if available, else default to 12
 			tray_capacity = None
 			try:
-				from modelmasterapp.models import ModelMasterCreation
 				batch_obj = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
 				if batch_obj:
 					tray_capacity = getattr(batch_obj, 'tray_capacity', None)
@@ -252,31 +270,91 @@ class InitJigLoad(APIView):
 			# STRICT DELINK: delink is only the jig fill (cases that will go onto the jig)
 			lot_qty_int = int(lot_qty or 0)
 			jig_capacity_int = int(jig_capacity or 0)
-			# delink_qty = amount to fill the jig (cannot exceed lot or jig)
-			delink_qty = min(lot_qty_int, jig_capacity_int)
-			# excess_qty is remaining after jig is filled
-			excess_qty = max(0, lot_qty_int - jig_capacity_int)
-			# build delink trays by filling tray_capacity until delink_qty exhausted
+
+			# ==========================================================
+			# BROKEN HOOKS 
+			# ==========================================================
+
+			# Prefer an explicit broken hooks value passed from the frontend (query param)
+			# so users can live-preview splits without saving a draft.
+			try:
+				bh_param = request.GET.get('broken_hooks') or request.GET.get('broken_buildup_hooks')
+				if bh_param is not None:
+					broken_hooks = int(bh_param or 0)
+				else:
+					broken_hooks = int(getattr(draft, 'broken_hooks', 0) or 0)
+			except Exception:
+				broken_hooks = int(getattr(draft, 'broken_hooks', 0) or 0)
+
+			effective_jig_capacity = max(0, jig_capacity_int - broken_hooks)
+
+			delink_qty = min(lot_qty_int, effective_jig_capacity)
+			excess_qty = max(0, lot_qty_int - delink_qty)
+
+			logging.info(f"[BH] jig={jig_capacity_int}, broken={broken_hooks}, effective={effective_jig_capacity}")
+			logging.info(f"[BH_SPLIT] delink={delink_qty}, excess={excess_qty}")
+
+			# ==========================================================
+			# 🔥 PARTIAL TRAY SPLIT (BROKEN HOOKS SAFE LOGIC)
+			# ==========================================================
+
+			# `trays` expected earlier from TrayInfoView (do NOT modify tray fetch)
+			remaining = int(delink_qty)
+			tray_index = 0
+
 			delink_tray_info = []
-			if delink_qty > 0:
-				delink_tray_count = ceil(delink_qty / tray_capacity) if tray_capacity else 0
-				remaining = int(delink_qty)
-				tray_no = 1
-				while remaining > 0:
-					qty = min(tray_capacity, remaining)
-					delink_tray_info.append({
-						"tray_no": tray_no,
-						"qty": int(qty),
-						"is_top_tray": True if qty < tray_capacity else False
+			excess_tray_info = []
+
+			# Consume trays in strict FIFO order, splitting only the last used tray
+			while remaining > 0 and tray_index < len(trays):
+
+				tray = trays[tray_index]
+				tray_id = tray.get('tray_id')
+				tray_qty = int(tray.get('qty', 0) or 0)
+
+				use_qty = min(tray_qty, remaining)
+				balance_qty = tray_qty - use_qty
+
+				# 🔹 DELINK ENTRY
+				delink_tray_info.append({
+					"tray_id": tray_id,
+					"qty": use_qty,
+					"top_tray": (remaining <= tray_capacity),
+					"is_partial": balance_qty > 0
+				})
+
+				# 🔥 CRITICAL: SAME TRAY REUSED FOR EXCESS
+				if balance_qty > 0:
+					excess_tray_info.insert(0, {
+						"tray_id": tray_id,
+						"qty": balance_qty,
+						"top_tray": True,
+						"source": "partial_split"
 					})
-					remaining -= qty
-					tray_no += 1
-			else:
-				delink_tray_count = 0
+
+				remaining -= use_qty
+				tray_index += 1
+
+			# 🔹 REMAINING FULL TRAYS → EXCESS
+			for i in range(tray_index, len(trays)):
+				tray = trays[i]
+
+				excess_tray_info.append({
+					"tray_id": tray.get('tray_id'),
+					"qty": tray.get('qty'),
+					"top_tray": False,
+					"source": "full_excess"
+				})
 
 				# Do NOT persist to draft here. Instead return stable computed values
 				# to the frontend. The frontend will save the draft only when the user
 				# explicitly clicks the Draft button.
+
+			# Log final distribution info for debugging
+			try:
+				logging.info(f"[DELINK_SPLIT] Remaining after allocation: {remaining}")
+			except Exception:
+				pass
 
 			# ==========================================================
 			# 🔥 EXCESS RENDER - Half filled tray scan
@@ -325,7 +403,6 @@ class InitJigLoad(APIView):
 		nickel_bath_type = ''
 		tray_type_name = ''
 		try:
-			from modelmasterapp.models import ModelMasterCreation
 			mm = None
 			batch_obj = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
 			if batch_obj:
@@ -354,6 +431,16 @@ class InitJigLoad(APIView):
 		except Exception:
 			pass
 
+		# ===== MULTI MODEL SUPPORT (NEW - NON BREAKING) =====
+		multi_model_flag = request.GET.get('multi_model')
+		secondary_lots = []
+		if multi_model_flag:
+			try:
+				secondary_lots = json.loads(request.GET.get('secondary_lots', '[]'))
+			except Exception:
+				secondary_lots = []
+			logging.info(f"[MULTI_MODEL] Secondary lots: {secondary_lots}")
+
 		# Build a non-persistent draft dict to return to the frontend
 		resp_draft = {
 			'batch_id': batch_id,
@@ -369,6 +456,12 @@ class InitJigLoad(APIView):
 			'model_image_label': model_image_label,
 			'nickel_bath_type': nickel_bath_type,
 			'tray_type': tray_type_name,
+			'is_multi_model': True if multi_model_flag else False,
+			'draft_data': {
+				'primary_lot': lot_id,
+				'secondary_lots': secondary_lots
+			},
+			'secondary_lots': secondary_lots,
 		}
 
 		return Response({
@@ -381,6 +474,7 @@ class InitJigLoad(APIView):
 			'model_image_label': model_image_label,
 			'nickel_bath_type': nickel_bath_type,
 			'tray_type': tray_type_name,
+			'secondary_lots': secondary_lots,
 			'scenario': 'PERFECT_FIT' if is_perfect_fit else '',
 		})
 
