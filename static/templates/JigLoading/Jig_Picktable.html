@@ -7,6 +7,8 @@
 
 <!-- Jig Loading - Inline Styles -->
 <style> 
+  .tray-duplicate-error { border: 2px solid #dc3545 !important; background: #fff1f0 !important; }
+  .tray-duplicate-message { color: #dc3545; font-size: 12px; margin-top: 6px; }
 .tray-id-input.model-bg-1 { background: #e2fbff75 !important; }   /* Primary model */
 .tray-id-input.model-bg-2 { background: #fce4ec !important; }   /* Secondary model */
 /* Action handlers attached via script (kept out of CSS block) */
@@ -1999,7 +2001,6 @@ tr.row-inactive td:first-child {
 </style>
 
 <div class="content-wrapper">
-  
   <div class="col-12 grid-margin stretch-card">
     <div class="card-body" style="padding-bottom: 12px">
       <div class="d-flex align-items-center gap-2 mb-4" style="flex-wrap: wrap">
@@ -3056,18 +3057,51 @@ document.addEventListener('DOMContentLoaded', function () {
           return fetch(brassUrl, { credentials: 'same-origin' })
             .then(res => res.json())
             .then(bdata => {
-              const tray_capacity = parseInt(bdata.tray_capacity || bdata.tray_cap || 16, 10) || 16;
+              // Determine tray capacity dynamically. Prefer explicit fields from brass data,
+              // then try to read from DOM attributes, then fall back to null (don't hardcode).
+              let tray_capacity = null;
+              if (bdata) {
+                const bc = bdata.tray_capacity || bdata.tray_cap || bdata.trayCap;
+                const parsed = parseInt(bc, 10);
+                if (!isNaN(parsed) && parsed > 0) tray_capacity = parsed;
+              }
+
+              // Try to locate a DOM element that exposes tray capacity for this lot (data-tray-capacity)
+              if (!tray_capacity) {
+                try {
+                  // Look for row elements that may include data attributes with the lot id
+                  const byLot = document.querySelector(`[data-lotid="${lotId}"], [data-stocklotid="${lotId}"]`);
+                  const attrEl = byLot || document.querySelector('[data-tray-capacity]');
+                  if (attrEl && attrEl.dataset && attrEl.dataset.trayCapacity) {
+                    const parsed = parseInt(attrEl.dataset.trayCapacity, 10);
+                    if (!isNaN(parsed) && parsed > 0) tray_capacity = parsed;
+                  }
+                } catch (e) {
+                  console.warn('Error reading tray capacity from DOM', e);
+                }
+              }
+
+              // Available quantity
               const available = parseInt(bdata.available_qty || bdata.brass_audit_physical_qty || 0, 10) || 0;
-              const full_trays = Math.floor(available / tray_capacity);
-              const top_tray_qty = available % tray_capacity;
+
+              // If we don't have a tray capacity, avoid hardcoding an incorrect value.
+              // In that case create a single synthesized tray with the total available quantity
+              // (safer than splitting using an incorrect capacity).
+              const full_trays = tray_capacity ? Math.floor(available / tray_capacity) : 0;
+              const top_tray_qty = tray_capacity ? (available % tray_capacity) : available;
               const synth = [];
               let counter = 1;
-              for (let i = 0; i < full_trays; i++) {
-                synth.push({ tray_id: `NB-A${String(counter).padStart(5,'0')}`, qty: tray_capacity, top_tray: false });
-                counter++;
-              }
-              if (top_tray_qty > 0) {
-                synth.push({ tray_id: `NB-A${String(counter).padStart(5,'0')}`, qty: top_tray_qty, top_tray: true });
+              if (tray_capacity) {
+                for (let i = 0; i < full_trays; i++) {
+                  synth.push({ tray_id: `NB-A${String(counter).padStart(5,'0')}`, qty: tray_capacity, top_tray: false });
+                  counter++;
+                }
+                if (top_tray_qty > 0) {
+                  synth.push({ tray_id: `NB-A${String(counter).padStart(5,'0')}`, qty: top_tray_qty, top_tray: true });
+                }
+              } else if (available > 0) {
+                // Unknown capacity — present available quantity as a single top tray
+                synth.push({ tray_id: `NB-A${String(counter).padStart(5,'0')}`, qty: available, top_tray: true });
               }
               // attach brass metadata for header rendering
               return { accepted: synth, brass_meta: bdata };
@@ -3287,6 +3321,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // expose current lot and model for frontend validation/UI
       try {
         window.CURRENT_LOT_ID = lotId;
+        window.CURRENT_BATCH_ID = batchId;
         window.CURRENT_MODEL_NO = (data.draft && (data.draft.plating_stock_num || data.draft.model_image_label)) || data.plating_stock_num || data.model_image_label || '';
         const modelBox = document.getElementById('currentModelInfo');
         if (modelBox) {
@@ -3295,24 +3330,47 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       } catch (e) { /* ignore */ }
 
-      // Ensure Loaded Cases display always shows loaded / JIG CAPACITY (not lot qty)
-      window.updateLoadedDisplay = function(loaded, capacity) {
-        const el = idMap.loadedCasesInput;
-        const text = `${parseInt(loaded || 0)}/${parseInt(capacity || 0)}`;
-        if (!el) return;
+      // BACKEND authoritative values (single source of truth)
+      try {
+        window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || data.draft && data.draft.loaded_cases_qty || 0) || 0;
+      } catch (e) { window.BACKEND_LOADED_CASES = 0; }
+
+      try {
+        window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || data.draft && data.draft.jig_capacity || 0) || 0;
+      } catch (e) { window.BACKEND_ORIGINAL_CAPACITY = 0; }
+
+      try {
+        window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || 0;
+      } catch (e) { window.BACKEND_EFFECTIVE_CAPACITY = 0; }
+
+      try {
+        window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks || 0) || 0;
+      } catch (e) { window.BACKEND_BROKEN_HOOKS = 0; }
+
+      try {
+        window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+      } catch (e) { window.BACKEND_EMPTY_HOOKS = 0; }
+
+      // Update UI elements directly from backend-provided values (no calculations here)
+      if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+
+      window.updateLoadedDisplay = function() {
         try {
+          const el = idMap.loadedCasesInput;
+          if (!el) return;
+          const text = `${parseInt(window.BACKEND_LOADED_CASES || 0)}/${parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0)}`;
           if (el.tagName === 'SPAN' || el.tagName === 'DIV') el.innerText = text;
           else el.value = text;
-        } catch (e) {
-          // fallback
-          el.textContent = text;
-        }
+          console.log('[updateLoadedDisplay] Updated to:', text);
+        } catch (e) { console.error('[updateLoadedDisplay] Unexpected error:', e); }
       };
 
-      // initial render
+      // initial render with calculated final capacity
+      console.log('[LCQ_INIT] Starting initial render');
       if (typeof window.updateLoadedDisplay === 'function') {
-        window.updateLoadedDisplay(data.draft.loaded_cases_qty || 0, data.draft.jig_capacity || 0);
+        window.updateLoadedDisplay();
       }
+      console.log('[LCQ_INIT] Initial render completed');
       // Enable Add Model button when lot qty < jig capacity
       try {
         const addModelBtn = document.getElementById('addModelBtn');
@@ -3336,7 +3394,8 @@ document.addEventListener('DOMContentLoaded', function () {
           idMap.brokenHooksInput.value = data.draft.broken_hooks || 0;
         }
       }
-      if (idMap.emptyHooksInput) idMap.emptyHooksInput.value = data.draft.jig_cases_remaining_count || 0;
+      // Initialize current delink qty from server draft (backend is authoritative)
+      try { window.currentDelinkQty = parseInt(data.draft.delink_tray_qty || 0) || 0; } catch (e) { window.currentDelinkQty = 0; }
       // delink tray count will be set after we pick the authoritative source (draft.delink_tray_info or trays)
 
 
@@ -3361,8 +3420,16 @@ document.addEventListener('DOMContentLoaded', function () {
           source = [];
         }
 
-        // sort ascending by qty so the (smaller) top tray appears first
-        source.sort((a, b) => (parseInt(a.qty || 0) - parseInt(b.qty || 0)));
+        // sort so top-tray entries (explicit flag) come first, then by qty asc
+        source.sort((a, b) => {
+          const aMeta = a.meta || a || {};
+          const bMeta = b.meta || b || {};
+          const aTop = Boolean(aMeta.is_top_tray || aMeta.top_tray || false);
+          const bTop = Boolean(bMeta.is_top_tray || bMeta.top_tray || false);
+          if (aTop && !bTop) return -1;
+          if (!aTop && bTop) return 1;
+          return parseInt(a.qty || 0) - parseInt(b.qty || 0);
+        });
 
         // update visible delink tray count using authoritative source (display text)
         try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = `(No of Trays: ${source.length})`; } catch (e) { /* ignore */ }
@@ -3374,15 +3441,30 @@ document.addEventListener('DOMContentLoaded', function () {
           const t = entry.meta || {};
           const qty = entry.qty || 0;
           const isTop = Boolean(t.is_top_tray || t.top_tray || (qty && qty < trayCapacity));
+          const isPlaceholder = Boolean(t.is_placeholder);
           const div = document.createElement('div');
           div.className = 'tray-scan-tab';
           const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
           const modelNoRaw = window.CURRENT_MODEL_NO || ((data && data.draft && (data.draft.plating_stock_num || data.draft.model_image_label)) || data.plating_stock_num || data.model_image_label) || '';
           const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
           const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
-          div.innerHTML = `\n            <input type="text" class="tray-id-input" data-expected-qty="${qty}" placeholder="${placeholder}">\n            <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n          `;
+          if (isPlaceholder) {
+            // Placeholder tray: not a real DB tray, show info only — no scan input
+            div.innerHTML = `\n              <div class="tray-qty" style="color:#888;font-style:italic;">Qty: ${qty}${topLabel}</div>\n              <div style="font-size:11px;color:#aaa;">(virtual slot — scan real tray)</div>\n            `;
+          } else {
+            div.innerHTML = `\n              <input type="text" class="tray-id-input" data-expected-qty="${qty}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
+          }
           container.appendChild(div);
         });
+
+        // Compute authoritative delink total from authoritative source and trigger recalculation
+        try {
+          // Prefer persisted draft delink_tray_qty (sum of actually scanned trays) over plan total
+          const persistedDelink = parseInt((data && data.draft && data.draft.delink_tray_qty) || 0) || 0;
+          window.currentDelinkQty = persistedDelink;
+          console.log('[DELINK_INIT] currentDelinkQty set to (persisted):', window.currentDelinkQty);
+          if (typeof window.safeLCQRecalculation === 'function') window.safeLCQRecalculation('init_delink');
+        } catch (e) { console.warn('[DELINK_INIT] failed to compute delink total', e); }
 
         // ===== INPUT HANDLERS: 9-digit numeric validation and backend verification =====
         (function attachTrayInputHandlers() {
@@ -3414,7 +3496,7 @@ document.addEventListener('DOMContentLoaded', function () {
           }
 
           async function validateTray(trayId, inputEl) {
-            console.log('[VALIDATE] Tray:', trayId);
+            console.log('[SCAN_TRAY] Tray:', trayId);
             try {
               const resp = await fetch('/jig_loading/scan-tray/', {
                 method: 'POST',
@@ -3426,23 +3508,50 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify({ tray_id: trayId, lot_id: window.CURRENT_LOT_ID, batch_id: batchId })
               });
               const data = await resp.json();
-              if (data && data.status === 'success') {
-                // mark visually as validated but keep editable for corrections
-                try { inputEl.dataset.validated = 'true'; } catch (e) {}
+              
+              // Backend returns validation_status (success | duplicate | exceeds_capacity | error)
+              // and authoritative state: loaded_cases_qty, empty_hooks
+              console.log('[SCAN_RESPONSE]', data);
+              
+              // PURE RENDERING: Backend tells UI exactly what to show via validation_status
+              if (data && data.validation_status === 'success') {
+                // Backend accepted the scan
+                showSmallInfo(inputEl, 'Accepted');
+                // Mark input as validated (visual feedback only, not decision logic)
                 try { inputEl.classList.add('validated'); } catch (e) {}
-                showSmallInfo(inputEl, 'Valid');
+                
+                // Update UI from backend-provided authoritative state (NO CALCULATIONS)
+                try {
+                  // Update backend-sourced values and re-render UI (no calculations)
+                  window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+                  window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+                  window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || window.BACKEND_EFFECTIVE_CAPACITY || 0;
+                  window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || 0) || window.BACKEND_ORIGINAL_CAPACITY || 0;
+                  if (typeof window.updateLoadedDisplay === 'function') {
+                    window.updateLoadedDisplay();
+                  }
+                  if (idMap && idMap.emptyHooksInput) {
+                    idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+                  }
+                } catch (e) { console.warn('[SCAN] State update failed', e); }
+                
                 moveToNextInput(inputEl);
               } else {
-                // validation failed: remove validated marker if present
-                try { delete inputEl.dataset.validated; } catch (e) {}
+                // Backend rejected (duplicate | exceeds_capacity | error)
+                // Frontend just renders backend's decision, no business logic
                 try { inputEl.classList.remove('validated'); } catch (e) {}
                 inputEl.style.background = '#f8d7da';
                 inputEl.style.border = '1px solid #dc3545';
-                showSmallInfo(inputEl, data && data.message ? data.message : 'Invalid');
+                
+                // Show backend-provided error message (not frontend decision)
+                if (data && data.message) {
+                  showSmallInfo(inputEl, data.message);
+                }
+                console.log('[SCAN_REJECTED]', data.validation_status, data.message);
                 try { inputEl.select(); } catch (e) {}
               }
             } catch (e) {
-              console.error('Validate tray failed', e);
+              console.error('[SCAN] API call failed', e);
               inputEl.style.background = '#f8d7da';
               inputEl.style.border = '1px solid #dc3545';
               showSmallInfo(inputEl, 'Error');
@@ -3550,42 +3659,97 @@ document.addEventListener('DOMContentLoaded', function () {
           const halfWrap = document.getElementById('halfFilledTraySection');
           if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
           try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
+
+          // Update backend-provided empty_hooks and expose to UI
+          try {
+            window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+            if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+          } catch (e) { window.BACKEND_EMPTY_HOOKS = 0; }
+
+          // ===== USE SAFE RECALCULATION FOR LCQ (reads backend empty hooks) =====
+          if (typeof window.safeLCQRecalculation === 'function') {
+            try {
+              window.safeLCQRecalculation('refresh_tray_calculation');
+            } catch (e) {
+              console.warn('[LCQ] Safe recalculation after API failed:', e);
+            }
+          }
         })
         .catch(err => console.warn('refreshTrayCalculation error', err));
     } catch (e) { console.warn(e); }
   }
 
   // ==========================================================
-  // 🔥 INSTANT LOCAL BH UI UPDATE (NO API DELAY)
+  // 🔥 BROKEN HOOKS CHANGE → REFRESH FROM BACKEND ONLY
   // ==========================================================
-  function applyBHLocally(bh) {
-    const inputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
-    if (!inputs.length) return;
-    let last = inputs[inputs.length - 1];
-    let currentQty = parseInt(last.getAttribute('data-expected-qty')) || 0;
-    let newQty = Math.max(0, currentQty - bh);
-    // update instantly
-    last.setAttribute('data-expected-qty', newQty);
-    const qtyDiv = last.closest('.tray-scan-tab')?.querySelector('.tray-qty');
-    if (qtyDiv) {
-      qtyDiv.innerText = `Qty: ${newQty}`;
-    }
-    console.log('[BH_LOCAL_APPLIED]', currentQty, '→', newQty);
-  }
-
-  // Patch input event for instant update and backend sync
+  // When BH changes, refetch delink UI from backend (no local calculations)
   const bhInput = document.getElementById('brokenBuildupHooksInput');
   if (bhInput) {
     bhInput.addEventListener('input', function () {
       const bh = parseInt(this.value) || 0;
-      applyBHLocally(bh);   // 🔥 INSTANT UI
-      clearTimeout(window.bhTimer);
-      window.bhTimer = setTimeout(() => {
-        window.currentBrokenHooks = bh;
-        refreshTrayCalculation(); // backend sync
-      }, 300);
+      window.currentBrokenHooks = bh;
+      
+      // Debounce backend call (don't spam API on each keystroke)
+      clearTimeout(window.bhRefreshTimer);
+      window.bhRefreshTimer = setTimeout(() => {
+        console.log('[BH_CHANGED] Refreshing delink from backend:', bh);
+        refreshTrayCalculation();  // Backend recomputes splits
+      }, 200);
     });
   }
+
+  // ==========================================================
+  // 🔥 LCQ DISPLAY FUNCTION (PURE RENDERING, NO CALCULATIONS)
+  // ==========================================================
+  // Render UI using ONLY backend-provided authoritative values
+  // No calculations, no fallbacks, no business logic
+  window.safeLCQRecalculation = function(source = 'manual') {
+    try {
+      console.log(`[LCQ_RENDER] Source: ${source}`);
+      
+      const lcqElement = document.getElementById('loadedCasesQtyDisplay') || document.getElementById('loadedCasesInput');
+      if (!lcqElement) {
+        console.warn('[LCQ_RENDER] LCQ element not found');
+        return false;
+      }
+      
+      // ✅ Use ONLY backend-provided authoritative values (NO calculations)
+      const loadedQty = parseInt(window.BACKEND_LOADED_CASES || 0);
+      const finalCapacity = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0);
+      const newDisplay = `${loadedQty}/${finalCapacity}`;
+      console.log('[LCQ_RENDER] Displaying:', { loadedQty, finalCapacity });
+      
+      // ✅ Render display (no decisions, just show)
+      try {
+        if (lcqElement.tagName === 'SPAN' || lcqElement.tagName === 'DIV') {
+          lcqElement.innerText = newDisplay;
+        } else if (lcqElement.tagName === 'INPUT') {
+          lcqElement.value = newDisplay;
+        } else {
+          lcqElement.textContent = newDisplay;
+        }
+        console.log('[LCQ_RENDER] ✅ Rendered:', newDisplay);
+      } catch (e) {
+        console.error('[LCQ_RENDER] Failed:', e);
+        return false;
+      }
+      
+      // ✅ Update empty_hooks display (backend-provided, NOT calculated)
+      try {
+        if (typeof window.BACKEND_EMPTY_HOOKS !== 'undefined' && idMap && idMap.emptyHooksInput) {
+          idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+          console.log('[LCQ_RENDER] Set empty_hooks from backend:', window.BACKEND_EMPTY_HOOKS);
+        }
+      } catch (e) {
+        console.warn('[LCQ_RENDER] Failed to set empty_hooks', e);
+      }
+      
+      return true;
+    } catch (e) {
+      console.error('[LCQ_RENDER] Unexpected error:', e);
+      return false;
+    }
+  };
 
   // ==========================================================
   // 🔥 RESTORE INPUT AFTER DOM REBUILD
@@ -3599,6 +3763,11 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       input.value = parseInt(window.currentBrokenHooks || 0) || 0;
       console.log('[BH_RESTORED]', input.value);
+      
+      // Also trigger safe LCQ recalculation after restoring BH
+      if (typeof window.safeLCQRecalculation === 'function') {
+        window.safeLCQRecalculation('restore_bh');
+      }
     } catch (e) { console.warn('restoreBrokenHooksInput error', e); }
   }
 
@@ -3741,8 +3910,31 @@ document.addEventListener('DOMContentLoaded', function () {
   document.addEventListener('change', function (e) {
     try {
       if (e && e.target && e.target.id === 'brokenBuildupHooksInput') {
-        console.log('[BH_CHANGE_TRIGGER]');
-        if (typeof refreshTrayCalculation === 'function') refreshTrayCalculation();
+        console.log('[BH_CHANGE_TRIGGER] calling backend to recalc');
+        try {
+          const raw = e.target.value;
+          const broken = parseInt(raw, 10) || 0;
+          // Call Init API to get authoritative effective capacity and empty hooks for preview
+          (async function(){
+            try {
+              const q = new URLSearchParams();
+              q.set('lot_id', window.CURRENT_LOT_ID || '');
+              q.set('batch_id', window.CURRENT_BATCH_ID || '');
+              q.set('broken_hooks', String(broken));
+              const resp = await fetch(`/jig_loading/init-jig-load/?${q.toString()}`, { credentials: 'same-origin' });
+              if (!resp.ok) throw new Error('Init API failed');
+              const d = await resp.json();
+              // Use backend fields directly
+              window.BACKEND_LOADED_CASES = parseInt(d.loaded_cases_qty || 0) || 0;
+              window.BACKEND_EMPTY_HOOKS = parseInt(d.empty_hooks || 0) || 0;
+              window.BACKEND_EFFECTIVE_CAPACITY = parseInt(d.effective_capacity || 0) || 0;
+              window.BACKEND_ORIGINAL_CAPACITY = parseInt(d.original_capacity || 0) || 0;
+              window.BACKEND_BROKEN_HOOKS = parseInt(d.broken_hooks || 0) || 0;
+              if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+              if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+            } catch (err) { console.warn('[BH_CHANGE] preview API failed', err); }
+          })();
+        } catch (err) { console.warn('[BH_CHANGE] safeLCQ failed', err); }
       }
     } catch (err) { /* ignore */ }
   });
@@ -3774,7 +3966,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 });
 </script>
-
 
 <!-- UI State Reset and Modal Lifecycle Fixes -->
 <script nonce="{{ csp_nonce }}">
@@ -3897,27 +4088,448 @@ document.addEventListener('DOMContentLoaded', function () {
   // Reveal per-row checkbox (keeps table structure intact)
   document.querySelectorAll('.add-model-checkbox').forEach(cb => cb.style.display = 'inline-block');
 
-  // Direct selection: save and go back when checkbox checked
+  // NEW: Use sessionStorage and single-redirect flow on checkbox select
   document.querySelectorAll('.add-model-checkbox').forEach(cb => {
     cb.addEventListener('change', function () {
-      if (!this.checked) return;
-      const selectedLot = {
-        lot_id: this.dataset.lotId || this.getAttribute('data-stock-lot-id'),
-        qty: parseInt(this.dataset.qty || 0)
-      };
-      console.log('[ADD_MODEL] Selected:', selectedLot);
-      let existing = [];
-      try { existing = JSON.parse(localStorage.getItem('secondary_lots') || '[]'); } catch (e) { existing = []; }
-      existing.push(selectedLot);
-      try { localStorage.setItem('secondary_lots', JSON.stringify(existing)); } catch (e) { console.warn('localStorage failed', e); }
-      console.log('[ADD_MODEL] Redirecting back to Jig Modal');
-      try { window.history.back(); } catch (e) { window.location.href = '/jig_loading/JigView/'; }
+      try {
+        if (!this.checked) return;
+        const selectedLot = {
+          lot_id: this.dataset.lotId || this.getAttribute('data-stock-lot-id') || this.getAttribute('data-lot-id') || null,
+          qty: parseInt(this.dataset.qty || this.getAttribute('data-qty') || 0) || 0
+        };
+        console.log('[CHECKBOX_SELECTED]', selectedLot.lot_id);
+        if (!selectedLot.lot_id) {
+          console.warn('[CHECKBOX_SELECTED] missing lot_id');
+          return;
+        }
+
+        // Prefer sessionStorage for ephemeral navigation state
+        try {
+          sessionStorage.setItem('secondary_lot', JSON.stringify(selectedLot));
+        } catch (e) {
+          console.warn('[STORAGE] sessionStorage failed, falling back to localStorage', e);
+          try { localStorage.setItem('secondary_lot', JSON.stringify(selectedLot)); } catch (e2) { console.warn('[STORAGE] localStorage also failed', e2); }
+        }
+
+        // Compose return URL with merge_model flag (single redirect)
+        const primary = params.get('primary_lot_id') || params.get('primary_lot') || params.get('exclude_lot_id') || '';
+        const primaryBatch = params.get('primary_batch_id') || params.get('primary_batch') || '';
+        const redirectUrl = `/jig_loading/JigView/?primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(primaryBatch)}&merge_model=1`;
+
+        console.log('[ADD_MODEL_NAVIGATION]');
+        console.log('[RETURN_TO_MODAL]');
+
+        // Redirect once to JigView with merge flag
+        window.location.href = redirectUrl;
+      } catch (err) {
+        console.warn('add-model checkbox handler failed', err);
+      }
     });
   });
+
+  // If we arrived with merge_model=1, reopen modal and merge stored secondary
+  (async function handleMergeFlow() {
+      try {
+        if (params.get('merge_model') !== '1') return;
+        console.log('[ADD_MODEL_NAVIGATION] merge_model detected');
+
+      const primaryLot = params.get('primary_lot_id') || params.get('primary_lot') || '';
+      const primaryBatch = params.get('primary_batch_id') || params.get('primary_batch') || '';
+      // Safety: require both lot and batch for init API
+      if (!primaryLot || !primaryBatch) {
+        console.error('[INIT ERROR] Missing required params', primaryLot, primaryBatch);
+        return;
+      }
+      console.log('[PRIMARY LOAD]', primaryLot, primaryBatch);
+
+      // Open modal but DO NOT call initJigFromButton (that function resets the delink UI).
+      // Instead fetch primary init data and populate fields without clearing existing trays.
+      try {
+        const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.add('open');
+        const initQ = new URLSearchParams();
+        initQ.set('lot_id', primaryLot);
+        if (primaryBatch) initQ.set('batch_id', primaryBatch);
+        const initUrl = `/jig_loading/init-jig-load/?${initQ.toString()}`;
+        let initResp = null;
+        try {
+          const r = await fetch(initUrl, { credentials: 'same-origin' });
+          if (r.ok) initResp = await r.json();
+        } catch (e) { console.warn('[MERGE] primary init fetch failed', e); }
+
+        if (initResp && initResp.draft) {
+          try {
+            const data = initResp.draft;
+            // ===== STORE/UPDATE ORIGINAL JIG CAPACITY FOR SECONDARY MODEL =====
+            const jigCap = parseInt(data.jig_capacity || 0);
+            if (jigCap > 0) {
+              window.ORIGINAL_JIG_CAPACITY = jigCap;
+              window.BACKEND_ORIGINAL_CAPACITY = jigCap;
+            }
+            
+            // Populate simple fields without clearing delink UI
+            const lotQtyEl = document.getElementById('reallotQty') || document.getElementById('lotQtyInput');
+            const jigCapEl = document.getElementById('jigCapacityInput');
+            const loadedEl = document.getElementById('loadedCasesQtyDisplay') || document.getElementById('loadedCasesInput');
+            const brokenEl = document.getElementById('brokenBuildupHooksInput') || document.getElementById('brokenHooksInput');
+            const nickelEl = document.getElementById('nickelBathTypeInput');
+            const trayTypeEl = document.getElementById('trayTypeInput');
+            const imgEl = document.getElementById('modelImagePreview');
+            const labelEl = document.getElementById('modelImageLabel');
+
+            if (lotQtyEl) try { lotQtyEl.value = data.original_lot_qty || 0; } catch (e) {}
+            if (jigCapEl) try { jigCapEl.value = data.jig_capacity || 0; } catch (e) {}
+            if (brokenEl) try { brokenEl.value = window.currentBrokenHooks !== undefined ? window.currentBrokenHooks : (data.broken_hooks || 0); } catch (e) {}
+            if (loadedEl && typeof window.updateLoadedDisplay === 'function') try { window.updateLoadedDisplay(); } catch (e) {}
+            if (nickelEl) nickelEl.value = initResp.draft.nickel_bath_type || initResp.nickel_bath_type || '';
+            if (trayTypeEl) trayTypeEl.value = initResp.draft.tray_type || initResp.tray_type || '';
+            try { if (imgEl && initResp.draft.model_image_url) imgEl.src = initResp.draft.model_image_url; } catch (e) {}
+            try { if (labelEl && initResp.draft.model_image_label) labelEl.innerText = initResp.draft.model_image_label; } catch (e) {}
+
+            // If delink container is empty, render authoritative delink_tray_info for primary only
+            const container = document.getElementById('delinkTableSection') || document.getElementById('trayInputsContainer');
+            if (container && container.querySelectorAll('.tray-scan-tab').length === 0) {
+              try {
+                const source = Array.isArray(initResp.draft.delink_tray_info) ? initResp.draft.delink_tray_info : (Array.isArray(initResp.delink_tray_info) ? initResp.delink_tray_info : []);
+                const trayCapacity = initResp.draft.tray_capacity || initResp.tray_capacity || 12;
+                // Ensure top tray (explicit flag) comes before full trays, then sort by qty
+                source.sort((a,b) => {
+                  const aObj = a || {};
+                  const bObj = b || {};
+                  const aTop = Boolean(aObj.is_top_tray || aObj.top_tray || false);
+                  const bTop = Boolean(bObj.is_top_tray || bObj.top_tray || false);
+                  if (aTop && !bTop) return -1;
+                  if (!aTop && bTop) return 1;
+                  return parseInt(aObj.qty || aObj.tray_quantity || 0) - parseInt(bObj.qty || bObj.tray_quantity || 0);
+                });
+                source.forEach(entry => {
+                  const t = entry || {};
+                  const qty = t.qty || t.tray_quantity || 0;
+                  const div = document.createElement('div'); div.className = 'tray-scan-tab';
+                  const inp = document.createElement('input'); inp.type='text'; inp.className='tray-id-input model-bg-1'; inp.setAttribute('data-expected-qty', qty||0); inp.placeholder = 'Scan Tray ID';
+                  const qtyDiv = document.createElement('div'); qtyDiv.className='tray-qty'; qtyDiv.innerText = `Qty: ${qty}`;
+                  div.appendChild(inp); div.appendChild(qtyDiv); container.appendChild(div);
+                });
+              } catch (e) { console.warn('[MERGE] render primary delink failed', e); }
+            }
+          } catch (e) { console.warn('[MERGE] populate primary fields failed', e); }
+        }
+      } catch (e) { console.warn('[MERGE] open modal/init failed', e); }
+
+      // Now check for stored secondary lot
+      let secRaw = null;
+      try { secRaw = sessionStorage.getItem('secondary_lot') || localStorage.getItem('secondary_lot'); } catch (e) { secRaw = null; }
+      if (!secRaw) {
+        console.log('[MERGE] No secondary_lot found in sessionStorage');
+        // Clean merge flag from URL
+        const url = new URL(window.location.href);
+        url.searchParams.delete('merge_model');
+        window.history.replaceState({}, '', url.toString());
+        return;
+      }
+
+      let secondaryLot = null;
+      try { secondaryLot = JSON.parse(secRaw); } catch (e) { console.warn('[MERGE] parse failed', e); }
+      if (!secondaryLot || !secondaryLot.lot_id) {
+        console.warn('[MERGE] invalid secondary_lot payload');
+        sessionStorage.removeItem('secondary_lot');
+        const url = new URL(window.location.href); url.searchParams.delete('merge_model'); window.history.replaceState({}, '', url.toString());
+        return;
+      }
+
+      console.log('[MERGING_SECONDARY]', secondaryLot);
+
+      // Call InitJigLoad API again to get merged trays (safe: server handles multi_model when requested)
+      const q = new URLSearchParams();
+      q.set('lot_id', primaryLot);
+      q.set('batch_id', primaryBatch);
+      q.set('multi_model', '1');
+      q.set('secondary_lots', JSON.stringify([secondaryLot]));
+      console.log('[MERGE CALL]', primaryLot, primaryBatch, secondaryLot);
+
+      const mergeUrl = `/jig_loading/init-jig-load/?${q.toString()}`;
+      let mergedResp = null;
+      try {
+        const r = await fetch(mergeUrl, { credentials: 'same-origin' });
+        if (r.ok) mergedResp = await r.json(); else mergedResp = await r.json().catch(() => null);
+      } catch (e) { console.warn('[MERGE] InitJigLoad fetch failed', e); }
+
+      // Determine trays to append: prefer `trays`, fall back to `delink_tray_info`, `extra_trays`, or `half_filled_tray_info`
+      const traysToAppend = (mergedResp && (mergedResp.trays || mergedResp.extra_trays || mergedResp.delink_tray_info || mergedResp.half_filled_tray_info)) || [];
+
+      // Find append target: prefer #delinkTableSection, else first .tray-scan-tabs
+      const appendTarget = document.getElementById('delinkTableSection') || document.querySelector('.tray-scan-tabs');
+      if (!appendTarget) {
+        console.warn('[MERGE] append target not found');
+      } else if (!Array.isArray(traysToAppend) || traysToAppend.length === 0) {
+        console.log('[MERGE] no trays returned to append');
+      } else {
+        // Append each tray as a tray-scan-tab with secondary styling
+        traysToAppend.forEach((t) => {
+          try {
+            // guard against duplicate tray ids already present
+            const trayId = (t.tray_id || t.tray || t.trayId || '').toString();
+            const qty = t.qty || t.tray_quantity || t.effective_qty || t.qty || 0;
+            if (trayId) {
+              const exists = Array.from(appendTarget.querySelectorAll('.tray-scan-tab input')).some(inp => (inp.value || '').toString() === trayId);
+              if (exists) return; // skip duplicate
+            }
+
+            const div = document.createElement('div');
+            div.className = 'tray-scan-tab';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'tray-id-input model-bg-2';
+            input.placeholder = trayId ? trayId : 'Scan Tray ID';
+            input.value = ''; // keep empty for scanning
+            input.setAttribute('data-expected-qty', qty || 0);
+            const qtyDiv = document.createElement('div'); qtyDiv.className = 'tray-qty'; qtyDiv.innerText = `Qty: ${qty}`;
+            div.appendChild(input); div.appendChild(qtyDiv);
+            appendTarget.appendChild(div);
+          } catch (e) { console.warn('[MERGE] append failed for tray', t, e); }
+        });
+        console.log('[FINAL_TRAY_COUNT]', appendTarget.querySelectorAll('.tray-scan-tab').length);
+      }
+
+      // ===== 🔥 SAFE LCQ RE-CALCULATION AFTER MERGE =====
+      try {
+        console.log('[LCQ_AFTER_MERGE] Starting safe recalculation after merge');
+        
+        // Update ORIGINAL_JIG_CAPACITY from merged response if available
+        if (mergedResp && mergedResp.draft && mergedResp.draft.jig_capacity) {
+          const newCapacity = parseInt(mergedResp.draft.jig_capacity || 0);
+          if (newCapacity > 0) {
+            window.ORIGINAL_JIG_CAPACITY = newCapacity;
+            window.BACKEND_ORIGINAL_CAPACITY = newCapacity;
+            console.log('[LCQ_AFTER_MERGE] Updated ORIGINAL_JIG_CAPACITY:', newCapacity);
+          }
+        }
+        
+        // Use standalone safe recalculation function (includes all validations)
+        if (typeof window.safeLCQRecalculation === 'function') {
+          const success = window.safeLCQRecalculation('after_merge');
+          console.log('[LCQ_AFTER_MERGE] Safe recalculation result:', success ? '✅ SUCCESS' : '❌ FAILED');
+        } else {
+          console.warn('[LCQ_AFTER_MERGE] safeLCQRecalculation function not available');
+        }
+      } catch (e) {
+        console.error('[LCQ_AFTER_MERGE] Error in safe recalculation:', e);
+      }
+
+      // Cleanup state
+      try { sessionStorage.removeItem('secondary_lot'); } catch (e) { console.warn('[CLEANUP] sessionStorage remove failed', e); }
+      // remove merge_model param from URL to avoid re-run on reload
+      try { const url = new URL(window.location.href); url.searchParams.delete('merge_model'); window.history.replaceState({}, '', url.toString()); } catch (e) {}
+
+    } catch (err) { console.warn('merge flow failed', err); }
+  })();
 });
 </script>
 
 
+<script nonce="{{ csp_nonce }}">
+(function(){
+  const delinkSets = new Map(); // modelKey -> Set of normalized tray ids
+  function normalize(v){ try{ return (v||'').toString().trim().toUpperCase(); }catch(e){return v;} }
+  function getModelKeyForInput(inp){
+    try{
+      const ds = inp && inp.dataset ? inp.dataset : {};
+      let k = ds.lotId || ds.lot || ds.batchId || ds.batch || window.CURRENT_LOT_ID || window.currentJigLotId || inp.closest('.delink-section')?.dataset.lotId || 'GLOBAL';
+      return (k||'GLOBAL').toString();
+    }catch(e){ return 'GLOBAL'; }
+  }
+  function markDuplicate(input, msg){
+    input.classList.add('tray-duplicate-error');
+    let m = input.parentNode.querySelector('.tray-duplicate-message');
+    if(!m){ m = document.createElement('div'); m.className='tray-duplicate-message'; input.parentNode.appendChild(m); }
+    m.innerText = msg || 'Tray already scanned in this delink';
+    console.log('[DUPLICATE_BLOCKED]', normalize(input.value));
+  }
+  function clearDuplicate(input){
+    input.classList.remove('tray-duplicate-error');
+    const m = input.parentNode.querySelector('.tray-duplicate-message'); if(m) m.remove();
+  }
+
+  function revalidateAllDelinkInputs(){
+    // Get all inputs in the delink section and validate them together
+    const inputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
+    const key = inputs.length > 0 ? getModelKeyForInput(inputs[0]) : 'GLOBAL';
+    
+    // Count occurrences of each value
+    const valueCount = {};
+    const valueFirstInput = {};
+    
+    inputs.forEach((inp) => {
+      const val = normalize(inp.value);
+      if(val && val.length >= 3){
+        if(!valueCount[val]){
+          valueCount[val] = 0;
+          valueFirstInput[val] = inp;
+        }
+        valueCount[val]++;
+      }
+    });
+    
+    // Now validate: 1st occurrence is valid, 2nd+ are errors
+    inputs.forEach((inp) => {
+      const val = normalize(inp.value);
+      if(!val || val.length < 3){
+        clearDuplicate(inp);
+        return;
+      }
+      
+      // If this is the first occurrence of this value, it's valid
+      if(valueFirstInput[val] === inp){
+        clearDuplicate(inp);
+        console.log('[TRAY_ACCEPTED]', val, key);
+      } else if(valueCount[val] > 1){
+        // This is a duplicate (2nd or later occurrence)
+        markDuplicate(inp, 'Tray already scanned in this delink');
+        console.log('[DUPLICATE_BLOCKED]', val, key);
+      }
+    });
+    
+    // Update tracking set for API interception
+    const set = new Set();
+    Object.keys(valueCount).forEach(val => {
+      if(val && val.length >= 3) set.add(val);
+    });
+    delinkSets.set(key, set);
+
+    // Recompute authoritative delink total from DOM and trigger LCQ recalculation
+    try {
+      let delinkTotal = 0;
+      inputs.forEach(inp => {
+        try {
+          const parent = inp.parentNode;
+          const qtyEl = parent && parent.querySelector && parent.querySelector('.tray-qty');
+          if (qtyEl) {
+            const match = (qtyEl.textContent || '').match(/\d+/);
+            if (match) delinkTotal += parseInt(match[0]) || 0;
+          }
+        } catch (e) {}
+      });
+      // Only count validated (scanned) inputs to avoid pre-populating before any scan
+      let validatedDelinkTotal = 0;
+      inputs.forEach(inp => {
+        try {
+          if (inp.dataset.validated !== 'true') return;
+          const parent = inp.parentNode;
+          const qtyEl = parent && parent.querySelector && parent.querySelector('.tray-qty');
+          if (qtyEl) {
+            const match = (qtyEl.textContent || '').match(/\d+/);
+            if (match) validatedDelinkTotal += parseInt(match[0]) || 0;
+          }
+        } catch (e) {}
+      });
+      window.currentDelinkQty = validatedDelinkTotal;
+      console.log('[DELINK_CHANGE] currentDelinkQty set to (validated only)', window.currentDelinkQty);
+      if (typeof window.safeLCQRecalculation === 'function') window.safeLCQRecalculation('delink_change');
+    } catch (e) { console.warn('[DELINK_CHANGE] failed to recompute delink total', e); }
+  }
+
+  function attachHandler(inp){
+    if(!inp || inp.__dup_attached) return; inp.__dup_attached = true;
+    
+    inp.addEventListener('input', function(){
+      // Re-validate all inputs whenever any input changes
+      revalidateAllDelinkInputs();
+    });
+
+    inp.addEventListener('blur', function(){
+      // Final validation on blur
+      revalidateAllDelinkInputs();
+    });
+
+    inp.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        revalidateAllDelinkInputs();
+        this.blur();
+        
+        // Check if this input has a duplicate error
+        if(this.classList.contains('tray-duplicate-error')){
+          try{ this.focus(); this.select(); }catch(e){}
+        } else {
+          const ev = new CustomEvent('tray-validated', { detail:{ trayId: this.value, input: this }, bubbles:true, cancelable:true });
+          this.dispatchEvent(ev);
+        }
+      }
+    });
+  }
+
+  const container = document.getElementById('delinkTableSection');
+  if(container){
+    const mo = new MutationObserver(function(muts){
+      muts.forEach(m=>{
+        m.addedNodes.forEach(n=>{ if(n.nodeType!==1) return; if(n.matches && n.matches('.tray-scan-tab')){ const i = n.querySelector('.tray-id-input'); if(i) attachHandler(i); } else { n.querySelectorAll && n.querySelectorAll('.tray-id-input').forEach(attachHandler); } });
+        m.removedNodes.forEach(n=>{ if(n.nodeType!==1) return; n.querySelectorAll && n.querySelectorAll('.tray-id-input').forEach(inp=>{ const prev = inp.dataset.__prevTrayId; if(prev){ const key = getModelKeyForInput(inp); const set = delinkSets.get(key) || new Set(); set.delete(prev); delinkSets.set(key,set); console.log('[DUPLICATE_REMOVED_ON_DOM_REMOVE]', prev, key); } }); });
+      });
+    });
+    mo.observe(container, { childList:true, subtree:true });
+    container.querySelectorAll('.tray-id-input').forEach(attachHandler);
+  }
+
+  // Intercept fetch to block client-side duplicate calls to scan-tray endpoint
+  const _fetch = window.fetch ? window.fetch.bind(window) : null;
+  if(_fetch){
+    window.fetch = function(resource, options){
+      try{
+        const url = (typeof resource === 'string') ? resource : (resource && resource.url) || '';
+        if(url && url.indexOf('/jig_loading/scan-tray') !== -1){
+          try{
+            const body = options && options.body ? JSON.parse(options.body) : null;
+            const trayId = normalize(body && body.tray_id);
+            const lot = body && body.lot_id || window.CURRENT_LOT_ID || window.currentJigLotId || 'GLOBAL';
+            const s = delinkSets.get((lot||'GLOBAL').toString()) || new Set();
+            console.log('[DUPLICATE_CHECK]', trayId, lot);
+            if(s.has(trayId)){
+              console.log('[DUPLICATE_BLOCKED] (client)', trayId, lot);
+              document.querySelectorAll && document.querySelectorAll('#delinkTableSection .tray-id-input').forEach(i=>{ if(normalize(i.value)===trayId) markDuplicate(i,'Tray already scanned in this delink'); });
+              return Promise.resolve(new Response(JSON.stringify({ status:'error' }), { status:400, headers: { 'Content-Type':'application/json' } }));
+            }
+          }catch(e){ console.warn('[DUPLICATE] fetch wrapper parse failed', e); }
+        }
+      }catch(e){}
+      return _fetch(resource, options);
+    };
+  }
+
+  // jQuery.ajax wrapper if used by existing code
+  if(window.jQuery && window.jQuery.ajax){
+    const _ajax = window.jQuery.ajax;
+    window.jQuery.ajax = function(opts){
+      try{
+        const url = (opts && opts.url) || '';
+        if(url && url.indexOf('/jig_loading/scan-tray') !== -1){
+          let data = opts.data;
+          if(typeof data === 'string'){ try{ data = JSON.parse(data); }catch(e){} }
+          const trayId = normalize(data && (data.tray_id || data.trayId));
+          const lot = (data && (data.lot_id || data.lot)) || window.CURRENT_LOT_ID || window.currentJigLotId || 'GLOBAL';
+          const s = delinkSets.get((lot||'GLOBAL').toString()) || new Set();
+          if(s.has(trayId)){
+            console.log('[DUPLICATE_BLOCKED] (client-jq)', trayId, lot);
+            if(opts && typeof opts.error === 'function'){ try{ opts.error({ status:400, responseJSON:{ status:'error', message:'Duplicate tray not allowed' } }); }catch(e){} }
+            if(opts && typeof opts.complete === 'function'){ try{ opts.complete(); }catch(e){} }
+            return Promise.resolve();
+          }
+        }
+      }catch(e){}
+      return _ajax.apply(this, arguments);
+    };
+  }
+
+  // Clear sets on modal reset/close by wrapping existing reset function
+  try{
+    if(typeof window.resetJigModalState === 'function'){
+      const _orig = window.resetJigModalState;
+      window.resetJigModalState = function(){ try{ delinkSets.clear(); console.log('[DUPLICATE_STATE_CLEARED]'); }catch(e){}; return _orig.apply(this, arguments); };
+    } else {
+      window.resetJigModalState = function(){ try{ delinkSets.clear(); console.log('[DUPLICATE_STATE_CLEARED]'); }catch(e){} };
+    }
+  }catch(e){ console.warn('[DUPLICATE] wrap reset failed', e); }
+
+})();
+</script>
 
 {% endblock %}
 {% endblock content %}

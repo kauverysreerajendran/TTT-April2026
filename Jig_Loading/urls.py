@@ -10,4 +10,3 @@ urlpatterns = [
 	path('scan-tray/', ScanTray.as_view(), name='scan-tray'),
 	path('JigCompletedTable/', JigCompletedTable.as_view(), name='JigCompletedTable'),
 ]
-

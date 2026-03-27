@@ -1,6 +1,7 @@
 from django.views.generic import *
 from modelmasterapp.models import *
 from .models import Jig, JigLoadingMaster, JigLoadTrayId, JigLoadingManualDraft, JigCompleted
+from .services import JigLoadingService
 from rest_framework.decorators import *
 from django.http import JsonResponse
 import logging
@@ -224,6 +225,7 @@ class InitJigLoad(APIView):
 						'top_tray': False,
 						'rejected': False,
 						'delinked': False,
+						'is_placeholder': True,  # mark as synthetic - not a real scannable tray
 					})
 					counter += 1
 				if top_tray_qty and top_tray_qty > 0:
@@ -233,6 +235,7 @@ class InitJigLoad(APIView):
 						'top_tray': True,
 						'rejected': False,
 						'delinked': False,
+						'is_placeholder': True,  # mark as synthetic - not a real scannable tray
 					})
 			except Exception:
 				logging.exception('InitJigLoad BrassAudit fallback failed')
@@ -441,33 +444,6 @@ class InitJigLoad(APIView):
 				secondary_lots = []
 			logging.info(f"[MULTI_MODEL] Secondary lots: {secondary_lots}")
 
-		# ===== CALCULATE SERVER-AUTHORITATIVE LOADED_CASES_QTY AND EMPTY_HOOKS ==
-		loaded_cases_qty = 0
-		broken_hooks_int = 0
-		jig_capacity_int = int(jig_capacity or 0)
-		lot_qty_int = int(lot_qty or 0)
-
-		try:
-			broken_hooks_int = int(getattr(draft, 'broken_hooks', 0) or 0)
-		except Exception:
-			broken_hooks_int = 0
-
-		# 🔥 FIX: NO auto-loading on initial load. Only use persisted draft value if exists.
-		# All initial states (including perfect fit 144/144) start with loaded_cases_qty = 0
-		if draft and getattr(draft, 'loaded_cases_qty', None):
-			# Use persisted draft value (user already scanned)
-			loaded_cases_qty = int(draft.loaded_cases_qty)
-		else:
-			# Initial state: no auto-loading (user hasn't scanned yet)
-			loaded_cases_qty = 0
-
-		# empty_hooks = total capacity - (minimum of lot and capacity) - broken_hooks
-		effective_used = min(lot_qty_int, jig_capacity_int)
-		empty_hooks = jig_capacity_int - effective_used - broken_hooks_int
-		empty_hooks = max(0, empty_hooks)
-
-		logging.info(f"[BACKEND_STATE] lot={lot_qty_int}, cap={jig_capacity_int}, broken={broken_hooks_int}, loaded={loaded_cases_qty}, empty={empty_hooks}")
-
 		# Build a non-persistent draft dict to return to the frontend
 		resp_draft = {
 			'batch_id': batch_id,
@@ -491,15 +467,32 @@ class InitJigLoad(APIView):
 			'secondary_lots': secondary_lots,
 		}
 
+		# Calculate empty hooks based on business rule
+		empty_hooks = 0
+		try:
+			lot_qty_int = int(lot_qty or 0)
+			jig_capacity_int = int(jig_capacity or 0)
+			_loaded = int(resp_draft.get('loaded_cases_qty', 0) or 0)
+			_broken = int((draft.broken_hooks if draft and getattr(draft, 'broken_hooks', None) is not None else 0) or 0)
+			
+			# BUSINESS RULE: If lot_qty >= jig_capacity, empty_hooks = 0 (no calculation needed)
+			if lot_qty_int >= jig_capacity_int:
+				empty_hooks = 0
+				logging.info(f"[EMPTY_HOOKS] lot_qty({lot_qty_int}) >= jig_capacity({jig_capacity_int}), empty_hooks=0")
+			else:
+				empty_hooks = max(0, jig_capacity_int - _loaded - _broken)
+				logging.info(f"[EMPTY_HOOKS] lot_qty({lot_qty_int}) < jig_capacity({jig_capacity_int}), calculated empty_hooks={empty_hooks}")
+			
+			logging.info(f"[EMPTY_HOOKS_FINAL] capacity={jig_capacity_int}, loaded={_loaded}, broken={_broken}, result={empty_hooks}")
+		except Exception:
+			logging.exception('[EMPTY_HOOKS_CALC] Failed to calculate empty hooks')
+			empty_hooks = 0
+
 		return Response({
 			'draft': resp_draft,
 			'trays': trays,
 			'lot_qty': int(lot_qty or 0),
-			'original_capacity': int(jig_capacity_int or 0),
-			'effective_capacity': int(max(0, jig_capacity_int - broken_hooks_int) or 0),
-			'loaded_cases_qty': int(loaded_cases_qty or 0),
-			'broken_hooks': int(broken_hooks_int or 0),
-			'empty_hooks': int(empty_hooks or 0),
+			'empty_hooks': empty_hooks,
 			'excess_qty': int(excess_qty or 0) if 'excess_qty' in locals() else 0,
 			'excess_info': response_excess if 'response_excess' in locals() else {"excess_qty": 0, "excess_tray_count": 0, "excess_trays": []},
 			# duplicate top-level metadata for compatibility
@@ -529,7 +522,7 @@ class ScanTray(APIView):
 		if not lot_id or not batch_id or not tray_id:
 			raise exceptions.ParseError(detail='lot_id, batch_id and tray_id are required')
 
-		# Validation-only scan: do not create or modify drafts here. Return tray qty.
+		# Validate tray exists in DB for this lot
 		try:
 			tray = JigLoadTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
 			if not tray:
@@ -539,10 +532,44 @@ class ScanTray(APIView):
 			return Response({'status': 'error', 'message': 'Tray fetch error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 		tray_qty = int(tray.tray_quantity or 0)
+		logging.info(f"Tray validated: {tray_id} (lot: {lot_id}) qty:{tray_qty}")
 
-		print(f"Tray validated: {tray_id} (lot: {lot_id}) qty:{tray_qty}")
+		# Persist scan to draft: update delink_tray_info, delink_tray_qty, loaded_cases_qty
+		total_delink_qty = 0
+		try:
+			draft, _ = JigLoadingManualDraft.objects.get_or_create(
+				batch_id=batch_id,
+				lot_id=lot_id,
+				user=request.user,
+				defaults={'original_lot_qty': 0, 'jig_capacity': 0}
+			)
+			existing_info = list(draft.delink_tray_info or [])
+			# Idempotent: skip if tray already recorded
+			tray_already_in = any(
+				(e.get('tray_id') if isinstance(e, dict) else None) == tray_id
+				for e in existing_info
+			)
+			if not tray_already_in:
+				existing_info.append({'tray_id': tray_id, 'qty': tray_qty})
+			total_delink_qty = sum(
+				int((e.get('qty') if isinstance(e, dict) else 0) or 0)
+				for e in existing_info
+			)
+			draft.delink_tray_info = existing_info
+			draft.delink_tray_qty = total_delink_qty
+			draft.loaded_cases_qty = total_delink_qty
+			draft.save(update_fields=['delink_tray_info', 'delink_tray_qty', 'loaded_cases_qty', 'updated_at'])
+			logging.info(f"[SCAN_PERSISTED] tray={tray_id}, total={total_delink_qty}, entries={len(existing_info)}")
+		except Exception:
+			logging.exception('Failed to persist scan to draft')
 
-		return Response({'status': 'success', 'tray_id': tray_id, 'tray_qty': tray_qty})
+		return Response({
+			'status': 'success',
+			'tray_id': tray_id,
+			'tray_qty': tray_qty,
+			'delink_tray_qty': total_delink_qty,
+			'loaded_cases_qty': total_delink_qty,
+		})
 
 # Jig Loading - Complete Table View
 @method_decorator(login_required, name='dispatch')

@@ -85,10 +85,10 @@ class JigLoadTrayId(models.Model):
     @property
     def is_available_for_scanning(self):
         """
-        Check if tray is available for scanning
-        Available if: not scanned OR delinked (can be reused)
+        Check if tray is available for scanning.
+        Available if: not yet delinked (new tray) OR already delinked (can be reused).
         """
-        return not self.scanned or self.delink_tray
+        return self.new_tray or self.delink_tray
 
     @property
     def status_display(self):
