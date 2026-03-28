@@ -77,24 +77,17 @@ def auto_provision_modules_for_group(user, group):
 
 
 def get_allowed_modules_for_user(user):
+    # Default: any authenticated user sees all modules
     if not user.is_authenticated:
         return []
-    if (
-        user.is_superuser
-        or user.groups.filter(name__iexact="Admin").exists()
-        or (
-            hasattr(user, 'userprofile')
-            and user.userprofile.department
-            and user.userprofile.department.name.lower() == "admin"
-        )
-    ):
+    try:
         return list(Module.objects.values_list('name', flat=True))
-    # Use UserModuleProvision for per-user modules
-    return list(
-        UserModuleProvision.objects.filter(user=user)
-        .values_list('module_name', flat=True)
-        .distinct()
-    )
+    except Exception:
+        return list(
+            UserModuleProvision.objects.filter(user=user)
+            .values_list('module_name', flat=True)
+            .distinct()
+        )
 
 
 

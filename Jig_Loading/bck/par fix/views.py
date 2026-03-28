@@ -571,10 +571,7 @@ class InitJigLoad(APIView):
 			except Exception as e:
 				logging.exception(f"[MULTI_MODEL] Primary allocation failed: {e}")
 
-			# STEP 2: SECONDARY MODEL ALLOCATIONS (with capacity enforcement + excess → half-filled)
-			mm_half_filled_tray_info = []
-			mm_half_filled_tray_qty = 0
-
+			# STEP 2: SECONDARY MODEL ALLOCATIONS
 			for seq, sec in enumerate(secondary_lots, start=1):
 				try:
 					sec_lot_id = sec.get('lot_id')
@@ -588,41 +585,17 @@ class InitJigLoad(APIView):
 					capacity_used = sum(m['allocated_qty'] for m in multi_model_allocation)
 					capacity_remaining = max(0, _mm_eff_cap - capacity_used)
 
-					# CAPACITY CONTROL: cap allocation to remaining jig capacity
-					allowed_qty = min(sec_lot_qty, capacity_remaining)
-					excess_for_model = max(0, sec_lot_qty - allowed_qty)
-					logging.info(f"[MULTI_MODEL] Secondary {sec_lot_id}: remaining_capacity={capacity_remaining}, sec_lot_qty={sec_lot_qty}, allowed_qty={allowed_qty}, excess_qty={excess_for_model}")
-
 					secondary_result = allocate_trays_for_model(
 						lot_id=sec_lot_id,
-						model_lot_qty=allowed_qty,
+						model_lot_qty=sec_lot_qty,
 						effective_capacity_remaining=capacity_remaining,
 						used_tray_ids=used_tray_ids
 					)
 					used_tray_ids.update(secondary_result['allocated_tray_ids'])
 					sec_img = fetch_model_image_metadata(sec_lot_id, sec_batch_id)
-					sec_model_name = fetch_model_metadata(sec_lot_id, sec_batch_id)
-
-					# Check for partial tray: last allocated tray may be partially used
-					partial_remainder = 0
-					partial_tray_id = None
-					if secondary_result['tray_info']:
-						last_alloc = secondary_result['tray_info'][-1]
-						# Find original tray qty to detect partial usage
-						try:
-							orig_tray = JigLoadTrayId.objects.filter(lot_id=sec_lot_id, tray_id=last_alloc['tray_id']).first()
-							if orig_tray:
-								orig_qty = int(getattr(orig_tray, 'tray_quantity', 0) or 0)
-								if last_alloc['qty'] < orig_qty:
-									partial_remainder = orig_qty - last_alloc['qty']
-									partial_tray_id = last_alloc['tray_id']
-									logging.info(f"[MULTI_MODEL] Partial tray detected: {partial_tray_id} used={last_alloc['qty']}, remainder={partial_remainder}")
-						except Exception:
-							pass
-
 					multi_model_allocation.append({
-						'model': sec_model_name,
-						'model_name': sec_model_name,
+						'model': fetch_model_metadata(sec_lot_id, sec_batch_id),
+						'model_name': fetch_model_metadata(sec_lot_id, sec_batch_id),
 						'model_role': 'secondary',
 						'lot_id': sec_lot_id,
 						'batch_id': sec_batch_id,
@@ -632,51 +605,7 @@ class InitJigLoad(APIView):
 						'model_image_url': sec_img['model_image_url'],
 						'model_image_label': sec_img['model_image_label'],
 					})
-					logging.info(f"[MULTI_MODEL] Secondary {sec_lot_id}: allocated {secondary_result['allocated_qty']} qty")
-
-					# EXCESS HANDLING: collect excess trays into half_filled_tray_info
-					if excess_for_model > 0:
-						excess_remaining = excess_for_model
-
-						# 1) If last allocated tray was partial, its remainder goes to half-filled
-						if partial_remainder > 0 and partial_tray_id:
-							hf_qty = min(partial_remainder, excess_remaining)
-							mm_half_filled_tray_info.append({
-								'tray_id': partial_tray_id,
-								'qty': hf_qty,
-								'model': sec_model_name,
-							})
-							excess_remaining -= hf_qty
-							mm_half_filled_tray_qty += hf_qty
-							logging.info(f"[MULTI_MODEL] Half-filled partial tray: {partial_tray_id} qty={hf_qty}")
-
-						# 2) Continue with unallocated trays from same lot for remaining excess
-						if excess_remaining > 0:
-							try:
-								excess_qs = JigLoadTrayId.objects.filter(lot_id=sec_lot_id).order_by('id')
-								for tray_obj in excess_qs:
-									if excess_remaining <= 0:
-										break
-									tid = getattr(tray_obj, 'tray_id', '')
-									# Skip already allocated trays
-									if tid in used_tray_ids:
-										continue
-									tq = int(getattr(tray_obj, 'tray_quantity', 0) or 0)
-									hf_qty = min(tq, excess_remaining)
-									mm_half_filled_tray_info.append({
-										'tray_id': tid,
-										'qty': hf_qty,
-										'model': sec_model_name,
-									})
-									excess_remaining -= hf_qty
-									mm_half_filled_tray_qty += hf_qty
-									used_tray_ids.add(tid)
-									logging.info(f"[MULTI_MODEL] Half-filled excess tray: {tid} qty={hf_qty}")
-							except Exception as ex:
-								logging.exception(f"[MULTI_MODEL] Excess tray fetch failed for {sec_lot_id}: {ex}")
-
-						logging.info(f"[MULTI_MODEL] Excess for {sec_lot_id}: total half_filled_qty={mm_half_filled_tray_qty}, trays={len(mm_half_filled_tray_info)}")
-
+					logging.info(f"[MULTI_MODEL] Secondary {sec_lot_id}: {secondary_result['allocated_qty']} qty")
 				except Exception as e:
 					logging.exception(f"[MULTI_MODEL] Secondary allocation failed for {sec.get('lot_id')}: {e}")
 					continue
@@ -685,7 +614,7 @@ class InitJigLoad(APIView):
 			all_tray_ids = [t['tray_id'] for m in multi_model_allocation for t in m['tray_info']]
 			if len(all_tray_ids) != len(set(all_tray_ids)):
 				logging.error("[MULTI_MODEL] VALIDATION FAILED: Duplicate tray IDs detected!")
-			logging.info(f"[MULTI_MODEL] Final: {len(multi_model_allocation)} models, {len(all_tray_ids)} total trays, half_filled_qty={mm_half_filled_tray_qty}")
+			logging.info(f"[MULTI_MODEL] Final: {len(multi_model_allocation)} models, {len(all_tray_ids)} total trays")
 
 		# Build ui_delink_tray_info: flattened tray list from multi_model_allocation for FE binding
 		ui_delink_tray_info = []
@@ -712,13 +641,7 @@ class InitJigLoad(APIView):
 		jig_capacity_int = int(jig_capacity or 0)
 		lot_qty_int = int(lot_qty or 0)
 
-		# 🔥 MULTI-MODEL CUMULATIVE: aggregate total qty from all models
-		if multi_model_flag and multi_model_allocation:
-			total_multi_model_qty = sum(m.get('allocated_qty', 0) for m in multi_model_allocation)
-			logging.info(f"[MULTI_MODEL] Incoming Models: {len(multi_model_allocation)}")
-			logging.info(f"[MULTI_MODEL] Computed Total: {total_multi_model_qty}")
-		else:
-			total_multi_model_qty = lot_qty_int
+		# No need to recalculate broken_hooks_int - use the value from earlier
 
 		# 🔥 FIX: NO auto-loading on initial load. Only use persisted draft value if exists.
 		# All initial states (including perfect fit 144/144) start with loaded_cases_qty = 0
@@ -736,15 +659,13 @@ class InitJigLoad(APIView):
 			# AFTER SCAN: use scan-based calculation
 			empty_hooks = max(0, effective_capacity - loaded_cases_qty)
 		else:
-			# BEFORE SCAN: use cumulative lot-based calculation (multi-model aware)
-			if total_multi_model_qty < effective_capacity:
-				empty_hooks = effective_capacity - total_multi_model_qty
+			# BEFORE SCAN: use lot-based calculation
+			if lot_qty_int < effective_capacity:
+				empty_hooks = effective_capacity - lot_qty_int
 			else:
 				empty_hooks = 0
 
-		logging.info(f"[BACKEND_STATE] lot={lot_qty_int}, cap={jig_capacity_int}, broken={broken_hooks_int}, loaded={loaded_cases_qty}, empty={empty_hooks}, total_multi_model_qty={total_multi_model_qty}")
-		if multi_model_flag and multi_model_allocation:
-			logging.info(f"[MULTI_MODEL] Empty Hooks: {empty_hooks}")
+		logging.info(f"[BACKEND_STATE] lot={lot_qty_int}, cap={jig_capacity_int}, broken={broken_hooks_int}, loaded={loaded_cases_qty}, empty={empty_hooks}")
 
 		# Detect BH preview mode: when broken_hooks is explicitly passed via query param,
 		# ALWAYS use freshly computed delink_tray_info (not stale draft data)
@@ -768,7 +689,6 @@ class InitJigLoad(APIView):
 			'nickel_bath_type': nickel_bath_type,
 			'tray_type': tray_type_name,
 			'is_multi_model': True if multi_model_flag else False,
-			'total_multi_model_qty': int(total_multi_model_qty or 0),
 			'draft_data': {
 				'primary_lot': lot_id,
 				'secondary_lots': secondary_lots
@@ -797,13 +717,10 @@ class InitJigLoad(APIView):
 			'secondary_lots': secondary_lots,
 			'scenario': 'PERFECT_FIT' if is_perfect_fit else '',
 			'is_multi_model': True if multi_model_flag else False,
-			'total_multi_model_qty': int(total_multi_model_qty or 0),
 			# ===== NEW: MULTI-MODEL ALLOCATION (when multi_model flag is set) =====
 			'multi_model_allocation': multi_model_allocation if multi_model_flag else [],
 			# Flattened tray list from all models for FE delink binding in multi-model mode
 			'ui_delink_tray_info': ui_delink_tray_info if ui_delink_tray_info else [],
-			'half_filled_tray_info': mm_half_filled_tray_info if 'mm_half_filled_tray_info' in locals() else [],
-			'half_filled_tray_qty': mm_half_filled_tray_qty if 'mm_half_filled_tray_qty' in locals() else 0,
 		})
 
 

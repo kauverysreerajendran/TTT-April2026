@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
+from watchcase_tracker import sso
 from django.conf.urls import handler404, handler500, handler403, handler400
 from django.shortcuts import render
 from django.http import HttpResponse
@@ -30,6 +31,9 @@ urlpatterns = [
     
     #path('admin/', admin.site.urls),
     path('auth/', include('social_django.urls', namespace='social')),
+    # Microsoft Entra ID (Azure AD) SSO endpoints
+    path('auth/microsoft/login/', sso.microsoft_login, name='microsoft_login'),
+    path('auth/microsoft/callback/', sso.microsoft_callback, name='microsoft_callback'),
     
     path('accounts/profile/', lambda request: HttpResponse('Logged in successfully!')),
     # Use your custom login template here:    

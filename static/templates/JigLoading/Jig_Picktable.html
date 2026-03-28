@@ -3241,9 +3241,49 @@ document.addEventListener('DOMContentLoaded', function () {
   window.jigInitBound = true;
 
   // ==========================================================
+  // 🔥 GLOBAL API STORM PREVENTION - CRITICAL FIX
+  // ==========================================================
+  // Single lock to prevent init-jig-load being called multiple times
+  window.isInitLoading = false;
+  
+  // Controlled INIT API call with lock
+  window.callInitAPI = function(url, callback) {
+    if (window.isInitLoading) {
+      console.warn('🚫 [INIT BLOCKED] Already in progress, preventing duplicate call');
+      return Promise.resolve(null);
+    }
+    
+    window.isInitLoading = true;
+    console.log('✅ [INIT START]', url);
+    
+    return fetch(url, { credentials: 'same-origin' })
+      .then(res => {
+        if (!res.ok) throw new Error('Init API failed with status ' + res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log('✅ [INIT SUCCESS] Data received');
+        if (typeof callback === 'function') {
+          callback(data);
+        }
+        return data;
+      })
+      .catch(err => {
+        console.error('❌ [INIT ERROR]', err);
+        return null;
+      })
+      .finally(() => {
+        window.isInitLoading = false;
+        console.log('🔓 [INIT LOCK RELEASED]');
+      });
+  };
+
+  // ==========================================================
   // 🔥 GLOBAL STATE FOR BROKEN HOOKS (SAFE)
   // ==========================================================
   window.currentBrokenHooks = window.currentBrokenHooks || 0;
+  // Internal update flag: when true, API-triggering functions should skip network calls
+  window.isInternalUpdate = window.isInternalUpdate || false;
 
   const idMap = {
     lotQtyInput: document.getElementById('reallotQty') || document.getElementById('lotQtyInput'),
@@ -3269,8 +3309,8 @@ document.addEventListener('DOMContentLoaded', function () {
   window.currentJigBatchId = batchId;
   window.jigCapacity = parseInt(jigCapacity) || window.jigCapacity || 0;
 
-  // immediate preview refresh (safe no-op if function not yet defined)
-  if (typeof refreshTrayCalculation === 'function') refreshTrayCalculation();
+  // 🚫 DO NOT call refreshTrayCalculation here - init hasn't run yet
+  // The initJigFromButton function will call init-jig-load below
 
     const modal = document.getElementById('jigAddModal');
     if (!modal) return;
@@ -3282,29 +3322,35 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     try {
-      // Include any secondary_lots stored by Add Model selection (multi-model flow)
-      try {
-        const q = new URLSearchParams();
-        q.set('lot_id', lotId);
-        q.set('batch_id', batchId);
-        q.set('jig_capacity', jigCapacity);
-        const stored = localStorage.getItem('secondary_lots');
-        if (stored) {
-          q.set('multi_model', '1');
-          q.set('secondary_lots', stored);
-        }
-        var url = `/jig_loading/init-jig-load/?${q.toString()}`;
-      } catch (e) {
-        var url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lotId)}&batch_id=${encodeURIComponent(batchId)}&jig_capacity=${encodeURIComponent(jigCapacity)}`;
+      // Build init URL — include multi_model params if merge flow set window._pendingSecondaryLot
+      let multiParams = '';
+      if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
+        try {
+          const secLots = JSON.stringify([{
+            lot_id: window._pendingSecondaryLot.lot_id,
+            batch_id: window._pendingSecondaryLot.batch_id || '',
+            qty: window._pendingSecondaryLot.qty || 0
+          }]);
+          multiParams = `&multi_model=true&secondary_lots=${encodeURIComponent(secLots)}`;
+          console.log('[MULTI_MODEL_MERGE] Including secondary in init:', window._pendingSecondaryLot.lot_id);
+        } catch (e) { console.warn('[MULTI_MODEL_MERGE] Failed to build params', e); }
       }
-      const resp = await fetch(url, { credentials: 'same-origin' });
-      if (!resp.ok) throw new Error('Init API failed');
-      const data = await resp.json();
+      const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lotId)}&batch_id=${encodeURIComponent(batchId)}&jig_capacity=${encodeURIComponent(jigCapacity)}${multiParams}`;
+      
+      let data = null;
+      await window.callInitAPI(url, (respData) => {
+        data = respData;
+      });
+      
+      if (!data) {
+        console.error('❌ Init API returned no data');
+        return;
+      }
       console.log('📦 Init Data:', data);
 
-      // Fill form fields (use mapped elements)
-      if (idMap.lotQtyInput) idMap.lotQtyInput.value = data.draft.original_lot_qty || 0;
-      if (idMap.jigCapacityInput) idMap.jigCapacityInput.value = data.draft.jig_capacity || 0;
+      // Fill form fields — safe null checks prevent false 0 override on merge flow
+      if (idMap.lotQtyInput && data.draft.original_lot_qty !== undefined && data.draft.original_lot_qty !== null) idMap.lotQtyInput.value = data.draft.original_lot_qty;
+      if (idMap.jigCapacityInput && data.draft.jig_capacity !== undefined && data.draft.jig_capacity !== null) idMap.jigCapacityInput.value = data.draft.jig_capacity;
 
       // Populate nickel bath type and tray type (read-only inputs)
       if (idMap.nickelBathTypeInput) idMap.nickelBathTypeInput.value = data.draft.nickel_bath_type || data.nickel_bath_type || '';
@@ -3406,56 +3452,156 @@ document.addEventListener('DOMContentLoaded', function () {
         window.delinkData = [];
         container.innerHTML = '';
 
-        // authoritative source: draft.delink_tray_info -> never use physical tray rows for delink UI
-        let source = [];
-        try {
-          if (data && data.draft && Array.isArray(data.draft.delink_tray_info) && data.draft.delink_tray_info.length > 0) {
-            source = data.draft.delink_tray_info.map(x => ({ qty: x.qty || x['qty'] || 0, meta: x }));
-          } else if (Array.isArray(data.delink_tray_info) && data.delink_tray_info.length > 0) {
-            source = data.delink_tray_info.map(x => ({ qty: x.qty || x['qty'] || 0, meta: x }));
-          } else {
-            source = [];
-          }
-        } catch (e) {
-          source = [];
-        }
-
-        // sort so top-tray entries (explicit flag) come first, then by qty asc
-        source.sort((a, b) => {
-          const aMeta = a.meta || a || {};
-          const bMeta = b.meta || b || {};
-          const aTop = Boolean(aMeta.is_top_tray || aMeta.top_tray || false);
-          const bTop = Boolean(bMeta.is_top_tray || bMeta.top_tray || false);
-          if (aTop && !bTop) return -1;
-          if (!aTop && bTop) return 1;
-          return parseInt(a.qty || 0) - parseInt(b.qty || 0);
-        });
-
-        // update visible delink tray count using authoritative source (display text)
-        try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = `(No of Trays: ${source.length})`; } catch (e) { /* ignore */ }
-
         // determine tray_capacity for top-tray detection (fallback 12)
         const trayCapacity = (data && data.draft && data.draft.tray_capacity) || data.tray_capacity || 12;
 
-        source.forEach((entry, idx) => {
-          const t = entry.meta || {};
-          const qty = entry.qty || 0;
-          const isTop = Boolean(t.is_top_tray || t.top_tray || (qty && qty < trayCapacity));
-          const isPlaceholder = Boolean(t.is_placeholder);
-          const div = document.createElement('div');
-          div.className = 'tray-scan-tab';
-          const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
-          const modelNoRaw = window.CURRENT_MODEL_NO || ((data && data.draft && (data.draft.plating_stock_num || data.draft.model_image_label)) || data.plating_stock_num || data.model_image_label) || '';
-          const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
-          const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
-          if (isPlaceholder) {
-            // Placeholder tray: not a real DB tray, show info only — no scan input
-            div.innerHTML = `\n              <div class="tray-qty" style="color:#888;font-style:italic;">Qty: ${qty}${topLabel}</div>\n              <div style="font-size:11px;color:#aaa;">(virtual slot — scan real tray)</div>\n            `;
-          } else {
-            div.innerHTML = `\n              <input type="text" class="tray-id-input" data-expected-qty="${qty}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
+        // ===== MULTI-MODEL RENDERING: use multi_model_allocation as unified source =====
+        if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
+          console.log('[MULTI_MODEL_UI] Rendering from multi_model_allocation:', data.multi_model_allocation.length, 'models');
+
+          let totalTrayCount = 0;
+          data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
+            const colorClass = 'model-bg-' + (mIdx + 1);
+            const modelLabel = modelAlloc.model_name || modelAlloc.model || modelAlloc.lot_id || ('Model ' + (mIdx + 1));
+            const modelRole = modelAlloc.model_role || (mIdx === 0 ? 'primary' : 'secondary');
+            const allocLotId = modelAlloc.lot_id || '';
+            const allocBatchId = modelAlloc.batch_id || '';
+
+            // Section label for each model
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'tray-section-label';
+            const labelColor = modelRole === 'primary' ? '#028084' : '#1a7a2e';
+            const labelBg = modelRole === 'primary' ? '#e2fbff' : '#e8f4ea';
+            labelDiv.style.cssText = 'font-weight:700;font-size:12px;padding:4px 8px;margin:' + (mIdx > 0 ? '10px' : '0') + ' 0 2px;background:' + labelBg + ';border-radius:4px;color:' + labelColor + ';width:100%;';
+            labelDiv.textContent = (modelRole === 'primary' ? 'Primary: ' : 'Secondary: ') + modelLabel + ' (' + (modelAlloc.allocated_qty || 0) + ' qty)';
+            container.appendChild(labelDiv);
+
+            (modelAlloc.tray_info || []).forEach(function(tray) {
+              const qty = tray.qty || 0;
+              const isTop = Boolean(tray.top_tray || (qty && qty < trayCapacity));
+              const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
+              const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
+              const div = document.createElement('div');
+              div.className = 'tray-scan-tab';
+              div.innerHTML = '<input type="text" class="tray-id-input ' + colorClass + '" data-expected-qty="' + qty + '" data-lot-id="' + allocLotId + '" data-batch-id="' + allocBatchId + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
+              container.appendChild(div);
+              totalTrayCount++;
+            });
+          });
+
+          // Update tray count display
+          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = '(No of Trays: ' + totalTrayCount + ')'; } catch (e) { /* ignore */ }
+          console.log('[MULTI_MODEL_UI] Total trays rendered:', totalTrayCount);
+
+          // ===== MULTI-MODEL: Render half-filled trays in existing excessLotSection =====
+          try {
+            const halfFilled = data.half_filled_tray_info || [];
+            const halfFilledQty = parseInt(data.half_filled_tray_qty || 0) || 0;
+            const hfSection = document.getElementById('excessLotSection');
+            const hfContainer = document.getElementById('excessTrayContainer');
+            const hfCount = document.getElementById('excessLotCount');
+            console.log('[HALF_FILLED] data:', halfFilled, 'qty:', halfFilledQty);
+
+            if (hfSection && hfContainer && hfCount && halfFilled.length > 0 && halfFilledQty > 0) {
+              hfSection.style.display = 'block';
+              hfCount.innerText = '(Qty: ' + halfFilledQty + ' | No of Trays: ' + halfFilled.length + ')';
+              hfContainer.innerHTML = '';
+
+              halfFilled.forEach(function(tray) {
+                const modelLabel = tray.model || '';
+                const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
+                const div = document.createElement('div');
+                div.className = 'tray-scan-tab';
+                div.innerHTML = '<label>' + placeholder + '</label>' +
+                  '<input type="text" class="tray-id-input" style="background:#fff3cd !important;" data-expected-qty="' + (tray.qty || 0) + '" placeholder="' + placeholder + '" readonly>' +
+                  '<div class="tray-qty">Qty: ' + (tray.qty || 0) + '</div>';
+                hfContainer.appendChild(div);
+              });
+              console.log('[HALF_FILLED] Rendered', halfFilled.length, 'half-filled trays');
+            } else if (hfSection) {
+              hfSection.style.display = 'none';
+            }
+          } catch (hfErr) { console.warn('[HALF_FILLED] render error', hfErr); }
+
+        } else {
+          // ===== SINGLE-MODEL RENDERING (existing logic — unchanged) =====
+          // authoritative source: draft.delink_tray_info -> never use physical tray rows for delink UI
+          let source = [];
+          try {
+            if (data && data.draft && Array.isArray(data.draft.delink_tray_info) && data.draft.delink_tray_info.length > 0) {
+              source = data.draft.delink_tray_info.map(x => ({ qty: x.qty || x['qty'] || 0, meta: x }));
+            } else if (Array.isArray(data.delink_tray_info) && data.delink_tray_info.length > 0) {
+              source = data.delink_tray_info.map(x => ({ qty: x.qty || x['qty'] || 0, meta: x }));
+            } else {
+              source = [];
+            }
+          } catch (e) {
+            source = [];
           }
-          container.appendChild(div);
-        });
+
+          // sort so top-tray entries (explicit flag) come first, then by qty asc
+          source.sort((a, b) => {
+            const aMeta = a.meta || a || {};
+            const bMeta = b.meta || b || {};
+            const aTop = Boolean(aMeta.is_top_tray || aMeta.top_tray || false);
+            const bTop = Boolean(bMeta.is_top_tray || bMeta.top_tray || false);
+            if (aTop && !bTop) return -1;
+            if (!aTop && bTop) return 1;
+            return parseInt(a.qty || 0) - parseInt(b.qty || 0);
+          });
+
+          // update visible delink tray count using authoritative source (display text)
+          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = `(No of Trays: ${source.length})`; } catch (e) { /* ignore */ }
+
+          source.forEach((entry, idx) => {
+            const t = entry.meta || {};
+            const qty = entry.qty || 0;
+            const isTop = Boolean(t.is_top_tray || t.top_tray || (qty && qty < trayCapacity));
+            const isPlaceholder = Boolean(t.is_placeholder);
+            const div = document.createElement('div');
+            div.className = 'tray-scan-tab';
+            const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
+            const modelNoRaw = window.CURRENT_MODEL_NO || ((data && data.draft && (data.draft.plating_stock_num || data.draft.model_image_label)) || data.plating_stock_num || data.model_image_label) || '';
+            const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
+            const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
+            if (isPlaceholder) {
+              div.innerHTML = `\n              <div class="tray-qty" style="color:#888;font-style:italic;">Qty: ${qty}${topLabel}</div>\n              <div style="font-size:11px;color:#aaa;">(virtual slot — scan real tray)</div>\n            `;
+            } else {
+              div.innerHTML = `\n              <input type="text" class="tray-id-input" data-expected-qty="${qty}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
+            }
+            container.appendChild(div);
+          });
+        }
+
+        // ===== MULTI-MODEL: Render model image badges for all models =====
+        if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
+          const imgRow = document.querySelector('.jig-modal-model-images-row');
+          if (imgRow) {
+            // Remove any previously appended secondary badges (keep the first static badge)
+            imgRow.querySelectorAll('.multi-model-badge').forEach(function(el) { el.remove(); });
+
+            data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
+              const imgUrl = modelAlloc.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
+              const label = modelAlloc.model_image_label || modelAlloc.model_name || modelAlloc.model || '';
+
+              if (mIdx === 0) {
+                // Update already-existing primary badge
+                if (idMap.modelImagePreview) idMap.modelImagePreview.src = imgUrl;
+                if (idMap.modelImageLabel) idMap.modelImageLabel.innerText = label;
+              } else {
+                // Append additional model badge
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn-action transparent model-images multi-model-badge';
+                btn.disabled = true;
+                btn.style.cssText = 'display:flex;align-items:center;gap:8px;';
+                btn.innerHTML = '<img src="' + imgUrl + '" alt="Model Image" style="width:32px;height:32px;border-radius:6px;object-fit:contain;background:#f7f7f7;"/><span style="font-weight:600;color:#1a7a2e;">' + label + '</span>';
+                imgRow.appendChild(btn);
+              }
+            });
+            console.log('[MULTI_MODEL_UI] Model image badges rendered:', data.multi_model_allocation.length);
+          }
+        }
 
         // Compute authoritative delink total from authoritative source and trigger recalculation
         try {
@@ -3505,7 +3651,7 @@ document.addEventListener('DOMContentLoaded', function () {
                   'Content-Type': 'application/json',
                   'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({ tray_id: trayId, lot_id: window.CURRENT_LOT_ID, batch_id: batchId })
+                body: JSON.stringify({ tray_id: trayId, lot_id: inputEl.dataset.lotId || window.CURRENT_LOT_ID, batch_id: inputEl.dataset.batchId || batchId })
               });
               const data = await resp.json();
               
@@ -3641,60 +3787,124 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Patch: Only update delink UI, do not re-render full DOM
-  function refreshTrayCalculation() {
+  function applyResponseToUI(data) {
     try {
-      const lot = window.currentJigLotId;
-      const batch = window.currentJigBatchId;
-      if (!lot || !batch) return;
-      const brokenHooks = parseInt(window.currentBrokenHooks || 0) || 0;
-      console.log('[BH_API_SEND]', brokenHooks);
-      const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lot)}&batch_id=${encodeURIComponent(batch)}&broken_hooks=${encodeURIComponent(brokenHooks)}`;
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          updateDelinkUI(data.delink_tray_info); // 🔥 FIX
-          renderTrays('half', data.half_filled_tray_info || []);
-          renderTrays('extra', data.extra_trays || []);
-          renderTrays('excess', data.excess_info || null);
-          const halfWrap = document.getElementById('halfFilledTraySection');
-          if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
-          try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
+      updateDelinkUI(data.delink_tray_info); // 🔥 FIX
+      renderTrays('half', data.half_filled_tray_info || []);
+      renderTrays('extra', data.extra_trays || []);
+      renderTrays('excess', data.excess_info || null);
+      const halfWrap = document.getElementById('halfFilledTraySection');
+      if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
+      try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
 
-          // Update backend-provided empty_hooks and expose to UI
-          try {
-            window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
-            if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
-          } catch (e) { window.BACKEND_EMPTY_HOOKS = 0; }
+      // 🔥 FIX: Update ALL backend-authoritative values from response
+      try {
+        window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+        window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || 0;
+        window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || 0) || 0;
+        window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks || 0) || 0;
+        window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+        if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+        console.log('[REFRESH] Updated BACKEND values from API:', {
+          effective: window.BACKEND_EFFECTIVE_CAPACITY,
+          original: window.BACKEND_ORIGINAL_CAPACITY,
+          broken: window.BACKEND_BROKEN_HOOKS,
+          empty: window.BACKEND_EMPTY_HOOKS
+        });
+      } catch (e) { console.warn('[REFRESH] Failed to update BACKEND values', e); }
 
-          // ===== USE SAFE RECALCULATION FOR LCQ (reads backend empty hooks) =====
-          if (typeof window.safeLCQRecalculation === 'function') {
-            try {
-              window.safeLCQRecalculation('refresh_tray_calculation');
-            } catch (e) {
-              console.warn('[LCQ] Safe recalculation after API failed:', e);
-            }
-          }
-        })
-        .catch(err => console.warn('refreshTrayCalculation error', err));
-    } catch (e) { console.warn(e); }
+      if (typeof window.safeLCQRecalculation === 'function') {
+        try { window.safeLCQRecalculation('refresh_tray_calculation'); } catch (e) { console.warn('[LCQ] Safe recalculation after API failed:', e); }
+      }
+      if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+    } catch (e) { console.warn('[applyResponseToUI] failed', e); }
   }
 
   // ==========================================================
-  // 🔥 BROKEN HOOKS CHANGE → REFRESH FROM BACKEND ONLY
+  // 🔥 RECALCULATION LOCK (SEPARATE FROM INIT LOCK)
   // ==========================================================
-  // When BH changes, refetch delink UI from backend (no local calculations)
+  // Recalculation CAN be called multiple times, but not concurrently
+  window.isRecalculating = false;
+
+  function refreshTrayCalculation(data) {
+    // If data provided, apply UI update (internal refresh)
+    if (data) {
+      window.isInternalUpdate = true;
+      try { 
+        applyResponseToUI(data); 
+      } finally { 
+        window.isInternalUpdate = false; 
+      }
+      return;
+    }
+
+    // Prevent concurrent recalc calls
+    if (window.isRecalculating) {
+      console.log('⛔ [RECALC BLOCKED] Already recalculating');
+      return;
+    }
+
+    window.isRecalculating = true;
+    console.log('[RECALC START] Fetching updated calculations...');
+
+    const lot = window.currentJigLotId;
+    const batch = window.currentJigBatchId;
+    if (!lot || !batch) {
+      console.warn('[RECALC] Missing lot/batch');
+      window.isRecalculating = false;
+      return;
+    }
+
+    const brokenHooks = parseInt(window.currentBrokenHooks || 0) || 0;
+    const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lot)}&batch_id=${encodeURIComponent(batch)}&broken_hooks=${encodeURIComponent(brokenHooks)}`;
+    
+    console.log('[RECALC URL]', url);
+
+    fetch(url, { credentials: 'same-origin' })
+      .then(res => {
+        if (!res.ok) throw new Error('Recalc API failed');
+        return res.json();
+      })
+      .then(data => {
+        console.log('[RECALC SUCCESS] Data received');
+        if (data && data.delink_tray_info) {
+          applyResponseToUI(data);
+        } else {
+          console.warn('[RECALC] Invalid response, skipping UI update');
+        }
+      })
+      .catch(err => {
+        console.error('[RECALC ERROR]', err);
+      })
+      .finally(() => {
+        window.isRecalculating = false;
+        console.log('[RECALC COMPLETE] Lock released');
+      });
+  }
+
+  // ==========================================================
+  // 🔥 BROKEN HOOKS CHANGE → TRIGGER RECALCULATION
+  // ==========================================================
+  // UI changes → API call to recalculate (with lock, not init)
   const bhInput = document.getElementById('brokenBuildupHooksInput');
+  window._lastSentBH = null;
   if (bhInput) {
     bhInput.addEventListener('input', function () {
       const bh = parseInt(this.value) || 0;
       window.currentBrokenHooks = bh;
-      
-      // Debounce backend call (don't spam API on each keystroke)
+
+      // Debounce: wait 300ms after keystroke
       clearTimeout(window.bhRefreshTimer);
       window.bhRefreshTimer = setTimeout(() => {
-        console.log('[BH_CHANGED] Refreshing delink from backend:', bh);
-        refreshTrayCalculation();  // Backend recomputes splits
-      }, 200);
+        // Block duplicate: don't call API if value hasn't changed
+        if (bh === window._lastSentBH) {
+          console.log('[BH_SKIP] Same value, no recalc:', bh);
+          return;
+        }
+        window._lastSentBH = bh;
+        console.log('[BH_CHANGED] Triggering recalc with BH:', bh);
+        refreshTrayCalculation();
+      }, 300);
     });
   }
 
@@ -3761,12 +3971,19 @@ document.addEventListener('DOMContentLoaded', function () {
         console.warn('[BH] Input not found after render');
         return;
       }
-      input.value = parseInt(window.currentBrokenHooks || 0) || 0;
-      console.log('[BH_RESTORED]', input.value);
-      
-      // Also trigger safe LCQ recalculation after restoring BH
-      if (typeof window.safeLCQRecalculation === 'function') {
-        window.safeLCQRecalculation('restore_bh');
+      // Mark internal update so any functions that would trigger network
+      // calls skip them while we restore UI state.
+      window.isInternalUpdate = true;
+      try {
+        input.value = parseInt(window.currentBrokenHooks || 0) || 0;
+        console.log('[BH_RESTORED]', input.value);
+
+        // Also trigger safe LCQ recalculation after restoring BH (UI-only)
+        if (typeof window.safeLCQRecalculation === 'function') {
+          window.safeLCQRecalculation('restore_bh');
+        }
+      } finally {
+        window.isInternalUpdate = false;
       }
     } catch (e) { console.warn('restoreBrokenHooksInput error', e); }
   }
@@ -3885,67 +4102,7 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) { console.warn('renderExcessSection error', e); }
   }
 
-  // Broken hooks: use keyup for correct timing, avoid 'input' listener that races with re-renders
-  let bhTimer = null;
-
-  document.addEventListener('keyup', function (e) {
-    try {
-      if (e && e.target && e.target.id === 'brokenBuildupHooksInput') {
-        // capture raw value immediately
-        const raw = e.target.value;
-        console.log('[BH_RAW_INPUT]', raw);
-        const broken = parseInt(raw, 10);
-        if (isNaN(broken)) return;
-        // debounce assignment to avoid spamming API while typing
-        clearTimeout(bhTimer);
-        bhTimer = setTimeout(() => {
-          window.currentBrokenHooks = broken;
-          console.log('[BH_CAPTURED_CORRECT]', broken);
-        }, 50);
-      }
-    } catch (err) { /* ignore */ }
-  });
-
-  // Trigger recalculation on change (user finished editing)
-  document.addEventListener('change', function (e) {
-    try {
-      if (e && e.target && e.target.id === 'brokenBuildupHooksInput') {
-        console.log('[BH_CHANGE_TRIGGER] calling backend to recalc');
-        try {
-          const raw = e.target.value;
-          const broken = parseInt(raw, 10) || 0;
-          // Call Init API to get authoritative effective capacity and empty hooks for preview
-          (async function(){
-            try {
-              const q = new URLSearchParams();
-              q.set('lot_id', window.CURRENT_LOT_ID || '');
-              q.set('batch_id', window.CURRENT_BATCH_ID || '');
-              q.set('broken_hooks', String(broken));
-              const resp = await fetch(`/jig_loading/init-jig-load/?${q.toString()}`, { credentials: 'same-origin' });
-              if (!resp.ok) throw new Error('Init API failed');
-              const d = await resp.json();
-              // Use backend fields directly
-              window.BACKEND_LOADED_CASES = parseInt(d.loaded_cases_qty || 0) || 0;
-              window.BACKEND_EMPTY_HOOKS = parseInt(d.empty_hooks || 0) || 0;
-              window.BACKEND_EFFECTIVE_CAPACITY = parseInt(d.effective_capacity || 0) || 0;
-              window.BACKEND_ORIGINAL_CAPACITY = parseInt(d.original_capacity || 0) || 0;
-              window.BACKEND_BROKEN_HOOKS = parseInt(d.broken_hooks || 0) || 0;
-              if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
-              if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
-            } catch (err) { console.warn('[BH_CHANGE] preview API failed', err); }
-          })();
-        } catch (err) { console.warn('[BH_CHANGE] safeLCQ failed', err); }
-      }
-    } catch (err) { /* ignore */ }
-  });
-
-  // Debug: monitor live value to detect external overrides
-  setInterval(() => {
-    try {
-      const el = document.getElementById('brokenBuildupHooksInput');
-      if (el) console.log('[BH_LIVE_VALUE]', el.value);
-    } catch (e) { }
-  }, 1000);
+  // (BH keyup, change, and debug setInterval removed — single 'input' handler above handles everything)
 
   // ===============================
   // HARD RESET: Clear all modal UI state before rendering new lot
@@ -4095,6 +4252,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!this.checked) return;
         const selectedLot = {
           lot_id: this.dataset.lotId || this.getAttribute('data-stock-lot-id') || this.getAttribute('data-lot-id') || null,
+          batch_id: this.closest('tr')?.dataset?.batchId || this.closest('tr')?.getAttribute('data-batch-id') || '',
           qty: parseInt(this.dataset.qty || this.getAttribute('data-qty') || 0) || 0
         };
         console.log('[CHECKBOX_SELECTED]', selectedLot.lot_id);
@@ -4127,200 +4285,71 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // If we arrived with merge_model=1, reopen modal and merge stored secondary
-  (async function handleMergeFlow() {
-      try {
-        if (params.get('merge_model') !== '1') return;
-        console.log('[ADD_MODEL_NAVIGATION] merge_model detected');
+  // If we arrived with merge_model=1, find primary button and trigger init (+ secondary via window._pendingSecondaryLot)
+  (function handleMergeFlow() {
+    try {
+      if (params.get('merge_model') !== '1') return;
+      console.log('[MERGE_FLOW] merge_model=1 detected');
 
       const primaryLot = params.get('primary_lot_id') || params.get('primary_lot') || '';
       const primaryBatch = params.get('primary_batch_id') || params.get('primary_batch') || '';
-      // Safety: require both lot and batch for init API
       if (!primaryLot || !primaryBatch) {
-        console.error('[INIT ERROR] Missing required params', primaryLot, primaryBatch);
+        console.error('[MERGE_FLOW] Missing primary lot/batch params');
         return;
       }
-      console.log('[PRIMARY LOAD]', primaryLot, primaryBatch);
+      console.log('[MERGE_FLOW] Primary:', primaryLot, primaryBatch);
 
-      // Open modal but DO NOT call initJigFromButton (that function resets the delink UI).
-      // Instead fetch primary init data and populate fields without clearing existing trays.
+      // ✅ SET GLOBAL STATE FROM URL PARAMS (critical — window state is empty on fresh page load)
+      window.currentJigLotId = primaryLot;
+      window.currentJigBatchId = primaryBatch;
+      window.CURRENT_LOT_ID = primaryLot;
+      window.CURRENT_BATCH_ID = primaryBatch;
+
+      // Read secondary lot from sessionStorage and save to global for initJigFromButton to pick up
       try {
-        const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.add('open');
-        const initQ = new URLSearchParams();
-        initQ.set('lot_id', primaryLot);
-        if (primaryBatch) initQ.set('batch_id', primaryBatch);
-        const initUrl = `/jig_loading/init-jig-load/?${initQ.toString()}`;
-        let initResp = null;
-        try {
-          const r = await fetch(initUrl, { credentials: 'same-origin' });
-          if (r.ok) initResp = await r.json();
-        } catch (e) { console.warn('[MERGE] primary init fetch failed', e); }
-
-        if (initResp && initResp.draft) {
-          try {
-            const data = initResp.draft;
-            // ===== STORE/UPDATE ORIGINAL JIG CAPACITY FOR SECONDARY MODEL =====
-            const jigCap = parseInt(data.jig_capacity || 0);
-            if (jigCap > 0) {
-              window.ORIGINAL_JIG_CAPACITY = jigCap;
-              window.BACKEND_ORIGINAL_CAPACITY = jigCap;
-            }
-            
-            // Populate simple fields without clearing delink UI
-            const lotQtyEl = document.getElementById('reallotQty') || document.getElementById('lotQtyInput');
-            const jigCapEl = document.getElementById('jigCapacityInput');
-            const loadedEl = document.getElementById('loadedCasesQtyDisplay') || document.getElementById('loadedCasesInput');
-            const brokenEl = document.getElementById('brokenBuildupHooksInput') || document.getElementById('brokenHooksInput');
-            const nickelEl = document.getElementById('nickelBathTypeInput');
-            const trayTypeEl = document.getElementById('trayTypeInput');
-            const imgEl = document.getElementById('modelImagePreview');
-            const labelEl = document.getElementById('modelImageLabel');
-
-            if (lotQtyEl) try { lotQtyEl.value = data.original_lot_qty || 0; } catch (e) {}
-            if (jigCapEl) try { jigCapEl.value = data.jig_capacity || 0; } catch (e) {}
-            if (brokenEl) try { brokenEl.value = window.currentBrokenHooks !== undefined ? window.currentBrokenHooks : (data.broken_hooks || 0); } catch (e) {}
-            if (loadedEl && typeof window.updateLoadedDisplay === 'function') try { window.updateLoadedDisplay(); } catch (e) {}
-            if (nickelEl) nickelEl.value = initResp.draft.nickel_bath_type || initResp.nickel_bath_type || '';
-            if (trayTypeEl) trayTypeEl.value = initResp.draft.tray_type || initResp.tray_type || '';
-            try { if (imgEl && initResp.draft.model_image_url) imgEl.src = initResp.draft.model_image_url; } catch (e) {}
-            try { if (labelEl && initResp.draft.model_image_label) labelEl.innerText = initResp.draft.model_image_label; } catch (e) {}
-
-            // If delink container is empty, render authoritative delink_tray_info for primary only
-            const container = document.getElementById('delinkTableSection') || document.getElementById('trayInputsContainer');
-            if (container && container.querySelectorAll('.tray-scan-tab').length === 0) {
-              try {
-                const source = Array.isArray(initResp.draft.delink_tray_info) ? initResp.draft.delink_tray_info : (Array.isArray(initResp.delink_tray_info) ? initResp.delink_tray_info : []);
-                const trayCapacity = initResp.draft.tray_capacity || initResp.tray_capacity || 12;
-                // Ensure top tray (explicit flag) comes before full trays, then sort by qty
-                source.sort((a,b) => {
-                  const aObj = a || {};
-                  const bObj = b || {};
-                  const aTop = Boolean(aObj.is_top_tray || aObj.top_tray || false);
-                  const bTop = Boolean(bObj.is_top_tray || bObj.top_tray || false);
-                  if (aTop && !bTop) return -1;
-                  if (!aTop && bTop) return 1;
-                  return parseInt(aObj.qty || aObj.tray_quantity || 0) - parseInt(bObj.qty || bObj.tray_quantity || 0);
-                });
-                source.forEach(entry => {
-                  const t = entry || {};
-                  const qty = t.qty || t.tray_quantity || 0;
-                  const div = document.createElement('div'); div.className = 'tray-scan-tab';
-                  const inp = document.createElement('input'); inp.type='text'; inp.className='tray-id-input model-bg-1'; inp.setAttribute('data-expected-qty', qty||0); inp.placeholder = 'Scan Tray ID';
-                  const qtyDiv = document.createElement('div'); qtyDiv.className='tray-qty'; qtyDiv.innerText = `Qty: ${qty}`;
-                  div.appendChild(inp); div.appendChild(qtyDiv); container.appendChild(div);
-                });
-              } catch (e) { console.warn('[MERGE] render primary delink failed', e); }
-            }
-          } catch (e) { console.warn('[MERGE] populate primary fields failed', e); }
-        }
-      } catch (e) { console.warn('[MERGE] open modal/init failed', e); }
-
-      // Now check for stored secondary lot
-      let secRaw = null;
-      try { secRaw = sessionStorage.getItem('secondary_lot') || localStorage.getItem('secondary_lot'); } catch (e) { secRaw = null; }
-      if (!secRaw) {
-        console.log('[MERGE] No secondary_lot found in sessionStorage');
-        // Clean merge flag from URL
-        const url = new URL(window.location.href);
-        url.searchParams.delete('merge_model');
-        window.history.replaceState({}, '', url.toString());
-        return;
-      }
-
-      let secondaryLot = null;
-      try { secondaryLot = JSON.parse(secRaw); } catch (e) { console.warn('[MERGE] parse failed', e); }
-      if (!secondaryLot || !secondaryLot.lot_id) {
-        console.warn('[MERGE] invalid secondary_lot payload');
-        sessionStorage.removeItem('secondary_lot');
-        const url = new URL(window.location.href); url.searchParams.delete('merge_model'); window.history.replaceState({}, '', url.toString());
-        return;
-      }
-
-      console.log('[MERGING_SECONDARY]', secondaryLot);
-
-      // Call InitJigLoad API again to get merged trays (safe: server handles multi_model when requested)
-      const q = new URLSearchParams();
-      q.set('lot_id', primaryLot);
-      q.set('batch_id', primaryBatch);
-      q.set('multi_model', '1');
-      q.set('secondary_lots', JSON.stringify([secondaryLot]));
-      console.log('[MERGE CALL]', primaryLot, primaryBatch, secondaryLot);
-
-      const mergeUrl = `/jig_loading/init-jig-load/?${q.toString()}`;
-      let mergedResp = null;
-      try {
-        const r = await fetch(mergeUrl, { credentials: 'same-origin' });
-        if (r.ok) mergedResp = await r.json(); else mergedResp = await r.json().catch(() => null);
-      } catch (e) { console.warn('[MERGE] InitJigLoad fetch failed', e); }
-
-      // Determine trays to append: prefer `trays`, fall back to `delink_tray_info`, `extra_trays`, or `half_filled_tray_info`
-      const traysToAppend = (mergedResp && (mergedResp.trays || mergedResp.extra_trays || mergedResp.delink_tray_info || mergedResp.half_filled_tray_info)) || [];
-
-      // Find append target: prefer #delinkTableSection, else first .tray-scan-tabs
-      const appendTarget = document.getElementById('delinkTableSection') || document.querySelector('.tray-scan-tabs');
-      if (!appendTarget) {
-        console.warn('[MERGE] append target not found');
-      } else if (!Array.isArray(traysToAppend) || traysToAppend.length === 0) {
-        console.log('[MERGE] no trays returned to append');
-      } else {
-        // Append each tray as a tray-scan-tab with secondary styling
-        traysToAppend.forEach((t) => {
-          try {
-            // guard against duplicate tray ids already present
-            const trayId = (t.tray_id || t.tray || t.trayId || '').toString();
-            const qty = t.qty || t.tray_quantity || t.effective_qty || t.qty || 0;
-            if (trayId) {
-              const exists = Array.from(appendTarget.querySelectorAll('.tray-scan-tab input')).some(inp => (inp.value || '').toString() === trayId);
-              if (exists) return; // skip duplicate
-            }
-
-            const div = document.createElement('div');
-            div.className = 'tray-scan-tab';
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'tray-id-input model-bg-2';
-            input.placeholder = trayId ? trayId : 'Scan Tray ID';
-            input.value = ''; // keep empty for scanning
-            input.setAttribute('data-expected-qty', qty || 0);
-            const qtyDiv = document.createElement('div'); qtyDiv.className = 'tray-qty'; qtyDiv.innerText = `Qty: ${qty}`;
-            div.appendChild(input); div.appendChild(qtyDiv);
-            appendTarget.appendChild(div);
-          } catch (e) { console.warn('[MERGE] append failed for tray', t, e); }
-        });
-        console.log('[FINAL_TRAY_COUNT]', appendTarget.querySelectorAll('.tray-scan-tab').length);
-      }
-
-      // ===== 🔥 SAFE LCQ RE-CALCULATION AFTER MERGE =====
-      try {
-        console.log('[LCQ_AFTER_MERGE] Starting safe recalculation after merge');
-        
-        // Update ORIGINAL_JIG_CAPACITY from merged response if available
-        if (mergedResp && mergedResp.draft && mergedResp.draft.jig_capacity) {
-          const newCapacity = parseInt(mergedResp.draft.jig_capacity || 0);
-          if (newCapacity > 0) {
-            window.ORIGINAL_JIG_CAPACITY = newCapacity;
-            window.BACKEND_ORIGINAL_CAPACITY = newCapacity;
-            console.log('[LCQ_AFTER_MERGE] Updated ORIGINAL_JIG_CAPACITY:', newCapacity);
+        const secRaw = sessionStorage.getItem('secondary_lot') || localStorage.getItem('secondary_lot');
+        if (secRaw) {
+          const parsedSec = JSON.parse(secRaw);
+          if (parsedSec && parsedSec.lot_id) {
+            console.log('[MERGE_FLOW] Secondary lot found:', parsedSec.lot_id);
+            window._pendingSecondaryLot = parsedSec;
           }
         }
-        
-        // Use standalone safe recalculation function (includes all validations)
-        if (typeof window.safeLCQRecalculation === 'function') {
-          const success = window.safeLCQRecalculation('after_merge');
-          console.log('[LCQ_AFTER_MERGE] Safe recalculation result:', success ? '✅ SUCCESS' : '❌ FAILED');
-        } else {
-          console.warn('[LCQ_AFTER_MERGE] safeLCQRecalculation function not available');
+      } catch (e) { console.warn('[MERGE_FLOW] sessionStorage read failed', e); }
+
+      // Cleanup storage + URL immediately (data is now safely in window._pendingSecondaryLot)
+      try { sessionStorage.removeItem('secondary_lot'); } catch (e) {}
+      try { localStorage.removeItem('secondary_lot'); } catch (e) {}
+      try {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('merge_model');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      } catch (e) {}
+
+      // Find matching row button and trigger click → calls initJigFromButton (opens modal + populates all fields)
+      const primaryBtn = document.querySelector('.open-jig-modal-btn[data-stock-lot-id="' + primaryLot + '"][data-batch-id="' + primaryBatch + '"]');
+      if (primaryBtn) {
+        console.log('[MERGE_FLOW] Found primary button, triggering init');
+        primaryBtn.click();
+      } else {
+        console.warn('[MERGE_FLOW] Primary button not found for lot:', primaryLot, '— using direct callInitAPI fallback');
+        // Fallback: open modal and call init API directly (jig capacity unknown)
+        const modal = document.getElementById('jigAddModal');
+        if (modal) modal.classList.add('open');
+        if (window.callInitAPI) {
+          let multiParams = '';
+          if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
+            try {
+              const secLots = JSON.stringify([window._pendingSecondaryLot]);
+              multiParams = '&multi_model=true&secondary_lots=' + encodeURIComponent(secLots);
+            } catch (e) {}
+            window._pendingSecondaryLot = null;
+          }
+          const fallbackUrl = '/jig_loading/init-jig-load/?lot_id=' + encodeURIComponent(primaryLot) + '&batch_id=' + encodeURIComponent(primaryBatch) + multiParams;
+          window.callInitAPI(fallbackUrl);
         }
-      } catch (e) {
-        console.error('[LCQ_AFTER_MERGE] Error in safe recalculation:', e);
       }
-
-      // Cleanup state
-      try { sessionStorage.removeItem('secondary_lot'); } catch (e) { console.warn('[CLEANUP] sessionStorage remove failed', e); }
-      // remove merge_model param from URL to avoid re-run on reload
-      try { const url = new URL(window.location.href); url.searchParams.delete('merge_model'); window.history.replaceState({}, '', url.toString()); } catch (e) {}
-
-    } catch (err) { console.warn('merge flow failed', err); }
+    } catch (err) { console.warn('[MERGE_FLOW] failed', err); }
   })();
 });
 </script>
@@ -4529,6 +4558,68 @@ document.addEventListener('DOMContentLoaded', function () {
   }catch(e){ console.warn('[DUPLICATE] wrap reset failed', e); }
 
 })();
+</script>
+
+<script nonce="{{ csp_nonce }}">
+// Guard to prevent duplicate Init API calls from Add Jig flow.
+let isJigInitCalled = false;
+window.initApiInProgress = window.initApiInProgress || false;
+
+// Capture Add Jig clicks early to set a one-time init flag.
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('.open-jig-modal-btn');
+  if(!btn) return;
+  if(isJigInitCalled){
+    console.log('🚫 Duplicate Init API blocked');
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    return;
+  }
+  isJigInitCalled = true;
+  // set the init lock immediately to avoid ajax race where two calls are fired
+  window.initApiInProgress = true;
+  // safety: release the lock after 10s if something goes wrong (prevents permanent lock)
+  setTimeout(function(){ if(window.initApiInProgress){ window.initApiInProgress = false; } }, 10000);
+  console.log('🔥 Add Jig Clicked (guarded)');
+}, true);
+
+// Close/reset - expose for other code to call
+function closeJigModal(){
+  isJigInitCalled = false;
+  window.initApiInProgress = false;
+}
+
+// Also reset when known modal close buttons are clicked
+document.addEventListener('click', function(e){
+  if (e.target.closest('.new-popup-modal .tray-scan-close') || e.target.closest('.right-slide-modal .close-btn') || e.target.closest('.jig-modal-header .close-btn')) {
+    closeJigModal();
+  }
+});
+
+// Extra safety: guard init-jig-load AJAX calls using global ajax handlers
+if (window.jQuery) {
+  (function($){
+    $(document).ajaxSend(function(event, jqXHR, settings){
+      try{
+        if(settings && settings.url && settings.url.indexOf('/jig_loading/init-jig-load/') !== -1){
+          if(window.initApiInProgress){
+            console.log('🚫 Init already in progress — aborting duplicate AJAX');
+            try { jqXHR.abort(); } catch(e) {}
+          } else {
+            window.initApiInProgress = true;
+          }
+        }
+      }catch(e){}
+    });
+    $(document).ajaxComplete(function(event, jqXHR, settings){
+      try{
+        if(settings && settings.url && settings.url.indexOf('/jig_loading/init-jig-load/') !== -1){
+          window.initApiInProgress = false;
+        }
+      }catch(e){}
+    });
+  })(jQuery);
+}
 </script>
 
 {% endblock %}

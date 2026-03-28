@@ -282,6 +282,9 @@
           linear-gradient(180deg, #28c3bd 0%, #0f7f7a 45%, #0a6b66 100%) !important;
         color: #ffffff !important;
         box-shadow: 0 6px 18px rgba(10, 95, 90, 0.22);
+        /* make primary (Login) narrower so MS button can be larger */
+        width: 34% !important;
+        min-width: 120px !important;
       }
       .btn-primary.auth-form-btn:hover,
       .btn-primary.auth-form-btn:active {
@@ -293,6 +296,60 @@
         border-color: rgba(0, 0, 0, 0.08) !important;
         box-shadow: 0 10px 28px rgba(6, 70, 63, 0.28) !important;
         transform: translateY(-1px);
+      }
+      /* Microsoft button styling (refined) */
+      .btn-microsoft {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 8px 12px;
+        height: 44px;
+        min-height: 40px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        color: #111827;
+        border: 1px solid #e6edf0;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(16,24,40,0.04);
+        text-decoration: none;
+        font-weight: 400;
+        align-self: center;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+      }
+      /* smaller variant when used with .auth-form-btn */
+      .btn-microsoft.auth-form-btn {
+        /* make MS button wider than primary */
+        width: 60% !important;
+        padding: 8px 12px !important;
+        height: 44px !important;
+        box-shadow: 0 4px 14px rgba(16,24,40,0.06) !important;
+        justify-content: flex-start;
+      }
+      .btn-microsoft .ms-logo {
+        margin-right: 10px;
+        flex-shrink: 0;
+      }
+      .btn-microsoft span {
+        /* allow the label to wrap inside the button */
+        white-space: normal;
+        display: inline-block;
+        line-height: 1.05;
+      }
+      .btn-microsoft .ms-text {
+        font-size: 14px;
+        font-weight: 500;
+        color: #393d45;
+      }
+      .btn-microsoft:hover {
+        background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 26px rgba(16,24,40,0.08);
+      }
+      .ms-logo {
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+        flex: 0 0 16px;
       }
       .cancelBtn {
         background: #b63c3c !important;
@@ -651,6 +708,18 @@
                     <button type="submit" class="btn btn-primary auth-form-btn">
                       Login
                     </button>
+                    <a href="{% url 'microsoft_login' %}" class="btn-microsoft auth-form-btn" aria-label="Login with Microsoft">
+                      <!-- Inline Microsoft logo (4 tiles) -->
+                      <span class="ms-logo" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="18" height="18" role="img" focusable="false">
+                          <rect x="1" y="1" width="10" height="10" fill="#f35325" />
+                          <rect x="13" y="1" width="10" height="10" fill="#81bc06" />
+                          <rect x="1" y="13" width="10" height="10" fill="#05a6f0" />
+                          <rect x="13" y="13" width="10" height="10" fill="#ffba08" />
+                        </svg>
+                      </span>
+                      <span class="ms-text">Login with Microsoft</span>
+                    </a>
                   </div>
                 </form>
               </div>
