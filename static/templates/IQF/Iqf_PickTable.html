@@ -34,7 +34,7 @@
   border: 1px solid rgba(7, 34, 56, 0.06) !important;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
   width: 100% !important;
-  max-width: 760px !important;
+  max-width: 750px !important;
   max-height: 88vh !important;
   display: flex !important;
   flex-direction: column !important;
@@ -124,7 +124,7 @@
 .iqf-rejection-modal-body {
   flex: 1 !important;
   overflow-y: auto !important;
-  padding: 24px !important;
+  padding: 14px !important;
   background: white !important;
 }
 
@@ -274,11 +274,21 @@
 
 /* Specific styling for IQF Total to prevent cropping and align visually */
 .iqf-total-item {
-  border-left-color: #1976d2 !important;
-  background: linear-gradient(180deg,#ffffff,#f7fbff) !important;
+  border-left-color: #d32f2f !important;
+  /* Rejection theme: subtle red tint to indicate 'rejection' total */
+  background: linear-gradient(180deg,#fff6f6,#fff0f0) !important;
   min-width: 110px !important;
   padding-left: 14px !important;
   padding-right: 14px !important;
+}
+
+/* Make the label/value visually align with rejection theme */
+.iqf-total-item .iqf-qty-label {
+  color: #d32f2f !important;
+  font-weight: 700 !important;
+}
+.iqf-total-item .iqf-qty-value {
+  color: #b71c1c !important;
 }
 
 @media (max-width: 640px) {
@@ -1272,6 +1282,15 @@
   min-width: 400px;
   max-width: 600px;
 }
+
+  /* Minimal modal styles */
+  .tray-view-modal { display: none; position: fixed; z-index: 11000; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
+  .tray-view-modal.open { display: flex; }
+  .tray-view-modal .tray-view-box { background: #fff; border-radius: 8px; padding: 18px; width: 420px; max-width: 92vw; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+  .tray-view-modal .tray-view-box h5 { margin: 0 0 10px 0; }
+  .tray-view-modal .tray-row { margin-bottom: 6px; }
+  <!-- Lightweight UI-only tray view modal and handler (pure UI; uses existing data-* on row/link) -->
+
 </style>
 
 <div class="content-wrapper">
@@ -1650,6 +1669,7 @@
     data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
     data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
     data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+    data-trays='{{ data.tray_details_json|default:'[]'|safe }}'
     data-model-image="{{ data.model_images.0|default:'' }}"
     data-total-batch-quantity="{{ data.display_physical_qty }}"
     data-lot-qty="{{ data.brass_rejection_total_qty }}"
@@ -2229,6 +2249,26 @@
   </div>
 </div>
 
+  <div id="trayViewModal" aria-hidden="true" style="position:fixed; top:0; right:-450px; width:440px; max-width:90vw; background:#fff; box-shadow: -6px 0 18px rgba(0,0,0,0.12); z-index:25000; transition:right 300ms ease;border-radius: 20px !important;">
+    <div style="padding:16px; box-sizing:border-box; height:100%; display:flex; flex-direction:column; max-height:100vh; overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <img src="/static/assets/images/imagePlaceholder.jpg" alt="Profile" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#f3f6f7; padding:4px; box-shadow:0 4px 12px rgba(0,0,0,0.08);" />
+          <div style="display:flex; align-items:center; gap:12px;">
+            <h4 style="margin:0; font-size:1.05rem;">Tray Details</h4>
+            <div id="trayViewModel" style="color:#028084; font-weight:600; font-size:0.95rem; display:flex; align-items:center; gap:6px;">
+              <span style="color:#595959; font-weight:600;">Model:</span>
+              <span id="trayViewModelNo" style="font-weight:700;"></span>
+            </div>
+          </div>
+        </div>
+        <button id="trayViewClose" aria-label="Close tray panel" style="border:0; background:transparent; font-size:18px; cursor:pointer;">&times;</button>
+      </div>
+      <div id="trayViewContent" style="margin-top:12px; flex:1 1 auto;">Loading...</div>
+      <div style="margin-top:12px; text-align:right;"> <!-- Reserved for future actions --> </div>
+    </div>
+  </div>
+
 {% block script %}
 
 <!-- Fetches and displays audit data.
@@ -2454,6 +2494,74 @@
       var lotEl = document.querySelector('.tray-scan-btn[data-stock-lot-id]');
       var lotId = lotEl && (lotEl.getAttribute('data-stock-lot-id') || lotEl.getAttribute('data-stock_lot_id') || lotEl.dataset.stockLotId);
       submitAudit(lotId, 'proceed');
+    }
+  });
+
+})();
+</script>
+
+<!-- IQF: UI-only view icon handler. Reads existing data-* attributes and shows trayViewModal. -->
+<script nonce="{{ csp_nonce }}">
+(function(){
+  function escapeHtml(s){ if(s===null||s===undefined) return ''; return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+
+  function openTrayView(btn){
+    if(!btn) return;
+    var modal = document.getElementById('trayViewModal');
+    var content = document.getElementById('trayViewContent');
+    try{
+      var lotId = btn.getAttribute('data-stock-lot-id') || btn.dataset.stockLotId || '';
+      var modelNo = btn.getAttribute('data-model-no') || btn.dataset.modelNo || '';
+      var batchId = btn.getAttribute('data-batch-id') || btn.dataset.batchId || '';
+      var trayCap = btn.getAttribute('data-tray-capacity') || btn.dataset.trayCapacity || '';
+
+      content.innerHTML = '<div>Loading tray details  </div>';
+
+      fetch('/iqf/iqf_tray_details/?lot_id=' + encodeURIComponent(lotId), { credentials: 'same-origin' })
+        .then(function(res){ return res.json().catch(function(){ return { success: false, error: 'invalid json' }; }); })
+        .then(function(data){
+          if(!data || !data.success){
+            content.innerHTML = '<div>No tray details available</div>';
+            if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); }
+            return;
+          }
+
+          // Populate header model placeholder
+          try{ var modelSpan = document.getElementById('trayViewModelNo'); if(modelSpan) modelSpan.textContent = modelNo || ''; }catch(e){}
+          var html = '';
+          html += '<div style="margin-bottom:8px;"><strong>Total Qty:</strong> '+escapeHtml(String(data.total_qty||0))+' &nbsp; <strong>Capacity:</strong> '+escapeHtml(trayCap)+' &nbsp; <strong>No. Trays:</strong> '+escapeHtml(String(data.total_trays||0))+'</div>';
+
+          if(Array.isArray(data.trays) && data.trays.length){
+            html += '<table style="width:100%; border-collapse:collapse;">';
+            html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;font-weight:600;">S.no</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;font-weight:600;">Tray ID</th><th style="text-align:right;padding:8px;border-bottom:1px solid #ddd;font-weight:600;">Tray Qty</th></tr></thead><tbody>';
+            data.trays.forEach(function(t, idx){
+              var trayId = t.tray_id || '';
+              var qty = (t.tray_qty === null || t.tray_qty === undefined) ? '' : String(t.tray_qty);
+              html += '<tr><td style="padding:8px;border-bottom:1px solid #f3f3f3;">'+(idx+1)+'</td><td style="padding:8px;border-bottom:1px solid #f3f3f3;">'+escapeHtml(trayId)+'</td><td style="padding:8px;border-bottom:1px solid #f3f3f3;text-align:right;">'+escapeHtml(qty)+'</td></tr>';
+            });
+            html += '</tbody></table>';
+          } else {
+            html += '<div>No trays recorded for this lot</div>';
+          }
+
+          content.innerHTML = html;
+          if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); }
+        }).catch(function(err){ console.error('tray fetch failed', err); content.innerHTML = '<div>Failed to load trays</div>'; if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); } });
+    }catch(err){ console.error('openTrayView failed', err); }
+  }
+
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest && e.target.closest('.tray-scan-btn-Jig');
+    if(btn){
+      e.preventDefault();
+      openTrayView(btn);
+      return;
+    }
+    if(e.target && e.target.id === 'trayViewClose'){
+      var modal = document.getElementById('trayViewModal'); if(modal){ modal.style.right='-420px'; modal.setAttribute('aria-hidden','true'); }
+    }
+    if(e.target && e.target.id === 'trayViewModal'){
+      var modal = document.getElementById('trayViewModal'); if(modal){ modal.style.right='-420px'; modal.setAttribute('aria-hidden','true'); }
     }
   });
 
