@@ -1781,8 +1781,8 @@ document.addEventListener("DOMContentLoaded", function () {
         if (result.isConfirmed) {
           
 
-          // Send stock_lot_ids instead of tray_ids to IQF endpoint
-          fetch("/iqf/iqf_delink_selected_trays/", {
+          // Send stock_lot_ids instead of tray_ids to IQF consolidated delink endpoint
+          fetch("/iqf/delink/", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1894,8 +1894,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // Open modal
         document.getElementById('rejectionPopupModal').style.display = 'block';
   
-        // Fetch rejection details - Updated endpoint for IQF
-        fetch(`/iqf/iqf_get_rejection_details/?lot_id=${encodeURIComponent(lot_id)}`, {
+        // Fetch rejection details - consolidated IQF reject endpoint
+        fetch(`/iqf/reject/?lot_id=${encodeURIComponent(lot_id)}`, {
           headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
         .then(resp => resp.json())

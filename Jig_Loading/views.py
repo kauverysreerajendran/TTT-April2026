@@ -704,6 +704,48 @@ class InitJigLoad(APIView):
 					})
 			logging.info(f"[MULTI_MODEL] ui_delink_tray_info: {len(ui_delink_tray_info)} trays flattened")
 
+		# ===== UNIFIED HALF-FILLED FIX (SINGLE + MULTI + BH SAFE) =====
+		try:
+			# Ensure vars are always defined before any check
+			if 'mm_half_filled_tray_info' not in locals():
+				mm_half_filled_tray_info = []
+			if 'mm_half_filled_tray_qty' not in locals():
+				mm_half_filled_tray_qty = 0
+
+			# Step 1: TOTAL REQUESTED quantity — single source of truth
+			# Use REQUESTED qty (not allocated) so BH-reduced capacity triggers overflow correctly
+			if multi_model_flag and secondary_lots:
+				_hf_total_qty = int(lot_qty or 0) + sum(int(s.get('qty', 0) or 0) for s in secondary_lots)
+				logging.info(f"[HALF FIX] MULTI total_qty (requested): {_hf_total_qty}")
+			else:
+				_hf_total_qty = int(lot_qty or 0)
+				logging.info(f"[HALF FIX] SINGLE total_qty: {_hf_total_qty}")
+
+			# Step 2: Effective capacity — BH-aware (single source of truth)
+			_hf_cap = effective_jig_capacity if 'effective_jig_capacity' in locals() else int(jig_capacity or 0)
+
+			# Step 3: Only initialise if overflow AND secondary loop did not already populate
+			if _hf_total_qty > _hf_cap and not mm_half_filled_tray_info:
+				_hf_overflow = _hf_total_qty - _hf_cap
+				logging.info(f"[HALF FIX] Overflow={_hf_overflow}, creating half-filled trays")
+				_hf_tc = int(tray_capacity if tray_capacity else 12)
+				mm_half_filled_tray_info = []
+				_hf_rem = _hf_overflow
+				while _hf_rem > 0:
+					_hf_fill = min(_hf_tc, _hf_rem)
+					mm_half_filled_tray_info.append({"tray_id": None, "qty": _hf_fill})
+					_hf_rem -= _hf_fill
+				mm_half_filled_tray_qty = sum(t['qty'] for t in mm_half_filled_tray_info)
+				logging.info(f"[HALF FIX] CREATED: {mm_half_filled_tray_info}")
+			else:
+				logging.info(f"[HALF FIX] No overflow or already populated — skipping (total={_hf_total_qty}, cap={_hf_cap}, existing={len(mm_half_filled_tray_info)})")
+
+		except Exception as _hf_err:
+			logging.exception(f"[HALF FIX ERROR]: {_hf_err}")
+			if 'mm_half_filled_tray_info' not in locals():
+				mm_half_filled_tray_info = []
+			if 'mm_half_filled_tray_qty' not in locals():
+				mm_half_filled_tray_qty = 0
 
 		# ===== CALCULATE SERVER-AUTHORITATIVE LOADED_CASES_QTY AND EMPTY_HOOKS ==
 		loaded_cases_qty = 0

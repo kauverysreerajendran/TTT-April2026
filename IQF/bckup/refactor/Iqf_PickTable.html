@@ -204,27 +204,24 @@
 }
 
 .iqf-qty-info-bar {
-  display: flex !important;
-  gap: 18px !important;
-  margin-bottom: 2px !important;
-  padding: 6px !important;
-  background: linear-gradient(135deg, #f5f7fa 0%, #fffbf0 100%) !important;
-  border-radius: 12px !important;
-  border: 2px solid #e0e0e0 !important;
-  align-items: center !important;
-  flex-wrap: wrap !important; /* allow items to wrap if space is constrained */
+    display: flex !important;
+    gap: 50px !important;
+    margin-bottom: 2px !important;
+    padding: 5px !important;
+    background: linear-gradient(135deg, #f5f7fa 0%, #fffbf0 100%) !important;
+    border-radius: 12px !important;
+    border: 2px solid #e0e0e0 !important;
 }
 
 .iqf-qty-item {
+  flex: 1 !important;
   display: flex !important;
   align-items: center !important;
   gap: 12px !important;
-  padding: 10px 12px !important;
+  padding: 12px 16px !important;
   background: white !important;
   border-radius: 8px !important;
   border-left: 4px solid #028084 !important;
-  min-width: 88px !important; /* prevents extreme shrinking */
-  justify-content: space-between !important;
 }
 
 /* Compact variant for header placement */
@@ -256,35 +253,17 @@
 }
 
 .iqf-qty-label {
-  font-size: 11px !important;
+  font-size: 12px !important;
   color: #666 !important;
   text-transform: uppercase !important;
   font-weight: 600 !important;
   letter-spacing: 0.5px !important;
-  white-space: nowrap !important;
 }
 
 .iqf-qty-value {
-  font-size: 18px !important;
+  font-size: 20px !important;
   font-weight: 700 !important;
   color: #1a237e !important;
-  min-width: 36px !important;
-  text-align: right !important;
-}
-
-/* Specific styling for IQF Total to prevent cropping and align visually */
-.iqf-total-item {
-  border-left-color: #1976d2 !important;
-  background: linear-gradient(180deg,#ffffff,#f7fbff) !important;
-  min-width: 110px !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
-}
-
-@media (max-width: 640px) {
-  .iqf-qty-info-bar { gap: 8px !important; }
-  .iqf-qty-item { padding: 8px 10px !important; }
-  .iqf-total-item { min-width: 100px !important; }
 }
 
 .iqf-section-header {
@@ -369,15 +348,6 @@
 .iqf-rejection-modal-body .table thead th {
   background-color: #028084 !important;
   color: white !important;
-}
-
-/* Sticky header for rejection reasons table inside modal */
-#rejection-reasons-section .table thead th {
-  position: sticky !important;
-  top: 0; /* sticks to top of scroll container */
-  z-index: 20 !important;
-  background: linear-gradient(135deg, #028084 0%, #026066 100%) !important;
-  color: #fff !important;
 }
 
 .iqf-rejection-modal-body .table tbody tr:hover {
@@ -1191,13 +1161,6 @@
   box-shadow: 0 2px 8px rgba(2, 128, 132, 0.15) !important;
 }
 
-/* Error state for inputs when server reports invalid entry */
-.rejection-qty-input.input-error {
-  border-color: #d32f2f !important;
-  box-shadow: 0 0 0 4px rgba(211, 47, 47, 0.12) !important;
-  background: #fff6f6 !important;
-}
-
 /* ✅ Checkbox hover enhancement */
 #batchRejection:hover {
   cursor: pointer;
@@ -1428,7 +1391,7 @@
                       {% endif %}
                       <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
                     </span>
-                    {% if data.brass_origin == 'Audit' %}
+                    {% if data.send_brass_audit_to_iqf %}
                       <i class="fa fa-info-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Audit"></i>
                     {% else %}
                       <i class="fa fa-info-circle" style="color: #388e3c; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="QC"></i>
@@ -1530,7 +1493,7 @@
                       <div class="d-flex">
                         <!-- Q: Green if iqf_accepted_qty_verified, else gray -->
                         <div
-                          title="Quantity"
+                          title="Tray Scan"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 25px;
@@ -1547,7 +1510,7 @@
                         </div>
                         <!-- QC: Green if iqf_rejection or iqf_acceptance, else gray -->
                         <div 
-                          title="Quality Check"
+                          title="Tray Scan"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 25px;
@@ -2192,14 +2155,13 @@
 <div id="iqfRejectionModalOverlay" class="iqf-rejection-modal-overlay" style="display:block; opacity:0; visibility:hidden;">
   <div class="iqf-rejection-modal-container">
     <div class="iqf-rejection-modal-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-      <h5 class="iqf-rejection-modal-title" style="margin:0; display:flex; align-items:center; gap:8px;">IQF - Rejection Audit <span id="modalModelNo" style="font-weight:600; margin-left:8px;"></span></h5>
+      <h3 class="iqf-rejection-modal-title" style="margin:0; display:flex; align-items:center; gap:8px;">IQF - Rejection Audit <span id="modalModelNo" style="font-weight:600; margin-left:8px;"></span></h3>
       <div style="display:flex; align-items:center; gap:12px;">
         <div class="header-compact-qty">
           <div class="iqf-qty-info-bar">
             <div class="iqf-qty-item rw"><div class="iqf-qty-label">RW Qty</div><div class="iqf-qty-value" id="modalRwQty">0</div></div>
             <div class="iqf-qty-item missing"><div class="iqf-qty-label">Missing</div><div class="iqf-qty-value" id="modalMissingQty">0</div></div>
             <div class="iqf-qty-item physical"><div class="iqf-qty-label">Physical</div><div class="iqf-qty-value" id="modalPhysicalQty">0</div></div>
-            <div class="iqf-qty-item iqf-total-item"><div class="iqf-qty-label">IQF Total</div><div class="iqf-qty-value" id="modalIqfTotal">0</div></div>
           </div>
         </div>
         <button id="iqfModalClose" class="iqf-rejection-modal-close">&times;</button>
@@ -2254,7 +2216,7 @@
   // Open modal and populate data dynamically based on lotId
   function openAuditModal(lotId){
     if(!lotId) return;
-    fetch('/iqf/iqf_rejection_audit_iqf_reject/?lot_id='+encodeURIComponent(lotId))
+    fetch('/iqf/iqf_get_audit_modal_data/?lot_id='+encodeURIComponent(lotId))
       .then(function(res){ return res.json(); })
       .then(function(json){
         if(!json || !json.success) return;
@@ -2264,7 +2226,6 @@
         document.getElementById('modalRwQty') && (document.getElementById('modalRwQty').textContent = rw);
         document.getElementById('modalMissingQty') && (document.getElementById('modalMissingQty').textContent = json.missing_qty || '');
         document.getElementById('modalPhysicalQty') && (document.getElementById('modalPhysicalQty').textContent = json.physical_qty || '');
-        document.getElementById('modalIqfTotal') && (document.getElementById('modalIqfTotal').textContent = json.total_iqf_qty || 0);
         tbody.innerHTML = '';
 
         (json.rejection_data || []).forEach(function(row, idx){
@@ -2280,87 +2241,6 @@
                            + '</td>';
           tbody.appendChild(tr);
         });
-
-        // After rendering rows: attach input listeners that call server to compute total (backend-only calc)
-        var attachComputeListeners = function(){
-          var inputs = tbody.querySelectorAll('.rejection-qty-input');
-          inputs.forEach(function(inp){
-            // avoid duplicate handlers
-            inp.removeEventListener('input', inputChangedHandler);
-            inp.addEventListener('input', inputChangedHandler);
-          });
-        };
-
-        // Handler collects current inputs and requests server to compute total (uses existing submit API with action 'draft')
-        function inputChangedHandler(e){
-          try{
-            var csrftoken = getCookie('csrftoken');
-            var inputs = tbody.querySelectorAll('.rejection-qty-input');
-            var items = [];
-            inputs.forEach(function(i){
-              var rid = i.getAttribute('data-reason-id') || null;
-              var val = i.value || '';
-              items.push({ reason_id: rid, iqf_qty: val });
-            });
-            fetch('/iqf/iqf_submit_audit/', {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken || ''
-              },
-              body: JSON.stringify({ lot_id: lotId, action: 'draft', items: items })
-            }).then(function(resp){
-              return resp.json().catch(function(){ return { success: false, error: 'Invalid JSON' }; });
-            }).then(function(body){
-              if(body && body.success){
-                // Render backend-calculated total only
-                document.getElementById('modalIqfTotal') && (document.getElementById('modalIqfTotal').textContent = body.total_iqf_qty || 0);
-                // Keep RW qty in sync with server authoritative value
-                document.getElementById('modalRwQty') && (document.getElementById('modalRwQty').textContent = body.rw_qty || 0);
-              } else {
-                // on validation error, show server message and highlight offending input if provided
-                try{
-                  // remove any previous input error highlights
-                  try{
-                    tbody.querySelectorAll('.rejection-qty-input.input-error').forEach(function(i){ i.classList.remove('input-error'); });
-                  }catch(e){/* ignore */}
-
-                  if(body && body.error){
-                    console.warn('IQF compute error:', body.error);
-                    var el = document.getElementById('modalErrorMsg');
-                    if(!el){
-                      el = document.createElement('div'); el.id = 'modalErrorMsg';
-                      el.style.cssText = 'color:#8a1f1f;background:#fff2f2;padding:8px;border-radius:6px;margin-bottom:8px;border:1px solid #f5c6cb;';
-                      var bodyEl = document.querySelector('#iqfRejectionModalOverlay .iqf-rejection-modal-body');
-                      if(bodyEl) bodyEl.insertBefore(el, bodyEl.firstChild);
-                    }
-                    // If server provided which reason_id caused error, highlight that input and focus it
-                    if(body.reason_id !== undefined && body.reason_id !== null){
-                      var reasonId = String(body.reason_id);
-                      var badInput = tbody.querySelector('input[data-reason-id="'+reasonId+'"]');
-                      if(badInput){
-                        badInput.classList.add('input-error');
-                        try{ badInput.focus(); badInput.select(); }catch(e){}
-                        try{ badInput.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
-                        // augment error message with details when available
-                        var allowedText = (body.allowed !== undefined) ? (' Allowed: '+(body.allowed||0)) : '';
-                        var enteredText = (body.entered !== undefined) ? (' Entered: '+(body.entered||0)) : '';
-                        el.textContent = (body.error || 'Server validation failed') + allowedText + enteredText;
-                      } else {
-                        el.textContent = body.error || 'Server validation failed';
-                      }
-                    } else {
-                      el.textContent = body.error || 'Server validation failed';
-                    }
-                  }
-                }catch(e){ console.error('show modal error failed', e); }
-              }
-            }).catch(function(err){ console.error('Compute total failed', err); });
-          }catch(e){ console.error('inputChangedHandler error', e); }
-        }
-
-        attachComputeListeners();
 
         // reveal modal
         document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.add('active');
@@ -2398,26 +2278,7 @@
     }).then(function(json){
       if(!json){ alert('Empty response from server'); return; }
       if(!json.success){
-        // clear previous highlights
-        try{ document.querySelectorAll('.rejection-qty-input.input-error').forEach(function(i){ i.classList.remove('input-error'); }); }catch(e){}
-        // if server tells which reason_id failed, highlight and focus it
-        if(json && json.reason_id !== undefined && json.reason_id !== null){
-          try{
-            var reasonId = String(json.reason_id);
-            var badInput = document.querySelector('input[data-reason-id="'+reasonId+'"]');
-            if(badInput){ badInput.classList.add('input-error'); try{ badInput.focus(); badInput.select(); }catch(e){} try{ badInput.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){} }
-          }catch(e){}
-          // show inline modal message
-          try{
-            var el = document.getElementById('modalErrorMsg');
-            if(!el){ el = document.createElement('div'); el.id = 'modalErrorMsg'; el.style.cssText = 'color:#8a1f1f;background:#fff2f2;padding:8px;border-radius:6px;margin-bottom:8px;border:1px solid #f5c6cb;'; var bodyEl = document.querySelector('#iqfRejectionModalOverlay .iqf-rejection-modal-body'); if(bodyEl) bodyEl.insertBefore(el, bodyEl.firstChild); }
-            var allowedText = (json.allowed !== undefined) ? (' Allowed: '+(json.allowed||0)) : '';
-            var enteredText = (json.entered !== undefined) ? (' Entered: '+(json.entered||0)) : '';
-            el.textContent = (json.error || 'Server validation failed') + allowedText + enteredText;
-          }catch(e){ console.error('show modal error failed', e); }
-        } else {
-          alert(json.error || 'Server validation failed');
-        }
+        alert(json.error || 'Server validation failed');
       } else {
         if(action === 'draft') alert('Draft saved'); else alert('Submitted successfully');
         // close modal

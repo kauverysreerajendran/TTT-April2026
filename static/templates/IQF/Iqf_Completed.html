@@ -1966,11 +1966,44 @@ document.addEventListener("DOMContentLoaded", function () {
             const resp = await fetch(`/iqf/iqf_CompleteTable_tray_id_list/?${params}`);
             const result = await resp.json();
             if (result.success) {
-              traysData = result.trays || [];
-              delinkedTraysData = result.delinked_trays || [];
-              rejectionSummary = result.rejection_summary || {};
-              console.log('✅ Fetched ONLY brass rejected trays:', traysData);
-              console.log('🔗 Fetched delinked trays:', delinkedTraysData);
+              // Backend returns { success: true, data: { accepted_trays, rejected_trays, delink_trays, summary } }
+              const payload = result.data || {};
+
+              // Map accepted trays to unified tray objects
+              const accepted = (payload.accepted_trays || []).map(t => ({
+                tray_id: t.tray_id || '',
+                tray_quantity: t.qty || t.tray_quantity || 0,
+                rejected_tray: false,
+                delink_tray: false
+              }));
+
+              // Map rejected trays
+              const rejectedMapped = (payload.rejected_trays || []).map(t => ({
+                tray_id: t.tray_id || '',
+                tray_quantity: t.qty || t.tray_quantity || 0,
+                rejected_tray: true,
+                delink_tray: false,
+                rejection_reason: t.reason || t.rejection_reason || ''
+              }));
+
+              // Delinked trays (if any)
+              const delinked = (payload.delink_trays || []).map(t => ({
+                tray_id: t.tray_id || '',
+                tray_quantity: t.qty || t.tray_quantity || 0,
+                rejected_tray: !!t.rejected_tray,
+                delink_tray: true
+              }));
+
+              // Combine into traysData used by modal builder
+              traysData = [...accepted, ...rejectedMapped];
+              // Include delinked separately so modal can render them if needed
+              delinkedTraysData = delinked;
+              // Rejection summary/fallbacks
+              rejectionSummary = payload.summary || payload.rejection_summary || {};
+
+              console.log('✅ Mapped accepted trays:', accepted);
+              console.log('✅ Mapped rejected trays:', rejectedMapped);
+              console.log('🔗 Fetched delinked trays:', delinked);
               console.log('📊 Rejection summary:', rejectionSummary);
             }
           } catch (e) {

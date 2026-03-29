@@ -213,25 +213,12 @@ class IQFPickTableView(APIView):
                 use_audit = getattr(total_stock_obj, 'send_brass_audit_to_iqf', False)
                 reason_store = None
                 try:
-                    # Prefer explicit reason stores to derive origin (audit vs qc)
-                    # Prefer Brass Audit when present (some lots originate from audit)
-                    if Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).exists():
+                    if use_audit:
                         reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-                        inferred_origin = 'Audit'
-                    elif Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).exists():
-                        reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-                        inferred_origin = 'QC'
                     else:
-                        # Fallback to existing flag
-                        inferred_origin = 'Audit' if use_audit else 'QC'
-                        if use_audit:
-                            reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-                        else:
-                            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                        reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
                 except Exception:
                     reason_store = None
-                # expose inferred origin for template use (explicit override of send_brass_audit_to_iqf)
-                data['brass_origin'] = inferred_origin
 
                 rw_qty = (reason_store.total_rejection_quantity if reason_store and getattr(reason_store, 'total_rejection_quantity', 0) else 0)
 
@@ -265,7 +252,7 @@ class IQFPickTableView(APIView):
 # Audit modal single-source API: RW Qty + rejection reason table
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def iqf_rejection_audit_iqf_reject(request):
+def iqf_get_audit_modal_data(request):
     lot_id = request.GET.get('lot_id')
     if not lot_id:
         return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
@@ -346,34 +333,10 @@ def iqf_rejection_audit_iqf_reject(request):
 
         print(f"[AUDIT API] Output count: {len(response_data)}")
 
-        # If a draft exists for this lot, overlay its values into response_data and return total
-        try:
-            draft = IQF_Draft_Store.objects.filter(lot_id=lot_id, draft_type='batch_rejection').order_by('-updated_at').first()
-            if draft and draft.draft_data:
-                d_items = draft.draft_data.get('items') or []
-                # map reason_id -> qty
-                d_map = { (int(it.get('reason_id')) if it.get('reason_id') is not None else None): int(it.get('iqf_qty') or 0) for it in d_items }
-                total_from_draft = int(draft.draft_data.get('total_iqf') or 0)
-                # overlay
-                for row in response_data:
-                    rid = row.get('reason_id')
-                    if rid in d_map:
-                        row['iqf_qty'] = d_map[rid]
-                # expose draft total as initial IQF total
-                return Response({
-                    "success": True,
-                    "rw_qty": rw_qty,
-                    "rejection_data": response_data,
-                    "total_iqf_qty": total_from_draft
-                })
-        except Exception:
-            pass
-
         return Response({
             "success": True,
             "rw_qty": rw_qty,
-            "rejection_data": response_data,
-            "total_iqf_qty": 0
+            "rejection_data": response_data
         })
 
     except Exception as e:
@@ -411,7 +374,7 @@ def iqf_submit_audit(request):
         elif qc_store and getattr(qc_store, 'total_rejection_quantity', None) is not None:
             rw_qty = qc_store.total_rejection_quantity
 
-        # Parse items into ints and prepare for validation (backend-only calculation)
+        # Parse items into ints and prepare for validation
         total_iqf = 0
         parsed_items = []
         for it in items:
@@ -419,14 +382,10 @@ def iqf_submit_audit(request):
                 rid = int(it.get('reason_id'))
             except Exception:
                 rid = None
-            # Normalize qty: empty -> 0, enforce integer
             try:
                 qty = int(it.get('iqf_qty') or 0)
             except Exception:
-                return Response({'success': False, 'error': 'Invalid IQF quantity provided; must be integer'}, status=400)
-            # Strict validation: no negative values
-            if qty < 0:
-                return Response({'success': False, 'error': 'IQF quantities must be non-negative'}, status=400)
+                qty = 0
             total_iqf += qty
             parsed_items.append({'reason_id': rid, 'iqf_qty': qty})
 
@@ -470,73 +429,25 @@ def iqf_submit_audit(request):
             except Exception:
                 return 0
 
-        # Log computed total and inputs (backend single source of truth)
-        print('[IQF TOTAL CALC] Inputs:', parsed_items, 'Computed Total:', total_iqf)
-
-        # Build brass qty maps using the same logic as the GET audit API
-        try:
-            brass_rows_qs = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
-            if not brass_rows_qs.exists():
-                brass_rows_qs = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
-
-            reason_map = OrderedDict()
-            for row in brass_rows_qs:
-                try:
-                    reason_text = (row.rejection_reason.rejection_reason or '').strip()
-                except Exception:
-                    reason_text = str(getattr(row, 'rejection_reason', ''))
-                try:
-                    qty = int(row.rejected_tray_quantity or 0)
-                except Exception:
-                    try:
-                        qty = int(float(row.rejected_tray_quantity or 0))
-                    except Exception:
-                        qty = 0
-                if reason_text in reason_map:
-                    reason_map[reason_text]['qty'] += qty
-                else:
-                    reason_map[reason_text] = {'qty': qty, 'reason_id': getattr(row.rejection_reason, 'id', None)}
-
-            # Map IQF reason.id -> allowed brass qty using same matching logic as GET
-            by_id_map = {}
-            reasons = IQF_Rejection_Table.objects.all().order_by('rejection_reason_id')
-            for reason in reasons:
-                rtext = (reason.rejection_reason or '').strip()
-                info = reason_map.get(rtext)
-                brass_qty = 0
-                if info:
-                    brass_qty = info.get('qty', 0) or 0
-                else:
-                    for k, v in reason_map.items():
-                        if v.get('reason_id') and reason.id and v.get('reason_id') == reason.id:
-                            brass_qty = v.get('qty', 0) or 0
-                            break
-                by_id_map[reason.id] = int(brass_qty or 0)
-
-            print('[IQF BRASS MAP] by_id_map:', by_id_map)
-        except Exception as e:
-            print('[IQF BRASS MAP ERROR]', str(e))
-            by_id_map = {}
-
-        # Validate per-item: IQF_entered_qty <= Brass_QC_qty using by_id_map built above
+        # Validate per-item: IQF_entered_qty <= Brass_QC_qty (DB only)
         with transaction.atomic():
             for itm in parsed_items:
                 rid = itm.get('reason_id')
                 qty = itm.get('iqf_qty') or 0
-                # Enforce ID-based validation only
                 if rid is None:
-                    if qty > 0:
-                        return Response({'success': False, 'error': 'Missing reason_id for provided IQF qty; cannot validate'}, status=400)
-                    else:
-                        continue
-                allowed = by_id_map.get(rid, 0)
-                print(f'[VALIDATION] reason_id={rid}, allowed={allowed}, entered={qty}')
-                if allowed == 0 and qty > 0:
-                    return Response({'success': False, 'error': f'Cannot accept IQF qty for reason_id {rid}: no Brass QC quantity available', 'reason_id': rid, 'allowed': allowed, 'entered': qty}, status=400)
-                if qty > allowed:
-                    return Response({'success': False, 'error': f'IQF Qty cannot exceed Brass QC Reject Qty', 'reason_id': rid, 'allowed': allowed, 'entered': qty}, status=400)
+                    # If reason id missing, skip per-reason validation (still included in total check)
+                    continue
+                reason_obj = IQF_Rejection_Table.objects.filter(id=rid).first()
+                brass_qty = fetch_brass_qty_for_reason(lot_id, reason_obj)
+                # Reject if there is no Brass QC qty but frontend sent a positive IQF value
+                if (not brass_qty or int(brass_qty) == 0) and qty > 0:
+                    reason_text = reason_obj.rejection_reason if reason_obj else f'id {rid}'
+                    return Response({'success': False, 'error': f'Cannot accept IQF qty for {reason_text}: no Brass QC quantity available'}, status=400)
+                if qty > brass_qty:
+                    reason_text = reason_obj.rejection_reason if reason_obj else f'id {rid}'
+                    return Response({'success': False, 'error': f'IQF qty cannot exceed Brass QC qty for {reason_text}'}, status=400)
 
-            # Validate total against RW qty as previously (RW is canonical)
+            # Validate total against RW qty as previously
             if total_iqf > rw_qty:
                 return Response({'success': False, 'error': 'Submitted IQF total exceeds RW quantity', 'rw_qty': rw_qty, 'submitted_total': total_iqf}, status=400)
 
@@ -557,7 +468,7 @@ def iqf_submit_audit(request):
                         'draft_data': {'is_draft': True, 'items': parsed_items, 'total_iqf': total_iqf},
                     }
                 )
-                return Response({'success': True, 'draft': True, 'rw_qty': rw_qty, 'rejection_rows': parsed_items, 'total_iqf_qty': total_iqf})
+                return Response({'success': True, 'draft': True})
 
             # action == 'proceed'
             # Create IQF_Rejection_ReasonStore record to record final IQF rejection distribution
@@ -584,7 +495,7 @@ def iqf_submit_audit(request):
                 }
             )
 
-            return Response({'success': True, 'proceeded': True, 'rw_qty': rw_qty, 'rejection_rows': parsed_items, 'total_iqf_qty': total_iqf})
+            return Response({'success': True, 'proceeded': True})
 
     except Exception as e:
         print('[IQF SUBMIT ERROR]', str(e))

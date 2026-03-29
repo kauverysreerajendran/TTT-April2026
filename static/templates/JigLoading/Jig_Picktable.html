@@ -2905,7 +2905,7 @@ tr.row-inactive td:first-child {
 </div>
 
 <!-- ========================= -->
-<!-- 🔥 EXCESS LOT SECTION -->
+<!-- 🔥 EXCESS LOT SECTION - Half Filled Tray Scan-->
 <!-- ========================= -->
 <div id="excessLotSection" class="delink-section" style="display:none; margin-top:12px;">
 
@@ -2919,14 +2919,7 @@ tr.row-inactive td:first-child {
 
 </div>
 
-<!-- Half Filled Tray Section (Dynamic Rendering) -->
-<div class="halffilled-section" id="halfFilledTraySection" style="display: none; margin-top: 20px; margin-bottom: 50px;">
-  <h4 style="margin:0 0 8px 0; color: #028084;">Half Filled Tray</h4>
-  <!-- Top tray (user scans this) -->
-  <div id="halfTraySection" class="tray-scan-tabs" style="margin-bottom:12px;"></div>
-  <!-- Auto-allocated extra trays (read-only display) -->
-  <div id="extraTraySection" class="tray-scan-tabs"></div>
-</div>
+
 
   </div> <!-- /.jig-modal-content -->
 
@@ -3322,9 +3315,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     try {
-      // Build init URL — include multi_model params if merge flow set window._pendingSecondaryLot
+      // Build init URL — include multi_model params (supports N secondary lots)
       let multiParams = '';
-      if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
+      if (window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0) {
+        try {
+          const secLots = JSON.stringify(window._pendingSecondaryLots.map(function(s) {
+            return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
+          }));
+          multiParams = `&multi_model=true&secondary_lots=${encodeURIComponent(secLots)}`;
+          console.log('[MM] Models List Updated:', window._pendingSecondaryLots.length, 'secondary models');
+        } catch (e) { console.warn('[MULTI_MODEL_MERGE] Failed to build params', e); }
+      } else if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
         try {
           const secLots = JSON.stringify([{
             lot_id: window._pendingSecondaryLot.lot_id,
@@ -3417,19 +3418,30 @@ document.addEventListener('DOMContentLoaded', function () {
         window.updateLoadedDisplay();
       }
       console.log('[LCQ_INIT] Initial render completed');
-      // Enable Add Model button when lot qty < jig capacity
+      // Enable Add Model button based on empty hooks (cumulative multi-model aware)
       try {
         const addModelBtn = document.getElementById('addModelBtn');
-        const lotQty = parseInt(data.draft.original_lot_qty || 0) || 0;
-        const jigCap = parseInt(data.draft.jig_capacity || 0) || 0;
+        const emptyHooks = parseInt(data.empty_hooks || 0) || 0;
         if (addModelBtn) {
-          if (lotQty < jigCap) {
+          if (emptyHooks > 0) {
             addModelBtn.removeAttribute('disabled');
-            addModelBtn.title = 'Add secondary model(s)';
+            addModelBtn.title = 'Add secondary model(s) \u2014 ' + emptyHooks + ' hooks remaining';
           } else {
             addModelBtn.setAttribute('disabled', 'disabled');
-            addModelBtn.title = 'Lot equals jig capacity';
+            addModelBtn.title = 'Jig capacity fully allocated';
           }
+        }
+        // Persist current secondary lots for Add Model round-trip
+        if (data.secondary_lots && data.secondary_lots.length > 0) {
+          window._currentSecondaryLots = data.secondary_lots;
+        } else {
+          window._currentSecondaryLots = [];
+        }
+        // Log multi-model state
+        const totalMmQty = parseInt(data.total_multi_model_qty || 0) || 0;
+        if (data.is_multi_model) {
+          console.log('[MM] Total Loaded Qty:', totalMmQty);
+          console.log('[MM] Empty Hooks:', emptyHooks);
         }
       } catch (e) { console.warn('Add Model enable check failed', e); }
       if (idMap.brokenHooksInput) {
@@ -3476,9 +3488,21 @@ document.addEventListener('DOMContentLoaded', function () {
             labelDiv.textContent = (modelRole === 'primary' ? 'Primary: ' : 'Secondary: ') + modelLabel + ' (' + (modelAlloc.allocated_qty || 0) + ' qty)';
             container.appendChild(labelDiv);
 
-            (modelAlloc.tray_info || []).forEach(function(tray) {
+            // Preserve incoming order but move backend-marked top tray to the end
+            let traysArr = (modelAlloc.tray_info || []).slice();
+            try {
+              const topIndex = traysArr.findIndex(t => Boolean((t && (t.top_tray || t.is_top_tray))));
+              if (topIndex >= 0) {
+                const top = traysArr.splice(topIndex, 1)[0];
+                traysArr.push(top);
+              }
+            } catch (e) { /* ignore */ }
+
+            let modelTopTrayAssigned = false;
+            traysArr.forEach(function(tray) {
               const qty = tray.qty || 0;
-              const isTop = Boolean(tray.top_tray || (qty && qty < trayCapacity));
+              const isTop = Boolean(tray.top_tray && !modelTopTrayAssigned);
+              if (isTop) modelTopTrayAssigned = true;
               const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
               const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
               const div = document.createElement('div');
@@ -3539,24 +3563,24 @@ document.addEventListener('DOMContentLoaded', function () {
             source = [];
           }
 
-          // sort so top-tray entries (explicit flag) come first, then by qty asc
-          source.sort((a, b) => {
-            const aMeta = a.meta || a || {};
-            const bMeta = b.meta || b || {};
-            const aTop = Boolean(aMeta.is_top_tray || aMeta.top_tray || false);
-            const bTop = Boolean(bMeta.is_top_tray || bMeta.top_tray || false);
-            if (aTop && !bTop) return -1;
-            if (!aTop && bTop) return 1;
-            return parseInt(a.qty || 0) - parseInt(b.qty || 0);
-          });
+          // Preserve incoming order but move backend-marked top tray to the end
+          try {
+            const topIdx = source.findIndex(e => Boolean((e && (e.meta && (e.meta.top_tray || e.meta.is_top_tray)))));
+            if (topIdx >= 0) {
+              const topEntry = source.splice(topIdx, 1)[0];
+              source.push(topEntry);
+            }
+          } catch (e) { /* ignore */ }
 
           // update visible delink tray count using authoritative source (display text)
           try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = `(No of Trays: ${source.length})`; } catch (e) { /* ignore */ }
 
+          let singleModelTopTrayAssigned = false;
           source.forEach((entry, idx) => {
             const t = entry.meta || {};
             const qty = entry.qty || 0;
-            const isTop = Boolean(t.is_top_tray || t.top_tray || (qty && qty < trayCapacity));
+            const isTop = Boolean(t.top_tray && !singleModelTopTrayAssigned);
+            if (isTop) singleModelTopTrayAssigned = true;
             const isPlaceholder = Boolean(t.is_placeholder);
             const div = document.createElement('div');
             div.className = 'tray-scan-tab';
@@ -3724,6 +3748,13 @@ document.addEventListener('DOMContentLoaded', function () {
           });
         })();
         console.log('✅ Tray UI Rendered (delink slots):', source.length);
+
+        // ===== SINGLE MODEL: render excess/half-filled section from API data =====
+        try {
+          renderTrays('excess', data.excess_info || null);
+          console.log('[SM_EXCESS] excess_info rendered:', data.excess_info);
+        } catch (smExcessErr) { console.warn('[SM_EXCESS] render failed', smExcessErr); }
+
         // UI adjustments for PERFECT_FIT scenario
         const scenario = data.scenario || '';
         const perfectFit = scenario === 'PERFECT_FIT' || ((data.draft && parseInt(data.draft.original_lot_qty||0) === parseInt(data.draft.jig_capacity||0)) && (parseInt(data.draft.broken_hooks||0) === 0));
@@ -3731,7 +3762,7 @@ document.addEventListener('DOMContentLoaded', function () {
           // Hide half-filled and excess UI sections
           const halfSection = document.getElementById('halfFilledTraySection');
           if (halfSection) halfSection.style.display = 'none';
-          const excessEl = document.getElementById('excessSection') || document.querySelector('.excess-section');
+          const excessEl = document.getElementById('excessLotSection') || document.getElementById('excessSection') || document.querySelector('.excess-section');
           if (excessEl) excessEl.style.display = 'none';
 
           // Enable submit only when loaded equals jig capacity
@@ -3789,12 +3820,96 @@ document.addEventListener('DOMContentLoaded', function () {
   // Patch: Only update delink UI, do not re-render full DOM
   function applyResponseToUI(data) {
     try {
-      updateDelinkUI(data.delink_tray_info); // 🔥 FIX
-      renderTrays('half', data.half_filled_tray_info || []);
-      renderTrays('extra', data.extra_trays || []);
-      renderTrays('excess', data.excess_info || null);
-      const halfWrap = document.getElementById('halfFilledTraySection');
-      if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
+      // ===== MULTI-MODEL: full re-render of delink + half-filled sections =====
+      if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
+        console.log('[RECALC_MM] Re-rendering multi-model trays:', data.multi_model_allocation.length, 'models');
+        const container = idMap.trayInputsContainer;
+        if (container) {
+          container.innerHTML = '';
+          const trayCapacity = (data && data.draft && data.draft.tray_capacity) || data.tray_capacity || 12;
+          let totalTrayCount = 0;
+          let recalcModelTopAssigned = false;
+          data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
+            const colorClass = 'model-bg-' + (mIdx + 1);
+            const modelLabel = modelAlloc.model_name || modelAlloc.model || modelAlloc.lot_id || ('Model ' + (mIdx + 1));
+            const modelRole = modelAlloc.model_role || (mIdx === 0 ? 'primary' : 'secondary');
+            const allocLotId = modelAlloc.lot_id || '';
+            const allocBatchId = modelAlloc.batch_id || '';
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'tray-section-label';
+            const labelColor = modelRole === 'primary' ? '#028084' : '#1a7a2e';
+            const labelBg = modelRole === 'primary' ? '#e2fbff' : '#e8f4ea';
+            labelDiv.style.cssText = 'font-weight:700;font-size:12px;padding:4px 8px;margin:' + (mIdx > 0 ? '10px' : '0') + ' 0 2px;background:' + labelBg + ';border-radius:4px;color:' + labelColor + ';width:100%;';
+            labelDiv.textContent = (modelRole === 'primary' ? 'Primary: ' : 'Secondary: ') + modelLabel + ' (' + (modelAlloc.allocated_qty || 0) + ' qty)';
+            container.appendChild(labelDiv);
+            // Preserve incoming order but move backend-marked top tray to the end
+            let traysArr = (modelAlloc.tray_info || []).slice();
+            try {
+              const topIndex = traysArr.findIndex(t => Boolean((t && (t.top_tray || t.is_top_tray))));
+              if (topIndex >= 0) {
+                const top = traysArr.splice(topIndex, 1)[0];
+                traysArr.push(top);
+              }
+            } catch (e) { /* ignore */ }
+
+            let recalcModelInternalTop = false;
+            traysArr.forEach(function(tray) {
+              const qty = tray.qty || 0;
+              const isTop = Boolean(tray.top_tray && !recalcModelInternalTop);
+              if (isTop) recalcModelInternalTop = true;
+              const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
+              const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
+              const div = document.createElement('div');
+              div.className = 'tray-scan-tab';
+              div.innerHTML = '<input type="text" class="tray-id-input ' + colorClass + '" data-expected-qty="' + qty + '" data-lot-id="' + allocLotId + '" data-batch-id="' + allocBatchId + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
+              container.appendChild(div);
+              totalTrayCount++;
+            });
+          });
+          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = '(No of Trays: ' + totalTrayCount + ')'; } catch (e) {}
+          console.log('[RECALC_MM] Rendered', totalTrayCount, 'trays');
+        }
+        // Re-render multi-model half-filled section
+        try {
+          const halfFilled = data.half_filled_tray_info || [];
+          const halfFilledQty = parseInt(data.half_filled_tray_qty || 0) || 0;
+          const hfSection = document.getElementById('excessLotSection');
+          const hfContainer = document.getElementById('excessTrayContainer');
+          const hfCount = document.getElementById('excessLotCount');
+          if (hfSection && hfContainer && hfCount && halfFilled.length > 0 && halfFilledQty > 0) {
+            hfSection.style.display = 'block';
+            hfCount.innerText = '(Qty: ' + halfFilledQty + ' | No of Trays: ' + halfFilled.length + ')';
+            hfContainer.innerHTML = '';
+            let hfTopTrayAssigned = false;
+            halfFilled.forEach(function(tray) {
+              const mLabel = tray.model || '';
+              const placeholder = mLabel ? 'Scan ' + mLabel : 'Scan Tray ID';
+              const isHfTop = Boolean(tray.top_tray && !hfTopTrayAssigned);
+              if (isHfTop) hfTopTrayAssigned = true;
+              const hfTopLabel = isHfTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
+              const div = document.createElement('div');
+              div.className = 'tray-scan-tab';
+              div.innerHTML = '<label>' + placeholder + '</label><input type="text" class="tray-id-input" style="background:#fff3cd !important;" data-expected-qty="' + (tray.qty || 0) + '" placeholder="' + placeholder + '" readonly><div class="tray-qty">Qty: ' + (tray.qty || 0) + hfTopLabel + '</div>';
+              hfContainer.appendChild(div);
+            });
+            console.log('[RECALC_MM] Rendered', halfFilled.length, 'half-filled trays');
+          } else if (hfSection) {
+            hfSection.style.display = 'none';
+          }
+        } catch (hfErr) { console.warn('[RECALC_MM] half-filled render error', hfErr); }
+        // Update secondary lots state from response
+        if (data.secondary_lots && data.secondary_lots.length > 0) {
+          window._currentSecondaryLots = data.secondary_lots;
+        }
+      } else {
+        // ===== SINGLE-MODEL: existing delink update =====
+        updateDelinkUI(data.delink_tray_info);
+        renderTrays('half', data.half_filled_tray_info || []);
+        renderTrays('extra', data.extra_trays || []);
+        renderTrays('excess', data.excess_info || null);
+        const halfWrap = document.getElementById('halfFilledTraySection');
+        if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
+      }
       try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
 
       // 🔥 FIX: Update ALL backend-authoritative values from response
@@ -3856,7 +3971,23 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const brokenHooks = parseInt(window.currentBrokenHooks || 0) || 0;
-    const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lot)}&batch_id=${encodeURIComponent(batch)}&broken_hooks=${encodeURIComponent(brokenHooks)}`;
+
+    // Build multi-model params so BH recalc preserves multi-model state
+    let recalcMultiParams = '';
+    const secLots = window._pendingSecondaryLots || window._currentSecondaryLots;
+    if (secLots && secLots.length > 0) {
+      try {
+        const secJson = JSON.stringify(secLots.map(function(s) {
+          return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
+        }));
+        recalcMultiParams = `&multi_model=true&secondary_lots=${encodeURIComponent(secJson)}`;
+      } catch (e) { console.warn('[RECALC] Failed to build multi-model params', e); }
+    }
+
+    // Include jig_capacity so backend doesn't fall back to lot_qty
+    const jigCap = window.BACKEND_ORIGINAL_CAPACITY || (idMap && idMap.jigCapacityInput && idMap.jigCapacityInput.value) || window.jigCapacity || '';
+
+    const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lot)}&batch_id=${encodeURIComponent(batch)}&broken_hooks=${encodeURIComponent(brokenHooks)}&jig_capacity=${encodeURIComponent(jigCap)}${recalcMultiParams}`;
     
     console.log('[RECALC URL]', url);
 
@@ -4230,8 +4361,20 @@ document.addEventListener('DOMContentLoaded', function () {
             console.warn('Primary lot missing, cannot open Add Model list');
             return;
           }
+          // Persist existing secondary lots so they survive the Add Model page navigation
+          try {
+            const existingLots = window._currentSecondaryLots || [];
+            sessionStorage.setItem('secondary_lots', JSON.stringify(existingLots));
+            console.log('[ADD_MODEL] Persisted', existingLots.length, 'existing secondary lots');
+          } catch(e) { console.warn('[ADD_MODEL] Failed to store secondary lots', e); }
           const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.remove('open');
-          const url = `/jig_loading/JigView/?exclude_lot_id=${encodeURIComponent(primary)}&primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(batch)}`;
+          // Build exclude param with ALL already-selected lot IDs
+          let excludeIds = [primary];
+          try {
+            (window._currentSecondaryLots || []).forEach(function(s) { if(s.lot_id) excludeIds.push(s.lot_id); });
+          } catch(e) {}
+          const excludeParam = excludeIds.map(function(id){ return encodeURIComponent(id); }).join(',');
+          const url = `/jig_loading/JigView/?exclude_lot_id=${excludeParam}&primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(batch)}`;
           window.location.href = url;
         } catch (e) { console.warn('Add Model click failed', e); }
       });
@@ -4261,9 +4404,17 @@ document.addEventListener('DOMContentLoaded', function () {
           return;
         }
 
-        // Prefer sessionStorage for ephemeral navigation state
+        // Append to existing secondary lots array (supports N models)
         try {
-          sessionStorage.setItem('secondary_lot', JSON.stringify(selectedLot));
+          let existingLots = [];
+          try {
+            const raw = sessionStorage.getItem('secondary_lots');
+            if (raw) existingLots = JSON.parse(raw);
+            if (!Array.isArray(existingLots)) existingLots = [];
+          } catch(e) { existingLots = []; }
+          existingLots.push(selectedLot);
+          sessionStorage.setItem('secondary_lots', JSON.stringify(existingLots));
+          console.log('[MM] Models List Updated:', existingLots.length, 'secondary models');
         } catch (e) {
           console.warn('[STORAGE] sessionStorage failed, falling back to localStorage', e);
           try { localStorage.setItem('secondary_lot', JSON.stringify(selectedLot)); } catch (e2) { console.warn('[STORAGE] localStorage also failed', e2); }
@@ -4305,19 +4456,31 @@ document.addEventListener('DOMContentLoaded', function () {
       window.CURRENT_LOT_ID = primaryLot;
       window.CURRENT_BATCH_ID = primaryBatch;
 
-      // Read secondary lot from sessionStorage and save to global for initJigFromButton to pick up
+      // Read secondary lots array from sessionStorage (supports N models)
       try {
-        const secRaw = sessionStorage.getItem('secondary_lot') || localStorage.getItem('secondary_lot');
-        if (secRaw) {
-          const parsedSec = JSON.parse(secRaw);
-          if (parsedSec && parsedSec.lot_id) {
-            console.log('[MERGE_FLOW] Secondary lot found:', parsedSec.lot_id);
-            window._pendingSecondaryLot = parsedSec;
+        const secArrayRaw = sessionStorage.getItem('secondary_lots');
+        if (secArrayRaw) {
+          const parsedArray = JSON.parse(secArrayRaw);
+          if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+            window._pendingSecondaryLots = parsedArray;
+            console.log('[MERGE_FLOW] Secondary lots found:', parsedArray.length);
+          }
+        }
+        // Fallback: single secondary_lot (backward compat)
+        if (!window._pendingSecondaryLots || !window._pendingSecondaryLots.length) {
+          const secRaw = sessionStorage.getItem('secondary_lot') || localStorage.getItem('secondary_lot');
+          if (secRaw) {
+            const parsedSec = JSON.parse(secRaw);
+            if (parsedSec && parsedSec.lot_id) {
+              window._pendingSecondaryLots = [parsedSec];
+              console.log('[MERGE_FLOW] Secondary lot (single) found:', parsedSec.lot_id);
+            }
           }
         }
       } catch (e) { console.warn('[MERGE_FLOW] sessionStorage read failed', e); }
 
-      // Cleanup storage + URL immediately (data is now safely in window._pendingSecondaryLot)
+      // Cleanup storage + URL immediately (data is now safely in window._pendingSecondaryLots)
+      try { sessionStorage.removeItem('secondary_lots'); } catch (e) {}
       try { sessionStorage.removeItem('secondary_lot'); } catch (e) {}
       try { localStorage.removeItem('secondary_lot'); } catch (e) {}
       try {
@@ -4338,7 +4501,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (modal) modal.classList.add('open');
         if (window.callInitAPI) {
           let multiParams = '';
-          if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
+          if (window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0) {
+            try {
+              const secLots = JSON.stringify(window._pendingSecondaryLots.map(function(s) {
+                return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
+              }));
+              multiParams = '&multi_model=true&secondary_lots=' + encodeURIComponent(secLots);
+            } catch (e) {}
+            window._pendingSecondaryLots = null;
+          } else if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
             try {
               const secLots = JSON.stringify([window._pendingSecondaryLot]);
               multiParams = '&multi_model=true&secondary_lots=' + encodeURIComponent(secLots);
