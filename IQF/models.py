@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.timezone import now
+from django.core.exceptions import ValidationError
+from django.db.models import F, Q
 # Create your models here.
 
 class IQFTrayId(models.Model):
@@ -58,6 +60,7 @@ class IQFTrayId(models.Model):
     class Meta:
         verbose_name = "IQF Tray ID"
         verbose_name_plural = "IQF Tray IDs"
+
       
 class IQF_Draft_Store(models.Model):
     lot_id = models.CharField(max_length=255)
@@ -90,6 +93,9 @@ class IQF_Rejection_Table(models.Model):
 
     def __str__(self):
         return f"{self.rejection_reason} "
+
+    class Meta:
+        ordering = ['rejection_reason_id']
     
 
 class IQF_Rejection_ReasonStore(models.Model):
@@ -136,6 +142,7 @@ class IQF_Accepted_TrayID_Store(models.Model):
     
     def __str__(self):
         return f"{self.tray_id} - {self.lot_id}"
+
     
 class IQF_OptimalDistribution_Draft(models.Model):
     lot_id = models.CharField(max_length=100)
@@ -147,3 +154,82 @@ class IQF_OptimalDistribution_Draft(models.Model):
     
     class Meta:
         unique_together = ['lot_id', 'user']
+
+
+class IQF_Submitted(models.Model):
+    """
+    Single-row snapshot model: ONE lot → ONE row → FULL TRACEABILITY.
+    Stores complete tray-level data in JSON fields for each flow type.
+    Backend fully controls logic — no row duplication.
+
+    IQF processes ONLY Brass QC rejection qty (rw_qty), NOT the full lot.
+    original_lot_qty = full batch qty (e.g. 100)
+    iqf_incoming_qty = Brass QC rw_qty (e.g. 55) ← THIS is what IQF works with
+    """
+
+    # Submission type constants
+    SUB_FULL_ACCEPT = 'FULL_ACCEPT'
+    SUB_FULL_REJECT = 'FULL_REJECT'
+    SUB_PARTIAL = 'PARTIAL'
+
+    SUBMISSION_CHOICES = [
+        (SUB_FULL_ACCEPT, 'Full Accept'),
+        (SUB_FULL_REJECT, 'Full Reject'),
+        (SUB_PARTIAL, 'Partial'),
+    ]
+
+    # Core identifiers
+    lot_id = models.CharField(max_length=255, unique=True, db_index=True)
+    batch_id = models.ForeignKey('modelmasterapp.ModelMasterCreation', on_delete=models.SET_NULL, null=True, blank=True)
+
+    # SOURCE TRACEABILITY (separate original vs incoming)
+    original_lot_qty = models.IntegerField(default=0, help_text="Original full batch quantity (e.g. 100) — for reference only")
+    iqf_incoming_qty = models.IntegerField(default=0, help_text="IQF incoming qty = Brass QC rw_qty (e.g. 55) — what IQF actually processes")
+    total_lot_qty = models.IntegerField(help_text="Legacy: equals iqf_incoming_qty for backward compatibility")
+
+    # FINAL DECISION
+    accepted_qty = models.IntegerField()
+    rejected_qty = models.IntegerField()
+    submission_type = models.CharField(max_length=20, choices=SUBMISSION_CHOICES)
+
+    # 4 FLOW SNAPSHOTS with labels — only relevant one(s) populated per row
+    full_accept_data = models.JSONField(null=True, blank=True, help_text="Full accept: all trays accepted as-is (label=FULL_ACCEPT)")
+    partial_accept_data = models.JSONField(null=True, blank=True, help_text="Partial accept: accepted trays (label=PARTIAL_ACCEPT)")
+    full_reject_data = models.JSONField(null=True, blank=True, help_text="Full reject: all trays rejected (label=FULL_REJECT)")
+    partial_reject_data = models.JSONField(null=True, blank=True, help_text="Partial reject: rejected tray split (label=PARTIAL_REJECT)")
+
+    # SOURCE SNAPSHOTS — original lot trays + IQF working trays (both from DB)
+    original_data = models.JSONField(null=True, blank=True, help_text="Original lot tray snapshot (tray_quantity from all trays)")
+    iqf_data = models.JSONField(null=True, blank=True, help_text="IQF working tray snapshot (remaining_qty from eligible trays)")
+
+    # Per-reason rejection breakdown (populated when rejected_qty > 0)
+    rejection_details = models.JSONField(null=True, blank=True, help_text="Per-reason rejection quantities from audit")
+
+    # Metadata
+    is_completed = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'IQF Submitted'
+        verbose_name_plural = 'IQF Submitted'
+        constraints = [
+            models.CheckConstraint(
+                check=Q(accepted_qty=F('iqf_incoming_qty') - F('rejected_qty')),
+                name='iqf_accepted_plus_rejected_eq_incoming',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['lot_id']),
+        ]
+
+    def clean(self):
+        if (self.accepted_qty or 0) + (self.rejected_qty or 0) != (self.iqf_incoming_qty or 0):
+            raise ValidationError('Accepted + Rejected must equal IQF incoming qty (rw_qty)')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"IQF_Submitted(lot={self.lot_id}, type={self.submission_type}, incoming={self.iqf_incoming_qty}, original={self.original_lot_qty})"

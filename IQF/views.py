@@ -34,7 +34,8 @@ from django.views import View
 from django.db.models import Sum, F, Func, IntegerField
 from django.db import transaction
 from collections import OrderedDict
-# Create your views here.
+
+
 
 def generate_new_lot_id():
         from datetime import datetime
@@ -47,6 +48,102 @@ def generate_new_lot_id():
             next_seq_no = 1
         seq_no = f"{next_seq_no:04d}"
         return f"LID{timestamp}{seq_no}"
+
+
+def build_ui_state(data):
+    """Compute ALL UI state for a single IQF pick table row.
+
+    Frontend becomes pure render layer — zero business logic in templates.
+    Backend is SINGLE SOURCE OF TRUTH for button states, labels, colors, permissions.
+
+    Returns a dict that the template accesses via {{ data.ui.* }}
+    """
+    hold_lot = bool(data.get('iqf_hold_lot'))
+    verified = bool(data.get('iqf_accepted_qty_verified'))
+    acceptance = bool(data.get('iqf_acceptance'))
+    rejection = bool(data.get('iqf_rejection'))
+    few_cases = bool(data.get('iqf_few_cases_acceptance'))
+    onhold = bool(data.get('iqf_onhold_picking'))
+    draft = bool(data.get('Draft_Saved'))
+    has_remarks = bool(data.get('IQF_pick_remarks'))
+    holding_reason = data.get('iqf_holding_reason') or ''
+    release_reason = data.get('iqf_release_reason') or ''
+    release_lot = bool(data.get('iqf_release_lot'))
+    last_module = data.get('last_process_module') or ''
+
+    # ── Row CSS class ──
+    row_blur = 'row-inactive-blur' if hold_lot else ''
+
+    # ── Action state machine — ONE decision, backend-only ──
+    if acceptance:
+        action_type = 'ACCEPTED'
+    elif onhold:
+        action_type = 'VERIFY'
+    elif rejection or few_cases:
+        action_type = 'REJECTED'
+    elif verified:
+        action_type = 'AUDIT_ENABLED'
+    else:
+        action_type = 'AUDIT_DISABLED'
+
+    # ── Lot status pill — pre-computed label + colors ──
+    if hold_lot:
+        status_pill = {'label': 'On Hold', 'border': '#dc3545', 'bg': '#f8d7da', 'text': '#721c24'}
+    elif draft:
+        status_pill = {'label': 'Draft', 'border': '#4997ac', 'bg': '#d1f2f3', 'text': '#03425d'}
+    elif rejection or few_cases or acceptance:
+        status_pill = {'label': 'Yet to Release', 'border': '#0d5d17', 'bg': '#c5f9c2', 'text': '#2f801b'}
+    else:
+        status_pill = {'label': 'Yet to Start', 'border': '#f9a825', 'bg': '#fff8e1', 'text': '#b26a00'}
+
+    # ── Process status circles ──
+    q_color = '#0c8249' if verified else '#bdbdbd'
+    if rejection or acceptance or few_cases:
+        qc_style = 'background-color: #0c8249'
+    elif draft:
+        qc_style = 'background: linear-gradient(to right, #0c8249 50%, #bdbdbd 50%)'
+    else:
+        qc_style = 'background-color: #bdbdbd'
+
+    # ── Hold/release info ──
+    show_hold_info = bool(hold_lot or release_lot or holding_reason or release_reason)
+    tooltip_parts = []
+    if holding_reason:
+        tooltip_parts.append(f'Holding Reason: {holding_reason}')
+    if release_reason:
+        tooltip_parts.append(f'Release Reason: {release_reason}')
+    hold_tooltip = '\n'.join(tooltip_parts)
+
+    # ── Permissions ──
+    can_delete = verified
+    allow_remarks = not (acceptance or rejection or few_cases)
+
+    # ── Current stage colors ──
+    stage_map = {
+        'Input screening': {'border': '#0d5d17', 'bg': '#c5f9c2', 'text': '#2f801b'},
+        'IQF': {'border': '#f9a825', 'bg': '#fff8e1', 'text': '#b26a00'},
+        'DayPlanning': {'border': '#1976d2', 'bg': '#d1eaff', 'text': '#033b5d'},
+    }
+    stage = stage_map.get(last_module, {'border': '#9adeed', 'bg': '#d1edf3', 'text': '#033b5d'})
+
+    ui = {
+        'row_blur': row_blur,
+        'hold_lot': hold_lot,
+        'action_type': action_type,
+        'status_pill': status_pill,
+        'q_color': q_color,
+        'qc_style': qc_style,
+        'show_hold_info': show_hold_info,
+        'hold_tooltip': hold_tooltip,
+        'can_delete': can_delete,
+        'allow_remarks': allow_remarks,
+        'qty_verified': verified,
+        'remarks_saved': has_remarks,
+        'stage': stage,
+    }
+    print(f"[UI_STATE] lot={data.get('stock_lot_id')}, action={action_type}, status={status_pill['label']}")
+    return ui
+
     
 @method_decorator(login_required, name='dispatch')    
 class IQFPickTableView(APIView):
@@ -64,7 +161,7 @@ class IQFPickTableView(APIView):
         brass_rejection_qty_subquery = Brass_QC_Rejection_ReasonStore.objects.filter(
             lot_id=OuterRef('lot_id')
         ).values('total_rejection_quantity')[:1]
-        
+
         brass_audit_rejection_qty_subquery = Brass_Audit_Rejection_ReasonStore.objects.filter(
             lot_id=OuterRef('lot_id')
         ).values('total_rejection_quantity')[:1]
@@ -90,8 +187,8 @@ class IQFPickTableView(APIView):
             Q(send_brass_audit_to_iqf=True)
         ).exclude(
             Q(brass_audit_accptance=True) |
-            Q(iqf_acceptance=True) | 
-            Q(iqf_rejection=True) | 
+            Q(iqf_acceptance=True) |
+            Q(iqf_rejection=True) |
             Q(send_brass_audit_to_iqf=True, brass_audit_onhold_picking=True)|
             Q(iqf_few_cases_acceptance=True, iqf_onhold_picking=False)
         ).order_by('-bq_last_process_date_time', '-lot_id')
@@ -271,6 +368,10 @@ class IQFPickTableView(APIView):
             data['display_physical_qty'] = iqf_physical_qty if (iqf_physical_qty and iqf_physical_qty > 0) else 0
         print("Processed lot_ids:", [data['stock_lot_id'] for data in master_data])
 
+        # ── ATTACH UI STATE — Backend drives ALL UI decisions ──
+        for data in master_data:
+            data['ui'] = build_ui_state(data)
+
         context = {
             'master_data': master_data,
             'page_obj': page_obj,
@@ -302,24 +403,28 @@ def iqf_rejection_audit_iqf_reject(request):
 
         rw_qty = reason_store.total_rejection_quantity if reason_store else 0
 
-        # 2. Build per-reason data from Brass QC rejected tray scans (single source)
-        # Prefer Brass QC rejected tray scan records; if none found, fall back to Brass Audit rejected tray scans.
+        # 2. UNIFIED source aggregation — merge Brass QC + Brass Audit + IQF rejected tray scans
         response_data = []
         try:
-            brass_rows_qs = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason')
+            brass_qc_rows = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason'))
         except Exception:
-            brass_rows_qs = Brass_QC_Rejected_TrayScan.objects.none()
+            brass_qc_rows = []
+        try:
+            brass_audit_rows = list(Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason'))
+        except Exception:
+            brass_audit_rows = []
+        try:
+            iqf_rows = list(IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason'))
+        except Exception:
+            iqf_rows = []
 
-        # fallback to audit rejected tray scans if brass qc rows not present
-        if not brass_rows_qs.exists():
-            try:
-                brass_rows_qs = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason')
-            except Exception:
-                brass_rows_qs = Brass_QC_Rejected_TrayScan.objects.none()
+        all_rows = brass_qc_rows + brass_audit_rows + iqf_rows
 
-        # Aggregate quantities by reason text (preserve insertion order)
+        print(f"[AUDIT API] Total rows fetched: {len(all_rows)} (brass_qc={len(brass_qc_rows)}, brass_audit={len(brass_audit_rows)}, iqf={len(iqf_rows)})")
+
+        # Aggregate quantities by reason text + id (preserve insertion order)
         reason_map = OrderedDict()
-        for row in brass_rows_qs:
+        for row in all_rows:
             try:
                 reason_text = (row.rejection_reason.rejection_reason or '').strip()
             except Exception:
@@ -331,37 +436,69 @@ def iqf_rejection_audit_iqf_reject(request):
                     qty = int(float(row.rejected_tray_quantity or 0))
                 except Exception:
                     qty = 0
+            r_id = getattr(row.rejection_reason, 'id', None) if hasattr(row, 'rejection_reason') else None
             if reason_text in reason_map:
                 reason_map[reason_text]['qty'] += qty
             else:
-                reason_map[reason_text] = {'qty': qty, 'reason_id': getattr(row.rejection_reason, 'id', None)}
+                reason_map[reason_text] = {'qty': qty, 'reason_id': r_id}
 
-        # Build response using master IQF reasons but fill quantities from brass reason_map
-        # This ensures all master reasons (including 'OTHERS') appear even if qty is 0
+        # Build response using master IQF reasons, filling quantities from unified reason_map
         reasons = IQF_Rejection_Table.objects.all().order_by('rejection_reason_id')
-        for index, reason in enumerate(reasons, start=1):
-            reason_text = (reason.rejection_reason or '').strip()
-            # Prefer match by exact text; fall back to id-based lookup if available in map
-            info = reason_map.get(reason_text)
-            brass_qty = 0
-            if info:
-                brass_qty = info.get('qty', 0) or 0
-            else:
-                # attempt id-based match (in case texts differ)
-                for k, v in reason_map.items():
-                    if v.get('reason_id') and reason.id and v.get('reason_id') == reason.id:
-                        brass_qty = v.get('qty', 0) or 0
-                        break
+        print(f"[AUDIT API] Master reasons count: {reasons.count()}")
 
-            print(f"[AUDIT API] lot_id={lot_id}, reason={reason_text}, brass_qty={brass_qty}")
-            response_data.append({
-                "s_no": index,
-                "reason_id": reason.id,
-                "reason": reason_text,
-                "brass_qc_qty": brass_qty,
-                "iqf_qty": 0,
-                "is_editable": True if (brass_qty and int(brass_qty) > 0) else False
-            })
+        if not reasons.exists():
+            # DYNAMIC FALLBACK: no master table entries — derive reasons from actual data
+            print("[AUDIT API] No master reasons found → using dynamic reasons from scan data")
+            dynamic_reason_map = OrderedDict()
+            for row in all_rows:
+                try:
+                    reason_text = (row.rejection_reason.rejection_reason or '').strip()
+                except Exception:
+                    reason_text = str(getattr(row, 'rejection_reason', ''))
+                try:
+                    qty = int(row.rejected_tray_quantity or 0)
+                except Exception:
+                    try:
+                        qty = int(float(row.rejected_tray_quantity or 0))
+                    except Exception:
+                        qty = 0
+                if reason_text in dynamic_reason_map:
+                    dynamic_reason_map[reason_text] += qty
+                else:
+                    dynamic_reason_map[reason_text] = qty
+
+            for idx, (reason_text, qty) in enumerate(dynamic_reason_map.items(), start=1):
+                response_data.append({
+                    "s_no": idx,
+                    "reason_id": None,
+                    "reason": reason_text,
+                    "brass_qc_qty": qty,
+                    "iqf_qty": 0,
+                    "is_editable": True,
+                })
+        else:
+            for index, reason in enumerate(reasons, start=1):
+                reason_text = (reason.rejection_reason or '').strip()
+                info = reason_map.get(reason_text)
+                brass_qty = 0
+                if info:
+                    brass_qty = info.get('qty', 0) or 0
+                else:
+                    # id-based fallback match
+                    for v in reason_map.values():
+                        if v.get('reason_id') and reason.id and v.get('reason_id') == reason.id:
+                            brass_qty = v.get('qty', 0) or 0
+                            break
+
+                print(f"[AUDIT API] lot_id={lot_id}, reason={reason_text}, brass_qty={brass_qty}")
+                response_data.append({
+                    "s_no": index,
+                    "reason_id": reason.id,
+                    "reason": reason_text,
+                    "brass_qc_qty": brass_qty,
+                    "iqf_qty": 0,
+                    "is_editable": True,
+                })
 
         print(f"[AUDIT API] Output count: {len(response_data)}")
 
@@ -400,11 +537,14 @@ def iqf_rejection_audit_iqf_reject(request):
         traceback.print_exc()
         return Response({'success': False, 'error': 'Server error'}, status=500)
 
-
+# IQF - Proceed btn - Validation
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def iqf_submit_audit(request):
     """Accepts JSON payload to save draft or proceed with IQF rejection quantities.
+
+    CORE RULE: IQF processes ONLY Brass QC rejection qty (rw_qty), NOT the full lot.
+    iqf_incoming_qty = rw_qty (e.g. 55), NOT total_batch_quantity (e.g. 100).
 
     Expected JSON:
         {
@@ -421,7 +561,7 @@ def iqf_submit_audit(request):
         return Response({'success': False, 'error': 'Missing or invalid parameters'}, status=400)
 
     try:
-        # compute RW qty from brass audit or brass qc stores (source of truth)
+        # ─── 1. SINGLE SOURCE OF TRUTH: rw_qty from Brass QC/Audit rejection ───
         audit_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
         qc_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
         rw_qty = 0
@@ -430,7 +570,30 @@ def iqf_submit_audit(request):
         elif qc_store and getattr(qc_store, 'total_rejection_quantity', None) is not None:
             rw_qty = qc_store.total_rejection_quantity
 
-        # Parse items into ints and prepare for validation (backend-only calculation)
+        iqf_incoming_qty = rw_qty  # THIS IS WHAT IQF PROCESSES — NEVER total_batch_quantity
+
+        # Get TotalStockModel — MUST exist, hard fail otherwise
+        try:
+            ts = TotalStockModel.objects.get(lot_id=lot_id)
+        except TotalStockModel.DoesNotExist:
+            return Response({'success': False, 'error': f'Lot {lot_id} not found in TotalStockModel'}, status=404)
+
+        # ELIGIBILITY GUARD — lot must be pending IQF processing
+        if not ts.send_brass_audit_to_iqf:
+            return Response({'success': False, 'error': f'Lot {lot_id} is not eligible for IQF (send_brass_audit_to_iqf=False)'}, status=400)
+
+        original_lot_qty = 0
+        batch_id_val = ''
+        if getattr(ts, 'batch_id', None):
+            original_lot_qty = int(getattr(ts.batch_id, 'total_batch_quantity', 0) or 0)
+            batch_id_val = ts.batch_id.batch_id
+
+        print(f'[IQF INPUT] lot_id={lot_id}, original_qty={original_lot_qty}, iqf_incoming_qty={iqf_incoming_qty}')
+
+        if iqf_incoming_qty <= 0:
+            return Response({'success': False, 'error': 'No IQF incoming qty — rw_qty is 0. Nothing to process.'}, status=400)
+
+        # ─── 2. PARSE & VALIDATE ITEMS ───
         total_iqf = 0
         parsed_items = []
         for it in items:
@@ -438,61 +601,19 @@ def iqf_submit_audit(request):
                 rid = int(it.get('reason_id'))
             except Exception:
                 rid = None
-            # Normalize qty: empty -> 0, enforce integer
             try:
                 qty = int(it.get('iqf_qty') or 0)
             except Exception:
                 return Response({'success': False, 'error': 'Invalid IQF quantity provided; must be integer'}, status=400)
-            # Strict validation: no negative values
             if qty < 0:
                 return Response({'success': False, 'error': 'IQF quantities must be non-negative'}, status=400)
             total_iqf += qty
             parsed_items.append({'reason_id': rid, 'iqf_qty': qty})
 
-        # Helper: fetch brass QC qty for a given lot_id and IQF_Rejection_Table id
-        def fetch_brass_qty_for_reason(lot_id, reason_obj_or_id):
-            # Accept either reason id or IQF_Rejection_Table instance
-            try:
-                if isinstance(reason_obj_or_id, int):
-                    reason_obj = IQF_Rejection_Table.objects.filter(id=reason_obj_or_id).first()
-                else:
-                    reason_obj = reason_obj_or_id
-                if not reason_obj:
-                    return 0
+        print(f'[IQF TOTAL CALC] Inputs: {parsed_items}, Computed Total: {total_iqf}')
 
-                # Use per-reason rejected tray scans as the source of truth for splits
-                try:
-                    qty = Brass_QC_Rejected_TrayScan.objects.filter(
-                        lot_id=lot_id,
-                        rejection_reason=reason_obj
-                    ).aggregate(total=Sum('rejected_tray_quantity'))['total'] or 0
-                    return qty
-                except Exception:
-                    pass
-
-                # Fallback: match by reason text (case-insensitive)
-                try:
-                    qty = Brass_QC_Rejected_TrayScan.objects.filter(
-                        lot_id=lot_id,
-                        rejection_reason__rejection_reason__iexact=reason_obj.rejection_reason
-                    ).aggregate(total=Sum('rejected_tray_quantity'))['total'] or 0
-                    return qty
-                except Exception:
-                    pass
-
-                # Last resort: partial text match
-                qty = Brass_QC_Rejected_TrayScan.objects.filter(
-                    lot_id=lot_id,
-                    rejection_reason__rejection_reason__icontains=reason_obj.rejection_reason
-                ).aggregate(total=Sum('rejected_tray_quantity'))['total'] or 0
-                return qty
-            except Exception:
-                return 0
-
-        # Log computed total and inputs (backend single source of truth)
-        print('[IQF TOTAL CALC] Inputs:', parsed_items, 'Computed Total:', total_iqf)
-
-        # Build brass qty maps using the same logic as the GET audit API
+        # ─── 3. BUILD BRASS QTY MAP FOR PER-REASON VALIDATION ───
+        by_id_map = {}
         try:
             brass_rows_qs = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
             if not brass_rows_qs.exists():
@@ -516,8 +637,6 @@ def iqf_submit_audit(request):
                 else:
                     reason_map[reason_text] = {'qty': qty, 'reason_id': getattr(row, 'rejection_reason', 'None')}
 
-            # Map IQF reason.id -> allowed brass qty using same matching logic as GET
-            by_id_map = {}
             reasons = IQF_Rejection_Table.objects.all().order_by('rejection_reason_id')
             for reason in reasons:
                 rtext = (reason.rejection_reason or '').strip()
@@ -531,43 +650,32 @@ def iqf_submit_audit(request):
                             brass_qty = v.get('qty', 0) or 0
                             break
                 by_id_map[reason.id] = int(brass_qty or 0)
-
-            print('[IQF BRASS MAP] by_id_map:', by_id_map)
+            print(f'[IQF BRASS MAP] by_id_map: {by_id_map}')
         except Exception as e:
-            print('[IQF BRASS MAP ERROR]', str(e))
-            by_id_map = {}
+            print(f'[IQF BRASS MAP ERROR] {e}')
 
-        # Validate per-item: IQF_entered_qty <= Brass_QC_qty using by_id_map built above
+        # ─── 4. PER-ITEM AND TOTAL VALIDATION (STRICT) ───
         with transaction.atomic():
             for itm in parsed_items:
                 rid = itm.get('reason_id')
                 qty = itm.get('iqf_qty') or 0
-                # Enforce ID-based validation only
                 if rid is None:
                     if qty > 0:
                         return Response({'success': False, 'error': 'Missing reason_id for provided IQF qty; cannot validate'}, status=400)
-                    else:
-                        continue
+                    continue
                 allowed = by_id_map.get(rid, 0)
                 print(f'[VALIDATION] reason_id={rid}, allowed={allowed}, entered={qty}')
                 if allowed == 0 and qty > 0:
                     return Response({'success': False, 'error': f'Cannot accept IQF qty for reason_id {rid}: no Brass QC quantity available', 'reason_id': rid, 'allowed': allowed, 'entered': qty}, status=400)
                 if qty > allowed:
-                    return Response({'success': False, 'error': f'IQF Qty cannot exceed Brass QC Reject Qty', 'reason_id': rid, 'allowed': allowed, 'entered': qty}, status=400)
+                    return Response({'success': False, 'error': 'IQF Qty cannot exceed Brass QC Reject Qty', 'reason_id': rid, 'allowed': allowed, 'entered': qty}, status=400)
 
-            # Validate total against RW qty as previously (RW is canonical)
-            if total_iqf > rw_qty:
-                return Response({'success': False, 'error': 'Submitted IQF total exceeds RW quantity', 'rw_qty': rw_qty, 'submitted_total': total_iqf}, status=400)
+            if total_iqf > iqf_incoming_qty:
+                return Response({'success': False, 'error': 'Submitted IQF total exceeds RW quantity', 'rw_qty': iqf_incoming_qty, 'submitted_total': total_iqf}, status=400)
 
-            # find batch id for draft storage
-            batch_id_val = ''
-            ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            if ts and getattr(ts, 'batch_id', None):
-                batch_id_val = ts.batch_id.batch_id
-
+            # ─── 5. DRAFT SAVE ───
             if action == 'draft':
-                # save/update IQF_Draft_Store
-                draft_obj, created = IQF_Draft_Store.objects.update_or_create(
+                IQF_Draft_Store.objects.update_or_create(
                     lot_id=lot_id,
                     draft_type='batch_rejection',
                     defaults={
@@ -576,37 +684,427 @@ def iqf_submit_audit(request):
                         'draft_data': {'is_draft': True, 'items': parsed_items, 'total_iqf': total_iqf},
                     }
                 )
-                return Response({'success': True, 'draft': True, 'rw_qty': rw_qty, 'rejection_rows': parsed_items, 'total_iqf_qty': total_iqf})
+                return Response({'success': True, 'draft': True, 'rw_qty': iqf_incoming_qty, 'rejection_rows': parsed_items, 'total_iqf_qty': total_iqf})
 
-            # action == 'proceed'
-            # Create IQF_Rejection_ReasonStore record to record final IQF rejection distribution
-            store = IQF_Rejection_ReasonStore.objects.create(
-                lot_id=lot_id,
-                user=request.user,
-                total_rejection_quantity=total_iqf,
-                batch_rejection=False,
-            )
-            # Attach reason M2M using provided reason_ids (ignore missing ids)
-            reason_ids = [p['reason_id'] for p in parsed_items if p['reason_id']]
-            if reason_ids:
-                reasons_qs = IQF_Rejection_Table.objects.filter(id__in=reason_ids)
-                store.rejection_reason.set(reasons_qs)
+            # ─── 6. DECISION ENGINE (action == 'proceed') ───
+            rejected_qty = int(total_iqf)
+            accepted_qty = int(iqf_incoming_qty - rejected_qty)
 
-            # Optionally save detailed items inside a draft record for auditing
+            if rejected_qty == 0:
+                submission_type = IQF_Submitted.SUB_FULL_ACCEPT
+            elif rejected_qty == iqf_incoming_qty:
+                submission_type = IQF_Submitted.SUB_FULL_REJECT
+            else:
+                submission_type = IQF_Submitted.SUB_PARTIAL
+
+            print(f'[DECISION] {submission_type} — accepted={accepted_qty}, rejected={rejected_qty}')
+
+            # ─── 7. TRAY DATA FROM DB (REAL DATA ONLY — IGNORE FRONTEND TRAYS) ───
+
+            # 7a. ORIGINAL SNAPSHOT — full lot trays (tray_quantity) for reference
+            # SOURCE OF TRUTH: IQFTrayId only — no BrassTrayId fallback
+            all_trays_qs = IQFTrayId.objects.filter(lot_id=lot_id).order_by('id')
+            original_tray_list = []
+            original_tray_total = 0
+            for t in all_trays_qs:
+                raw_qty = int(getattr(t, 'tray_quantity', 0) or 0)
+                if raw_qty <= 0:
+                    continue
+                original_tray_total += raw_qty
+                original_tray_list.append({
+                    'tray_id': getattr(t, 'tray_id', '') or '',
+                    'qty': raw_qty,
+                    'top_tray': bool(getattr(t, 'top_tray', False)),
+                })
+            original_data_snapshot = {
+                'qty': original_lot_qty,
+                'tray_total': original_tray_total,
+                'total_trays': len(original_tray_list),
+                'trays': original_tray_list,
+            }
+            print(f'[ORIGINAL] qty={original_lot_qty}, tray_total={original_tray_total}, trays={len(original_tray_list)}')
+
+            # 7b. IQF WORKING SNAPSHOT — eligible trays, excluding delinked
+            # SOURCE OF TRUTH: IQFTrayId for tray identifiers
+            # QTY RESOLUTION: remaining_qty (post-processed) > BrassTrayId capacity (pre-processed) > tray_quantity (last resort)
+            iqf_trays_qs = IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id')
+            source_is_iqf = True
+
+            tray_list = []
+            for t in iqf_trays_qs:
+                remaining = int(getattr(t, 'remaining_qty', 0) or 0)
+                raw_qty = int(getattr(t, 'tray_quantity', 0) or 0)
+                # ✅ FIX: IQF-only resolution — NO BrassTrayId dependency
+                # Priority: remaining_qty (set by IQF submit) > IQFTrayId tray_quantity
+                if remaining > 0:
+                    tray_qty = remaining
+                else:
+                    tray_qty = raw_qty
+                if tray_qty <= 0:
+                    print(f'[TRAY WARNING] Tray {t.tray_id} has qty=0 (remaining={remaining}, raw={raw_qty}), skipping')
+                    continue
+                tray_list.append({
+                    'obj': t,
+                    'tray_id': getattr(t, 'tray_id', '') or '',
+                    'qty': tray_qty,
+                    'top_tray': bool(getattr(t, 'top_tray', False)),
+                    'new_tray': bool(getattr(t, 'new_tray', False)),
+                    'delink_flag': bool(getattr(t, 'delink_tray', False)),
+                })
+
+            iqf_tray_total = sum(tr['qty'] for tr in tray_list)
+            iqf_data_snapshot = {
+                'qty': iqf_incoming_qty,
+                'tray_total': iqf_tray_total,
+                'total_trays': len(tray_list),
+                'trays': [
+                    {'tray_id': tr['tray_id'], 'qty': tr['qty'], 'top_tray': tr['top_tray']}
+                    for tr in tray_list
+                ],
+            }
+            print(f'[IQF] qty={iqf_incoming_qty}, tray_total={iqf_tray_total}, trays={len(tray_list)}')
+            if iqf_tray_total != iqf_incoming_qty:
+                print(f'[WARNING] iqf_tray_total={iqf_tray_total} ≠ iqf_incoming_qty={iqf_incoming_qty} — tray data may be inconsistent')
+
+            # ─── 8. TRAY VALIDATION ───
+            # FULL_ACCEPT / FULL_REJECT: no tray validation needed here
+            #   (FULL_ACCEPT has its own per-tray strict validation in section 10 below)
+            # PARTIAL: iqf_tray_total must equal accepted_qty
+            print(f'[TRAY VALIDATION] flow={submission_type}, iqf_tray_total={iqf_tray_total}, accepted_qty={accepted_qty}, iqf_incoming_qty={iqf_incoming_qty}')
+
+            if submission_type == IQF_Submitted.SUB_PARTIAL:
+                if iqf_tray_total != accepted_qty:
+                    return Response({
+                        'success': False,
+                        'error': f'Tray mismatch — tray total ({iqf_tray_total}) must equal accepted qty ({accepted_qty}).',
+                        'tray_total': iqf_tray_total,
+                        'accepted_qty': accepted_qty,
+                    }, status=400)
+
+            # ─── 9. BUILD REJECTION DETAILS (when rejected_qty > 0) ───
+            rejection_details = None
+            if rejected_qty > 0 and parsed_items:
+                rejection_details = []
+                for itm in parsed_items:
+                    if itm.get('iqf_qty', 0) > 0:
+                        reason_obj = IQF_Rejection_Table.objects.filter(id=itm['reason_id']).first()
+                        rejection_details.append({
+                            'reason_id': itm['reason_id'],
+                            'reason_text': reason_obj.rejection_reason if reason_obj else '',
+                            'iqf_qty': itm['iqf_qty'],
+                        })
+
+            # ─── 10. BUILD LABELED FLOW SNAPSHOTS ───
+            full_accept_data = None
+            partial_accept_data = None
+            full_reject_data = None
+            partial_reject_data = None
+
+            # ── Helper: resolve tray capacity for an IQFTrayId record ──
+            def _resolve_tray_capacity(iqf_tray_obj):
+                """Resolve the REAL capacity for a tray.
+                Priority: IQFTrayId.tray_capacity → BrassTrayId → TrayId master → ModelMaster → 16
+                """
+                cap = getattr(iqf_tray_obj, 'tray_capacity', None)
+                if cap and cap > 0:
+                    return cap
+                # BrassTrayId (same tray_id, any lot)
+                brass = BrassTrayId.objects.filter(tray_id=iqf_tray_obj.tray_id).exclude(
+                    tray_capacity__isnull=True).first()
+                if brass and brass.tray_capacity and brass.tray_capacity > 0:
+                    return brass.tray_capacity
+                # TrayId master
+                tray_master = TrayId.objects.filter(tray_id=iqf_tray_obj.tray_id).exclude(
+                    tray_capacity__isnull=True).first()
+                if tray_master and tray_master.tray_capacity and tray_master.tray_capacity > 0:
+                    return tray_master.tray_capacity
+                # ModelMasterCreation (via TotalStockModel.batch_id)
+                try:
+                    mmc_cap = ts.batch_id.tray_capacity if ts.batch_id else None
+                    if mmc_cap and mmc_cap > 0:
+                        return mmc_cap
+                except Exception:
+                    pass
+                return 16  # safe default
+
+            if submission_type == IQF_Submitted.SUB_FULL_ACCEPT:
+                # ✅ FULL ACCEPT — DISTRIBUTE iqf_incoming_qty across IQFTrayId trays BY CAPACITY
+                # IQFTrayId.tray_quantity is unreliable (contains per-scan rejection qty, NOT full capacity).
+                # We MUST distribute the total accepted qty across trays using their real capacity.
+                fa_trays_qs = list(IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id'))
+
+                if not fa_trays_qs:
+                    return Response({
+                        'success': False,
+                        'error': f'No IQFTrayId records found for lot {lot_id}. Cannot build FULL ACCEPT snapshot.',
+                    }, status=400)
+
+                accepted_trays = []
+                remaining = iqf_incoming_qty
+
+                for t in fa_trays_qs:
+                    if remaining <= 0:
+                        break
+                    cap = _resolve_tray_capacity(t)
+                    qty = min(remaining, cap)
+                    remaining -= qty
+                    is_last = (remaining == 0)
+                    is_top = is_last and qty < cap  # partial fill → top tray
+
+                    # Persist remaining_qty to DB so downstream always reads it
+                    t.remaining_qty = qty
+                    t.top_tray = is_top
+                    t.save(update_fields=['remaining_qty', 'top_tray'])
+
+                    accepted_trays.append({'tray_id': t.tray_id, 'qty': qty, 'top_tray': is_top})
+                    print(f'  [FA DISTRIBUTE] tray={t.tray_id}, cap={cap}, assigned={qty}, remaining={remaining}, top={is_top}')
+
+                # If no tray was marked top_tray (all full fills), mark the last one
+                if accepted_trays and not any(tr['top_tray'] for tr in accepted_trays):
+                    accepted_trays[-1]['top_tray'] = True
+                    # Also persist to DB
+                    last_obj = fa_trays_qs[len(accepted_trays) - 1] if len(accepted_trays) <= len(fa_trays_qs) else None
+                    if last_obj:
+                        last_obj.top_tray = True
+                        last_obj.save(update_fields=['top_tray'])
+
+                fa_tray_total = sum(tr['qty'] for tr in accepted_trays)
+
+                if fa_tray_total != iqf_incoming_qty:
+                    return Response({
+                        'success': False,
+                        'error': (
+                            f'Could not distribute all pieces: distributed {fa_tray_total} of {iqf_incoming_qty}. '
+                            f'Available trays ({len(fa_trays_qs)}) have insufficient total capacity. '
+                            f'Please verify tray records for lot {lot_id}.'
+                        ),
+                        'tray_total': fa_tray_total,
+                        'iqf_incoming_qty': iqf_incoming_qty,
+                    }, status=400)
+
+                full_accept_data = {
+                    'label': 'FULL_ACCEPT',
+                    'qty': accepted_qty,
+                    'total_trays': len(accepted_trays),
+                    'trays': accepted_trays,
+                }
+                print(f'[FULL_ACCEPT] iqf_incoming={iqf_incoming_qty}, tray_total={fa_tray_total}, trays={len(accepted_trays)}, VALIDATED=OK')
+
+            elif submission_type == IQF_Submitted.SUB_FULL_REJECT:
+                # FULL REJECT — distribute rejected_qty across trays BY CAPACITY (same issue as FULL_ACCEPT)
+                fr_trays_qs = list(IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id'))
+                distributed_trays = []
+                remaining_to_distribute = rejected_qty
+
+                for t in fr_trays_qs:
+                    if remaining_to_distribute <= 0:
+                        t.remaining_qty = 0
+                        t.save(update_fields=['remaining_qty'])
+                        continue
+                    cap = _resolve_tray_capacity(t)
+                    take = min(remaining_to_distribute, cap)
+                    remaining_to_distribute -= take
+                    # Persist remaining_qty to DB
+                    t.remaining_qty = take
+                    t.save(update_fields=['remaining_qty'])
+                    if take > 0:
+                        distributed_trays.append({'tray_id': t.tray_id, 'qty': take, 'top_tray': bool(t.top_tray)})
+
+                full_reject_data = {
+                    'label': 'FULL_REJECT',
+                    'qty': rejected_qty,
+                    'total_trays': len(distributed_trays),
+                    'trays': distributed_trays,
+                    'reasons': rejection_details,
+                }
+                print(f'[FULL_REJECT DISTRIBUTE] rejected={rejected_qty}, distributed to {len(distributed_trays)} trays')
+
+            else:
+                # PARTIAL — distribute iqf_incoming_qty across trays BY CAPACITY,
+                # then split into accepted (head) and rejected (tail) portions.
+                pt_trays_qs = list(IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id'))
+
+                # Step 1: Build capacity-based distribution
+                work_list = []
+                remaining_full = iqf_incoming_qty
+                for t in pt_trays_qs:
+                    if remaining_full <= 0:
+                        break
+                    cap = _resolve_tray_capacity(t)
+                    qty = min(remaining_full, cap)
+                    remaining_full -= qty
+                    work_list.append({
+                        'tray_id': t.tray_id,
+                        'qty': qty,
+                        'top_tray': False,
+                        'new_tray': bool(getattr(t, 'new_tray', False)),
+                        'obj': t,
+                    })
+
+                print(f'[PARTIAL] Distributed {iqf_incoming_qty} across {len(work_list)} trays (remaining_full={remaining_full})')
+
+                # Step 2: Reject from tail
+                accepted_trays = []
+                rejected_trays = []
+                remaining_to_reject = rejected_qty
+
+                for tr in reversed(work_list):
+                    if remaining_to_reject <= 0:
+                        break
+                    avail = tr['qty']
+                    if avail <= 0:
+                        continue
+                    take = min(avail, remaining_to_reject)
+                    rejected_trays.append({'tray_id': tr['tray_id'], 'qty': take})
+                    tr['qty'] = max(tr['qty'] - take, 0)
+                    remaining_to_reject -= take
+                    # persist remaining_qty back to IQFTrayId
+                    try:
+                        obj = tr['obj']
+                        obj.remaining_qty = tr['qty']
+                        if tr['qty'] == 0:
+                            obj.delink_tray = False
+                        obj.save(update_fields=['remaining_qty', 'delink_tray'])
+                    except Exception:
+                        pass
+
+                # Step 3: Accept from head (remaining qty > 0)
+                for tr in work_list:
+                    avail = tr['qty']
+                    if avail <= 0:
+                        continue
+                    tray_type = 'NEW' if tr.get('new_tray') else 'REUSED'
+                    accepted_trays.append({'tray_id': tr['tray_id'], 'qty': avail, 'type': tray_type})
+                    try:
+                        obj = tr['obj']
+                        obj.remaining_qty = tr['qty']
+                        obj.save(update_fields=['remaining_qty'])
+                    except Exception:
+                        pass
+
+                rejected_trays.reverse()  # restore original order
+
+                partial_accept_data = {
+                    'label': 'PARTIAL_ACCEPT',
+                    'qty': accepted_qty,
+                    'total_trays': len(accepted_trays),
+                    'trays': accepted_trays,
+                }
+                partial_reject_data = {
+                    'label': 'PARTIAL_REJECT',
+                    'qty': rejected_qty,
+                    'total_trays': len(rejected_trays),
+                    'trays': rejected_trays,
+                    'reasons': rejection_details,
+                }
+
+            # ─── 11. CREATE REJECTION REASON STORE (only when rejected_qty > 0) ───
+            if rejected_qty > 0:
+                store = IQF_Rejection_ReasonStore.objects.create(
+                    lot_id=lot_id,
+                    user=request.user,
+                    total_rejection_quantity=rejected_qty,
+                    batch_rejection=False,
+                )
+                reason_ids = [p['reason_id'] for p in parsed_items if p['reason_id'] and p.get('iqf_qty', 0) > 0]
+                if reason_ids:
+                    reasons_qs = IQF_Rejection_Table.objects.filter(id__in=reason_ids)
+                    store.rejection_reason.set(reasons_qs)
+
+            # Save audit trail draft record
             IQF_Draft_Store.objects.update_or_create(
                 lot_id=lot_id,
                 draft_type='batch_rejection',
                 defaults={
                     'batch_id': batch_id_val,
                     'user': request.user,
-                    'draft_data': {'is_draft': False, 'items': parsed_items, 'total_iqf': total_iqf},
+                    'draft_data': {'is_draft': False, 'items': parsed_items, 'total_iqf': total_iqf,
+                                   'submission_type': submission_type},
                 }
             )
 
-            return Response({'success': True, 'proceeded': True, 'rw_qty': rw_qty, 'rejection_rows': parsed_items, 'total_iqf_qty': total_iqf})
+            # ─── 12. SAVE IQF_Submitted — ONE LOT → ONE ROW → FULL TRACEABILITY ───
+            IQF_Submitted.objects.update_or_create(
+                lot_id=lot_id,
+                defaults={
+                    'batch_id': ts.batch_id,
+                    'original_lot_qty': original_lot_qty,
+                    'iqf_incoming_qty': iqf_incoming_qty,
+                    'total_lot_qty': iqf_incoming_qty,  # backward compat — always = iqf_incoming_qty
+                    'accepted_qty': accepted_qty,
+                    'rejected_qty': rejected_qty,
+                    'submission_type': submission_type,
+                    'original_data': original_data_snapshot,
+                    'iqf_data': iqf_data_snapshot,
+                    'full_accept_data': full_accept_data,
+                    'partial_accept_data': partial_accept_data,
+                    'full_reject_data': full_reject_data,
+                    'partial_reject_data': partial_reject_data,
+                    'rejection_details': rejection_details,
+                    'is_completed': True,
+                    'created_by': request.user,
+                }
+            )
+
+            print(f'[DB SAVE] ONE ROW: lot={lot_id}, type={submission_type}, '
+                  f'original={original_lot_qty}, incoming={iqf_incoming_qty}, '
+                  f'accepted={accepted_qty}, rejected={rejected_qty}')
+
+            # ─── 13. MOVEMENT CONTROL — update TotalStockModel flags ───
+            # FULL_ACCEPT / PARTIAL: accepted qty flows to Brass QC (send_brass_qc=True)
+            # FULL_REJECT: nothing accepted, stays for rework
+            if submission_type == IQF_Submitted.SUB_FULL_ACCEPT:
+                ts.iqf_acceptance = True
+                ts.iqf_rejection = False
+                ts.iqf_few_cases_acceptance = False
+                ts.send_brass_qc = True  # push lot to Brass QC
+                ts.next_process_module = 'Brass QC'  # ✅ LOCK: downstream reads from IQF_Submitted
+            elif submission_type == IQF_Submitted.SUB_FULL_REJECT:
+                ts.iqf_rejection = True
+                ts.iqf_acceptance = False
+                ts.iqf_few_cases_acceptance = False
+                ts.send_brass_qc = False  # nothing to send
+            else:  # PARTIAL
+                ts.iqf_few_cases_acceptance = True
+                ts.iqf_acceptance = False
+                ts.iqf_rejection = False
+                ts.send_brass_qc = True  # accepted portion flows to Brass QC
+                ts.next_process_module = 'Brass QC'  # ✅ LOCK: downstream reads from IQF_Submitted
+
+            ts.iqf_accepted_qty = accepted_qty
+            ts.iqf_after_rejection_qty = rejected_qty
+            ts.last_process_module = 'IQF'
+            ts.send_brass_audit_to_iqf = False
+            ts.iqf_last_process_date_time = timezone.now()
+
+            ts.save(update_fields=[
+                'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance',
+                'iqf_accepted_qty', 'iqf_after_rejection_qty',
+                'last_process_module', 'send_brass_audit_to_iqf',
+                'send_brass_qc', 'next_process_module',
+                'iqf_last_process_date_time',
+            ])
+
+            print(f'[MOVEMENT] iqf_acceptance={ts.iqf_acceptance}, '
+                  f'iqf_rejection={ts.iqf_rejection}, '
+                  f'iqf_few_cases_acceptance={ts.iqf_few_cases_acceptance}, '
+                  f'send_brass_audit_to_iqf={ts.send_brass_audit_to_iqf}, '
+                  f'send_brass_qc={ts.send_brass_qc}')
+
+            return Response({
+                'success': True,
+                'proceeded': True,
+                'submission_type': submission_type,
+                'original_lot_qty': original_lot_qty,
+                'iqf_incoming_qty': iqf_incoming_qty,
+                'accepted_qty': accepted_qty,
+                'rejected_qty': rejected_qty,
+                'rw_qty': iqf_incoming_qty,
+                'total_iqf_qty': total_iqf,
+            })
 
     except Exception as e:
-        print('[IQF SUBMIT ERROR]', str(e))
+        print(f'[IQF SUBMIT ERROR] {e}')
         traceback.print_exc()
         return Response({'success': False, 'error': 'Server error'}, status=500)
 
@@ -616,89 +1114,100 @@ def iqf_submit_audit(request):
 def iqf_tray_details(request):
     """Return tray details for a lot. Single source of truth for tray modal.
 
+    ARCHITECTURE RULE: Tray qty = SUM(rejected_tray_quantity) GROUP BY tray_id
+    from Brass_QC_Rejected_TrayScan. Never trust stored tray_quantity or tray_capacity.
+
     Query params: ?lot_id=...
     """
     lot_id = request.GET.get('lot_id')
     if not lot_id:
         return Response({'success': False, 'error': 'lot_id required'}, status=400)
     try:
-        print(f"[IQF TRAY API] Resolve source-of-truth for lot: {lot_id}")
+        print(f"[IQF TRAY API] Checking IQF_Submitted first for lot: {lot_id}")
 
-        # PRIMARY SOURCE: Brass QC tray allocation (BrassTrayId)
-        batch_id_param = request.GET.get('batch_id')
-        try:
-            if batch_id_param:
-                try:
-                    bid = int(batch_id_param)
-                    brass_trays_qs = BrassTrayId.objects.filter(lot_id=lot_id, batch_id__id=bid, rejected_tray=True).order_by('id')
-                except Exception:
-                    # try matching batch identifier string on related model if available
-                    brass_trays_qs = BrassTrayId.objects.filter(lot_id=lot_id, batch_id__batch_id=batch_id_param, rejected_tray=True).order_by('id')
+        # ✅ FIX: Check IQF_Submitted FIRST — SINGLE SOURCE OF TRUTH after IQF completes
+        iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+
+        if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+            if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                source_trays = iqf_record.full_accept_data.get('trays', [])
+                label = 'FULL_ACCEPT'
+            elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                source_trays = iqf_record.partial_accept_data.get('trays', [])
+                label = 'PARTIAL_ACCEPT'
             else:
-                brass_trays_qs = BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=True).order_by('id')
-        except Exception:
-            # safest fallback: filter by lot + rejected flag only
-            brass_trays_qs = BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=True).order_by('id')
+                source_trays = []
+                label = 'EMPTY'
 
-        tray_list = []
-        total_qty = 0
-
-        if brass_trays_qs.exists():
-            for t in brass_trays_qs:
-                try:
-                    qty = int(t.tray_quantity or 0)
-                except Exception:
-                    qty = 0
+            tray_list = []
+            total_qty = 0
+            for tray in source_trays:
+                qty = int(tray.get('qty', 0))
+                if qty <= 0:
+                    continue
                 total_qty += qty
-                status = ('REUSE' if getattr(t, 'delink_tray', False) else ('NEW' if getattr(t, 'new_tray', False) else 'NORMAL'))
                 tray_list.append({
-                    'tray_id': t.tray_id,
+                    'tray_id': tray.get('tray_id', ''),
                     'tray_qty': qty,
-                    'status': status,
-                    'is_rejected': bool(getattr(t, 'rejected_tray', False)),
-                    'is_reusable': bool(getattr(t, 'delink_tray', False)),
-                    'is_new': bool(getattr(t, 'new_tray', False)),
+                    'top_tray': bool(tray.get('top_tray', False)),
+                    'status': 'ACCEPTED',
+                    'is_rejected': False,
+                    'is_reusable': True,
+                    'is_new': False,
+                    'label': f'IQF {label}',
                 })
 
-            print(f"[IQF TRAY API] returning {len(tray_list)} trays from BrassTrayId, total_qty={total_qty}")
+            print(f"[IQF TRAY API] Using IQF_Submitted ({label}) for lot {lot_id}: {len(tray_list)} trays, total_qty={total_qty}")
             return Response({
                 'success': True,
                 'lot_id': lot_id,
                 'total_qty': total_qty,
                 'total_trays': len(tray_list),
-                'trays': tray_list
+                'trays': tray_list,
+                'source': 'IQF_Submitted',
             })
 
-        # FALLBACK: use rejected tray scan records if no BrassTrayId allocation exists
-        print(f"[IQF TRAY API] No BrassTrayId rows for {lot_id}, falling back to rejected_tray scans")
+        # FALLBACK: Dynamic aggregation from Brass_QC_Rejected_TrayScan (pre-IQF completion)
+        print(f"[IQF TRAY API] Fallback: Dynamic aggregation from Brass_QC_Rejected_TrayScan for lot: {lot_id}")
 
-        brass_rows_qs = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
-        if not brass_rows_qs.exists():
-            brass_rows_qs = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+        # SOURCE OF TRUTH: Aggregate rejected_tray_quantity per tray from rejection scan logs
+        # rejected_tray_quantity is CharField, so aggregate in Python
+        brass_reject_rows = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
 
-        tray_map = OrderedDict()
-        for row in brass_rows_qs:
-            tray_id = getattr(row, 'rejected_tray_id', None) or getattr(row, 'tray_id', None) or getattr(row, 'tray', None)
-            try:
-                qty = int(getattr(row, 'rejected_tray_quantity', None) or getattr(row, 'rejected_tray_qty', None) or 0)
-            except Exception:
-                qty = 0
+        # If no Brass QC rows, try Brass Audit as fallback
+        if not brass_reject_rows.exists():
+            brass_reject_rows = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+
+        # Aggregate per tray_id (field is rejected_tray_id in Brass_QC_Rejected_TrayScan)
+        tray_qty_map = {}
+        for row in brass_reject_rows:
+            tray_id = getattr(row, 'rejected_tray_id', None) or getattr(row, 'tray_id', None) or ''
             if not tray_id:
                 continue
-            tray_map[tray_id] = tray_map.get(tray_id, 0) + qty
+            try:
+                qty = int(row.rejected_tray_quantity or 0)
+            except (ValueError, TypeError):
+                qty = 0
+            tray_qty_map[tray_id] = tray_qty_map.get(tray_id, 0) + qty
 
-        for tray_id, qty in tray_map.items():
+        tray_list = []
+        total_qty = 0
+
+        for tray_id in sorted(tray_qty_map.keys()):
+            qty = tray_qty_map[tray_id]
             total_qty += qty
+            is_new = not IQFTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).exists()
             tray_list.append({
                 'tray_id': tray_id,
                 'tray_qty': qty,
-                'status': 'REJECTED',
+                'status': 'NEW' if is_new else 'NORMAL',
                 'is_rejected': True,
                 'is_reusable': False,
-                'is_new': False,
+                'is_new': is_new,
+                'label': 'New Tray Available' if is_new else 'Tray reuse allowed',
             })
 
-        print(f"[IQF TRAY API] returning {len(tray_list)} trays from scan fallback, total_qty={total_qty}")
+        print(f"[IQF TRAY API] returning {len(tray_list)} trays (dynamic aggregation), total_qty={total_qty}")
         return Response({
             'success': True,
             'lot_id': lot_id,
@@ -711,11 +1220,58 @@ def iqf_tray_details(request):
         print('[IQF TRAY API ERROR]', str(e))
         return Response({'success': False, 'error': str(e)}, status=500)
 
+# IQF Completed Table API: returns all lots that have completed IQF processing (rejected, accepted, or few cases acceptance) but not yet sent back to Brass QC via pick table
+@method_decorator(login_required, name='dispatch')
+class IQFCompletedTableView(APIView):
+    permission_classes = [IsAuthenticated]
 
-# Minimal redirect view for legacy nav link: resolves NoReverseMatch
-def iqf_completed_table_redirect(request):
-    # Redirect to the main pick table; template for completed table may be added later
-    return redirect('iqf_picktable')
+    def get(self, request):
+        try:
+            print('[IQF COMPLETED API] Called')
+
+            queryset = TotalStockModel.objects.select_related(
+                'batch_id',
+                'batch_id__model_stock_no',
+                'batch_id__version',
+                'batch_id__location'
+            ).filter(
+                send_brass_audit_to_iqf=False
+            ).filter(
+                Q(iqf_rejection=True) | Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True)
+            ).order_by('-bq_last_process_date_time')
+
+            data = []
+            for obj in queryset:
+                trays = IQFTrayId.objects.filter(lot_id=obj.lot_id, batch_id=obj.batch_id)
+                tray_list = [{'tray_id': t.tray_id, 'tray_qty': t.tray_quantity} for t in trays]
+                data.append({
+                    'lot_id': obj.lot_id,
+                    'batch_id': obj.batch_id.batch_id if obj.batch_id else '',
+                    'model_no': getattr(obj.batch_id.model_stock_no, 'model_no', '') if obj.batch_id else '',
+                    'location': getattr(obj.batch_id.location, 'location_name', '') if obj.batch_id and getattr(obj.batch_id, 'location', None) else '',
+                    'iqf_rejection_qty': getattr(obj, 'iqf_rejection_qty', None),
+                    'iqf_accepted_qty': getattr(obj, 'iqf_accepted_qty', None),
+                    'status': 'REJECTED' if obj.iqf_rejection else ('ACCEPTED' if obj.iqf_acceptance else 'COMPLETED'),
+                    'last_updated': obj.bq_last_process_date_time,
+                    'tray_details': tray_list
+                })
+
+            print(f'[IQF COMPLETED API] Count: {len(data)}')
+            return Response({'success': True, 'count': len(data), 'data': data})
+        except Exception as e:
+            print('[IQF COMPLETED ERROR]', str(e))
+            traceback.print_exc()
+            return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@method_decorator(login_required, name='dispatch')
+class IQFCompletedPageView(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'IQF/Iqf_Completed.html'
+
+    def get(self, request):
+        # Page only — frontend will call `iqf_completed_api` to fetch data
+        return Response({}, template_name=self.template_name)
 
 
 # Redirect stub for legacy accept-table link

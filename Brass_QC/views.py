@@ -40,6 +40,16 @@ def auto_calculate_top_tray(lot_id):
     """
     try:
         print(f"🔄 [auto_calculate_top_tray] Calculating top tray for lot_id: {lot_id}")
+
+        # ✅ FIX: For lots from IQF, use IQF_Submitted — BrassTrayId may not exist yet
+        total_stock_check = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        if total_stock_check and total_stock_check.send_brass_qc:
+            from IQF.models import IQF_Submitted
+            iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+            if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                # Top tray already stored in IQF_Submitted snapshot — skip BrassTrayId calc
+                print(f"✅ [auto_calculate_top_tray] Lot {lot_id} from IQF — top_tray preserved in IQF_Submitted, skipping BrassTrayId calc")
+                return True
         
         # Get all non-rejected BrassTrayId records for this lot
         all_brass_trays = BrassTrayId.objects.filter(
@@ -158,6 +168,21 @@ def transfer_brass_qc_data_to_brass_audit(lot_id, user):
         # Import Brass Audit models
         from BrassAudit.models import Brass_Audit_Accepted_TrayID_Store, Brass_Audit_Accepted_TrayScan
         
+        # ✅ FIX: Check if lot came from IQF — use IQF_Submitted as SINGLE SOURCE OF TRUTH
+        total_stock_check = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        from_iqf = total_stock_check and total_stock_check.send_brass_qc
+        iqf_source_trays = None
+
+        if from_iqf:
+            from IQF.models import IQF_Submitted
+            iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+            if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                    iqf_source_trays = iqf_record.full_accept_data.get('trays', [])
+                elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                    iqf_source_trays = iqf_record.partial_accept_data.get('trays', [])
+                print(f"✅ [TRANSFER] Using IQF_Submitted ({iqf_record.submission_type}) as source for lot {lot_id}: {len(iqf_source_trays or [])} trays")
+
         # Keep only one BrassTrayId row per (lot_id, tray_id) before transfer.
         duplicate_tray_rows = (
             BrassTrayId.objects.filter(lot_id=lot_id)
@@ -183,7 +208,88 @@ def transfer_brass_qc_data_to_brass_audit(lot_id, user):
             if deleted_rows:
                 print(f"🧹 [TRANSFER] Removed {deleted_rows} duplicate BrassTrayId rows for tray {duplicate['tray_id']} in lot {lot_id}")
 
-        # ✅ FIXED: Always use BrassTrayId as the source for transfer
+        # ✅ FIX: When lot came from IQF, use IQF_Submitted trays instead of BrassTrayId
+        if iqf_source_trays is not None and len(iqf_source_trays) > 0:
+            from collections import namedtuple
+            _TrayProxy = namedtuple('TrayProxy', ['tray_id', 'tray_quantity', 'top_tray', 'tray_capacity', 'tray_type'])
+
+            # Clear existing Brass Audit data
+            deleted_by_lot = Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+            print(f"   🗑️ Deleted {deleted_by_lot[0]} existing Brass Audit records for lot_id: {lot_id}")
+
+            tray_ids_to_transfer = [t.get('tray_id', '') for t in iqf_source_trays]
+            deleted_by_tray_id = Brass_Audit_Accepted_TrayID_Store.objects.filter(
+                tray_id__in=tray_ids_to_transfer
+            ).delete()
+            print(f"   🗑️ Deleted {deleted_by_tray_id[0]} duplicate tray_id records from Brass Audit")
+
+            total_qty = 0
+            for tray_data in iqf_source_trays:
+                tray_id = tray_data.get('tray_id', '')
+                qty = int(tray_data.get('qty', 0))
+                top_tray = bool(tray_data.get('top_tray', False))
+                if qty <= 0:
+                    continue
+                audit_tray, created = Brass_Audit_Accepted_TrayID_Store.objects.update_or_create(
+                    tray_id=tray_id,
+                    defaults={
+                        'lot_id': lot_id,
+                        'tray_qty': qty,
+                        'user': user,
+                        'is_draft': False,
+                        'is_save': True
+                    }
+                )
+                total_qty += qty
+                action = "Created" if created else "Updated"
+                print(f"   ✅ {action} tray in Brass Audit from IQF_Submitted: {tray_id} (qty: {qty})")
+
+            # Transfer scan data
+            scan_record, created = Brass_Audit_Accepted_TrayScan.objects.update_or_create(
+                lot_id=lot_id,
+                defaults={
+                    'accepted_tray_quantity': str(total_qty),
+                    'user': user
+                }
+            )
+
+            # Create BrassAuditTrayId from IQF_Submitted
+            from BrassAudit.models import BrassAuditTrayId
+            BrassAuditTrayId.objects.filter(lot_id=lot_id).delete()
+            BrassAuditTrayId.objects.filter(tray_id__in=tray_ids_to_transfer).delete()
+
+            stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            batch_id = stock.batch_id if stock else None
+
+            for tray_data in iqf_source_trays:
+                tray_id = tray_data.get('tray_id', '')
+                qty = int(tray_data.get('qty', 0))
+                top_tray = bool(tray_data.get('top_tray', False))
+                if qty <= 0:
+                    continue
+                BrassAuditTrayId.objects.update_or_create(
+                    tray_id=tray_id,
+                    defaults={
+                        'lot_id': lot_id,
+                        'batch_id': batch_id,
+                        'tray_quantity': qty,
+                        'tray_capacity': None,
+                        'tray_type': None,
+                        'top_tray': top_tray,
+                        'IP_tray_verified': True,
+                        'new_tray': False,
+                        'delink_tray': False,
+                        'rejected_tray': False,
+                        'user': user,
+                        'date': timezone.now()
+                    }
+                )
+
+            auto_calculate_top_tray_brass_audit(lot_id)
+            print(f"✅ [TRANSFER] IQF_Submitted source: transferred {len(iqf_source_trays)} trays to Brass Audit for lot {lot_id}")
+            return True
+
+        # ✅ LEGACY PATH: Use BrassTrayId as the source for transfer (non-IQF lots)
         # Get all accepted BrassTrayId records (not rejected, not delinked)
         brass_trays_source_qs = BrassTrayId.objects.filter(
             lot_id=lot_id,
@@ -810,21 +916,46 @@ class BrassPickTableView(APIView):
                 data['brass_rejection_total_qty'] = 0
                 data['brass_qc_accepted_qty'] = 0
 
-                actual_tray_count = IQFTrayId.objects.filter(
-                    lot_id=lot_id,
-                    IP_tray_verified=True,
-                    rejected_tray=False,
-                    delink_tray=False
-                ).count()
-                if actual_tray_count > 0:
-                    data['no_of_trays'] = actual_tray_count
-                    print(f"✅ [BrassPickTable] Overrode no_of_trays for IQF lot {lot_id}: {actual_tray_count} (from IQFTrayId count)")
+                # ✅ FIX: Use IQF_Submitted as SINGLE SOURCE OF TRUTH for tray count AND lot qty
+                from IQF.models import IQF_Submitted
+                iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+                iqf_tray_count = 0
+
+                if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                    # ✅ FIX: Override display_accepted_qty with IQF accepted qty (NOT original lot qty)
+                    iqf_accepted = iqf_record.accepted_qty or 0
+                    if iqf_accepted > 0:
+                        data['display_accepted_qty'] = iqf_accepted
+                        data['total_IP_accpeted_quantity'] = iqf_accepted
+                        # Recalculate no_of_trays based on correct IQF qty
+                        if tray_capacity > 0:
+                            data['no_of_trays'] = math.ceil(iqf_accepted / tray_capacity)
+                        print(f"✅ [BrassPickTable] Overrode display_accepted_qty for IQF lot {lot_id}: {iqf_accepted} (was {display_qty})")
+
+                    if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                        iqf_tray_count = len([t for t in iqf_record.full_accept_data.get('trays', []) if int(t.get('qty', 0)) > 0])
+                    elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                        iqf_tray_count = len([t for t in iqf_record.partial_accept_data.get('trays', []) if int(t.get('qty', 0)) > 0])
+
+                if iqf_tray_count > 0:
+                    data['no_of_trays'] = iqf_tray_count
+                    print(f"✅ [BrassPickTable] Tray count from IQF_Submitted for lot {lot_id}: {iqf_tray_count}")
                 else:
-                    # Fall back to IQF_Accepted_TrayID_Store: new-tray acceptances don't appear in IQFTrayId
-                    store_count = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_save=True).count()
-                    if store_count > 0:
-                        data['no_of_trays'] = store_count
-                        print(f"✅ [BrassPickTable] Overrode no_of_trays for IQF lot {lot_id}: {store_count} (from IQF_Accepted_TrayID_Store count)")
+                    # Fallback: IQFTrayId / IQF_Accepted_TrayID_Store (legacy)
+                    actual_tray_count = IQFTrayId.objects.filter(
+                        lot_id=lot_id,
+                        IP_tray_verified=True,
+                        rejected_tray=False,
+                        delink_tray=False
+                    ).count()
+                    if actual_tray_count > 0:
+                        data['no_of_trays'] = actual_tray_count
+                        print(f"⚠️ [BrassPickTable] Fallback tray count from IQFTrayId for lot {lot_id}: {actual_tray_count}")
+                    else:
+                        store_count = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_save=True).count()
+                        if store_count > 0:
+                            data['no_of_trays'] = store_count
+                            print(f"⚠️ [BrassPickTable] Fallback tray count from IQF_Accepted_TrayID_Store for lot {lot_id}: {store_count}")
         
             # Get model images
             batch_obj = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
@@ -991,22 +1122,48 @@ class BrassSaveIPCheckboxView(APIView):
                 )
                 print(f"Using BrassAuditTrayId for tray creation (send_brass_audit_to_qc=True)")
             elif send_brass_qc:
-                # Use IQF_Accepted_TrayID_Store (correct accepted quantities) for IQF->Brass QC flow
-                from IQF.models import IQF_Accepted_TrayID_Store as _IQFAcceptedStore
+                # ✅ FIX: Use IQF_Submitted as SINGLE SOURCE OF TRUTH for tray data
+                from IQF.models import IQF_Submitted, IQF_Accepted_TrayID_Store as _IQFAcceptedStore
                 from collections import namedtuple
                 _TrayInfo = namedtuple('TrayInfo', ['tray_id', 'tray_quantity', 'top_tray', 'tray_type', 'tray_capacity'])
-                _accepted_records = _IQFAcceptedStore.objects.filter(lot_id=lot_id, is_save=True)
-                verified_trays = [
-                    _TrayInfo(
-                        tray_id=t.tray_id,
-                        tray_quantity=t.tray_qty or 0,
-                        top_tray=False,
-                        tray_type=None,
-                        tray_capacity=None,
-                    )
-                    for t in _accepted_records
-                ]
-                print(f"Using IQF_Accepted_TrayID_Store for tray creation (send_brass_qc=True), count={len(verified_trays)}")
+
+                iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+                verified_trays = []
+
+                if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                    # ✅ Read from IQF_Submitted snapshot — NEVER from old Brass data
+                    if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                        source_trays = iqf_record.full_accept_data.get('trays', [])
+                    elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                        source_trays = iqf_record.partial_accept_data.get('trays', [])
+                    else:
+                        source_trays = []
+
+                    verified_trays = [
+                        _TrayInfo(
+                            tray_id=t.get('tray_id', ''),
+                            tray_quantity=int(t.get('qty', 0)),
+                            top_tray=bool(t.get('top_tray', False)),
+                            tray_type=None,
+                            tray_capacity=None,
+                        )
+                        for t in source_trays if int(t.get('qty', 0)) > 0
+                    ]
+                    print(f"✅ [create_brass_tray_instances] Using IQF_Submitted ({iqf_record.submission_type}) for lot {lot_id}, trays={len(verified_trays)}")
+                else:
+                    # Fallback: IQF_Accepted_TrayID_Store (legacy path)
+                    _accepted_records = _IQFAcceptedStore.objects.filter(lot_id=lot_id, is_save=True)
+                    verified_trays = [
+                        _TrayInfo(
+                            tray_id=t.tray_id,
+                            tray_quantity=t.tray_qty or 0,
+                            top_tray=False,
+                            tray_type=None,
+                            tray_capacity=None,
+                        )
+                        for t in _accepted_records
+                    ]
+                    print(f"⚠️ [create_brass_tray_instances] Fallback to IQF_Accepted_TrayID_Store for lot {lot_id}, count={len(verified_trays)}")
             else:
                 # Use IPTrayId for accepted trays
                 verified_trays = IPTrayId.objects.filter(
@@ -3574,7 +3731,29 @@ def get_brass_qc_tray_details_for_modal(request):
         rejected_trays = []
         total_accepted_qty = 0
 
-        if stock_obj.current_stage == 'Brass QC':
+        # ✅ FIX: Check IQF_Submitted FIRST — SINGLE SOURCE OF TRUTH after IQF completes
+        from IQF.models import IQF_Submitted
+        iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+
+        if iqf_record and stock_obj.send_brass_qc and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+            if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                source_trays = iqf_record.full_accept_data.get('trays', [])
+            elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                source_trays = iqf_record.partial_accept_data.get('trays', [])
+            else:
+                source_trays = []
+
+            for tray in source_trays:
+                qty = int(tray.get('qty', 0))
+                accepted_trays.append({
+                    'tray_id': tray.get('tray_id', ''),
+                    'tray_quantity': qty,
+                    'top_tray': bool(tray.get('top_tray', False)),
+                })
+                total_accepted_qty += qty
+            print(f"✅ [BrassQC TrayModal] Using IQF_Submitted ({iqf_record.submission_type}) for lot {lot_id}: {len(accepted_trays)} trays, qty={total_accepted_qty}")
+
+        elif stock_obj.next_process_module == 'Brass QC' or BrassTrayId.objects.filter(lot_id=lot_id).exists():
             if BrassTrayId.objects.filter(lot_id=lot_id).exists():
                 # ✅ FIX: Order by top_tray first, then tray_quantity ascending (smallest qty = top tray)
                 trays = BrassTrayId.objects.filter(lot_id=lot_id).order_by('-top_tray', 'tray_quantity')
@@ -6097,7 +6276,50 @@ class PickTrayIdList_Complete_APIView(APIView):
             print(f"🔍 [PickTrayIdList] send_brass_audit_to_qc=True, using BrassTrayId directly: {base_queryset.count()} trays found")
         
         elif send_brass_qc:
-            # Use IQFTrayId for accepted trays
+            # ✅ FIX: Use IQF_Submitted as SINGLE SOURCE OF TRUTH
+            from IQF.models import IQF_Submitted
+            iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+
+            if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                    source_trays = iqf_record.full_accept_data.get('trays', [])
+                elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                    source_trays = iqf_record.partial_accept_data.get('trays', [])
+                else:
+                    source_trays = []
+
+                if source_trays:
+                    _iqf_data = []
+                    for _i, _t in enumerate(sorted(source_trays, key=lambda x: x.get('qty', 0))):
+                        _iqf_data.append({
+                            's_no': _i + 1,
+                            'tray_id': _t.get('tray_id', ''),
+                            'tray_quantity': int(_t.get('qty', 0)),
+                            'position': _i,
+                            'is_top_tray': bool(_t.get('top_tray', False)),
+                            'rejected_tray': False,
+                            'delink_tray': False,
+                            'rejection_details': [],
+                            'top_tray': bool(_t.get('top_tray', False)),
+                            'model_used': 'IQF_Submitted'
+                        })
+                    print(f"✅ [PickTrayIdList] Using IQF_Submitted ({iqf_record.submission_type}): {len(_iqf_data)} tray(s) for lot {lot_id}")
+                    return JsonResponse({
+                        'success': True,
+                        'trays': _iqf_data,
+                        'rejection_summary': {
+                            'total_accepted_trays': len(_iqf_data),
+                            'accepted_tray_ids': [t.get('tray_id', '') for t in source_trays],
+                            'total_rejected_trays': 0,
+                            'rejected_tray_ids': [],
+                            'shortage_rejections': 0,
+                            'filter_applied': 'accepted_only',
+                            'tray_model_used': 'IQF_Submitted',
+                            'flags': {'send_brass_qc': send_brass_qc, 'send_brass_audit_to_qc': send_brass_audit_to_qc}
+                        }
+                    })
+
+            # Fallback: Use IQFTrayId for accepted trays
             base_queryset = IQFTrayId.objects.filter(
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,

@@ -10,6 +10,7 @@ from Jig_Loading.models import *
 from Brass_QC.models import *
 from BrassAudit.models import *
 from InputScreening.models import *
+from IQF.models import *
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from datetime import datetime
@@ -44,6 +45,21 @@ def clear_database():
     IP_Rejected_TrayScan.objects.all().delete()
     IP_Rejection_ReasonStore.objects.all().delete()
     IP_Rejection_Draft.objects.all().delete()
+
+    # IQF tables (added)
+    IQF_Accepted_TrayID_Store.objects.all().delete()
+    IQF_Accepted_TrayScan.objects.all().delete()
+    IQF_Draft_Store.objects.all().delete()
+    IQF_Rejected_TrayScan.objects.all().delete()
+    IQF_Rejection_ReasonStore.objects.all().delete()
+    IQFTrayId.objects.all().delete()
+    # Optional/related IQF tables
+    # NOTE: preserve IQF_Rejection_Table — do NOT delete it during clearDB
+    # (previously: IQF_Rejection_Table.objects.all().delete())
+    try:
+        IQF_OptimalDistribution_Draft.objects.all().delete()
+    except NameError:
+        pass
 
     print("✅ All specified model data deleted successfully.")
 

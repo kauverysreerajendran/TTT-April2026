@@ -1289,9 +1289,9 @@
   .tray-view-modal .tray-view-box { background: #fff; border-radius: 8px; padding: 18px; width: 420px; max-width: 92vw; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
   .tray-view-modal .tray-view-box h5 { margin: 0 0 10px 0; }
   .tray-view-modal .tray-row { margin-bottom: 6px; }
-  <!-- Lightweight UI-only tray view modal and handler (pure UI; uses existing data-* on row/link) -->
 
-</style>
+
+  </style>
 
 <div class="content-wrapper">
   <div class="row">
@@ -1406,20 +1406,14 @@
 
                   <tr class="highlighted-tray-scan" 
                       data-batch-id="{{data.batch_id}}" 
-                      data-lot-qty="{{ data.brass_rejection_total_qty|default:'0' }}"
-                      data-available-qty="{{ data.available_qty }}" 
-                      data-brass-onhold-picking="{{ data.iqf_onhold_picking }}"
-                      data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-                          data-stock-lot-id="{{ data.stock_lot_id }}"
-                          data-missing-qty="{{ data.iqf_missing_qty}}"
-                          data-physical-qty="{{ data.iqf_physical_qty }}">
+                      data-stock-lot-id="{{ data.stock_lot_id }}">
 
-                      <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                      <td class="{{ data.ui.row_blur }}">
                     <span style="display:flex; align-items:center; gap:3px;">
                       {% if is_admin %} 
                         <!-- Admin users: Show toggle switch -->
                         <label class="hold-toggle-switch" style="margin-bottom:0;">
-                          {% if not data.iqf_hold_lot %}
+                          {% if not data.ui.hold_lot %}
                             <input type="checkbox" class="hold-toggle-btn" checked />
                             <span class="hold-slider"></span>
                           {% else %}
@@ -1429,18 +1423,18 @@
                         </label>
                         <!-- Hold remark icon -->
                         <span class="hold-remark-icon" 
-                              style="display: {% if data.iqf_hold_lot or data.iqf_release_lot or data.iqf_holding_reason or data.iqf_release_reason %}inline-block{% else %}none{% endif %}; cursor:pointer;" 
-                              title="{% if data.iqf_holding_reason %}Holding Reason: {{ data.iqf_holding_reason }}{% endif %}{% if data.iqf_holding_reason and data.iqf_release_reason %}&#10;{% endif %}{% if data.iqf_release_reason %}Release Reason: {{ data.iqf_release_reason }}{% endif %}">
-                          {% if data.iqf_hold_lot or data.iqf_release_lot or data.iqf_holding_reason or data.iqf_release_reason %}
+                              style="display: {% if data.ui.show_hold_info %}inline-block{% else %}none{% endif %}; cursor:pointer;" 
+                              title="{{ data.ui.hold_tooltip }}">
+                          {% if data.ui.show_hold_info %}
                             <img src="{% static 'assets/icons/view2.png' %}" alt="Remark" style="width:12px; height:12px;" />
                           {% endif %}
                         </span>
                       {% else %}
                         <!-- Non-admin: Only show view icon if there's a holding/release reason -->
-                        {% if data.iqf_hold_lot or data.iqf_release_lot or data.iqf_holding_reason or data.iqf_release_reason %}
+                        {% if data.ui.show_hold_info %}
                           <span class="hold-remark-icon" 
                                 style="display:inline-block; cursor:pointer;" 
-                                title="{% if data.iqf_holding_reason %}Holding Reason: {{ data.iqf_holding_reason }}{% endif %}{% if data.iqf_holding_reason and data.iqf_release_reason %}&#10;{% endif %}{% if data.iqf_release_reason %}Release Reason: {{ data.iqf_release_reason }}{% endif %}">
+                                title="{{ data.ui.hold_tooltip }}">
                             <img src="{% static 'assets/icons/view2.png' %}" alt="View Reason" style="width:18px; height:18px;" />
                           </span>
                         {% endif %}
@@ -1456,13 +1450,13 @@
                       <!-- <td>
                       4 <i class="fa fa-info-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="IQF"></i>
                     </td>-->                  
-                    <td style="white-space:normal;word-break:break-all;"   {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>
+                    <td style="white-space:normal;word-break:break-all;" class="{{ data.ui.row_blur }}">
                               {{ data.bq_last_process_date_time|date:"d-M-y"  }}<br>
                         <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ data.bq_last_process_date_time|date:"h:i A" }}</span>
                         
                         </td>
 
-                            <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>
+                            <td class="{{ data.ui.row_blur }}">
                       <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
                         {{ data.plating_stk_no|highlight_plating_color|safe_html }}
                         <div class="model-image-tooltip" style="position: absolute; left: 80%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
@@ -1487,28 +1481,27 @@
                         </div>
                       </span>
                     </td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
+                    <td class="{{ data.ui.row_blur }}">{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
 
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
+                    <td class="{{ data.ui.row_blur }}">{{ data.plating_color }}</td>
+                    <td class="{{ data.ui.row_blur }}">{{ data.category }}</td>
+                    <td class="{{ data.ui.row_blur }}">{{data.polish_finish}}</td>
                     <td style="display: none;">{{data.version__version_name}}</td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type}}-{{data.tray_capacity}}</td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
+                    <td class="{{ data.ui.row_blur }}">{{data.tray_type}}-{{data.tray_capacity}}</td>
+                    <td class="{{ data.ui.row_blur }}">{{data.location__location_name}}</td>
                     
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <td class="{{ data.ui.row_blur }}">{{data.no_of_trays}}</td>
+                    <td class="{{ data.ui.row_blur }}">
                       <span class="lot-qty" style="min-width: 30px; text-align: right">
                         {{ data.brass_rejection_total_qty|default:'0' }}
                       </span>
                       <span style="display: inline-flex; align-items: center; gap: 4px;">
-                        {% if not data.iqf_accepted_qty_verified %}
+                        {% if not data.ui.qty_verified %}
                           <!-- Show checkbox before save -->
                           <input type="checkbox"
                             class="ip-checkbox"
                             data-lot-id="{{ data.stock_lot_id }}"
-                            style="width: 15px; height: 15px"
-                            {% if data.iqf_accepted_qty_verified %}checked disabled{% endif %} />
+                            style="width: 15px; height: 15px" />
                           {% else %}
                           <!-- Show green tick after save -->
                           <span style="
@@ -1531,30 +1524,30 @@
                           class="missing-qty-input"
                           value="{{ data.iqf_missing_qty|default_if_none:'' }}"
                           style="width: 36px; padding: 1px 3px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; display: none;"
-                          {% if data.iqf_accepted_qty_verified %}disabled{% endif %} />
+                          {% if data.ui.qty_verified %}disabled{% endif %} />
                       </span>
                     </td>
-                      <td  {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                      <td class="{{ data.ui.row_blur }}">
                       {{data.iqf_physical_qty}}
                     </td>
 
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <td class="{{ data.ui.row_blur }}">
                         {{data.iqf_accepted_qty|default:0}}
                     </td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <td class="{{ data.ui.row_blur }}">
                         {{data.iqf_rejection_qty|default:0}}
                     </td>
-                    <!-- Process Status Column -->
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <!-- Process Status Column — colors pre-computed by backend -->
+                    <td class="{{ data.ui.row_blur }}">
                       <div class="d-flex">
-                        <!-- Q: Green if iqf_accepted_qty_verified, else gray -->
+                        <!-- Q circle -->
                         <div
                           title="Quantity"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 25px;
                             height: 25px;
-                            background-color: {% if data.iqf_accepted_qty_verified %}#0c8249{% else %}#bdbdbd{% endif %};
+                            background-color: {{ data.ui.q_color }};
                             color: white;
                             font-weight: bold;
                             line-height: 20px;
@@ -1564,22 +1557,14 @@
                         >
                           Q
                         </div>
-                        <!-- QC: Green if iqf_rejection or iqf_acceptance, else gray -->
+                        <!-- QC circle -->
                         <div 
                           title="Quality Check"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 25px;
                             height: 25px;
-                        
-                              {% if data.iqf_rejection or data.iqf_acceptance or data.iqf_few_cases_acceptance %}                              
-                              background-color: #0c8249;
-                              {% elif data.Draft_Saved %}
-                              background: linear-gradient(to right, #0c8249 50%, #bdbdbd 50%);
-                              {% else %}
-                              background-color: #bdbdbd;
-                              {% endif %}
-                              
+                            {{ data.ui.qc_style }};
                             color: white;
                             font-weight: bold;
                             line-height: 20px;
@@ -1591,21 +1576,19 @@
                         </div>
                       </div>
                     </td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <td class="{{ data.ui.row_blur }}">
                       
-                      {% if data.iqf_accepted_qty_verified %}
-
+                      {% if data.ui.can_delete %}
                       <a href="#" class="delete-batch-btn" title="Delete" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.stock_lot_id }}">
                         <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
                       </a>
                       {% else %}
-
                         <span title="Delete Disabled" style="opacity: 0.5; pointer-events: none;">
                           <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 20px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);" />
                         </span>
                       {% endif %}
                       
-                      {% if data.iqf_acceptance %}
+                      {% if data.ui.action_type == 'ACCEPTED' %}
                         <!-- Fully Accepted state -->
                         <span class="btn btn-social-icon-text btn-twitter"
                               style="background-color: #66bb6a; pointer-events: none; opacity: 0.8; cursor: not-allowed;">
@@ -1619,44 +1602,42 @@
                           <i class="fa fa-times-circle"></i>Reject
                         </button>
 
-                      {% elif data.iqf_onhold_picking %}
+                      {% elif data.ui.action_type == 'VERIFY' %}
 
 <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
         style="background-color: #84bbf3; color: #fff; border: 2px solid #1565c0; box-shadow: 0 2px 8px rgba(132,187,243,0.12);"
         data-stock-lot-id="{{ data.stock_lot_id }}"
         data-batch-id="{{ data.batch_id }}"
-        data-model-no="{{ data.plating_stk_no }}"
-        data-lot-qty="{{ data.brass_rejection_total_qty }}"
-        data-missing-qty="{{ data.iqf_missing_qty|default:'' }}"
-        data-physical-qty="{{ data.iqf_physical_qty|default:'' }}">
+        data-model-no="{{ data.plating_stk_no }}">
 <i class="fa fa-check-circle" style="color: #fff; background: #1976d2; border-radius: 50%; padding: 2px;"></i>Verify Trays</button>
-                      {% elif data.iqf_rejection or data.iqf_few_cases_acceptance %}
-                        <!-- Rejected or Few Cases Accepted state (but not on-hold) -->
-                        {% if not data.iqf_onhold_picking %}
 
+                      {% elif data.ui.action_type == 'REJECTED' %}
                           <span class="btn btn-social-icon-text btn-youtube"
                                 style="background-color: #e57373; pointer-events: none; opacity: 0.8; cursor: not-allowed;">
                             <i class="fa fa-times-circle"></i>Rejected
                           </span>
-                        {% endif %}
+
+                      {% elif data.ui.action_type == 'AUDIT_ENABLED' %}
+                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
+                                style="background-color: #eaab36; color: #fff; border: 2px solid #b38f00; box-shadow: 0 2px 8px rgba(234,171,54,0.12);"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-batch-id="{{ data.batch_id }}"
+                                data-model-no="{{ data.plating_stk_no }}">
+                          <i class="fa fa-check-circle" style="color: #fff; background: #b38f00; border-radius: 50%; padding: 2px;"></i>Audit
+                        </button>
 
                       {% else %}
-                        <!-- Default state - Audit button enabled only after lot qty checkbox is verified -->
-
+                        <!-- AUDIT_DISABLED — checkbox not yet verified -->
                         <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                style="background-color: #eaab36; color: #fff; border: 2px solid #b38f00; box-shadow: 0 2px 8px rgba(234,171,54,0.12);{% if not data.iqf_accepted_qty_verified %} opacity:0.5; cursor:not-allowed;{% endif %}"
+                                style="background-color: #eaab36; color: #fff; border: 2px solid #b38f00; box-shadow: 0 2px 8px rgba(234,171,54,0.12); opacity:0.5; cursor:not-allowed;"
                                 data-stock-lot-id="{{ data.stock_lot_id }}"
                                 data-batch-id="{{ data.batch_id }}"
                                 data-model-no="{{ data.plating_stk_no }}"
-                                data-lot-qty="{{ data.brass_rejection_total_qty|default:'0' }}"
-                                data-missing-qty="{{ data.iqf_missing_qty|default:'0' }}"
-                                data-physical-qty="{{ data.iqf_physical_qty|default:'0' }}"
-                                {% if not data.iqf_accepted_qty_verified %}disabled title="Check the Lot Qty checkbox first to enable Audit"{% endif %}
-                                >
+                                disabled title="Check the Lot Qty checkbox first to enable Audit">
                           <i class="fa fa-check-circle" style="color: #fff; background: #b38f00; border-radius: 50%; padding: 2px;"></i>Audit
                         </button>
                       {% endif %}
-                      <!-- Eye icon to view submitted "Tray Scan Table" -->
+                      <!-- Eye icon to view tray details (fetches from API) -->
 <a
     href="#"
     title="View"
@@ -1665,17 +1646,7 @@
     data-stock-lot-id="{{ data.stock_lot_id }}"
     data-batch-id="{{ data.batch_id }}"
     data-model-no="{{ data.plating_stk_no}}"
-    data-no-of-trays="{{ data.no_of_trays }}"
-    data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-    data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
-    data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-    data-trays='{{ data.tray_details_json|default:'[]'|safe }}'
-    data-model-image="{{ data.model_images.0|default:'' }}"
-    data-total-batch-quantity="{{ data.display_physical_qty }}"
-    data-lot-qty="{{ data.brass_rejection_total_qty }}"
-    data-missing-qty="{{ data.iqf_missing_qty }}"
-    data-physical-qty="{{ data.iqf_physical_qty }}">
-
+    data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
     <img
         src="{% static 'assets/icons/view.png' %}"
         alt="View"
@@ -1683,82 +1654,21 @@
     />
 </a>
                     </td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
-                      {% if data.iqf_hold_lot  %}
-                       <div
-                          class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                          style="
-                            border: 1px solid #dc3545;
-                            background-color: #f8d7da;
-                            color: #721c24;
-                            font-size: 12px;
-                            white-space: nowrap;
-                            padding: 5px;
-                          "
-                        >
-                          On Hold
-                        </div>
-                      {% elif data.Draft_Saved %}
-                        <div
-                          class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                          style="
-                            border: 2px solid #4997ac;
-                            background-color: #d1f2f3;
-                            color: #03425d;
-                            font-size: clamp(0.75rem, 2vw, 0.875rem);
-                            white-space: nowrap;
-                            padding-top: 0.5rem;
-                            padding-bottom: 0.5rem;
-                          "
-                        >
-                          Draft
-                        </div>
-                      {% elif data.iqf_rejection or data.iqf_few_cases_acceptance or data.iqf_acceptance %}
-                        <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                            style="border: 2px solid #0d5d17; background-color: #c5f9c2; color: #2f801b; font-size: clamp(0.3rem, 2vw, 0.875rem); white-space: nowrap; padding: 0.3rem;">
-                          Yet to Release
-                        </div>
-                      {% else %}
-                        <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                            style="border: 2px solid #f9a825; background-color: #fff8e1; color: #b26a00; font-size: clamp(0.3rem, 2vw, 0.875rem); white-space: nowrap; padding: 0.3rem;">
-                          Yet to Start
-                        </div>
-                      {% endif %}
+                    <!-- Lot Status — pre-computed pill from backend -->
+                    <td class="{{ data.ui.row_blur }}">
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="border: 2px solid {{ data.ui.status_pill.border }}; background-color: {{ data.ui.status_pill.bg }}; color: {{ data.ui.status_pill.text }}; font-size: clamp(0.3rem, 2vw, 0.875rem); white-space: nowrap; padding: 0.3rem;">
+                        {{ data.ui.status_pill.label }}
+                      </div>
                     </td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <!-- Current Stage — pre-computed colors from backend -->
+                    <td class="{{ data.ui.row_blur }}">
                       <div
                         class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                         style="
-                          border: 2px solid
-                            {% if data.last_process_module == 'Input screening' %}
-                              #0d5d17
-                            {% elif data.last_process_module == 'IQF' %}
-                              #f9a825
-                            {% elif data.last_process_module == 'DayPlanning' %}
-                              #1976d2
-                            {% else %}
-                              #9adeed
-                            {% endif %};
-                          background-color:
-                            {% if data.last_process_module == 'Input screening' %}
-                              #c5f9c2
-                            {% elif data.last_process_module == 'IQF' %}
-                              #fff8e1
-                            {% elif data.last_process_module == 'DayPlanning' %}
-                              #d1eaff
-                            {% else %}
-                              #d1edf3
-                            {% endif %};
-                          color:
-                            {% if data.last_process_module == 'Input screening' %}
-                              #2f801b
-                            {% elif data.last_process_module == 'IQF' %}
-                              #b26a00
-                            {% elif data.last_process_module == 'DayPlanning' %}
-                              #033b5d
-                            {% else %}
-                              #033b5d
-                            {% endif %};
+                          border: 2px solid {{ data.ui.stage.border }};
+                          background-color: {{ data.ui.stage.bg }};
+                          color: {{ data.ui.stage.text }};
                           font-size: clamp(0.75rem, 2vw, 0.875rem);
                           white-space: nowrap;
                           padding-top: 0.5rem;
@@ -1768,8 +1678,9 @@
                         {{ data.last_process_module|default:"N/A" }}
                       </div>
                     </td>
-                    <td {% if data.iqf_hold_lot %} class="row-inactive-blur"{% endif %}>
-                      {% if not data.iqf_acceptance and not data.iqf_rejection and not data.iqf_rejection_tray_scan_status and not data.iqf_few_cases_acceptance %}
+                    <!-- Remarks — pre-computed allow_remarks from backend -->
+                    <td class="{{ data.ui.row_blur }}">
+                      {% if data.ui.allow_remarks %}
 
                       <!-- VoiceRec with tooltip (audio remark) -->
                     <!-- VoiceRec with tooltip (audio remark) -->
@@ -1869,7 +1780,7 @@
                       <img
                         src="{% static 'assets/icons/chat_icon.png' %}"
                         alt="Chat"
-                        style="width: 20px; height: 20px; {% if data.IQF_pick_remarks %}filter: grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2); opacity: 1;{% endif %}"
+                        style="width: 20px; height: 20px; {% if data.ui.remarks_saved %}filter: grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2); opacity: 1;{% endif %}"
                       />
                       <div
                         class="remark-tooltip"
@@ -1904,7 +1815,7 @@
                           "
                           {%
                           if
-                          data.IQF_pick_remarks
+                          data.ui.remarks_saved
                           %}readonly{%
                           endif
                           %}
@@ -1912,7 +1823,7 @@
 {{ data.IQF_pick_remarks|default_if_none:"" }}</textarea
                         >
                         <div style="text-align: right; margin-top: -35px">
-                          {% if not data.IQF_pick_remarks %}
+                          {% if not data.ui.remarks_saved %}
                           <button
                             type="button"
                             style="
@@ -2249,7 +2160,7 @@
   </div>
 </div>
 
-  <div id="trayViewModal" aria-hidden="true" style="position:fixed; top:0; right:-450px; width:440px; max-width:90vw; background:#fff; box-shadow: -6px 0 18px rgba(0,0,0,0.12); z-index:25000; transition:right 300ms ease;border-radius: 20px !important;">
+<div id="trayViewModal" aria-hidden="true" style="position:fixed; top:0; right:-500px; width:440px; max-width:90vw; background:#fff; box-shadow: -6px 0 18px rgba(0,0,0,0.12); z-index:25000; transition:right 300ms ease;border-radius: 20px !important;">
     <div style="padding:16px; box-sizing:border-box; height:100%; display:flex; flex-direction:column; max-height:100vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div style="display:flex; align-items:center; gap:10px;">
@@ -2267,7 +2178,7 @@
       <div id="trayViewContent" style="margin-top:12px; flex:1 1 auto;">Loading...</div>
       <div style="margin-top:12px; text-align:right;"> <!-- Reserved for future actions --> </div>
     </div>
-  </div>
+</div>
 
 {% block script %}
 
@@ -2276,6 +2187,10 @@
      Keept this script minimal — did not performed submissions or enforce rules here. -->
 <script nonce="{{ csp_nonce }}">(function(){
   // Client: UI-only. Fetch audit data, render table, submit payloads to server.
+  // 🔒 CRITICAL: Store the lot_id when modal opens — used by Draft/Proceed buttons.
+  // NEVER re-query DOM for lot_id (querySelector grabs FIRST row, not the opened row).
+  var _currentAuditLotId = null;
+
   function getCookie(name) {
     var cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -2294,6 +2209,8 @@
   // Open modal and populate data dynamically based on lotId
   function openAuditModal(lotId){
     if(!lotId) return;
+    _currentAuditLotId = lotId;  // 🔒 Lock lot_id at modal open — single source for Draft/Proceed
+    console.log('[IQF MODAL] Opened for lot_id=' + lotId);
     fetch('/iqf/iqf_rejection_audit_iqf_reject/?lot_id='+encodeURIComponent(lotId))
       .then(function(res){ return res.json(); })
       .then(function(json){
@@ -2404,7 +2321,7 @@
 
         // reveal modal
         document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.add('active');
-      }).catch(function(err){ console.error('Audit fetch failed', err); alert('Failed to load audit data.'); });
+      }).catch(function(err){ console.error('Audit fetch failed', err); if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to load audit data.' }); } else { console.warn('SweetAlert not available: Failed to load audit data.'); } });
   }
 
   // Collect and post to server; do NOT enforce business rules client-side
@@ -2436,7 +2353,7 @@
     }).then(function(res){
       return res.json().catch(function(){ return { success: false, error: 'Invalid server response' }; });
     }).then(function(json){
-      if(!json){ alert('Empty response from server'); return; }
+      if(!json){ if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Empty response from server' }); } else { console.warn('Empty response from server'); } return; }
       if(!json.success){
         // clear previous highlights
         try{ document.querySelectorAll('.rejection-qty-input.input-error').forEach(function(i){ i.classList.remove('input-error'); }); }catch(e){}
@@ -2456,16 +2373,33 @@
             el.textContent = (json.error || 'Server validation failed') + allowedText + enteredText;
           }catch(e){ console.error('show modal error failed', e); }
         } else {
-          alert(json.error || 'Server validation failed');
+          var errMsg = json.error || 'Server validation failed';
+          if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: errMsg }); } else { console.warn(errMsg); }
         }
       } else {
-        if(action === 'draft') alert('Draft saved'); else alert('Submitted successfully');
-        // close modal
-        document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.remove('active');
+        // show professional success alert using SweetAlert (preferred) or fallback
+        try{
+          if(json.action === 'NO_IQF_ACTION'){
+            var title = '✅ Submitted Successfully';
+            var msg = 'No IQF rejection entered. Lot moved back to Brass QC.';
+            if(typeof Swal !== 'undefined'){
+              Swal.fire({ icon: 'success', title: title, text: msg }).then(function(){ location.reload(); });
+            } else {
+              console.log(title+" - "+msg); location.reload();
+            }
+          } else {
+            var title = (action === 'draft') ? 'Draft saved' : 'Submitted successfully';
+            if(typeof Swal !== 'undefined'){
+              Swal.fire({ icon: 'success', title: title, toast: false, timer: 1600, showConfirmButton: false }).then(function(){ document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.remove('active'); location.reload(); });
+            } else {
+              console.log(title); document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.remove('active'); location.reload();
+            }
+          }
+        }catch(e){ console.error('show success alert failed', e); document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.remove('active'); location.reload(); }
       }
     }).catch(function(err){
       console.error('Submit failed', err);
-      alert('Failed to submit audit.');
+      if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to submit audit.' }); } else { console.error('Failed to submit audit.'); }
     }).finally(function(){ if(draftBtn) draftBtn.disabled = false; if(proceedBtn) proceedBtn.disabled = false; });
   }
 
@@ -2482,18 +2416,21 @@
 
     if(e.target && e.target.id === 'iqfModalClose' || e.target && e.target.id === 'iqfCancelBtn'){
       document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.remove('active');
+      _currentAuditLotId = null;  // Clear on close
     }
 
     if(e.target && e.target.id === 'iqfDraftBtn'){
-      var lotEl = document.querySelector('.tray-scan-btn[data-stock-lot-id]');
-      var lotId = lotEl && (lotEl.getAttribute('data-stock-lot-id') || lotEl.getAttribute('data-stock_lot_id') || lotEl.dataset.stockLotId);
-      submitAudit(lotId, 'draft');
+      // 🔒 Use stored lot_id — NEVER re-query DOM (querySelector grabs FIRST row)
+      if(!_currentAuditLotId){ console.error('[IQF BUG] No lot_id stored for draft'); return; }
+      console.log('[IQF DRAFT] Submitting for lot_id=' + _currentAuditLotId);
+      submitAudit(_currentAuditLotId, 'draft');
     }
 
     if(e.target && e.target.id === 'iqfProceedBtn'){
-      var lotEl = document.querySelector('.tray-scan-btn[data-stock-lot-id]');
-      var lotId = lotEl && (lotEl.getAttribute('data-stock-lot-id') || lotEl.getAttribute('data-stock_lot_id') || lotEl.dataset.stockLotId);
-      submitAudit(lotId, 'proceed');
+      // 🔒 Use stored lot_id — NEVER re-query DOM (querySelector grabs FIRST row)
+      if(!_currentAuditLotId){ console.error('[IQF BUG] No lot_id stored for proceed'); return; }
+      console.log('[IQF PROCEED] Submitting for lot_id=' + _currentAuditLotId);
+      submitAudit(_currentAuditLotId, 'proceed');
     }
   });
 
@@ -2569,7 +2506,7 @@
 </script>
 
 
-<!-- //RW - Checkbox Checki & Audit btnenmable in paralle .ip-checkbox` state: send to server, then update UI -->
+<!-- RW Qty - Checkbox Checki & Audit btnenmable in paralle .ip-checkbox` state: send to server, then update UI -->
 <script nonce="{{ csp_nonce }}">
 function getCookie(name) {
   var cookieValue = null;
