@@ -171,11 +171,13 @@ class IQF_Submitted(models.Model):
     SUB_FULL_ACCEPT = 'FULL_ACCEPT'
     SUB_FULL_REJECT = 'FULL_REJECT'
     SUB_PARTIAL = 'PARTIAL'
+    SUB_LOT_REJECT = 'LOT_REJECTION'
 
     SUBMISSION_CHOICES = [
         (SUB_FULL_ACCEPT, 'Full Accept'),
         (SUB_FULL_REJECT, 'Full Reject'),
         (SUB_PARTIAL, 'Partial'),
+        (SUB_LOT_REJECT, 'Lot Rejection'),
     ]
 
     # Core identifiers

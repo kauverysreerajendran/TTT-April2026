@@ -13,6 +13,7 @@ urlpatterns = [
     path('iqf_accepted_tray_slots/', iqf_accepted_tray_slots, name='iqf_accepted_tray_slots'),
     path('iqf_validate_tray_scan/', iqf_validate_tray_scan, name='iqf_validate_tray_scan'),
     path('iqf_verify_trays_confirm/', iqf_verify_trays_confirm, name='iqf_verify_trays_confirm'),
+    path('iqf_lot_rejection/', iqf_lot_rejection, name='iqf_lot_rejection'),
     path('iqf_completed_api/', IQFCompletedTableView.as_view(), name='iqf_completed_api'),
     path('iqf_completed_table/', IQFCompletedPageView.as_view(), name='iqf_completed_table'),
     path('iqf_accept_table/', iqf_accept_table_redirect, name='iqf_accept_table'),

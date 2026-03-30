@@ -92,7 +92,7 @@ def build_ui_state(data):
     elif draft:
         status_pill = {'label': 'Draft', 'border': '#4997ac', 'bg': '#d1f2f3', 'text': '#03425d'}
     elif onhold:
-        status_pill = {'label': 'Pending Verification', 'border': '#1565c0', 'bg': '#e3f2fd', 'text': '#0d47a1'}
+        status_pill = {'label': 'Draft', 'border': '#4997ac', 'bg': '#e3f2fd', 'text': '#0d47a1'}
     elif rejection or few_cases or acceptance:
         status_pill = {'label': 'Yet to Release', 'border': '#0d5d17', 'bg': '#c5f9c2', 'text': '#2f801b'}
     else:
@@ -454,6 +454,11 @@ def iqf_rejection_audit_iqf_reject(request):
 
         print(f"[AUDIT API] is_full_lot_reject={is_full_lot_reject}, rw_qty={rw_qty}")
 
+        # Check if this lot already has an active LOT_REJECTION submission
+        _is_lot_rejection = IQF_Submitted.objects.filter(
+            lot_id=lot_id, submission_type=IQF_Submitted.SUB_LOT_REJECT
+        ).exists()
+
         # 2. UNIFIED source aggregation — merge Brass QC + Brass Audit + IQF rejected tray scans
         response_data = []
         try:
@@ -571,7 +576,8 @@ def iqf_rejection_audit_iqf_reject(request):
                     "success": True,
                     "rw_qty": rw_qty,
                     "rejection_data": response_data,
-                    "total_iqf_qty": total_from_draft
+                    "total_iqf_qty": total_from_draft,
+                    "is_lot_rejection": _is_lot_rejection,
                 })
         except Exception:
             pass
@@ -580,7 +586,8 @@ def iqf_rejection_audit_iqf_reject(request):
             "success": True,
             "rw_qty": rw_qty,
             "rejection_data": response_data,
-            "total_iqf_qty": 0
+            "total_iqf_qty": 0,
+            "is_lot_rejection": _is_lot_rejection,
         })
 
     except Exception as e:
@@ -1300,13 +1307,13 @@ def iqf_tray_details(request):
         # ✅ FIX: Check IQF_Submitted FIRST — SINGLE SOURCE OF TRUTH after IQF completes
         iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
 
-        if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL', 'FULL_REJECT'):
+        if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL', 'FULL_REJECT', 'LOT_REJECTION'):
             if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
                 source_trays = iqf_record.full_accept_data.get('trays', [])
                 label = 'FULL_ACCEPT'
                 is_rejected = False
                 tray_status = 'ACCEPTED'
-            elif iqf_record.submission_type == 'FULL_REJECT' and iqf_record.full_reject_data:
+            elif iqf_record.submission_type in ('FULL_REJECT', 'LOT_REJECTION') and iqf_record.full_reject_data:
                 source_trays = iqf_record.full_reject_data.get('trays', [])
                 label = 'FULL_REJECT'
                 is_rejected = True
@@ -1913,3 +1920,233 @@ def iqf_validate_tray_scan(request):
         'message': 'New Tray - Delink Mode',
         'tray_id': tray_id,
     })
+
+
+# ── IQF Lot Rejection — One-click full lot rejection ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def iqf_lot_rejection(request):
+    """Handle Lot Rejection checkbox toggle — backend single source of truth.
+
+    POST JSON:
+        { "lot_id": "LID...", "lot_rejection": true|false }
+
+    When lot_rejection = true:
+        - Treat 100% of IQF incoming qty as FULL REJECTION
+        - Keep tray structure as-is (no recalculation / split)
+        - Create IQF_Submitted with submission_type = LOT_REJECTION
+        - Set TotalStockModel flags for rejection
+        - Overrides any partial draft data
+
+    When lot_rejection = false:
+        - Clear IQF_Submitted for this lot (if LOT_REJECTION)
+        - Clear IQF rejection reason store
+        - Reset TotalStockModel flags to editable state
+        - Restore normal audit flow
+    """
+    data = request.data
+    lot_id = data.get('lot_id')
+    lot_rejection = data.get('lot_rejection')
+
+    if not lot_id:
+        return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
+    if lot_rejection is None:
+        return Response({'success': False, 'error': 'Missing lot_rejection flag'}, status=400)
+
+    lot_rejection = bool(lot_rejection)
+
+    try:
+        ts = TotalStockModel.objects.get(lot_id=lot_id)
+    except TotalStockModel.DoesNotExist:
+        return Response({'success': False, 'error': f'Lot {lot_id} not found'}, status=404)
+
+    if not ts.send_brass_audit_to_iqf:
+        return Response({'success': False, 'error': f'Lot {lot_id} is not eligible for IQF'}, status=400)
+
+    try:
+        with transaction.atomic():
+            if lot_rejection:
+                # ── ACTIVATE LOT REJECTION ──
+
+                # 1. Resolve iqf_incoming_qty (rw_qty) — same source as iqf_submit_audit
+                audit_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                qc_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                rw_qty = 0
+                if audit_store and getattr(audit_store, 'total_rejection_quantity', None) is not None:
+                    rw_qty = audit_store.total_rejection_quantity
+                elif qc_store and getattr(qc_store, 'total_rejection_quantity', None) is not None:
+                    rw_qty = qc_store.total_rejection_quantity
+
+                # Detect Brass QC full lot rejection
+                is_full_lot_reject = False
+                if audit_store and getattr(audit_store, 'batch_rejection', False):
+                    is_full_lot_reject = True
+                elif qc_store and getattr(qc_store, 'batch_rejection', False):
+                    is_full_lot_reject = True
+                if not is_full_lot_reject:
+                    if getattr(ts, 'brass_qc_rejection', False) and int(getattr(ts, 'brass_qc_accepted_qty', 0) or 0) == 0:
+                        is_full_lot_reject = True
+
+                original_lot_qty = 0
+                if getattr(ts, 'batch_id', None):
+                    original_lot_qty = int(getattr(ts.batch_id, 'total_batch_quantity', 0) or 0)
+
+                iqf_incoming_qty = rw_qty
+                if is_full_lot_reject and iqf_incoming_qty <= 0:
+                    iqf_incoming_qty = original_lot_qty
+
+                if iqf_incoming_qty <= 0:
+                    return Response({'success': False, 'error': 'No IQF incoming qty — rw_qty is 0'}, status=400)
+
+                rejected_qty = iqf_incoming_qty
+                accepted_qty = 0
+
+                print(f'[IQF LOT REJECTION] ACTIVATE lot={lot_id}, iqf_incoming={iqf_incoming_qty}, rejected={rejected_qty}')
+
+                # 2. Build tray snapshot — keep as-is, assign full quantities under rejection
+                all_trays_qs = IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id')
+                original_tray_list = []
+                reject_trays = []
+                for t in all_trays_qs:
+                    raw_qty = int(getattr(t, 'tray_quantity', 0) or 0)
+                    remaining = int(getattr(t, 'remaining_qty', 0) or 0)
+                    tray_qty = remaining if remaining > 0 else raw_qty
+                    if tray_qty <= 0:
+                        continue
+                    tray_entry = {
+                        'tray_id': getattr(t, 'tray_id', '') or '',
+                        'qty': tray_qty,
+                        'top_tray': bool(getattr(t, 'top_tray', False)),
+                    }
+                    original_tray_list.append(tray_entry)
+                    reject_trays.append(tray_entry)
+
+                original_data_snapshot = {
+                    'qty': original_lot_qty,
+                    'tray_total': sum(t['qty'] for t in original_tray_list),
+                    'total_trays': len(original_tray_list),
+                    'trays': original_tray_list,
+                }
+                iqf_data_snapshot = {
+                    'qty': iqf_incoming_qty,
+                    'tray_total': sum(t['qty'] for t in reject_trays),
+                    'total_trays': len(reject_trays),
+                    'trays': reject_trays,
+                }
+
+                full_reject_data = {
+                    'label': 'LOT_REJECTION',
+                    'qty': rejected_qty,
+                    'total_trays': len(reject_trays),
+                    'trays': reject_trays,
+                }
+
+                # 3. Create/update IQF_Submitted
+                IQF_Submitted.objects.update_or_create(
+                    lot_id=lot_id,
+                    defaults={
+                        'batch_id': ts.batch_id,
+                        'original_lot_qty': original_lot_qty,
+                        'iqf_incoming_qty': iqf_incoming_qty,
+                        'total_lot_qty': iqf_incoming_qty,
+                        'accepted_qty': accepted_qty,
+                        'rejected_qty': rejected_qty,
+                        'submission_type': IQF_Submitted.SUB_LOT_REJECT,
+                        'original_data': original_data_snapshot,
+                        'iqf_data': iqf_data_snapshot,
+                        'full_accept_data': None,
+                        'partial_accept_data': None,
+                        'full_reject_data': full_reject_data,
+                        'partial_reject_data': None,
+                        'rejection_details': None,
+                        'is_completed': True,
+                        'created_by': request.user,
+                    }
+                )
+
+                # 4. Create rejection reason store (lot-level, no per-reason breakdown)
+                store, _ = IQF_Rejection_ReasonStore.objects.update_or_create(
+                    lot_id=lot_id,
+                    defaults={
+                        'user': request.user,
+                        'total_rejection_quantity': rejected_qty,
+                        'batch_rejection': True,
+                        'lot_rejected_comment': 'Lot Rejection — full lot rejected via IQF',
+                    }
+                )
+
+                # 5. Update TotalStockModel flags
+                ts.iqf_rejection = True
+                ts.iqf_acceptance = False
+                ts.iqf_few_cases_acceptance = False
+                ts.iqf_onhold_picking = False
+                ts.iqf_accepted_qty = 0
+                ts.iqf_after_rejection_qty = rejected_qty
+                ts.last_process_module = 'IQF'
+                ts.send_brass_audit_to_iqf = False
+                ts.send_brass_qc = False
+                ts.iqf_last_process_date_time = timezone.now()
+                ts.save(update_fields=[
+                    'iqf_rejection', 'iqf_acceptance', 'iqf_few_cases_acceptance',
+                    'iqf_onhold_picking', 'iqf_accepted_qty', 'iqf_after_rejection_qty',
+                    'last_process_module', 'send_brass_audit_to_iqf', 'send_brass_qc',
+                    'iqf_last_process_date_time',
+                ])
+
+                # 6. Clear any existing drafts
+                IQF_Draft_Store.objects.filter(lot_id=lot_id).delete()
+
+                print(f'[IQF LOT REJECTION] SAVED lot={lot_id}, type=LOT_REJECTION, rejected={rejected_qty}')
+
+                return Response({
+                    'success': True,
+                    'lot_rejection': True,
+                    'lot_id': lot_id,
+                    'submission_type': 'LOT_REJECTION',
+                    'iqf_incoming_qty': iqf_incoming_qty,
+                    'accepted_qty': accepted_qty,
+                    'rejected_qty': rejected_qty,
+                    'total_trays': len(reject_trays),
+                    'trays': reject_trays,
+                })
+
+            else:
+                # ── DEACTIVATE LOT REJECTION ──
+                print(f'[IQF LOT REJECTION] DEACTIVATE lot={lot_id}')
+
+                # Only clear if the existing submission is LOT_REJECTION
+                existing_sub = IQF_Submitted.objects.filter(lot_id=lot_id).first()
+                if existing_sub and existing_sub.submission_type == IQF_Submitted.SUB_LOT_REJECT:
+                    existing_sub.delete()
+
+                # Clear lot-level rejection reason store
+                IQF_Rejection_ReasonStore.objects.filter(lot_id=lot_id, batch_rejection=True).delete()
+
+                # Reset TotalStockModel to editable state
+                ts.iqf_rejection = False
+                ts.iqf_acceptance = False
+                ts.iqf_few_cases_acceptance = False
+                ts.iqf_onhold_picking = False
+                ts.iqf_accepted_qty = 0
+                ts.iqf_after_rejection_qty = 0
+                ts.send_brass_audit_to_iqf = True  # Re-show in IQF pick table
+                ts.send_brass_qc = False
+                ts.save(update_fields=[
+                    'iqf_rejection', 'iqf_acceptance', 'iqf_few_cases_acceptance',
+                    'iqf_onhold_picking', 'iqf_accepted_qty', 'iqf_after_rejection_qty',
+                    'send_brass_audit_to_iqf', 'send_brass_qc',
+                ])
+
+                print(f'[IQF LOT REJECTION] CLEARED lot={lot_id}, restored editable state')
+
+                return Response({
+                    'success': True,
+                    'lot_rejection': False,
+                    'lot_id': lot_id,
+                    'message': 'Lot rejection cleared. Editable state restored.',
+                })
+
+    except Exception as e:
+        print(f'[IQF LOT REJECTION ERROR] {e}')
+        traceback.print_exc()
+        return Response({'success': False, 'error': 'Server error'}, status=500)
