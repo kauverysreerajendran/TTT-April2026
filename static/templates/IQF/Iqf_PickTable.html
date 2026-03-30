@@ -1221,6 +1221,78 @@
   transition: all 0.2s ease;
 }
 
+/* ── Accepted Tray Scan Slots ── */
+#iqf-accepted-tray-section .table thead th {
+  padding: 6px 8px !important;
+  font-size: 12px !important;
+  background: #e8f5e9 !important;
+  color: #1b5e20 !important;
+}
+#iqf-accepted-tray-section .table tbody td {
+  padding: 6px 8px !important;
+  vertical-align: middle !important;
+}
+#iqf-accepted-tray-section .table tbody tr { height: 38px !important; }
+#iqf-accepted-tray-section .tray-scan-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #bdbdbd;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+#iqf-accepted-tray-section .tray-scan-input:focus {
+  border-color: #1976d2;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(25,118,210,0.15);
+}
+#iqf-accepted-tray-section .tray-scan-input.scan-valid {
+  border-color: #28a745;
+  background: #f0fff4;
+}
+#iqf-accepted-tray-section .tray-scan-input.scan-invalid {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+#iqf-accepted-tray-section .tray-scan-input.scan-delink {
+  border-color: #f9a825;
+  background: #fffde7;
+}
+.tray-scan-status {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tray-scan-status.status-valid {
+  color: #2e7d32;
+}
+.tray-scan-status.status-invalid {
+  color: #c62828;
+}
+.tray-scan-status.status-delink {
+  color: #e65100;
+}
+.top-tray-badge {
+  display: inline-block;
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.full-tray-badge {
+  display: inline-block;
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* ========================================
    END IQF REJECTION MODAL RESPONSIVE STYLES
    ======================================== */
@@ -1493,7 +1565,7 @@
                     <td class="{{ data.ui.row_blur }}">{{data.no_of_trays}}</td>
                     <td class="{{ data.ui.row_blur }}">
                       <span class="lot-qty" style="min-width: 30px; text-align: right">
-                        {{ data.brass_rejection_total_qty|default:'0' }}
+                        {{ data.rw_qty|default:'0' }}
                       </span>
                       <span style="display: inline-flex; align-items: center; gap: 4px;">
                         {% if not data.ui.qty_verified %}
@@ -2151,6 +2223,29 @@
           <tbody id="rejection-table-body"></tbody>
         </table>
       </div>
+
+      <!-- ── Accepted Tray Scan Slots — Backend computes, frontend renders ── -->
+      <div id="iqf-accepted-tray-section" style="display:none; margin-top:16px; border-top:2px solid #e0e0e0; padding-top:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <h6 style="margin:0; font-weight:700; color:#1a237e; font-size:15px;">
+            <i class="fa fa-check-circle" style="color:#28a745; margin-right:6px;"></i>Accepted Tray Scan
+          </h6>
+          <span id="iqfAcceptedQtyBadge" style="background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; border-radius:16px; padding:3px 12px; font-size:13px; font-weight:600;">Accepted: 0</span>
+        </div>
+        <table class="table table-bordered" style="width:100%; margin-bottom:0;">
+          <thead>
+            <tr>
+              <th style="width:50px; text-align:center;">S.No</th>
+              <th>Scan Tray ID</th>
+              <th style="width:100px; text-align:right;">Expected Qty</th>
+              <th style="width:90px; text-align:center;">Type</th>
+              <th style="width:120px; text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="iqf-accepted-tray-slots-body"></tbody>
+        </table>
+      </div>
+
     </div>
     <div class="iqf-rejection-modal-footer">
       <button id="iqfDraftBtn" class="iqf-modal-btn draft">Save Draft</button>
@@ -2275,6 +2370,12 @@
                 document.getElementById('modalIqfTotal') && (document.getElementById('modalIqfTotal').textContent = body.total_iqf_qty || 0);
                 // Keep RW qty in sync with server authoritative value
                 document.getElementById('modalRwQty') && (document.getElementById('modalRwQty').textContent = body.rw_qty || 0);
+                // Clear any previous error message on success
+                try{ var errEl = document.getElementById('modalErrorMsg'); if(errEl) errEl.remove(); }catch(e){}
+                // ── Trigger accepted tray slots update (backend decides, frontend renders) ──
+                if(typeof window._iqfFetchTraySlots === 'function'){
+                  window._iqfFetchTraySlots(lotId, parseInt(body.total_iqf_qty || 0, 10));
+                }
               } else {
                 // on validation error, show server message and highlight offending input if provided
                 try{
@@ -2319,6 +2420,18 @@
 
         attachComputeListeners();
 
+        // ── Auto-trigger tray slots if draft has pre-filled IQF total ──
+        var prefilledTotal = parseInt(json.total_iqf_qty || 0, 10);
+        if(prefilledTotal > 0 && typeof window._iqfFetchTraySlots === 'function'){
+          window._iqfFetchTraySlots(lotId, prefilledTotal);
+        } else {
+          // Reset accepted tray section when no draft values
+          var section = document.getElementById('iqf-accepted-tray-section');
+          if(section) section.style.display = 'none';
+          var stbody = document.getElementById('iqf-accepted-tray-slots-body');
+          if(stbody) stbody.innerHTML = '';
+        }
+
         // reveal modal
         document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.add('active');
       }).catch(function(err){ console.error('Audit fetch failed', err); if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to load audit data.' }); } else { console.warn('SweetAlert not available: Failed to load audit data.'); } });
@@ -2336,7 +2449,19 @@
       items.push({ reason_id: rid, iqf_qty: val });
     });
 
-    var payload = { lot_id: lotId, action: action, items: items };
+    // ── Collect accepted tray scan data (user truth — backend stores as-is) ──
+    var acceptedTrays = [];
+    var slotInputs = document.querySelectorAll('#iqf-accepted-tray-slots-body .tray-scan-input');
+    slotInputs.forEach(function(inp){
+      var trayId = (inp.value || '').trim();
+      var qty = parseInt(inp.getAttribute('data-expected-qty') || '0', 10);
+      var isTop = inp.getAttribute('data-is-top-tray') === 'true';
+      if(trayId && qty > 0){
+        acceptedTrays.push({ tray_id: trayId, qty: qty, is_top_tray: isTop });
+      }
+    });
+
+    var payload = { lot_id: lotId, action: action, items: items, accepted_trays: acceptedTrays };
     var csrftoken = getCookie('csrftoken');
 
     var draftBtn = document.getElementById('iqfDraftBtn');
@@ -2417,6 +2542,8 @@
     if(e.target && e.target.id === 'iqfModalClose' || e.target && e.target.id === 'iqfCancelBtn'){
       document.getElementById('iqfRejectionModalOverlay') && document.getElementById('iqfRejectionModalOverlay').classList.remove('active');
       _currentAuditLotId = null;  // Clear on close
+      // Reset accepted tray slots section
+      if(typeof window._iqfResetTraySlots === 'function') window._iqfResetTraySlots();
     }
 
     if(e.target && e.target.id === 'iqfDraftBtn'){
@@ -2466,7 +2593,7 @@
           // Populate header model placeholder
           try{ var modelSpan = document.getElementById('trayViewModelNo'); if(modelSpan) modelSpan.textContent = modelNo || ''; }catch(e){}
           var html = '';
-          html += '<div style="margin-bottom:8px;"><strong>Total Qty:</strong> '+escapeHtml(String(data.total_qty||0))+' &nbsp; <strong>Capacity:</strong> '+escapeHtml(trayCap)+' &nbsp; <strong>No. Trays:</strong> '+escapeHtml(String(data.total_trays||0))+'</div>';
+          html += '<div style="margin-bottom:8px;"><strong>Lot Qty:</strong> '+escapeHtml(String(data.total_qty||0))+' &nbsp; <strong>Capacity:</strong> '+escapeHtml(trayCap)+' &nbsp; <strong>No. Trays:</strong> '+escapeHtml(String(data.total_trays||0))+'</div>';
 
           if(Array.isArray(data.trays) && data.trays.length){
             html += '<table style="width:100%; border-collapse:collapse;">';
@@ -2591,6 +2718,154 @@ document.addEventListener('click', function(evt){
     }catch(e){ console.error('ip-checkbox handler failed', e); }
   }
 });
+</script>
+
+<!-- IQF Accepted Tray Slots — Global function called by audit script. Zero own listeners. -->
+<script nonce="{{ csp_nonce }}">
+(function(){
+
+  // ── Exposed globally: audit script calls this after each draft success & on modal open ──
+  window._iqfFetchTraySlots = function(lotId, rejTotal){
+    var section = document.getElementById('iqf-accepted-tray-section');
+    var tbody = document.getElementById('iqf-accepted-tray-slots-body');
+    var badge = document.getElementById('iqfAcceptedQtyBadge');
+    if(!section || !tbody) return;
+
+    if(!lotId || rejTotal <= 0){
+      section.style.display = 'none';
+      tbody.innerHTML = '';
+      return;
+    }
+
+    console.log('[IQF TRAY SLOTS] Fetching for lot=' + lotId + ', rejTotal=' + rejTotal);
+
+    fetch('/iqf/iqf_accepted_tray_slots/?lot_id=' + encodeURIComponent(lotId) + '&iqf_rejection_total=' + rejTotal, { credentials: 'same-origin' })
+      .then(function(res){ return res.json().catch(function(){ return { success: false }; }); })
+      .then(function(data){
+        if(!data || !data.success){
+          section.style.display = 'none';
+          tbody.innerHTML = '';
+          return;
+        }
+        var slots = data.slots || [];
+        var acceptedQty = data.accepted_qty || 0;
+
+        if(badge) badge.textContent = 'Accepted: ' + acceptedQty;
+
+        if(slots.length === 0){
+          section.style.display = 'none';
+          tbody.innerHTML = '';
+          return;
+        }
+
+        section.style.display = 'block';
+        tbody.innerHTML = '';
+
+        slots.forEach(function(slot){
+          var tr = document.createElement('tr');
+          var typeBadge = slot.is_top_tray
+            ? '<span class="top-tray-badge">\u2B50 Top Tray</span>'
+            : '<span class="full-tray-badge">Full Tray</span>';
+          tr.innerHTML =
+            '<td style="text-align:center;">' + slot.slot_no + '</td>' +
+            '<td><input type="text" class="tray-scan-input" data-slot-no="' + slot.slot_no + '" data-expected-qty="' + slot.qty + '" data-is-top-tray="' + (slot.is_top_tray ? 'true' : 'false') + '" placeholder="Scan tray barcode..." autocomplete="off" maxlength="9" /></td>' +
+            '<td style="text-align:right; font-weight:600;">' + slot.qty + '</td>' +
+            '<td style="text-align:center;">' + typeBadge + '</td>' +
+            '<td style="text-align:center;"><span class="tray-scan-status" data-slot-no="' + slot.slot_no + '"></span></td>';
+          tbody.appendChild(tr);
+
+          // Attach validation listener on the input just created
+          var newInput = tr.querySelector('.tray-scan-input');
+          if(newInput) newInput.addEventListener('input', window._iqfTrayScanValidate);
+        });
+
+        console.log('[IQF TRAY SLOTS] Rendered ' + slots.length + ' slots, accepted=' + acceptedQty);
+      })
+      .catch(function(err){
+        console.error('[IQF TRAY SLOTS] fetch failed', err);
+        section.style.display = 'none';
+      });
+  };
+
+  // ── Exposed globally: audit script calls this on modal close ──
+  window._iqfResetTraySlots = function(){
+    var section = document.getElementById('iqf-accepted-tray-section');
+    if(section) section.style.display = 'none';
+    var tbody = document.getElementById('iqf-accepted-tray-slots-body');
+    if(tbody) tbody.innerHTML = '';
+  };
+
+  // ── Store current lot_id for validation calls ──
+  var _validationLotId = null;
+
+  // Update lot_id when tray slots are fetched (piggyback on existing function)
+  var _origFetch = window._iqfFetchTraySlots;
+  window._iqfFetchTraySlots = function(lotId, rejTotal){
+    _validationLotId = lotId;
+    _origFetch(lotId, rejTotal);
+  };
+
+  // ── Tray scan input validation handler — backend decides, frontend renders ──
+  window._iqfTrayScanValidate = function(e){
+    var inp = e.target;
+    var val = (inp.value || '').trim().toUpperCase();
+    var slotNo = inp.getAttribute('data-slot-no');
+    var statusEl = document.querySelector('.tray-scan-status[data-slot-no="' + slotNo + '"]');
+
+    // Reset visual state
+    inp.classList.remove('scan-valid', 'scan-invalid', 'scan-delink');
+    if(statusEl){ statusEl.textContent = ''; statusEl.className = 'tray-scan-status'; }
+
+    // RULE 1: Only validate at exactly 9 characters
+    if(val.length < 9) return;
+    if(val.length > 9){
+      inp.value = val.substring(0, 9);
+      val = inp.value;
+    }
+
+    // Auto-uppercase the input
+    inp.value = val;
+
+    // Call backend validation API
+    var lotId = _validationLotId;
+    if(!lotId){ console.warn('[TRAY VALIDATE] No lot_id available'); return; }
+
+    console.log('[TRAY VALIDATE] slot=' + slotNo + ', tray=' + val + ', lot=' + lotId);
+
+    fetch('/iqf/iqf_validate_tray_scan/?lot_id=' + encodeURIComponent(lotId) + '&tray_id=' + encodeURIComponent(val), { credentials: 'same-origin' })
+      .then(function(res){ return res.json().catch(function(){ return { success: false }; }); })
+      .then(function(data){
+        if(!data || !data.success){
+          inp.classList.add('scan-invalid');
+          if(statusEl){ statusEl.textContent = 'Error'; statusEl.className = 'tray-scan-status status-invalid'; }
+          return;
+        }
+
+        var st = data.status;
+        var msg = data.message || '';
+
+        if(st === 'valid_lot'){
+          inp.classList.add('scan-valid');
+          if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-valid'; }
+        } else if(st === 'delink'){
+          inp.classList.add('scan-delink');
+          if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-delink'; }
+        } else {
+          // invalid_format or any other
+          inp.classList.add('scan-invalid');
+          if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-invalid'; }
+          // Auto-select for re-entry
+          try{ inp.select(); }catch(e){}
+        }
+      })
+      .catch(function(err){
+        console.error('[TRAY VALIDATE] fetch failed', err);
+        inp.classList.add('scan-invalid');
+        if(statusEl){ statusEl.textContent = 'Error'; statusEl.className = 'tray-scan-status status-invalid'; }
+      });
+  };
+
+})();
 </script>
 
 
