@@ -153,7 +153,7 @@ def auto_calculate_top_tray_brass_audit(lot_id):
         return False
 
 # ✅ NEW: Helper function to transfer Brass QC accepted data to Brass Audit tables
-def transfer_brass_qc_data_to_brass_audit(lot_id, user):
+def transfer_brass_qc_data_to_brass_audit(lot_id, user, from_iqf_flag=None):
     """
     Transfer accepted tray data from Brass QC tables to Brass Audit tables
     when lots are marked as accepted or partially accepted.
@@ -168,9 +168,9 @@ def transfer_brass_qc_data_to_brass_audit(lot_id, user):
         # Import Brass Audit models
         from BrassAudit.models import Brass_Audit_Accepted_TrayID_Store, Brass_Audit_Accepted_TrayScan
         
-        # ✅ FIX: Check if lot came from IQF — use IQF_Submitted as SINGLE SOURCE OF TRUTH
+        # ✅ FIX: Use caller-supplied flag (send_brass_qc may already be cleared before this call)
         total_stock_check = TotalStockModel.objects.filter(lot_id=lot_id).first()
-        from_iqf = total_stock_check and total_stock_check.send_brass_qc
+        from_iqf = from_iqf_flag if from_iqf_flag is not None else (total_stock_check and total_stock_check.send_brass_qc)
         iqf_source_trays = None
 
         if from_iqf:
@@ -1782,6 +1782,9 @@ class BQ_Accepted_form(APIView):
             # Use brass_physical_qty if set and > 0, else use total_stock
             physical_qty = total_stock_data.brass_physical_qty
 
+            # ✅ FIX: Capture send_brass_qc BEFORE clearing — needed by transfer function to detect IQF origin
+            was_from_iqf = bool(total_stock_data.send_brass_qc)
+
             total_stock_data.brass_qc_accepted_qty = physical_qty
             total_stock_data.send_brass_qc = False
             # Update process modules
@@ -1801,10 +1804,15 @@ class BQ_Accepted_form(APIView):
             total_stock_data.brass_audit_accepted_tray_scan_status = False
             total_stock_data.brass_audit_accepted_qty = 0
             
+            # ✅ FIX: Reset IQF flags so Brass Audit pick table doesn't exclude this lot
+            total_stock_data.iqf_acceptance = False
+            total_stock_data.iqf_rejection = False
+            total_stock_data.iqf_few_cases_acceptance = False
+            
             total_stock_data.save()
             
             # ✅ NEW: Transfer Brass QC accepted data to Brass Audit tables
-            transfer_success = transfer_brass_qc_data_to_brass_audit(lot_id, request.user)
+            transfer_success = transfer_brass_qc_data_to_brass_audit(lot_id, request.user, from_iqf_flag=was_from_iqf)
             if transfer_success:
                 print(f"✅ [BQ_Accepted_form] Data transferred to Brass Audit for lot: {lot_id}")
             else:
@@ -2006,9 +2014,16 @@ class BQBatchRejectionAPIView(APIView):
             total_stock.send_brass_audit_to_qc = False
             total_stock.send_brass_qc = False
             total_stock.bq_last_process_date_time = timezone.now()
+            
+            # ✅ FIX: Reset IQF flags so IQF pick table doesn't exclude this lot
+            total_stock.iqf_acceptance = False
+            total_stock.iqf_rejection = False
+            total_stock.iqf_few_cases_acceptance = False
+            
             total_stock.save(update_fields=[
                 'brass_qc_rejection', 'last_process_module', 'next_process_module', 
-                'bq_last_process_date_time', 'send_brass_audit_to_qc', 'send_brass_qc'
+                'bq_last_process_date_time', 'send_brass_audit_to_qc', 'send_brass_qc',
+                'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance'
             ])
 
             # Update BrassTrayId records (only for non-delinked trays)
@@ -2263,7 +2278,13 @@ class BQTrayRejectionAPIView(APIView):
 
             # Always move the lot to IQF Pick after any tray-level rejection (partial or full)
             total_stock_obj.send_brass_audit_to_iqf = True
-            total_stock_obj.save(update_fields=['send_brass_audit_to_iqf'])
+            
+            # ✅ FIX: Reset IQF flags so IQF pick table doesn't exclude this lot
+            total_stock_obj.iqf_acceptance = False
+            total_stock_obj.iqf_rejection = False
+            total_stock_obj.iqf_few_cases_acceptance = False
+            
+            total_stock_obj.save(update_fields=['send_brass_audit_to_iqf', 'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance'])
             print(f"✅ [BQTrayRejectionAPIView] Set send_brass_audit_to_iqf=True for lot {lot_id} after tray rejection.")
 
             # ✅ Update TrayId records for ALL individual tray IDs
