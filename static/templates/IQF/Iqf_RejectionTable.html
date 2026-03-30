@@ -1,0 +1,218 @@
+{% extends "base.html" %} {% load static %} {% block content %}
+
+<style>
+.iqf-rej-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.iqf-rej-card-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e8eaf6 100%);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-bottom: 1px solid #e0e0e0;
+  cursor: pointer;
+}
+.iqf-rej-card-header:hover {
+  background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+}
+.iqf-rej-card-body {
+  padding: 14px 18px;
+  display: none;
+}
+.iqf-rej-card-body.open {
+  display: block;
+}
+.iqf-rej-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.iqf-rej-badge.partial {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+.iqf-rej-badge.full-reject {
+  background: #ffebee;
+  color: #b71c1c;
+  border: 1px solid #ef9a9a;
+}
+.iqf-rej-info-row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.iqf-rej-info-item {
+  font-size: 13px;
+  color: #555;
+}
+.iqf-rej-info-item b {
+  color: #1a237e;
+}
+.iqf-rej-section-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin: 12px 0 6px;
+  color: #37474f;
+}
+.iqf-rej-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.iqf-rej-table th {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  padding: 6px 10px;
+  font-weight: 600;
+  text-align: left;
+}
+.iqf-rej-table td {
+  border: 1px solid #e0e0e0;
+  padding: 6px 10px;
+}
+.iqf-rej-table .text-right {
+  text-align: right;
+}
+.iqf-rej-empty {
+  text-align: center;
+  padding: 40px;
+  color: #9e9e9e;
+  font-size: 15px;
+}
+.iqf-rej-summary-strip {
+  display: flex;
+  gap: 12px;
+  margin: 8px 0 10px;
+  flex-wrap: wrap;
+}
+.iqf-rej-summary-chip {
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.iqf-rej-summary-chip.accepted { background: #e8f5e9; color: #2e7d32; }
+.iqf-rej-summary-chip.rejected { background: #ffebee; color: #c62828; }
+.iqf-rej-summary-chip.incoming { background: #e3f2fd; color: #1565c0; }
+
+/* Tablet */
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+  * { font-size: 18px !important; }
+  .iqf-rej-card-header { padding: 14px 16px; }
+  .iqf-rej-table th, .iqf-rej-table td { padding: 8px 10px; font-size: 16px !important; }
+}
+</style>
+
+<div class="content-wrapper">
+  <div class="row">
+    <div class="col-lg-12 grid-margin stretch-card">
+      <div class="card">
+        <div class="card-body" style="padding: 18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+            <h4 style="margin:0; font-weight:700; color:#1a237e;">
+              <i class="fa fa-times-circle" style="color:#c62828; margin-right:6px;"></i>IQF — Rejection Table
+            </h4>
+            <span style="font-size:13px; color:#757575;">Total: {{ total_count }} lot{{ total_count|pluralize }}</span>
+          </div>
+
+          {% if rows %}
+            {% for row in rows %}
+            <div class="iqf-rej-card" data-row-idx="{{ forloop.counter }}">
+              <div class="iqf-rej-card-header" onclick="this.nextElementSibling.classList.toggle('open');">
+                <div class="iqf-rej-info-row">
+                  <span class="iqf-rej-info-item"><b>{{ forloop.counter }}.</b></span>
+                  <span class="iqf-rej-info-item"><b>Lot:</b> {{ row.lot_id }}</span>
+                  <span class="iqf-rej-info-item"><b>Model:</b> {{ row.model_no }}</span>
+                  {% if row.plating_stk_no %}<span class="iqf-rej-info-item"><b>Plating Stk:</b> {{ row.plating_stk_no }}</span>{% endif %}
+                  <span class="iqf-rej-info-item"><b>IQF Qty:</b> {{ row.iqf_incoming_qty }}</span>
+                  <span class="iqf-rej-info-item" style="color:#c62828; font-weight:700;">Rejected: {{ row.rejected_qty }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  {% if row.submission_type == 'PARTIAL' %}
+                    <span class="iqf-rej-badge partial">Partial</span>
+                  {% elif row.submission_type == 'FULL_REJECT' %}
+                    <span class="iqf-rej-badge full-reject">Full Reject</span>
+                  {% endif %}
+                  <i class="fa fa-chevron-down" style="color:#9e9e9e;font-size:12px;"></i>
+                </div>
+              </div>
+              <div class="iqf-rej-card-body">
+                <div class="iqf-rej-summary-strip">
+                  <span class="iqf-rej-summary-chip incoming">Incoming: {{ row.iqf_incoming_qty }}</span>
+                  <span class="iqf-rej-summary-chip accepted">Accepted: {{ row.accepted_qty }}</span>
+                  <span class="iqf-rej-summary-chip rejected">Rejected: {{ row.rejected_qty }}</span>
+                </div>
+
+                {% if row.reasons %}
+                <div class="iqf-rej-section-title"><i class="fa fa-exclamation-triangle" style="color:#e65100;margin-right:4px;"></i>Rejection Reasons</div>
+                <table class="iqf-rej-table">
+                  <thead><tr><th>S.No</th><th>Reason</th><th class="text-right">Qty</th></tr></thead>
+                  <tbody>
+                    {% for r in row.reasons %}
+                    <tr><td>{{ forloop.counter }}</td><td>{{ r.reason }}</td><td class="text-right" style="font-weight:600;">{{ r.qty }}</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% endif %}
+
+                {% if row.reject_trays %}
+                <div class="iqf-rej-section-title"><i class="fa fa-times-circle" style="color:#c62828;margin-right:4px;"></i>Reject Tray Allocation</div>
+                <table class="iqf-rej-table">
+                  <thead><tr><th>S.No</th><th>Tray ID</th><th class="text-right">Reject Qty</th></tr></thead>
+                  <tbody>
+                    {% for t in row.reject_trays %}
+                    <tr><td>{{ forloop.counter }}</td><td>{{ t.tray_id }}</td><td class="text-right" style="font-weight:600;">{{ t.qty }}</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% endif %}
+
+                {% if row.accept_trays %}
+                <div class="iqf-rej-section-title"><i class="fa fa-check-circle" style="color:#2e7d32;margin-right:4px;"></i>Accepted Trays</div>
+                <table class="iqf-rej-table">
+                  <thead><tr><th>S.No</th><th>Tray ID</th><th class="text-right">Qty</th><th>Type</th></tr></thead>
+                  <tbody>
+                    {% for t in row.accept_trays %}
+                    <tr>
+                      <td>{{ forloop.counter }}</td>
+                      <td>{{ t.tray_id }}</td>
+                      <td class="text-right" style="font-weight:600;">{{ t.qty }}</td>
+                      <td>{% if t.is_top_tray %}&#11088; Top Tray{% else %}Full Tray{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% endif %}
+
+                <div style="font-size:12px;color:#9e9e9e;margin-top:8px;">
+                  By: {{ row.created_by }} &middot; {{ row.created_at|date:"d M Y H:i" }}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="iqf-rej-empty">
+              <i class="fa fa-check-circle" style="font-size:32px;color:#ccc;margin-bottom:8px;display:block;"></i>
+              No IQF rejections found.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}
