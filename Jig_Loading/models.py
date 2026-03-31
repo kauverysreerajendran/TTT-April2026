@@ -178,6 +178,14 @@ class JigLoadingManualDraft(models.Model):
     plating_stock_num = models.CharField(max_length=100, blank=True, null=True)
     draft_status = models.CharField(max_length=20, choices=[('active', 'Active'), ('submitted', 'Submitted')], default='active')
     is_multi_model = models.BooleanField(default=False)
+    effective_capacity = models.IntegerField(default=0, blank=True, null=True)
+    tray_capacity = models.IntegerField(default=12, blank=True, null=True)
+    nickel_bath_type = models.CharField(max_length=100, blank=True, null=True)
+    tray_type = models.CharField(max_length=100, blank=True, null=True)
+    multi_model_allocation = models.JSONField(default=list, blank=True, null=True, help_text="Full multi-model allocation data")
+    scanned_trays = models.JSONField(default=list, blank=True, null=True, help_text="List of scanned tray IDs with qty")
+    empty_hooks = models.IntegerField(default=0, blank=True, null=True)
+    excess_qty = models.IntegerField(default=0, blank=True, null=True)
 
     class Meta:
         unique_together = ['batch_id', 'lot_id', 'user']  # <-- FIXED!
@@ -216,6 +224,14 @@ class JigCompleted(models.Model):
     bath_numbers = models.ForeignKey('BathNumbers', on_delete=models.SET_NULL, blank=True, null=True)
     no_of_model_cases = models.TextField(blank=True, null=True)
     partial_lot_id = models.CharField(max_length=100, blank=True, null=True, help_text="New lot ID for remaining cases in partial submission")
+    effective_capacity = models.IntegerField(default=0, blank=True, null=True)
+    tray_capacity = models.IntegerField(default=12, blank=True, null=True)
+    nickel_bath_type = models.CharField(max_length=100, blank=True, null=True)
+    tray_type = models.CharField(max_length=100, blank=True, null=True)
+    multi_model_allocation = models.JSONField(default=list, blank=True, null=True, help_text="Full multi-model allocation data")
+    scanned_trays = models.JSONField(default=list, blank=True, null=True, help_text="List of scanned tray IDs with qty")
+    empty_hooks = models.IntegerField(default=0, blank=True, null=True)
+    excess_qty = models.IntegerField(default=0, blank=True, null=True)
 
     class Meta:
         unique_together = ['batch_id', 'lot_id', 'user']

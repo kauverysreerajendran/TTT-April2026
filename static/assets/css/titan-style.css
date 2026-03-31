@@ -3336,11 +3336,7 @@ label.hold-toggle-disabled {
 
 /* Button-like appearance for header items to match Bulk Upload's Upload button */
 .navbar-nav-right .btn.btn-outline {
-  background: linear-gradient(
-    135deg,
-    rgba(20, 184, 166, 0.06),
-    rgba(20, 184, 166, 0.02)
-  );
+background: linear-gradient(135deg, #e0f7fa, #e8f5e9) !important;
   border: 1px solid rgba(20, 184, 166, 0.18);
   color: #0d9488;
   padding: 6px 10px;
@@ -3445,14 +3441,14 @@ label.hold-toggle-disabled {
 
 .navbar-nav-right .nav-link small,
 .navbar-nav-right .dropdown-toggle small {
-  font-size: 0.85rem !important;
-  color: #333 !important;
-  font-weight: 600 !important;
-  margin: 0 !important;
-  line-height: 1 !important;
-  display: inline-block !important;
-  padding-left: 4px !important;
-  text-transform: none !important;
+    font-size: 11px !important;
+    color: #333 !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    line-height: 1 !important;
+    display: inline-block !important;
+    padding-left: -5px !important;
+    text-transform: none !important;
 }
 
 /* Slight visual lift on hover kept consistent */

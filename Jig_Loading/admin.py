@@ -105,17 +105,17 @@ class JigAutoSaveAdmin(admin.ModelAdmin):
 
 
 class JigLoadingManualDraftAdmin(admin.ModelAdmin):
-    list_display = ['lot_id', 'jig_id', 'user', 'delink_tray_count', 'updated_lot_qty', 'broken_hooks', 'draft_status', 'updated_at', 'original_lot_qty', 'jig_capacity', 'loaded_cases_qty', 'delink_tray_qty', 'half_filled_tray_qty']
-    list_filter = ['updated_at', 'user', 'draft_status']
+    list_display = ['lot_id', 'jig_id', 'user', 'delink_tray_count', 'updated_lot_qty', 'broken_hooks', 'draft_status', 'updated_at', 'original_lot_qty', 'jig_capacity', 'effective_capacity', 'loaded_cases_qty', 'delink_tray_qty', 'half_filled_tray_qty', 'is_multi_model', 'empty_hooks', 'excess_qty']
+    list_filter = ['updated_at', 'user', 'draft_status', 'is_multi_model']
     search_fields = ['lot_id', 'jig_id', 'user__username']
-    readonly_fields = ['updated_at', 'draft_data']
+    readonly_fields = ['updated_at', 'draft_data', 'multi_model_allocation', 'scanned_trays']
 
 
 class JigCompletedAdmin(admin.ModelAdmin):
-    list_display = ['lot_id', 'partial_lot_id', 'jig_id', 'user', 'delink_tray_count', 'updated_lot_qty', 'broken_hooks', 'draft_status', 'updated_at', 'original_lot_qty', 'jig_capacity', 'loaded_cases_qty', 'delink_tray_qty', 'half_filled_tray_qty']
-    list_filter = ['updated_at', 'user', 'draft_status']
+    list_display = ['lot_id', 'partial_lot_id', 'jig_id', 'user', 'delink_tray_count', 'updated_lot_qty', 'broken_hooks', 'draft_status', 'updated_at', 'original_lot_qty', 'jig_capacity', 'effective_capacity', 'loaded_cases_qty', 'delink_tray_qty', 'half_filled_tray_qty', 'is_multi_model', 'empty_hooks', 'excess_qty']
+    list_filter = ['updated_at', 'user', 'draft_status', 'is_multi_model']
     search_fields = ['lot_id', 'partial_lot_id', 'jig_id', 'user__username']
-    readonly_fields = ['updated_at', 'draft_data']
+    readonly_fields = ['updated_at', 'draft_data', 'multi_model_allocation', 'scanned_trays']
 
 
 admin.site.register(Jig, JigAdmin)

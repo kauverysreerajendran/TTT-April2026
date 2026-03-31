@@ -9,105 +9,352 @@
 <style> 
   .tray-duplicate-error { border: 2px solid #dc3545 !important; background: #fff1f0 !important; }
   .tray-duplicate-message { color: #dc3545; font-size: 12px; margin-top: 6px; }
-.tray-id-input.model-bg-1 { background: #e2fbff75 !important; }   /* Primary model */
-.tray-id-input.model-bg-2 { background: #fce4ec !important; }   /* Secondary model */
-/* Action handlers attached via script (kept out of CSS block) */
 
-.tray-id-input.model-bg-3 { background: #fff9c4 !important; }   /* Third model */
-.tray-id-input.model-bg-4 { background: #e1bee7 !important; }   /* Fourth model */
-.tray-id-input.model-bg-5 { background: #c8e6c9 !important; }   /* Fifth model */
-
-/* Jig ID and Broken Hooks input */
-#jigIdInput,
-#brokenBuildupHooksInput {
-  background: #ebfdff !important;
-}
-
-/* Tray ID inputs (Delink Information section) */
+/* ============================================================
+   TRAY ID INPUT — Multi-model color backgrounds
+   ============================================================ */
 .tray-id-input {
-  background: #ebfdff !important;
+  background: #f9fafb !important;  /* Default fallback color */
 }
+.tray-id-input.model-bg-1 { background: #e2fbff !important; }   /* Primary model (cyan) */
+.tray-id-input.model-bg-2 { background: #fff4e6 !important; }   /* Secondary model (orange) */
+.tray-id-input.model-bg-3 { background: #fff9c4 !important; }   /* Third model (yellow) */
+.tray-id-input.model-bg-4 { background: #e1bee7 !important; }   /* Fourth model (purple) */
+.tray-id-input.model-bg-5 { background: #c8e6c9 !important; }   /* Fifth model (green) */
+
+/* Validated state colors with model backgrounds */
+
+/* ============================================================
+   MODEL CARD STRIP — Compact horizontal model cards
+   ============================================================ */
+.model-card-strip {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 6px 0;
+  padding: 5px 8px;
+  background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(2,128,132,0.08);
+  box-shadow: 0 1px 3px rgba(0,40,60,0.03);
+}
+.model-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1.5px solid rgba(2,128,132,0.1);
+  background: #fff;
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0,40,60,0.05);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.model-card:hover {
+  box-shadow: 0 3px 8px rgba(2,128,132,0.12);
+  transform: translateY(-1px);
+}
+/* Per-model card colors — match delink tray backgrounds */
+.model-card.model-color-1 {
+  background: linear-gradient(160deg, #fff 60%, #e2fbff 100%);
+  border-color: rgba(2,128,132,0.3);
+}
+.model-card.model-color-2 {
+  background: linear-gradient(160deg, #fff 60%, #fff4e6 100%);
+  border-color: rgba(230,126,34,0.3);
+}
+.model-card.model-color-3 {
+  background: linear-gradient(160deg, #fff 60%, #e1bee7 100%);
+  border-color: rgba(180,160,0,0.3);
+}
+.model-card.model-color-4 {
+  background: linear-gradient(160deg, #fff 60%, #fff9c4 100%);
+  border-color: rgba(120,50,150,0.3);
+}
+.model-card.model-color-5 {
+  background: linear-gradient(160deg, #fff 60%, #c8e6c9 100%);
+  border-color: rgba(40,130,60,0.3);
+}
+/* Role badge (tiny icon top-right) */
+.model-card[data-role="primary"]::before {
+  content: '★';
+  position: absolute;
+  top: -2px;
+  right: 3px;
+  font-size: 9px;
+  color: #028084;
+  opacity: 0.35;
+}
+.model-card[data-role="secondary"]::before {
+  /* content: '◆'; */
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 8px;
+  color: #888;
+  opacity: 0.35;
+}
+.model-card .model-card-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  object-fit: contain;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.model-card:hover .model-card-img {
+  transform: scale(1.05);
+}
+.model-card .model-card-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+.model-card .model-card-code {
+  font-size: 9px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+.model-card .model-card-qty {
+  font-size: 10px;
+  font-weight: 700;
+  color: #028084;
+  background: rgba(2,128,132,0.07);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(2,128,132,0.12);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.model-card .model-card-delink {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(220,53,69,0.1);
+  color: #dc3545;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+  line-height: 1;
+  font-weight: 300;
+}
+.model-card .model-card-delink:hover {
+  background: rgba(220,53,69,0.2);
+  transform: scale(1.15) rotate(90deg);
+  box-shadow: 0 1px 4px rgba(220,53,69,0.2);
+}
+/* ✅ Force SweetAlert above ALL modal layers */
+.swal2-container {
+  z-index: 99999 !important;
+}
+.model-card-add {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 70px;
+  max-width: 100px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1.5px dashed rgba(2,128,132,0.25);
+  background: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(240,255,254,0.3) 100%);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #028084;
+  font-weight: 600;
+  font-size: 11px;
+  backdrop-filter: blur(8px);
+}
+.model-card-add:hover:not([disabled]) {
+  background: linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(226,251,255,0.5) 100%);
+  border-color: rgba(2,128,132,0.4);
+  box-shadow: 0 2px 8px rgba(2,128,132,0.1);
+  transform: translateY(-1px);
+}
+.model-card-add[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.model-card-add .model-card-add-icon {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 300;
+  transition: transform 0.2s;
+}
+.model-card-add:hover:not([disabled]) .model-card-add-icon {
+  transform: rotate(90deg) scale(1.1);
+}
+
+/* ============================================================
+   TRAY GROUP — Compact horizontal model-grouped trays
+   ============================================================ */
+.tray-model-group {
+  display: contents; /* transparent in flex layout — children join parent flow */
+}
+.tray-model-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  width: 100%;          /* forces full-row separator in parent flex */
+  flex-basis: 100%;     /* ensures new row before trays */
+}
+.tray-model-group-header.primary-group {
+  background: #e2fbff;
+  color: #028084;
+}
+.tray-model-group-header.secondary-group {
+  background: #fff4e6;
+  color: #e67e22;
+}
+.tray-model-group-trays {
+  display: contents; /* transparent — trays join parent flex row flow */
+}
+
     #global-loading-spinner {
-    z-index: 10000 !important; /* Lower than SweetAlert2 (which uses 1060+) */
+    z-index: 10000 !important;
   }
+
+/* ============================================================
+   PREMIUM TRAY CARD SYSTEM
+   ============================================================ */
 .tray-scan-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
-  max-height: 320px;
+  gap: 12px;
+  margin-top: 12px;
+  max-height: 380px;
   overflow-y: auto;
+  padding: 4px 2px;
 }
+.tray-scan-tabs::-webkit-scrollbar { width: 5px; }
+.tray-scan-tabs::-webkit-scrollbar-thumb { background: #c5e8ea; border-radius: 10px; }
+.tray-scan-tabs::-webkit-scrollbar-track { background: transparent; }
+
 .tray-scan-tab {
-  border-radius: 8px;
-  padding: 15px 14px 8px 0px;
-  min-width: 120px;
-  max-width: 170px;
+  border-radius: 12px;
+  padding: 14px 16px 10px;
+  min-width: 135px;
+  max-width: 175px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   position: relative;
+  background: #fff;
+  border: 1px solid #e8edf2;
+  box-shadow: 0 1px 4px rgba(0,40,60,0.06);
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+}
+.tray-scan-tab:hover {
+  box-shadow: 0 4px 16px rgba(2,128,132,0.12);
+  border-color: #b2dfdb;
+  transform: translateY(-1px);
 }
 .tray-model-label {
-  font-size: 12px;
-  color: #028084 !important; /* teal */
-  font-weight: 600;
+  font-size: 11px;
+  color: #028084 !important;
+  font-weight: 700;
   margin-bottom: 6px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 .tray-scan-tab label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #028084;
+  color: #37474f;
   margin-bottom: 4px;
 }
 .tray-scan-tab input[type="text"] {
-  border: 1px solid #ffff;
-  border-radius: 6px;
-  padding: 10px 8px;
+  border: 1.5px solid #dce3e8;
+  border-radius: 8px;
+  padding: 9px 10px;
   font-size: 12px;
-  background: #fff;
-  margin-bottom: 4px;
+  font-weight: 500;
+  background: #f8fbfc;
+  margin-bottom: 6px;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  color: #263238;
+  letter-spacing: 0.2px;
 }
-.tray-id-input.validated { background: #d4edda !important; border: 1px solid #28a745 !important; }
+.tray-id-input.validated {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9) !important;
+  border: 1.5px solid #43a047 !important;
+  color: #1b5e20 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 0 3px rgba(67,160,71,0.1) !important;
+}
 .tray-scan-tab input[type="text"]:focus {
   border-color: #028084;
-  background: #e2fbff75;
+  background: #fff;
   outline: none;
+  box-shadow: 0 0 0 3px rgba(2,128,132,0.1);
 }
 
-/* Placeholder styling: subtle blend of white and grey */
+/* Placeholder styling */
 .tray-id-input::placeholder,
 .tray-id-input::-webkit-input-placeholder,
 .tray-id-input:-ms-input-placeholder,
 .tray-id-input::-moz-placeholder {
-  /* base white tint */
-  color: rgba(255,255,255,0.75) !important;
-  /* overlay a soft grey via text-shadow to create a blended appearance */
-  text-shadow: 0 0 0 rgba(128,128,128,0.45);
-  opacity: 1; /* ensure consistent rendering across browsers */
+  color: #9eb3b4 !important;
+  font-weight: 400 !important;
+  font-style: italic;
+  text-shadow: none;
+  opacity: 1;
 }
 .tray-scan-tab .tray-qty {
   font-size: 12px;
-  color: #666;
+  color: #546e7a;
+  font-weight: 500;
   margin-bottom: 2px;
 }
 .tray-scan-tab .tray-error-message {
   color: #dc3545;
-  font-size: 12px;
+  font-size: 11px;
   margin-top: 2px;
   position: absolute;
   bottom: 4px;
-  left: 8px;
+  left: 10px;
+  font-weight: 500;
 }
 @media (max-width: 600px) {
   .tray-scan-tab {
-    min-width: 90px;
+    min-width: 100px;
     max-width: 98vw;
-    padding: 8px 6px;
+    padding: 10px 10px 8px;
   }
-  .tray-scan-tabs {
-    gap: 6px;
-  }
+  .tray-scan-tabs { gap: 8px; }
 }
 
   #delinkInfoTable {
@@ -122,7 +369,379 @@
     padding: 8px;
   }
 
-  /* Make modal height dynamic and reduce empty space */
+/* ============================================================
+   PREMIUM MODAL SYSTEM — .add-jig-window
+   ============================================================ */
+
+  /* Overlay */
+  #jigAddModal.right-slide-modal {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10500 !important;
+    display: none !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow-y: auto !important;
+  }
+  #jigAddModal.right-slide-modal.open {
+    display: flex !important;
+    opacity: 1 !important;
+    animation: modalFadeIn 0.25s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Modal Container */
+  .add-jig-window {
+    background: #ffffff !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+    min-width: 1020px !important;
+    max-width: 95vw !important;
+    max-height: 94vh !important;
+    overflow-y: auto !important;
+    box-shadow:
+      0 25px 60px rgba(0,0,0,0.18),
+      0 8px 24px rgba(0,0,0,0.08),
+      0 0 0 1px rgba(0,0,0,0.04) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+    margin: 20px !important;
+    animation: modalSlideUp 0.3s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(24px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Header */
+  .jig-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+        background: linear-gradient(
+      90deg,
+      #e2fbff75 0%,
+      #b2ebf2 33%,
+      #ffe0b2 66%,
+      #f8bbd0 100%
+    );
+    padding: 16px 28px;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 2px 8px rgba(1,77,78,0.15);
+    margin: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .jig-modal-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .jig-modal-header h3 {
+    color: #303030 !important;
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-shadow: none;
+  }
+
+  .jig-modal-header .close-btn {
+    color: rgba(255,255,255,0.85);
+    font-size: 22px;
+    cursor: pointer;
+    text-decoration: none;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+    background: rgba(255,255,255,0.1);
+  }
+  .jig-modal-header .close-btn:hover {
+    background: rgba(220,53,69,0.9);
+    color: #fff;
+    transform: scale(1.05);
+  }
+
+  /* Header action buttons */
+  .jig-modal-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+  }
+
+  .btn-action {
+    padding: 7px 18px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.2px;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-action::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  .btn-action:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .btn-action:active { transform: translateY(0); box-shadow: none; }
+
+  .btn-action.teal {
+    background: linear-gradient(135deg, #028a8c, #01676a);
+  }
+  .btn-action.teal:hover { background: linear-gradient(135deg, #01676a, #014d4e); }
+
+  .btn-action.blue {
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+  }
+  .btn-action.blue:hover { background: linear-gradient(135deg, #1976d2, #1565c0); }
+
+  .btn-action.transparent {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  .btn-action.transparent::after { display: none; }
+  .btn-action.transparent:hover { background: #e2e8f0; color: #334155; }
+
+  .btn-action.model-images {
+    background: #ffffff !important;
+    color: #028084 !important;
+    border: 1px solid #d1d9e0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    font-weight: 600;
+    cursor: default;
+    border-radius: 10px;
+  }
+
+  .btn-action.btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff;
+  }
+  .btn-action.btn-danger:hover { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+
+  .cycle-status {
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(4px);
+    padding: 7px 16px;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.15);
+    letter-spacing: 0.2px;
+  }
+
+  /* Content area */
+  .add-jig-window .jig-modal-content {
+    flex: 1;
+    padding: 24px 28px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    max-height: calc(100vh - 160px);
+    background: #fafcfd;
+  }
+  .add-jig-window .jig-modal-content::-webkit-scrollbar { width: 6px; }
+  .add-jig-window .jig-modal-content::-webkit-scrollbar-thumb { background: #c5e8ea; border-radius: 10px; }
+  .add-jig-window .jig-modal-content::-webkit-scrollbar-track { background: transparent; }
+
+  .add-jig-window > *:not(.jig-modal-header):not(.jig-modal-footer) {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .add-jig-window > *:first-child:not(.jig-modal-header) {
+    padding-top: 24px;
+  }
+
+  /* Footer */
+  .jig-modal-footer {
+    background: #ffffff;
+    border-top: 1px solid #e8edf2;
+    padding: 14px 28px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    border-radius: 0 0 16px 16px;
+    margin: 0;
+    box-shadow: 0 -1px 8px rgba(0,0,0,0.03);
+  }
+
+/* ============================================================
+   FORM FIELDS — Premium Input Design
+   ============================================================ */
+  .form-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 14px 18px;
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .jig-id-valid-alert, .jig-id-error-alert {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 100;
+    font-size: 11px;
+    padding: 2px 0;
+    font-weight: 500;
+  }
+
+  .form-group label {
+    font-size: 11.5px;
+    color: #64748b;
+    margin-bottom: 5px;
+    font-weight: 600;
+    
+  }
+
+  .form-group input,
+  .form-group select {
+    padding: 10px 12px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #ffffff;
+    color: #1e293b;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: #028084;
+    box-shadow: 0 0 0 3px rgba(2,128,132,0.1), 0 1px 2px rgba(0,0,0,0.03);
+    background: #ffffff;
+  }
+
+  .form-group input[readonly] {
+    background: #f1f5f9;
+    color: #475569;
+    cursor: default;
+    border-color: #e2e8f0;
+  }
+
+  /* Jig ID and Broken Hooks — editable accent */
+  #jigIdInput,
+  #brokenBuildupHooksInput {
+    background: #f0fffe !important;
+    border-color: #b2dfdb !important;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #jigIdInput:focus,
+  #brokenBuildupHooksInput:focus {
+    border-color: #028084 !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(2,128,132,0.12) !important;
+  }
+  #jigIdInput.jig-id-error {
+    border-color: #dc3545 !important;
+    background: #fff5f5 !important;
+    box-shadow: 0 0 0 3px rgba(220,53,69,0.12) !important;
+  }
+  #jigIdInput.jig-id-valid {
+    border-color: #28a745 !important;
+    background: #f0fff4 !important;
+  }
+
+  /* Tray ID inputs */
+  .tray-id-input {
+    background: #f0fffe !important;
+    border: 1.5px solid #b2dfdb !important;
+    border-radius: 8px !important;
+  }
+
+/* ============================================================
+   DELINK / SECTION HEADERS
+   ============================================================ */
+  .delink-section {
+    border-radius: 12px;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block;
+    background: #ffffff;
+    border: 1px solid #e8edf2;
+    padding: 16px 20px;
+    margin-top: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+  }
+
+  .delink-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .delink-header span:first-child {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+  }
+
+  .delink-count {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .delink-toggle {
+    color: #94a3b8;
+  }
+
+  .delink-content {
+    margin-top: 12px;
+  }
+
+/* ============================================================
+   RESPONSIVE RULES
+   ============================================================ */
   .right-slide-modal.open {
     right: 0 !important;
     opacity: 1 !important;
@@ -136,33 +755,42 @@
     overflow-y: visible !important;
   }
 
-  .add-jig-window .jig-modal-content {
-    flex: 1;
-    padding: 20px 24px;
-    overflow-y: auto;
-    box-sizing: border-box;
-    /* Limit modal body height so header/footer remain visible and user can scroll */
-    max-height: calc(100vh - 160px);
+  @media (max-width: 768px) {
+    .add-jig-window {
+      min-width: 90vw !important;
+      max-width: 95vw !important;
+      margin: 10px !important;
+      max-height: 92vh !important;
+    }
+    .jig-modal-header { padding: 14px 20px; }
+    .add-jig-window .jig-modal-content { padding: 16px 20px; }
+    .add-jig-window > *:not(.jig-modal-header):not(.jig-modal-footer) {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+    .form-fields-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 16px;
+    }
+    .jig-modal-actions { flex-direction: column; align-items: stretch; }
+    .btn-action { justify-content: center; }
   }
 
-  .add-jig-window > *:not(.jig-modal-header):not(.jig-modal-footer) {
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-
-  .add-jig-window > *:first-child:not(.jig-modal-header) {
-    padding-top: 20px;
-  }
-
-  .jig-modal-footer {
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-    padding: 20px 24px;
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    border-radius: 0 0 16px 16px;
-    margin: 0;
+  @media (max-width: 480px) {
+    .add-jig-window {
+      min-width: 95vw !important;
+      max-width: 98vw !important;
+      margin: 5px !important;
+      max-height: 95vh !important;
+      border-radius: 12px !important;
+    }
+    .jig-modal-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+    .add-jig-window .jig-modal-content { padding: 14px 16px; }
+    .add-jig-window > *:not(.jig-modal-header):not(.jig-modal-footer) {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    .form-fields-grid { grid-template-columns: 1fr; gap: 12px; }
   }
 
   td .open-jig-modal-btn {
@@ -171,268 +799,8 @@
     pointer-events: auto;
   }
 
-  /* Horizontal Modal Layout - Centered Design */
-  #jigAddModal.right-slide-modal {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    background: rgba(0, 0, 0, 0.5) !important;
-    z-index: 10500 !important;
-    display: none !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow-y: auto !important;
-  }
+  /* Horizontal Modal Layout — handled by premium system above */
 
-  #jigAddModal.right-slide-modal.open {
-    display: flex !important;
-    opacity: 1 !important;
-  }
-
-  .add-jig-window {
-    background: #fff !important;
-    border-radius: 16px !important;
-    padding: 0 !important;
-    min-width: 1000px !important;
-    max-width: 95vw !important;
-    max-height: 95vh !important;
-    overflow-y: auto !important;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
-    display: flex !important;
-    flex-direction: column !important;
-    position: relative !important;
-    margin: 20px !important;
-  }
-  .jig-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: linear-gradient(
-      90deg,
-      #e2fbff75 0%,
-      #b2ebf2 33%,
-      #ffe0b2 66%,
-      #f8bbd0 100%
-    );
-    /* Teal, light blue, light yellow, light pink - equally distributed */
-    padding: 20px 24px;
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 2px 12px rgba(56, 132, 132, 0.18);
-    margin: 0;
-  }
-
-  .jig-modal-header h3 {
-    color: white;
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .jig-modal-header .close-btn {
-    color: rgb(234, 55, 55);
-    font-size: 20px;
-    cursor: pointer;
-    text-decoration: none;
-  }
-
-  .jig-modal-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-  }
-
-  .btn-action {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 20px;
-    font-size: 13px;
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .btn-action.teal {
-    background-color: #4db6ac;
-  }
-
-  .btn-action.blue {
-    background-color: #42a5f5;
-  }
-
-  .btn-action.transparent {
-    background-color: #e7e7e7;
-    color: #666;
-    border: 1px solid #ddd;
-  }
-  .btn-action.model-images {
-  background-color: #f7fafd !important;
-  color: #028084 !important;
-  border: 1px solid #bdbdbd !important;
-  box-shadow: 0 2px 8px rgba(2, 128, 132, 0.08);
-  font-weight: 600;
-  cursor: default;
-}
-
-  .cycle-status {
-    background: #e8f5e9;
-    padding: 8px 16px;
-    border-radius: 20px;
-    color: #2e7d32;
-    font-size: 13px;
-    font-weight: 500;
-  }
-
-  .form-fields-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 16px 20px;
-    margin-bottom: 16px;
-  }
-
-.form-group {
-  position: relative !important;
-  display: block !important;
-}
-.jig-id-valid-alert, .jig-id-error-alert {
-  position: absolute;
-  left: 0;
-  top: 100%;
-  z-index: 100;
-  font-size: 12px;
-  padding: 2px 0;
-}
-
-  .form-group label {
-    font-size: 14px;
-    color: #666;
-    margin-bottom: 6px;
-    font-weight: 500;
-  }
-
-  .form-group input {
-    padding: 12px;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    font-size: 14px;
-    background: #f9f9f9;
-  }
-
-  .form-group input:focus {
-    outline: none;
-    border-color: #2196f3;
-    background: white;
-  }
-
-  /* Subtle multi-stop linear-gradient for Jig ID, Broken Hooks, and Tray ID inputs */
-  #jigIdInput,
-  #brokenBuildupHooksInput,
-  .tray-id-input {
-    background: 
-      #c5f7ffdb;
-      border: 1px solid #cccece !important;
-    border-radius: 10px !important;
-     /* Add a subtle box-shadow for depth */
-  }
-
-  .delink-section {
-    border-radius: 8px;
-    /* Fix: auto height, allow content to expand, never crop */
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    display: block;
-  }
-
-  .delink-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-  }
-
-  .delink-header span:first-child {
-    font-weight: 600;
-    color: #495057;
-  }
-
-  .delink-count {
-    font-size: 12px;
-    color: #6c757d;
-  }
-
-  .delink-toggle {
-    color: #6c757d;
-  }
-
-  .delink-content {
-    margin-top: 12px;
-  }
-
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .add-jig-window {
-      min-width: 90vw;
-      max-width: 95vw;
-      margin: 10px;
-      max-height: 90vh;
-    }
-
-    .jig-modal-header {
-      padding: 16px 20px;
-    }
-
-    .add-jig-window > *:not(.jig-modal-header):not(.jig-modal-footer) {
-      padding-left: 20px;
-      padding-right: 20px;
-    }
-
-    .form-fields-grid {
-      grid-template-columns: 1fr 1fr;
-      gap: 12px 16px;
-    }
-
-    .jig-modal-actions {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .btn-action {
-      justify-content: center;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .add-jig-window {
-      min-width: 95vw;
-      max-width: 98vw;
-      margin: 5px;
-      max-height: 95vh;
-    }
-
-    .jig-modal-header {
-      padding: 12px 16px;
-      border-radius: 12px 12px 0 0;
-    }
-
-    .add-jig-window > *:not(.jig-modal-header):not(.jig-modal-footer) {
-      padding-left: 16px;
-      padding-right: 16px;
-    }
-
-    .form-fields-grid {
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
-  }
   .jig-modal-section {
     flex: 1;
     min-width: 220px;
@@ -457,7 +825,7 @@
     gap: 12px;
   }
   .jig-modal-form .form-group label {
-    font-size: 13px;
+    font-size: 12px;
     margin-bottom: 4px;
     color: #555;
   }
@@ -466,7 +834,7 @@
     border-radius: 6px;
     border: 1px solid #ccc;
     background: #f9f9f9;
-    font-size: 13px;
+    font-size: 12px;
   }
   .jig-modal-options {
     display: flex;
@@ -1538,7 +1906,7 @@
   }
 
   .form-group label {
-    font-size: 13px;
+    font-size: 12px;
     margin-bottom: 4px;
     color: #555;
   }
@@ -1548,7 +1916,7 @@
     border-radius: 6px;
     border: 1px solid #ccc;
     background: #f9f9f9;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   /* QR validation error styling */
@@ -1997,6 +2365,64 @@ tr.row-inactive td:first-child {
 
 .picktable-scan-status.error {
   color: #dc3545;
+}
+
+/* Half-filled auto-link styling */
+.half-filled-input.validated {
+  background: #d4edda !important;
+  border: 2px solid #28a745 !important;
+  font-weight: 700;
+  color: #155724;
+}
+.half-filled-auto-tag {
+  font-size: 11px;
+  color: #155724;
+  margin-top: 2px;
+}
+.half-filled-slot-card {
+  overflow: visible;
+}
+.half-filled-input-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow: visible;
+}
+.half-filled-slot-input {
+  width: 100% !important;
+  background: #fff7db !important;
+  border: 2px dashed #d7b458 !important;
+  color: #6b5b22 !important;
+  font-weight: 600;
+}
+.half-filled-slot-input::placeholder {
+  color: #8c7a3c !important;
+  font-style: normal;
+}
+.half-filled-slot-label {
+  font-weight: 600;
+  color: #9a7d0a;
+}
+.btn-edit-half-filled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 34px;
+  min-height: 32px;
+  line-height: 1;
+  overflow: visible;
+  transition: background 0.2s, transform 0.1s;
+}
+.btn-edit-half-filled i {
+  margin: 0;
+  pointer-events: none;
+}
+.btn-edit-half-filled:hover {
+  background: #e0a800 !important;
+  transform: scale(1.05);
 }
 </style>
 
@@ -2720,249 +3146,122 @@ tr.row-inactive td:first-child {
 <!-- Add Jig Button - Window (functional) -->
 <div id="jigAddModal" class="right-slide-modal" tabindex="-1">
   <div class="add-jig-window">
-    <!-- Header with close button -->
+    <!-- Header -->
     <div class="jig-modal-header">
-      <h3
-        id="jigAddModalTitle"
-        style="color: rgb(0, 0, 0); margin: 0; font-weight: 600"
-      >
+      <h3 id="jigAddModalTitle">
         Jig Loading
         <span id="modalPlatingStockNo" style="display: none"></span>
       </h3>
-      <div style="display: flex; gap: 10px; align-items: center">
-
-        <button type="button" class="btn-action teal" id="jigCompositionBtn">
+      <div style="display: flex; gap: 8px; align-items: center">
+        <button type="button" class="btn-action" id="jigCompositionBtn" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);color:#403f3f;backdrop-filter:blur(4px);">
           <i class="fa fa-cogs"></i> Jig Composition
         </button>
-        <button type="button" class="btn-action blue" id="addModelBtn" disabled>
-          + Add Model
-        </button>
-        <span class="cycle-status"
-          >No of Cycle: <span id="modalNoOfCycle"></span
-        ></span>
-        <span
-          class="close-btn"
-          style="color: rgb(223, 50, 50); font-size: 24px; cursor: pointer"
-          >&times;</span
-        >
+        <span class="cycle-status">No of Cycle: <span id="modalNoOfCycle"></span></span>
+        <span class="close-btn">&times;</span>
       </div>
     </div>
 
-    <!-- Content wrapper to enable inner scrolling while keeping header/footer fixed -->
+    <!-- Content -->
     <div class="jig-modal-content">
 
-    <!-- FIX 3: Model Images Row - single image slot only (removed duplicate) -->
-    <div
-      class="jig-modal-model-images-row"
-      style="
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin: 10px 0 16px 0;
-        padding: 0 24px;
-      "
-    >
-      <!-- Primary model image badge -->
-      <button
-        type="button"
-        class="btn-action transparent model-images"
-        disabled
-        style="display: flex; align-items: center; gap: 8px"
-      >
-        <img
-          id="modelImagePreview"
-          src="/static/assets/images/imagePlaceholder.jpg"
-          alt="Model Image"
-          style="
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            object-fit: contain;
-            background: #f7f7f7;
-          "
-        />
-        <span
-          id="modelImageLabel"
-          style="font-weight: 600; color: #028084"
-        ></span>
-      </button>
-      <!-- Additional model tabs will be appended here by JS when Add Model is used -->
+    <!-- Model Card Strip -->
+    <div id="modelCardStrip" class="model-card-strip">
+      <!-- Cards rendered dynamically by JS -->
     </div>
 
-    <!-- Jig Loading - Form Fields Grid -->
+    <!-- Form Fields -->
     <form id="jigAddForm" autocomplete="off">
-      <div
-        class="form-fields-grid"
-        style="
-          display: flex;
-          flex-direction: row;
-          gap: 18px;
-          margin-bottom: 16px;
-          flex-wrap: nowrap;
-        "
-      >
-      <!-- JIG ID INPUT -->
-        <div class="form-group" style="min-width: 120px; position: relative;">
+      <div class="form-fields-grid" style="display:flex; flex-direction:row; gap:14px; margin-bottom:20px; flex-wrap:nowrap;">
+        <div class="form-group" style="min-width:120px; flex:1;">
           <label for="jigIdInput">Jig ID</label>
-          <input
-            type="text"
-            id="jigIdInput"
-            maxlength="9"
-            required
-            placeholder="Enter Jig ID"
-            style="width: 100%"
-          />
+          <input type="text" id="jigIdInput" maxlength="9" required placeholder="Enter Jig ID" style="width:100%;" />
+          <div id="jigIdError" style="color:#dc3545; font-size:11px; margin-top:2px; display:none; font-weight:500;"></div>
         </div>
-        <!-- Nickel Bath Type -->
-        <div class="form-group" style="min-width: 120px">
+        <div class="form-group" style="min-width:120px; flex:1;">
           <label for="nickelBathTypeInput">Nickel Bath Type</label>
-          <input
-            type="text"
-            id="nickelBathTypeInput"
-            readonly
-            style="width: 100%"
-          />
+          <input type="text" id="nickelBathTypeInput" readonly style="width:100%" />
         </div>
-         <!-- Tray Type -->
-        <div class="form-group" style="min-width: 120px">
+        <div class="form-group" style="min-width:120px; flex:1;">
           <label for="trayTypeInput">Tray Type</label>
-          <input type="text" id="trayTypeInput" readonly style="width: 100%" />
+          <input type="text" id="trayTypeInput" readonly style="width:100%" />
         </div>
-        <!-- Lot Qty -->
-        <div class="form-group" style="min-width: 120px ">
+        <div class="form-group" style="min-width:100px; flex:1;">
           <label for="reallotQty">Lot Qty</label>
-          <input
-            type="number"
-            id="reallotQty"
-            readonly
-            style="width: 100% ; background: #e6f7f7; border: none; font-weight: 600; color: #033b5d;"
-            value="{{ data.display_qty|default:0 }}"
-          />
+          <input type="number" id="reallotQty" readonly style="width:100%; background:linear-gradient(135deg,#e0f7fa,#e8f5e9) !important; border:none; font-weight:700; color:#014d4e; font-size:13px;" value="{{ data.display_qty|default:0 }}" />
         </div>
-        <!-- Jig Capacity -->
-        <div class="form-group" style="min-width: 85px">
+        <div class="form-group" style="min-width:85px; flex:0.8;">
           <label for="jigCapacityInput">Jig Capacity</label>
-          <input
-            type="number"
-            id="jigCapacityInput"
-            readonly
-            style="width: 100%"
-          />
+          <input type="number" id="jigCapacityInput" readonly style="width:100%" />
         </div>
-
-        <!-- Loaded Cases Qty -->
-        <div class="form-group" style="min-width: 120px">
+        <div class="form-group" style="min-width:130px; flex:1;">
           <label for="loadedCasesQtyInput">Loaded Cases Qty</label>
-          <span
-            id="loadedCasesQtyDisplay"
-            style="display: inline-block; width: 100%; border: 1.5px solid #ccc; background: #f9f9f9; font-weight: bold; text-align: center; border-radius: 6px; padding: 10px 0; font-size: 15px;"
-            tabindex="-1"
-            draggable="false"
-            ondragstart="return false;"
-            ondrop="return false;"
-            onmousedown="if(event.detail>1){event.preventDefault();}"
-          >
-          </span>
-          <span id="excessMessage" style="color: #dc3545; font-size: 12px; margin-top: 4px; display: block;"></span>
-           
+          <span id="loadedCasesQtyDisplay" style="display:inline-flex; width:100%; border:1.5px solid #e2e8f0; background:linear-gradient(135deg,#f8fafc,#f1f5f9); font-weight:700; text-align:center; align-items:center; justify-content:center; border-radius:10px; padding:9px 0; font-size:13px; color:#1e293b; box-shadow:0 1px 2px rgba(0,0,0,0.03);" tabindex="-1" draggable="false" ondragstart="return false;" ondrop="return false;" onmousedown="if(event.detail>1){event.preventDefault();}"></span>
+          <span id="excessMessage" style="color:#dc3545; font-size:11px; margin-top:4px; display:block; font-weight:500;"></span>
           <input type="hidden" id="lotQtyHidden" value="0" />
         </div>
-        <div class="form-group" style="min-width: 120px">
+        <div class="form-group" style="min-width:100px; flex:0.8;">
           <label for="emptyHooksInput">Empty Hooks</label>
-          <input
-            type="number"
-            id="emptyHooksInput"
-            readonly
-            style="width: 100%"
-          />
+          <input type="number" id="emptyHooksInput" readonly style="width:100%" />
         </div>
-        <!-- Broken Hooks -->
-        <div class="form-group" style="min-width: 120px">
+        <div class="form-group" style="min-width:120px; flex:1;">
           <label for="brokenBuildupHooksInput">Broken Hooks</label>
-          <input
-            type="number"
-            id="brokenBuildupHooksInput"
-            style="width: 100%"
-          />
+          <select id="brokenBuildupHooksInput" style="width:70%">
+            <option value="0">0</option>
+          </select>
         </div>
       </div>
     </form>
 
-    <!-- Delink Information Section (collapsible) -->
+    <!-- Delink Information Section -->
 <div class="delink-section">
-  <div class="delink-header" style="display: flex; align-items: center; justify-content: space-between;">
+  <div class="delink-header" style="display:flex; align-items:center; justify-content:space-between;">
     <span>
       Delink Information
-      <span style="font-size: 13px; color: #028084; font-weight: 600; margin-left: 12px;">
-        (No of Trays: <span id="delinkTrayCount"></span>)
+      <span style="font-size:12px; color:#028084; font-weight:700; margin-left:12px; background:rgba(2,128,132,0.08); padding:3px 10px; border-radius:20px;">
+        <span id="delinkTrayCount"></span> Trays
       </span>
     </span>
   </div>
 </div>
 
-<div class="delink-content" id="delinkTableSection" style="display: flex; flex-wrap: wrap; margin-top: 10px; padding-bottom: 10px;">
-  <!-- Tray scan inputs will be rendered here by JS -->
-</div>
+<div class="delink-content" id="delinkTableSection" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; padding-bottom:10px;"></div>
 
-<!-- ========================= -->
-<!-- 🔥 EXCESS LOT SECTION - Half Filled Tray Scan-->
-<!-- ========================= -->
+<!-- Excess Lot Section -->
 <div id="excessLotSection" class="delink-section" style="display:none; margin-top:12px;">
-
   <div class="delink-header" style="display:flex; align-items:center; justify-content:space-between;">
-    <span>Half Filled Tray Scan<span id="excessLotCount" class="delink-count" style="margin-left:10px;"></span></span>
+    <span>Half Filled Tray Scan <span id="excessLotCount" class="delink-count" style="margin-left:10px; background:rgba(2,128,132,0.08); padding:3px 10px; border-radius:20px;"></span></span>
   </div>
-
   <div class="delink-content">
     <div id="excessTrayContainer" class="tray-scan-tabs"></div>
   </div>
-
 </div>
 
+    </div> <!-- /.jig-modal-content -->
 
-
-  </div> <!-- /.jig-modal-content -->
-
-  <!-- Stick footer to bottom INSIDE add-jig-window -->
-    <div
-      class="jig-modal-footer"
-      style="
-        position: sticky;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background: #f7fafd;
-        box-shadow: 0 -2px 12px rgba(56, 132, 132, 0.1);
-        padding: 10px 24px;
-        display: flex;
-        gap: 16px;
-        justify-content: flex-end;
-        z-index: 11000;
-      "
-    >
-      <button type="button" class="btn-action teal" id="submitJigBtn">
-        Submit
+    <!-- Footer -->
+    <div class="jig-modal-footer">
+      <button type="button" class="btn-action teal" id="submitJigBtn" style="padding:9px 28px; font-size:14px;">
+        <i class="fa fa-check" style="font-size:12px;"></i> Submit
       </button>
-      <button type="button" class="btn-action blue" id="draftJigBtn">
-        Draft
+      <button type="button" class="btn-action blue" id="draftJigBtn" style="padding:9px 24px; font-size:14px;">
+        <i class="fa fa-save" style="font-size:12px;"></i> Draft
       </button>
-      <button type="button" class="btn-action transparent" id="clearJigBtn">
+      <button type="button" class="btn-action transparent" id="clearJigBtn" style="padding:9px 24px; font-size:14px;">
         Clear
       </button>
-      <button
-        type="button"
-        class="btn-action btn-danger"
-        id="cancelJigBtn"
-      >
+      <button type="button" class="btn-action btn-danger" id="cancelJigBtn" style="padding:9px 24px; font-size:14px;">
         Cancel
       </button>
     </div>
-
 
   </div>
 </div>
 
 {% block script %}
+
+<!-- ✅ SweetAlert2 for improved confirmation dialogs -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 
 <!-- // Event delegation for .jig-view-btn to open modal -->
 <script nonce="{{ csp_nonce }}">
@@ -3204,17 +3503,14 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       });
 
-      // Close handlers: .close-btn, cancel button, and overlay click
+      // Close handlers: .close-btn and cancel button ONLY
+      // Do NOT close on overlay (outside) click — user must use close icon or cancel
       document.addEventListener('click', function (ev) {
         const target = ev.target;
         if (target.classList && target.classList.contains('close-btn')) {
           jigModal.classList.remove('open');
         }
         if (target.id === 'cancelJigBtn') {
-          jigModal.classList.remove('open');
-        }
-        // clicking on overlay (modal element itself) should close
-        if (target === jigModal) {
           jigModal.classList.remove('open');
         }
       });
@@ -3239,17 +3535,31 @@ document.addEventListener('DOMContentLoaded', function () {
   // Single lock to prevent init-jig-load being called multiple times
   window.isInitLoading = false;
   
-  // Controlled INIT API call with lock
-  window.callInitAPI = function(url, callback) {
+  // CSRF helper (available to all API calls in this scope)
+  window.getCsrfToken = function() {
+    const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  };
+
+  // Controlled INIT API call with lock — POST to new consolidated endpoint
+  window.callInitAPI = function(payload, callback) {
     if (window.isInitLoading) {
       console.warn('🚫 [INIT BLOCKED] Already in progress, preventing duplicate call');
       return Promise.resolve(null);
     }
     
     window.isInitLoading = true;
-    console.log('✅ [INIT START]', url);
+    console.log('✅ [INIT START]', payload.lot_id || payload);
     
-    return fetch(url, { credentials: 'same-origin' })
+    return fetch('/jig_loading/api/load/init/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': window.getCsrfToken()
+      },
+      body: JSON.stringify(payload)
+    })
       .then(res => {
         if (!res.ok) throw new Error('Init API failed with status ' + res.status);
         return res.json();
@@ -3278,6 +3588,36 @@ document.addEventListener('DOMContentLoaded', function () {
   // Internal update flag: when true, API-triggering functions should skip network calls
   window.isInternalUpdate = window.isInternalUpdate || false;
 
+  // ==========================================================
+  // 🔥 MULTI-MODEL BH GATE: BH disabled until models finalized
+  // ==========================================================
+  // For MULTI-MODEL only: BH is disabled during model selection
+  // For SINGLE-MODEL: BH is always enabled (no gate needed)
+  window.isModelSelectionComplete = false;
+  window.enableBH = function() {
+    var bhEl = document.getElementById('brokenBuildupHooksInput');
+    if (bhEl) { bhEl.disabled = false; bhEl.title = ''; }
+  };
+  window.disableBH = function() {
+    var bhEl = document.getElementById('brokenBuildupHooksInput');
+    if (bhEl) { bhEl.disabled = true; bhEl.title = 'Add all models first before changing broken hooks'; }
+  };
+  window.checkBHGate = function() {
+    // BH is only accessible when jig is fully allocated (empty_hooks === 0)
+    // For both single-model and multi-model
+    var emptyH = parseInt(window.BACKEND_EMPTY_HOOKS || 0) || 0;
+    var isMulti = !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0) || !!(window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0);
+    if (isMulti) {
+      // Multi-model: check if model selection is complete (planned_empty_hooks === 0)
+      if (emptyH > 0) { window.isModelSelectionComplete = false; window.disableBH(); }
+      else { window.isModelSelectionComplete = true; window.enableBH(); }
+    } else {
+      // Single model: BH only when empty_hooks === 0 (jig fully allocated)
+      if (emptyH > 0) { window.disableBH(); }
+      else { window.isModelSelectionComplete = true; window.enableBH(); }
+    }
+  };
+
   const idMap = {
     lotQtyInput: document.getElementById('reallotQty') || document.getElementById('lotQtyInput'),
     jigCapacityInput: document.getElementById('jigCapacityInput') || document.getElementById('jigCapacityInput'),
@@ -3288,16 +3628,280 @@ document.addEventListener('DOMContentLoaded', function () {
     trayInputsContainer: document.getElementById('delinkTableSection') || document.getElementById('trayInputsContainer'),
     nickelBathTypeInput: document.getElementById('nickelBathTypeInput'),
     trayTypeInput: document.getElementById('trayTypeInput'),
-    modelImagePreview: document.getElementById('modelImagePreview'),
-    modelImageLabel: document.getElementById('modelImageLabel'),
+    modelCardStrip: document.getElementById('modelCardStrip'),
   };
+
+  // ===== SCANNED TRAY STATE PRESERVATION =====
+  // Capture all scanned tray values from DOM keyed by (lot_id, model_index, position)
+  function captureScannedTrays(container) {
+    var saved = {};
+    if (!container) return saved;
+    container.querySelectorAll('.tray-id-input').forEach(function(inp) {
+      var lotId = inp.dataset.lotId || '';
+      var modelIdx = inp.dataset.modelIndex || '1';
+      var key = lotId + '|' + modelIdx;
+      if (!saved[key]) saved[key] = [];
+      saved[key].push({
+        value: inp.value || '',
+        validated: inp.classList.contains('validated')
+      });
+    });
+    return saved;
+  }
+  // Restore scanned values into freshly rendered tray inputs
+  function restoreScannedTrays(container, saved) {
+    if (!container || !saved || Object.keys(saved).length === 0) return;
+    var counters = {};
+    var restoredCount = 0;
+    container.querySelectorAll('.tray-id-input').forEach(function(inp) {
+      var lotId = inp.dataset.lotId || '';
+      var modelIdx = inp.dataset.modelIndex || '1';
+      var key = lotId + '|' + modelIdx;
+      if (!saved[key]) return;
+      if (!counters[key]) counters[key] = 0;
+      var idx = counters[key]++;
+      if (idx < saved[key].length && saved[key][idx].value) {
+        inp.value = saved[key][idx].value;
+        if (saved[key][idx].validated) {
+          inp.classList.add('validated');
+          inp.readOnly = true;
+        }
+        restoredCount++;
+      }
+    });
+    if (restoredCount > 0) console.log('[RESTORE_SCAN] Restored', restoredCount, 'scanned trays');
+  }
+  // Persist scanned trays to sessionStorage (survives page navigation)
+  function persistScannedTraysToStorage(container) {
+    try {
+      var saved = captureScannedTrays(container || idMap.trayInputsContainer);
+      if (Object.keys(saved).length > 0) {
+        sessionStorage.setItem('scanned_trays', JSON.stringify(saved));
+        console.log('[PERSIST_SCAN] Saved scanned trays to sessionStorage');
+      }
+    } catch (e) { console.warn('[PERSIST_SCAN] Failed:', e); }
+  }
+  // Restore scanned trays from sessionStorage after page navigation
+  function restoreScannedTraysFromStorage(container) {
+    try {
+      var raw = sessionStorage.getItem('scanned_trays');
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      restoreScannedTrays(container || idMap.trayInputsContainer, saved);
+      sessionStorage.removeItem('scanned_trays');
+      console.log('[RESTORE_SCAN] Restored from sessionStorage');
+    } catch (e) { console.warn('[RESTORE_SCAN] Storage restore failed:', e); }
+  }
+  // Expose globally for cross-script-block access (Add Model handler lives in separate script block)
+  window.captureScannedTrays = captureScannedTrays;
+  window.restoreScannedTrays = restoreScannedTrays;
+  window.persistScannedTraysToStorage = persistScannedTraysToStorage;
+  window.restoreScannedTraysFromStorage = restoreScannedTraysFromStorage;
+
+  // ===== COLOR MAPPING HELPER (supports unlimited models) =====
+  function getModelColorClass(modelIdx, backendColorClass) {
+    // Prefer backend-provided color class if available
+    if (backendColorClass && typeof backendColorClass === 'string' && backendColorClass.match(/^model-bg-\d+$/)) {
+      console.log('[COLOR_MAP] Using backend color:', backendColorClass, 'for model index:', modelIdx);
+      return backendColorClass;
+    }
+    // Otherwise derive from model index: 1→model-bg-1, 2→model-bg-2, etc.
+    // Supports up to 5 models; beyond 5, cycles (6→model-bg-1, etc.)
+    const maxColors = 5;
+    const normalizedIdx = ((modelIdx - 1) % maxColors) + 1;
+    const derivedClass = 'model-bg-' + normalizedIdx;
+    console.log('[COLOR_MAP] Derived color for index', modelIdx, '→', derivedClass, '(backend color was:', backendColorClass, ')');
+    return derivedClass;
+  }
+
+  // ===== SHARED: Render model card strip (horizontal cards with delink) =====
+  function renderModelCardStrip(data) {
+    const strip = idMap.modelCardStrip || document.getElementById('modelCardStrip');
+    if (!strip) return;
+    strip.innerHTML = '';
+
+    // Determine models to show as cards
+    let models = [];
+    if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
+      // Multi-model: deduplicate by lot_id
+      const seen = new Set();
+      data.multi_model_allocation.forEach(function(m) {
+        const key = m.lot_id || m.model_image_label || m.model_name || m.model || '';
+        if (key && seen.has(key)) return;
+        if (key) seen.add(key);
+        models.push(m);
+      });
+    } else {
+      // Single model: build a card from top-level data
+      models.push({
+        model_image_url: (data.draft && data.draft.model_image_url) || data.model_image_url || '/static/assets/images/imagePlaceholder.jpg',
+        display_name: 'Primary',
+        model_image_label: (data.draft && data.draft.model_image_label) || data.model_image_label || '',
+        model_role: 'primary',
+        allocated_qty: data.loaded_cases_qty || (data.draft && data.draft.original_lot_qty) || '',
+        lot_id: window.CURRENT_LOT_ID || '',
+        batch_id: window.CURRENT_BATCH_ID || ''
+      });
+    }
+
+    models.forEach(function(m, idx) {
+      const imgUrl = m.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
+      const displayName = m.display_name || ('Model ' + (idx + 1));
+      const modelNo = (m.model_image_label || m.model_name || m.model || '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      const role = m.model_role || (idx === 0 ? 'primary' : 'secondary');
+      const allocQty = m.allocated_qty || m.allocated_qty === 0 ? m.allocated_qty : '';
+      const lotId = m.lot_id || '';
+      const batchId = m.batch_id || '';
+
+      // ✅ DYNAMIC: derive color from backend color_class (fully generic for N models)
+      const modelIdx = m.model_index || (idx + 1);
+      const colorClass = m.color_class || getModelColorClass(modelIdx, null);
+      const colorNum = colorClass.replace('model-bg-', '') || '1';
+
+      console.log('[CARD_COLOR] model=' + displayName + ' idx=' + modelIdx + ' color=' + colorClass + ' colorNum=' + colorNum);
+
+      const card = document.createElement('div');
+      // Apply per-model color class (model-color-N) for distinct card backgrounds
+      card.className = 'model-card model-color-' + colorNum;
+      card.setAttribute('data-lot-id', lotId);
+      card.setAttribute('data-batch-id', batchId);
+      card.setAttribute('data-role', role);  // used by CSS ::before pseudo-element
+
+      let cardHTML = '';
+      cardHTML += '<img class="model-card-img" src="' + imgUrl + '" alt="' + displayName + '" />';
+      cardHTML += '<div class="model-card-name" title="' + displayName + '">' + displayName + '</div>';
+      if (modelNo) {
+        cardHTML += '<div class="model-card-code" title="' + modelNo + '">' + modelNo + '</div>';
+      }
+      if (allocQty || allocQty === 0) {
+        cardHTML += '<div class="model-card-qty">' + allocQty + '</div>';
+      }
+
+      // Delink button only on secondary models in multi-model mode
+      if (data.is_multi_model && role !== 'primary') {
+        cardHTML += '<button type="button" class="model-card-delink" data-lot-id="' + lotId + '" data-batch-id="' + batchId + '" title="Remove this model">×</button>';
+      }
+
+      card.innerHTML = cardHTML;
+      strip.appendChild(card);
+    });
+
+    // Add Model card (always last)
+    const addCard = document.createElement('div');
+    addCard.className = 'model-card-add';
+    addCard.id = 'addModelBtn';
+    addCard.setAttribute('disabled', 'disabled');
+    addCard.innerHTML = '<span class="model-card-add-icon">+</span><span>Add Model</span>';
+    strip.appendChild(addCard);
+
+    // Enable/disable Add Model based on planned empty hooks
+    try {
+      const plannedEmpty = parseInt(data.planned_empty_hooks || 0) || 0;
+      if (plannedEmpty > 0) {
+        addCard.removeAttribute('disabled');
+        addCard.title = 'Add secondary model(s) — ' + plannedEmpty + ' hooks remaining';
+      } else {
+        addCard.setAttribute('disabled', 'disabled');
+        addCard.title = 'Jig capacity fully allocated';
+      }
+    } catch (e) {}
+
+    // Attach delink handlers
+    strip.querySelectorAll('.model-card-delink').forEach(function(btn) {
+      btn.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        const removeLotId = this.getAttribute('data-lot-id');
+        if (!removeLotId) return;
+        
+        // Use SweetAlert2 if available, fallback to confirm()
+        async function handleRemoval() {
+          let shouldRemove = false;
+          if (typeof Swal !== 'undefined') {
+            try {
+              const result = await Swal.fire({
+                title: 'Confirm Removal',
+                text: 'Remove this model from the jig?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Remove',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d'
+              });
+              shouldRemove = result.isConfirmed;
+            } catch (err) {
+              console.warn('[DELINK] SweetAlert error, using confirm:', err);
+              shouldRemove = confirm('Remove this model from the jig?');
+            }
+          } else {
+            shouldRemove = confirm('Remove this model from the jig?');
+          }
+          
+          if (!shouldRemove) return;
+          
+          // ✅ IMMEDIATE: Clear ALL trays belonging to the removed model from DOM
+          // (Optimistic UI — API will confirm and re-render from scratch)
+          const delinkContainer = idMap.trayInputsContainer;
+          if (delinkContainer) {
+            const allTabs = Array.from(delinkContainer.querySelectorAll('.tray-scan-tab'));
+            let removedCount = 0;
+            allTabs.forEach(function(tab) {
+              const inp = tab.querySelector('.tray-id-input');
+              if (inp && inp.dataset.lotId === removeLotId) {
+                tab.remove();
+                removedCount++;
+              }
+            });
+            console.log('[DELINK_MODEL] Removed', removedCount, 'tray elements for lot:', removeLotId);
+          }
+          // Also remove the model card immediately (visual feedback)
+          const cardEl = strip.querySelector('.model-card[data-lot-id="' + removeLotId + '"]');
+          if (cardEl) cardEl.remove();
+          
+          // Remove from secondary lots
+          const currentSecondary = window._currentSecondaryLots || [];
+          window._currentSecondaryLots = currentSecondary.filter(function(lot) {
+            return (lot.lot_id || lot.stock_lot_id || '') !== removeLotId;
+          });
+          window._pendingSecondaryLots = window._currentSecondaryLots.slice();
+          try { sessionStorage.setItem('secondary_lots', JSON.stringify(window._currentSecondaryLots)); } catch(e) {}
+          console.log('[DELINK_MODEL] Removed lot:', removeLotId, '| Remaining secondary:', window._currentSecondaryLots.length);
+          
+          // 🔒 Multi-model: When removing a model, disable BH until recalc completes
+          window.isModelSelectionComplete = false;
+          window.disableBH();
+          console.log('[DELINK_MODEL] BH disabled during model removal');
+
+          // Re-trigger init to recalculate allocations
+          if (typeof window.refreshTrayCalculation === 'function') {
+            window.refreshTrayCalculation();
+          }
+        }
+        
+        handleRemoval();
+      });
+    });
+
+    console.log('[MODEL_CARDS] Rendered', models.length, 'model cards');
+  }
+  window.renderModelCardStrip = renderModelCardStrip;
 
   async function initJigFromButton(btn) {
   const lotId = btn.dataset.stockLotId || btn.dataset.lotId || btn.getAttribute('data-stock-lot-id') || btn.getAttribute('data-lot-id');
   const batchId = btn.dataset.batchId || btn.getAttribute('data-batch-id') || btn.getAttribute('data-batch_id');
   const jigCapacity = btn.dataset.jigCapacity || btn.getAttribute('data-jig-capacity') || btn.dataset.jigQrId || btn.getAttribute('data-jig-qr-id') || '';
 
-  // expose for external refresh (broken-hooks preview) and immediate refresh
+  // STRICT: Fresh session — no memory from previous lot
+  window.currentBrokenHooks = 0;
+  window._lastSentBH = null;
+  window.BACKEND_LOADED_CASES = 0;
+  window.BACKEND_BROKEN_HOOKS = 0;
+  window.BACKEND_EMPTY_HOOKS = 0;
+  window.BACKEND_EFFECTIVE_CAPACITY = 0;
+    // Immediately disable BH until init confirms empty_hooks = 0
+    if (typeof window.disableBH === 'function') window.disableBH();
+
+    // expose for external refresh (broken-hooks preview) and immediate refresh
   window.currentJigLotId = lotId;
   window.currentJigBatchId = batchId;
   window.jigCapacity = parseInt(jigCapacity) || window.jigCapacity || 0;
@@ -3315,31 +3919,30 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     try {
-      // Build init URL — include multi_model params (supports N secondary lots)
-      let multiParams = '';
+      // Build init payload — single POST body (no query params)
+      const initPayload = {
+        lot_id: lotId,
+        batch_id: batchId,
+        jig_capacity: parseInt(jigCapacity) || 0
+      };
       if (window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0) {
-        try {
-          const secLots = JSON.stringify(window._pendingSecondaryLots.map(function(s) {
-            return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
-          }));
-          multiParams = `&multi_model=true&secondary_lots=${encodeURIComponent(secLots)}`;
-          console.log('[MM] Models List Updated:', window._pendingSecondaryLots.length, 'secondary models');
-        } catch (e) { console.warn('[MULTI_MODEL_MERGE] Failed to build params', e); }
+        initPayload.multi_model = true;
+        initPayload.secondary_lots = window._pendingSecondaryLots.map(function(s) {
+          return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
+        });
+        console.log('[MM] Models List Updated:', window._pendingSecondaryLots.length, 'secondary models');
       } else if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
-        try {
-          const secLots = JSON.stringify([{
-            lot_id: window._pendingSecondaryLot.lot_id,
-            batch_id: window._pendingSecondaryLot.batch_id || '',
-            qty: window._pendingSecondaryLot.qty || 0
-          }]);
-          multiParams = `&multi_model=true&secondary_lots=${encodeURIComponent(secLots)}`;
-          console.log('[MULTI_MODEL_MERGE] Including secondary in init:', window._pendingSecondaryLot.lot_id);
-        } catch (e) { console.warn('[MULTI_MODEL_MERGE] Failed to build params', e); }
+        initPayload.multi_model = true;
+        initPayload.secondary_lots = [{
+          lot_id: window._pendingSecondaryLot.lot_id,
+          batch_id: window._pendingSecondaryLot.batch_id || '',
+          qty: parseInt(window._pendingSecondaryLot.qty || 0) || 0
+        }];
+        console.log('[MULTI_MODEL_MERGE] Including secondary in init:', window._pendingSecondaryLot.lot_id);
       }
-      const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lotId)}&batch_id=${encodeURIComponent(batchId)}&jig_capacity=${encodeURIComponent(jigCapacity)}${multiParams}`;
       
       let data = null;
-      await window.callInitAPI(url, (respData) => {
+      await window.callInitAPI(initPayload, (respData) => {
         data = respData;
       });
       
@@ -3357,14 +3960,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (idMap.nickelBathTypeInput) idMap.nickelBathTypeInput.value = data.draft.nickel_bath_type || data.nickel_bath_type || '';
       if (idMap.trayTypeInput) idMap.trayTypeInput.value = data.draft.tray_type || data.tray_type || '';
 
-      // Populate model image preview and label (best-effort)
-      try {
-        const imgUrl = (data.draft && data.draft.model_image_url) || data.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
-        const label = (data.draft && data.draft.model_image_label) || data.model_image_label || '';
-        if (idMap.modelImagePreview) idMap.modelImagePreview.src = imgUrl;
-        if (idMap.modelImageLabel) idMap.modelImageLabel.innerText = label;
-      } catch (e) { /* ignore */ }
-
       // expose current lot and model for frontend validation/UI
       try {
         window.CURRENT_LOT_ID = lotId;
@@ -3378,8 +3973,10 @@ document.addEventListener('DOMContentLoaded', function () {
       } catch (e) { /* ignore */ }
 
       // BACKEND authoritative values (single source of truth)
+      // STRICT: Use ONLY top-level response fields, never draft (draft may be stale)
+      // ✅ Loaded cases starts at 0 on init — increments only after valid tray scan
       try {
-        window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || data.draft && data.draft.loaded_cases_qty || 0) || 0;
+        window.BACKEND_LOADED_CASES = 0;
       } catch (e) { window.BACKEND_LOADED_CASES = 0; }
 
       try {
@@ -3418,38 +4015,55 @@ document.addEventListener('DOMContentLoaded', function () {
         window.updateLoadedDisplay();
       }
       console.log('[LCQ_INIT] Initial render completed');
-      // Enable Add Model button based on empty hooks (cumulative multi-model aware)
+      // Persist secondary lots and multi-model state (Add Model enable/disable now in card strip)
       try {
-        const addModelBtn = document.getElementById('addModelBtn');
-        const emptyHooks = parseInt(data.empty_hooks || 0) || 0;
-        if (addModelBtn) {
-          if (emptyHooks > 0) {
-            addModelBtn.removeAttribute('disabled');
-            addModelBtn.title = 'Add secondary model(s) \u2014 ' + emptyHooks + ' hooks remaining';
-          } else {
-            addModelBtn.setAttribute('disabled', 'disabled');
-            addModelBtn.title = 'Jig capacity fully allocated';
-          }
-        }
         // Persist current secondary lots for Add Model round-trip
         if (data.secondary_lots && data.secondary_lots.length > 0) {
           window._currentSecondaryLots = data.secondary_lots;
         } else {
           window._currentSecondaryLots = [];
         }
+          // Store full backend-computed multi-model allocation (tray-level detail) for submit
+          window._lastMultiModelAllocation = data.multi_model_allocation || [];
+          window._lastHalfFilledTrayInfo = data.half_filled || data.half_filled_tray_info || {};
         // Log multi-model state
         const totalMmQty = parseInt(data.total_multi_model_qty || 0) || 0;
         if (data.is_multi_model) {
           console.log('[MM] Total Loaded Qty:', totalMmQty);
-          console.log('[MM] Empty Hooks:', emptyHooks);
+          console.log('[MM] Empty Hooks:', window.BACKEND_EMPTY_HOOKS);
         }
-      } catch (e) { console.warn('Add Model enable check failed', e); }
+      } catch (e) { console.warn('Secondary lots persist failed', e); }
+      // Render model card strip after secondary-lots state is ready
+      try { renderModelCardStrip(data); } catch (e) { console.warn('[MODEL_CARDS] init render failed', e); }
+      // STRICT: BH from backend response ONLY (not stale window.currentBrokenHooks)
       if (idMap.brokenHooksInput) {
-        // Preserve any live preview value set by the user (window.currentBrokenHooks)
-        if (window.currentBrokenHooks !== undefined) {
-          idMap.brokenHooksInput.value = window.currentBrokenHooks;
+        const backendBH = parseInt(data.broken_hooks || 0) || 0;
+        // Populate BH dropdown based on jig capacity
+        const jigCap = parseInt(data.jig_capacity || data.original_capacity || 0) || 0;
+        let maxBH = 0;
+        if (jigCap > 0 && jigCap <= 98) maxBH = 5;
+        else if (jigCap > 98) maxBH = 10;
+        const bhSelect = idMap.brokenHooksInput;
+        bhSelect.innerHTML = '';
+        for (let i = 0; i <= maxBH; i++) {
+          const opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = i;
+          if (i === backendBH) opt.selected = true;
+          bhSelect.appendChild(opt);
+        }
+        window.currentBrokenHooks = backendBH;
+        // ✅ BH GATE: BH only accessible when empty_hooks === 0 (jig fully allocated)
+        // Applies to BOTH single-model and multi-model
+        const emptyHForBH = parseInt(data.empty_hooks || 0) || 0;
+        if (emptyHForBH > 0) {
+          window.isModelSelectionComplete = false;
+          window.disableBH();
+          console.log('[BH_DISABLE] empty_hooks=' + emptyHForBH + ' — BH disabled');
         } else {
-          idMap.brokenHooksInput.value = data.draft.broken_hooks || 0;
+          window.isModelSelectionComplete = true;
+          window.enableBH();
+          console.log('[BH_ENABLE] empty_hooks=0 — BH enabled');
         }
       }
       // Initialize current delink qty from server draft (backend is authoritative)
@@ -3460,6 +4074,8 @@ document.addEventListener('DOMContentLoaded', function () {
       // Render tray inputs into container using strict server-computed delink data ONLY
       const container = idMap.trayInputsContainer;
       if (container) {
+        // ✅ Capture scanned trays BEFORE clearing (in-page state)
+        const _initSavedScans = captureScannedTrays(container);
         // HARD RESET state
         window.delinkData = [];
         container.innerHTML = '';
@@ -3471,81 +4087,86 @@ document.addEventListener('DOMContentLoaded', function () {
         if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
           console.log('[MULTI_MODEL_UI] Rendering from multi_model_allocation:', data.multi_model_allocation.length, 'models');
 
-          let totalTrayCount = 0;
+          // ===== FLATTEN: collect all trays across all models into one array =====
+          const allFlatTrays = [];
           data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
-            const colorClass = 'model-bg-' + (mIdx + 1);
-            const modelLabel = modelAlloc.model_name || modelAlloc.model || modelAlloc.lot_id || ('Model ' + (mIdx + 1));
-            const modelRole = modelAlloc.model_role || (mIdx === 0 ? 'primary' : 'secondary');
+            // ✅ FIX: Use backend model_index if provided, fallback to sequence order
+            const modelIdxValue = modelAlloc.model_index || (mIdx + 1);
+            const backendColorClass = modelAlloc.color_class || null;
+            const colorClass = getModelColorClass(modelIdxValue, backendColorClass);
+            
+            const modelCode = (modelAlloc.model_image_label || modelAlloc.model_name || modelAlloc.model || '').replace(/\s*\[.*?\]\s*/g, '').trim() || ('Model ' + modelIdxValue);
             const allocLotId = modelAlloc.lot_id || '';
             const allocBatchId = modelAlloc.batch_id || '';
 
-            // Section label for each model
-            const labelDiv = document.createElement('div');
-            labelDiv.className = 'tray-section-label';
-            const labelColor = modelRole === 'primary' ? '#028084' : '#1a7a2e';
-            const labelBg = modelRole === 'primary' ? '#e2fbff' : '#e8f4ea';
-            labelDiv.style.cssText = 'font-weight:700;font-size:12px;padding:4px 8px;margin:' + (mIdx > 0 ? '10px' : '0') + ' 0 2px;background:' + labelBg + ';border-radius:4px;color:' + labelColor + ';width:100%;';
-            labelDiv.textContent = (modelRole === 'primary' ? 'Primary: ' : 'Secondary: ') + modelLabel + ' (' + (modelAlloc.allocated_qty || 0) + ' qty)';
-            container.appendChild(labelDiv);
+            // ✅ DEBUG: Log model allocation details
+            console.log('[ALLOC_DETAIL]', {
+              model_code: modelCode,
+              model_index: modelIdxValue,
+              backend_color: backendColorClass,
+              assigned_color: colorClass,
+              lot_id: allocLotId,
+              tray_count: (modelAlloc.tray_info || []).length
+            });
 
-            // Preserve incoming order but move backend-marked top tray to the end
+            // Sort: TOP TRAYS FIRST, PARTIAL TRAYS LAST
             let traysArr = (modelAlloc.tray_info || []).slice();
             try {
-              const topIndex = traysArr.findIndex(t => Boolean((t && (t.top_tray || t.is_top_tray))));
-              if (topIndex >= 0) {
-                const top = traysArr.splice(topIndex, 1)[0];
-                traysArr.push(top);
-              }
+              const topTrays = traysArr.filter(t => t && t.top_tray);
+              const partialTrays = traysArr.filter(t => t && t.is_partial && !t.top_tray);
+              const regularTrays = traysArr.filter(t => t && !t.top_tray && !t.is_partial);
+              traysArr = [...topTrays, ...regularTrays, ...partialTrays];
             } catch (e) { /* ignore */ }
 
-            let modelTopTrayAssigned = false;
+            let modelTopAssigned = false;
             traysArr.forEach(function(tray) {
-              const qty = tray.qty || 0;
-              const isTop = Boolean(tray.top_tray && !modelTopTrayAssigned);
-              if (isTop) modelTopTrayAssigned = true;
-              const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
-              const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
-              const div = document.createElement('div');
-              div.className = 'tray-scan-tab';
-              div.innerHTML = '<input type="text" class="tray-id-input ' + colorClass + '" data-expected-qty="' + qty + '" data-lot-id="' + allocLotId + '" data-batch-id="' + allocBatchId + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
-              container.appendChild(div);
-              totalTrayCount++;
+              const isTop = Boolean(tray.top_tray && !modelTopAssigned);
+              if (isTop) modelTopAssigned = true;
+              const flatTray = {
+                qty: tray.qty || 0,
+                isTop,
+                isPartial: Boolean(tray.is_partial && !isTop),
+                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue
+              };
+              allFlatTrays.push(flatTray);
+              // ✅ DEBUG: Log each tray's color assignment
+              console.log('[TRAY_COLOR]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty);
             });
           });
 
+          // ===== SINGLE FLAT RENDER: one loop → left → right continuous flow =====
+          let totalTrayCount = 0;
+          allFlatTrays.forEach(function(item) {
+            const topLabel = item.isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (item.isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
+            const placeholder = 'Scan ' + item.modelCode + ' (Tray ID)';
+            const div = document.createElement('div');
+            div.className = 'tray-scan-tab';
+            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
+            container.appendChild(div);
+            totalTrayCount++;
+          });
+
           // Update tray count display
-          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = '(No of Trays: ' + totalTrayCount + ')'; } catch (e) { /* ignore */ }
-          console.log('[MULTI_MODEL_UI] Total trays rendered:', totalTrayCount);
+          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = totalTrayCount; } catch (e) { /* ignore */ }
+          console.log('[MULTI_MODEL_UI] Total trays rendered:', totalTrayCount, 'Colors assigned per model');
+          // ✅ Restore scanned trays: first try in-page saved state, then sessionStorage
+          restoreScannedTrays(container, _initSavedScans);
+          restoreScannedTraysFromStorage(container);
 
-          // ===== MULTI-MODEL: Render half-filled trays in existing excessLotSection =====
           try {
-            const halfFilled = data.half_filled_tray_info || [];
-            const halfFilledQty = parseInt(data.half_filled_tray_qty || 0) || 0;
-            const hfSection = document.getElementById('excessLotSection');
-            const hfContainer = document.getElementById('excessTrayContainer');
-            const hfCount = document.getElementById('excessLotCount');
-            console.log('[HALF_FILLED] data:', halfFilled, 'qty:', halfFilledQty);
-
-            if (hfSection && hfContainer && hfCount && halfFilled.length > 0 && halfFilledQty > 0) {
-              hfSection.style.display = 'block';
-              hfCount.innerText = '(Qty: ' + halfFilledQty + ' | No of Trays: ' + halfFilled.length + ')';
-              hfContainer.innerHTML = '';
-
-              halfFilled.forEach(function(tray) {
-                const modelLabel = tray.model || '';
-                const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
-                const div = document.createElement('div');
-                div.className = 'tray-scan-tab';
-                div.innerHTML = '<label>' + placeholder + '</label>' +
-                  '<input type="text" class="tray-id-input" style="background:#fff3cd !important;" data-expected-qty="' + (tray.qty || 0) + '" placeholder="' + placeholder + '" readonly>' +
-                  '<div class="tray-qty">Qty: ' + (tray.qty || 0) + '</div>';
-                hfContainer.appendChild(div);
-              });
-              console.log('[HALF_FILLED] Rendered', halfFilled.length, 'half-filled trays');
-            } else if (hfSection) {
-              hfSection.style.display = 'none';
-            }
+            renderHalfFilledAutoLink(data);
           } catch (hfErr) { console.warn('[HALF_FILLED] render error', hfErr); }
+
+          // Show excess message for multi-model
+          try {
+            const mmExcess = parseInt(data.excess_qty || 0) || 0;
+            const excessMsgEl = document.getElementById('excessMessage');
+            if (excessMsgEl && mmExcess > 0) {
+              excessMsgEl.innerText = 'Excess: ' + mmExcess + ' qty';
+            } else if (excessMsgEl) {
+              excessMsgEl.innerText = '';
+            }
+          } catch (e) { /* ignore */ }
 
         } else {
           // ===== SINGLE-MODEL RENDERING (existing logic — unchanged) =====
@@ -3563,17 +4184,21 @@ document.addEventListener('DOMContentLoaded', function () {
             source = [];
           }
 
-          // Preserve incoming order but move backend-marked top tray to the end
+          // Sort: TOP TRAYS FIRST, PARTIAL TRAYS LAST
           try {
-            const topIdx = source.findIndex(e => Boolean((e && (e.meta && (e.meta.top_tray || e.meta.is_top_tray)))));
-            if (topIdx >= 0) {
-              const topEntry = source.splice(topIdx, 1)[0];
-              source.push(topEntry);
-            }
+            const topTrays = [];
+            const partialTrays = [];
+            const regularTrays = [];
+            source.forEach(e => {
+              if (e && e.meta && e.meta.top_tray) topTrays.push(e);
+              else if (e && e.meta && e.meta.is_partial) partialTrays.push(e);
+              else regularTrays.push(e);
+            });
+            source = [...topTrays, ...regularTrays, ...partialTrays];
           } catch (e) { /* ignore */ }
 
-          // update visible delink tray count using authoritative source (display text)
-          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = `(No of Trays: ${source.length})`; } catch (e) { /* ignore */ }
+          // update visible delink tray count (just the number — HTML already wraps with "No of Trays:")
+          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = source.length; } catch (e) { /* ignore */ }
 
           let singleModelTopTrayAssigned = false;
           source.forEach((entry, idx) => {
@@ -3581,50 +4206,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const qty = entry.qty || 0;
             const isTop = Boolean(t.top_tray && !singleModelTopTrayAssigned);
             if (isTop) singleModelTopTrayAssigned = true;
+            const isPartial = Boolean(t.is_partial && !isTop);
             const isPlaceholder = Boolean(t.is_placeholder);
             const div = document.createElement('div');
             div.className = 'tray-scan-tab';
-            const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
-            const modelNoRaw = window.CURRENT_MODEL_NO || ((data && data.draft && (data.draft.plating_stock_num || data.draft.model_image_label)) || data.plating_stock_num || data.model_image_label) || '';
-            const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
-            const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
+            const topLabel = isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
+            const trayLabel = t.tray_id || ('Tray ' + (idx + 1));
+            const placeholder = 'Scan Model 1 (Tray ID)';
             if (isPlaceholder) {
               div.innerHTML = `\n              <div class="tray-qty" style="color:#888;font-style:italic;">Qty: ${qty}${topLabel}</div>\n              <div style="font-size:11px;color:#aaa;">(virtual slot — scan real tray)</div>\n            `;
             } else {
-              div.innerHTML = `\n              <input type="text" class="tray-id-input" data-expected-qty="${qty}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
+              div.innerHTML = `\n              <input type="text" class="tray-id-input" maxlength="9" data-expected-qty="${qty}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
             }
             container.appendChild(div);
           });
-        }
-
-        // ===== MULTI-MODEL: Render model image badges for all models =====
-        if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
-          const imgRow = document.querySelector('.jig-modal-model-images-row');
-          if (imgRow) {
-            // Remove any previously appended secondary badges (keep the first static badge)
-            imgRow.querySelectorAll('.multi-model-badge').forEach(function(el) { el.remove(); });
-
-            data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
-              const imgUrl = modelAlloc.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
-              const label = modelAlloc.model_image_label || modelAlloc.model_name || modelAlloc.model || '';
-
-              if (mIdx === 0) {
-                // Update already-existing primary badge
-                if (idMap.modelImagePreview) idMap.modelImagePreview.src = imgUrl;
-                if (idMap.modelImageLabel) idMap.modelImageLabel.innerText = label;
-              } else {
-                // Append additional model badge
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'btn-action transparent model-images multi-model-badge';
-                btn.disabled = true;
-                btn.style.cssText = 'display:flex;align-items:center;gap:8px;';
-                btn.innerHTML = '<img src="' + imgUrl + '" alt="Model Image" style="width:32px;height:32px;border-radius:6px;object-fit:contain;background:#f7f7f7;"/><span style="font-weight:600;color:#1a7a2e;">' + label + '</span>';
-                imgRow.appendChild(btn);
-              }
-            });
-            console.log('[MULTI_MODEL_UI] Model image badges rendered:', data.multi_model_allocation.length);
-          }
         }
 
         // Compute authoritative delink total from authoritative source and trigger recalculation
@@ -3662,20 +4257,60 @@ document.addEventListener('DOMContentLoaded', function () {
             const index = inputs.indexOf(currentInput);
             if (index >= 0 && index < inputs.length - 1) {
               try { inputs[index + 1].focus(); } catch (e) {}
+            } else {
+              // Last delink input scanned — if backend completed delinking, move focus to the next actionable half-filled control.
+              try {
+                const latestState = window._lastInitData || {};
+                if (latestState.delink_completed) {
+                  setTimeout(function() {
+                    const hfContainer = document.getElementById('excessTrayContainer');
+                    if (hfContainer) {
+                      const editBtn = hfContainer.querySelector('.btn-edit-half-filled');
+                      const hfInput = hfContainer.querySelector('.tray-id-input:not([readonly])');
+                      if (editBtn) {
+                        console.log('[AUTO_FOCUS] Focusing half-filled edit button');
+                        editBtn.focus();
+                      } else if (hfInput) {
+                        console.log('[AUTO_FOCUS] Focusing half-filled tray input');
+                        hfInput.focus();
+                      }
+                    }
+                  }, 150);
+                }
+              } catch (e) { /* ignore */ }
             }
           }
 
           async function validateTray(trayId, inputEl) {
             console.log('[SCAN_TRAY] Tray:', trayId);
             try {
-              const resp = await fetch('/jig_loading/scan-tray/', {
+              const allowReuseDelink = !!(inputEl && inputEl.closest && inputEl.closest('#excessTrayContainer'));
+              const allowNewHalfFilled = !!(allowReuseDelink && inputEl.dataset && inputEl.dataset.isTopHalfFilled === 'true');
+              // Collect already-scanned trays for server-side duplicate detection
+              const scannedTrays = [];
+              container.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
+                if (inp !== inputEl && inp.value) {
+                  scannedTrays.push({ tray_id: inp.value, qty: parseInt(inp.dataset.expectedQty || 0) || 0 });
+                }
+              });
+              const resp = await fetch('/jig_loading/api/load/update/', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                   'Content-Type': 'application/json',
                   'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({ tray_id: trayId, lot_id: inputEl.dataset.lotId || window.CURRENT_LOT_ID, batch_id: inputEl.dataset.batchId || batchId })
+                body: JSON.stringify({
+                  action: 'scan_tray',
+                  tray_id: trayId,
+                  lot_id: inputEl.dataset.lotId || window.CURRENT_LOT_ID,
+                  batch_id: inputEl.dataset.batchId || batchId,
+                  allow_reuse_delink: allowReuseDelink,
+                  allow_new_half_filled: allowNewHalfFilled,
+                  broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
+                  jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
+                  scanned_trays: scannedTrays
+                })
               });
               const data = await resp.json();
               
@@ -3705,8 +4340,31 @@ document.addEventListener('DOMContentLoaded', function () {
                   }
                 } catch (e) { console.warn('[SCAN] State update failed', e); }
                 
+                // ✅ Store fresh data from every scan response so half-filled always has latest state
+                try {
+                  if (data.half_filled_tray_info) {
+                    window._lastInitData = Object.assign({}, window._lastInitData || {}, data, {
+                      half_filled: data.half_filled || data.half_filled_tray_info,
+                      half_filled_tray_info: data.half_filled_tray_info,
+                    });
+                    window._trayCapacity = parseInt(data.tray_capacity || window._trayCapacity || 12) || 12;
+                    renderHalfFilledAutoLink(window._lastInitData);
+                    console.log('[SCAN_HF_UPDATE] Half-filled re-rendered from scan response');
+                  }
+                } catch (hfUpd) { console.warn('[SCAN_HF_UPDATE] failed', hfUpd); }
+
                 moveToNextInput(inputEl);
-              } else {
+                }
+                // ✅ BH GATE: re-apply after every scan (empty_hooks may change)
+                try {
+                  if (window.BACKEND_EMPTY_HOOKS > 0) {
+                    if (typeof window.disableBH === 'function') window.disableBH();
+                  } else {
+                    window.isModelSelectionComplete = true;
+                    if (typeof window.enableBH === 'function') window.enableBH();
+                  }
+                } catch (_bhg) {}
+                if (data.validation_status !== 'success') {
                 // Backend rejected (duplicate | exceeds_capacity | error)
                 // Frontend just renders backend's decision, no business logic
                 try { inputEl.classList.remove('validated'); } catch (e) {}
@@ -3727,6 +4385,9 @@ document.addEventListener('DOMContentLoaded', function () {
               showSmallInfo(inputEl, 'Error');
             }
           }
+
+          // Expose validateTray globally so re-rendered inputs (from applyResponseToUI) can use it
+          window._scanTrayFn = validateTray;
 
           const inputs = container.querySelectorAll('.tray-id-input');
           inputs.forEach(inp => {
@@ -3749,33 +4410,128 @@ document.addEventListener('DOMContentLoaded', function () {
         })();
         console.log('✅ Tray UI Rendered (delink slots):', source.length);
 
-        // ===== SINGLE MODEL: render excess/half-filled section from API data =====
-        try {
-          renderTrays('excess', data.excess_info || null);
-          console.log('[SM_EXCESS] excess_info rendered:', data.excess_info);
-        } catch (smExcessErr) { console.warn('[SM_EXCESS] render failed', smExcessErr); }
+        // ===== KEYBOARD UNSCAN: Backspace on validated tray clears scan =====
+        // When user clears a validated tray input via keyboard (backspace/delete),
+        // call backend unscan API to sync loaded qty. No close icons needed.
+        (function attachKeyboardUnscanHandlers() {
+          if (!container) return;
 
-        // UI adjustments for PERFECT_FIT scenario
-        const scenario = data.scenario || '';
-        const perfectFit = scenario === 'PERFECT_FIT' || ((data.draft && parseInt(data.draft.original_lot_qty||0) === parseInt(data.draft.jig_capacity||0)) && (parseInt(data.draft.broken_hooks||0) === 0));
-        if (perfectFit) {
-          // Hide half-filled and excess UI sections
-          const halfSection = document.getElementById('halfFilledTraySection');
-          if (halfSection) halfSection.style.display = 'none';
-          const excessEl = document.getElementById('excessLotSection') || document.getElementById('excessSection') || document.querySelector('.excess-section');
-          if (excessEl) excessEl.style.display = 'none';
-
-          // Enable submit only when loaded equals jig capacity
-          const submitBtn = document.getElementById('submitJigBtn') || document.querySelector('#jigAddModal .btn-action.teal');
-          const loaded = parseInt((data.draft && data.draft.loaded_cases_qty) || 0);
-          const capacity = parseInt((data.draft && data.draft.jig_capacity) || 0);
-          if (submitBtn) {
-            if (loaded === capacity && capacity > 0) {
-              submitBtn.removeAttribute('disabled');
-            } else {
-              submitBtn.setAttribute('disabled', 'disabled');
-            }
+          function getCsrf() {
+            const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+            return v ? v.pop() : '';
           }
+
+          container.addEventListener('keydown', async function(e) {
+            const inp = e.target;
+            if (!inp || !inp.classList.contains('tray-id-input')) return;
+            if (!inp.classList.contains('validated')) return;
+
+            // Only act on Backspace or Delete when input is validated
+            if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+
+            e.preventDefault(); // Prevent default character deletion
+            const removedTrayId = inp.value;
+            if (!removedTrayId) return;
+
+            console.log('[UNSCAN_KB] Clearing validated tray:', removedTrayId);
+
+            // Clear input UI immediately
+            inp.value = '';
+            inp.classList.remove('validated');
+            inp.style.background = '';
+            inp.style.border = '';
+
+            // Collect remaining scanned trays
+            const remainingTrays = [];
+            container.querySelectorAll('.tray-id-input.validated').forEach(function(otherInp) {
+              if (otherInp.value) {
+                remainingTrays.push({
+                  tray_id: otherInp.value,
+                  qty: parseInt(otherInp.dataset.expectedQty || 0) || 0
+                });
+              }
+            });
+
+            // Call backend unscan API
+            try {
+              const resp = await fetch('/jig_loading/api/load/update/', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': getCsrf()
+                },
+                body: JSON.stringify({
+                  action: 'unscan_tray',
+                  tray_id: removedTrayId,
+                  lot_id: inp.dataset.lotId || window.CURRENT_LOT_ID,
+                  batch_id: inp.dataset.batchId || window.currentJigBatchId || window.CURRENT_BATCH_ID,
+                  broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
+                  jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
+                  scanned_trays: remainingTrays
+                })
+              });
+              const respData = await resp.json();
+              console.log('[UNSCAN_KB_RESPONSE]', respData);
+
+              if (respData) {
+                window.BACKEND_LOADED_CASES = parseInt(respData.loaded_cases_qty || 0) || 0;
+                window.BACKEND_EMPTY_HOOKS = parseInt(respData.empty_hooks || 0) || 0;
+                window.BACKEND_EFFECTIVE_CAPACITY = parseInt(respData.effective_capacity || 0) || window.BACKEND_EFFECTIVE_CAPACITY;
+                window.BACKEND_ORIGINAL_CAPACITY = parseInt(respData.original_capacity || 0) || window.BACKEND_ORIGINAL_CAPACITY;
+                if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+                if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+                console.log('[UNSCAN_KB] State synced: loaded=' + window.BACKEND_LOADED_CASES + ', empty=' + window.BACKEND_EMPTY_HOOKS);
+                  // ✅ BH GATE: re-apply after unscan
+                  try {
+                    if (window.BACKEND_EMPTY_HOOKS > 0) {
+                      if (typeof window.disableBH === 'function') window.disableBH();
+                    } else {
+                      window.isModelSelectionComplete = true;
+                      if (typeof window.enableBH === 'function') window.enableBH();
+                    }
+                  } catch (_bhg) {}
+                  // ✅ Refresh half-filled from unscan response
+                  try {
+                    if (respData.half_filled_tray_info) {
+                      window._lastInitData = Object.assign({}, window._lastInitData || {}, respData, {
+                        half_filled: respData.half_filled || respData.half_filled_tray_info,
+                        half_filled_tray_info: respData.half_filled_tray_info,
+                      });
+                      window._trayCapacity = parseInt(respData.tray_capacity || window._trayCapacity || 12) || 12;
+                      renderHalfFilledAutoLink(window._lastInitData);
+                      console.log('[UNSCAN_HF_UPDATE] Half-filled re-rendered after unscan');
+                    }
+                  } catch (_hfU) {}
+              }
+            } catch (err) {
+              console.error('[UNSCAN_KB] API call failed', err);
+            }
+          });
+        })();
+
+        // ===== SINGLE MODEL: render half-filled section from backend data =====
+        window._lastInitData = data;
+        window._trayCapacity = parseInt((data.draft && data.draft.tray_capacity) || data.tray_capacity || 12) || 12;
+        if (!data.is_multi_model) {
+          try {
+            renderHalfFilledAutoLink(data);
+            console.log('[SM_HALF_FILLED] Rendered from backend on init');
+          } catch (smExcessErr) { console.warn('[SM_HALF_FILLED] render failed', smExcessErr); }
+        }
+
+        // UI adjustments for PERFECT_FIT scenario (backend-authoritative)
+        const scenario = data.scenario || '';
+        const perfectFit = scenario === 'PERFECT_FIT';
+        // Guard: never hide half-filled section if backend sent half-filled data
+        const hasHalfFilled = !!((data.half_filled && Array.isArray(data.half_filled.slots) && data.half_filled.slots.length > 0) || (data.half_filled_tray_info && Array.isArray(data.half_filled_tray_info.slots) && data.half_filled_tray_info.slots.length > 0) || (Array.isArray(data.half_filled_tray_info) && data.half_filled_tray_info.length > 0));
+        const hasExcess = parseInt(data.excess_qty || 0) > 0;
+        if (perfectFit) {
+          // Hide half-filled and excess UI sections UNLESS half-filled or excess data exists
+          const halfSection = document.getElementById('halfFilledTraySection');
+          if (halfSection && !hasHalfFilled) halfSection.style.display = 'none';
+          const excessEl = document.getElementById('excessLotSection') || document.getElementById('excessSection') || document.querySelector('.excess-section');
+          if (excessEl && !hasHalfFilled && !hasExcess) excessEl.style.display = 'none';
         }
       }
     } catch (err) {
@@ -3792,6 +4548,195 @@ document.addEventListener('DOMContentLoaded', function () {
     fallback.addEventListener('click', function (e) { e.preventDefault(); const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.add('open'); });
   }
   /* ---------- Half-tray & Extra-tray rendering helpers ---------- */
+
+  // ==========================================================
+  // 🔥 AUTO-LINK: Render half-filled trays with auto-link logic
+  // ==========================================================
+  // When last delink tray is partial → auto-fill same tray ID in top half-filled tray
+  // User can edit/override. Remaining half-filled trays are auto-generated (readonly).
+  function getHalfFilledState(data) {
+    const payload = (data && (data.half_filled || data.half_filled_tray_info)) || null;
+    const fallbackQty = parseInt((data && data.half_filled_tray_qty) || 0) || 0;
+
+    if (payload && !Array.isArray(payload) && typeof payload === 'object' && Array.isArray(payload.slots)) {
+      const slots = payload.slots.slice();
+      const trayIds = Array.isArray(payload.tray_ids) ? payload.tray_ids.slice() : [];
+      return {
+        slots: slots,
+        trayIds: trayIds,
+        totalQty: fallbackQty || parseInt(payload.total_qty || 0) || 0,
+        trayCount: parseInt(payload.tray_count || slots.length || 0) || slots.length,
+      };
+    }
+
+    if (Array.isArray(payload)) {
+      const slots = payload.map(function(tray, idx) {
+        return {
+          index: idx + 1,
+          qty: parseInt(tray.qty || 0) || 0,
+          type: tray.is_top_half_filled || tray.auto_linked ? 'partial' : 'auto',
+          editable: !!tray.editable,
+          model: tray.model || '',
+        };
+      });
+      const trayIds = payload.map(function(tray) {
+        return {
+          tray_id: tray.tray_id || null,
+          qty: parseInt(tray.qty || 0) || 0,
+          auto_linked: !!tray.auto_linked,
+          linked_to: tray.linked_to || null,
+          is_top_half_filled: !!tray.is_top_half_filled,
+          editable: !!tray.editable,
+          model: tray.model || '',
+        };
+      });
+      const totalQty = fallbackQty || slots.reduce(function(sum, slot) { return sum + (parseInt(slot.qty || 0) || 0); }, 0);
+      return {
+        slots: slots,
+        trayIds: trayIds,
+        totalQty: totalQty,
+        trayCount: payload.length,
+      };
+    }
+
+    return {
+      slots: [],
+      trayIds: [],
+      totalQty: fallbackQty,
+      trayCount: 0,
+    };
+  }
+
+  function renderHalfFilledAutoLink(data) {
+    const section = document.getElementById('excessLotSection');
+    const container = document.getElementById('excessTrayContainer');
+    const count = document.getElementById('excessLotCount');
+    if (!section || !container || !count) return;
+
+    const halfFilledState = getHalfFilledState(data || {});
+    const halfFilledSlots = halfFilledState.slots || [];
+    const halfFilledTrayIds = halfFilledState.trayIds || [];
+    const halfFilledQty = parseInt(halfFilledState.totalQty || 0) || 0;
+    const delinkCompleted = !!(data && data.delink_completed);
+    const excessInfo = data.excess_info || {};
+    const excessQty = parseInt(excessInfo.excess_qty || data.excess_qty || 0) || 0;
+
+    if (halfFilledSlots.length === 0 && excessQty <= 0) {
+      section.style.display = 'none';
+      container.innerHTML = '';
+      count.innerText = '';
+      return;
+    }
+
+    section.style.display = 'block';
+    const totalHfQty = halfFilledQty || excessQty;
+    count.innerText = '(Qty: ' + totalHfQty + ' | No of Trays: ' + (halfFilledState.trayCount || halfFilledSlots.length || (excessInfo.excess_tray_count || 0)) + ')';
+    container.innerHTML = '';
+
+    if (halfFilledSlots.length > 0) {
+      halfFilledSlots.forEach(function(slot, idx) {
+        const trayMeta = halfFilledTrayIds[idx] || {};
+        const isAutoLinked = !!trayMeta.auto_linked;
+        const isEditable = !!(trayMeta.editable || slot.editable);
+        const isTopHf = !!trayMeta.is_top_half_filled;
+        const linkedTo = trayMeta.linked_to || '';
+        const trayId = trayMeta.tray_id || '';
+        const qty = parseInt(trayMeta.qty || slot.qty || 0) || 0;
+        const slotLabel = 'Slot ' + (slot.index || (idx + 1));
+
+        const div = document.createElement('div');
+        div.className = 'tray-scan-tab half-filled-slot-card';
+        div.dataset.halfFilledIndex = idx;
+
+        if (delinkCompleted && trayId) {
+          if (isTopHf && isAutoLinked && isEditable) {
+          let inputHtml = '<div class="half-filled-input-row">';
+          inputHtml += '<input type="text" class="tray-id-input half-filled-input validated" maxlength="9" ';
+          inputHtml += 'value="' + trayId + '" ';
+          inputHtml += 'data-expected-qty="' + qty + '" ';
+          inputHtml += 'data-auto-linked="true" ';
+          inputHtml += 'data-linked-to="' + linkedTo + '" ';
+          inputHtml += 'data-is-top-half-filled="true" ';
+          inputHtml += 'data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" ';
+          inputHtml += 'data-batch-id="' + (window.CURRENT_BATCH_ID || '') + '" ';
+          inputHtml += 'readonly ';
+          inputHtml += 'style="width: 100%; background:#d4edda !important; border:2px solid #28a745; font-weight:700; color:#155724; flex:1;">';
+          inputHtml += '<button type="button" class="btn-edit-half-filled" style="background:#ffc107; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; font-weight:600; color:#333; white-space:nowrap;" title="Edit tray ID">';
+          inputHtml += '<i class="fa fa-pencil"></i>';
+          inputHtml += '</button>';
+          inputHtml += '</div>';
+          inputHtml += '<div class="tray-qty">Qty: ' + qty + ' <span style="font-weight:700;color:#28a745;">(Auto-linked from Partial)</span></div>';
+          inputHtml += '<div class="half-filled-auto-tag" style="font-size:11px; color:#155724; margin-top:2px;">Linked to delink tray: ' + linkedTo + '</div>';
+          div.innerHTML = inputHtml;
+
+          // Attach edit handler
+          setTimeout(function() {
+            const editBtn = div.querySelector('.btn-edit-half-filled');
+            const input = div.querySelector('.half-filled-input');
+            if (editBtn && input) {
+              editBtn.addEventListener('click', function() {
+                input.removeAttribute('readonly');
+                input.classList.remove('validated');
+                input.dataset.autoLinked = 'false';
+                input.style.background = '#fff3cd';
+                input.style.border = '2px solid #ffc107';
+                input.style.color = '#333';
+                input.value = '';
+                input.focus();
+                // Update tag
+                const tag = div.querySelector('.half-filled-auto-tag');
+                if (tag) tag.innerHTML = '<span style="color:#856404;">Scan Tray ID</span>';
+                console.log('[HALF_FILLED_EDIT] User editing top half-filled tray');
+              });
+              // Re-validate on 9-char input
+              input.addEventListener('input', function() {
+                const raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
+                if (raw.length > 9) this.value = raw.slice(0, 9);
+                else this.value = raw;
+                if (raw.length === 9 && typeof window._scanTrayFn === 'function') {
+                  window._scanTrayFn(raw, this);
+                }
+              });
+            }
+          }, 50);
+          } else {
+            const displayId = trayId || 'Assigned';
+            div.innerHTML = '<input type="text" class="tray-id-input validated" maxlength="9" ' +
+              'style="background:#e8f4f8 !important; color:#155724; border:2px solid #17a2b8; font-weight:600; cursor:not-allowed;" ' +
+              'value="' + displayId + '" ' +
+              'data-expected-qty="' + qty + '" ' +
+              'readonly disabled>' +
+              '<div class="tray-qty">Qty: ' + qty + ' <span style="font-weight:600;color:#17a2b8;">(' + displayId + ')</span></div>';
+          }
+        } else {
+          div.innerHTML = '<div class="half-filled-input-row">' +
+            '<input type="text" class="tray-id-input half-filled-slot-input" maxlength="9" ' +
+            'data-expected-qty="' + qty + '" ' +
+            'placeholder="Scan Tray ID" readonly>' +
+            '</div>' +
+            '<div class="tray-qty">Qty: ' + qty + ' <span class="half-filled-slot-label">(' + slotLabel + ')</span></div>' +
+            '<div class="half-filled-auto-tag">Tray ID will be assigned after delink completion</div>';
+        }
+
+        container.appendChild(div);
+      });
+      console.log('[HALF_FILLED_RENDER] Rendered', halfFilledSlots.length, 'half-filled slots');
+    } else if (excessQty > 0) {
+      (excessInfo.excess_trays || []).forEach(function(tray, idx) {
+        const div = document.createElement('div');
+        div.className = 'tray-scan-tab half-filled-slot-card';
+        div.innerHTML = '<div class="half-filled-input-row">' +
+          '<input type="text" class="tray-id-input half-filled-slot-input" maxlength="9" ' +
+          'data-expected-qty="' + (tray.qty || 0) + '" ' +
+          'placeholder="Scan Tray ID" readonly>' +
+          '</div>' +
+          '<div class="tray-qty">Qty: ' + (tray.qty || 0) + ' <span class="half-filled-slot-label">(Slot ' + (idx + 1) + ')</span></div>' +
+          '<div class="half-filled-auto-tag">Tray ID will be assigned after delink completion</div>';
+        container.appendChild(div);
+      });
+    }
+  }
+  window.renderHalfFilledAutoLink = renderHalfFilledAutoLink;
 
   // ==========================================================
   // 🔥 FIX: FORCE DELINK UPDATE FROM API RESPONSE
@@ -3820,97 +4765,177 @@ document.addEventListener('DOMContentLoaded', function () {
   // Patch: Only update delink UI, do not re-render full DOM
   function applyResponseToUI(data) {
     try {
+      // Keep secondary-lot state fresh before card rendering
+      if (data.secondary_lots && Array.isArray(data.secondary_lots)) {
+        window._currentSecondaryLots = data.secondary_lots;
+      }
+      // Re-render model card strip on every response
+      renderModelCardStrip(data);
+
+      // ✅ FIX: ALWAYS clear container first — prevents ghost trays when transitioning
+      // from multi-model → single-model (e.g., after removing the last secondary model)
+      const containerForClear = idMap.trayInputsContainer;
+      // ✅ Capture scanned trays BEFORE clearing (preserve during recalc)
+      const _recalcSavedScans = captureScannedTrays(containerForClear);
+      if (containerForClear) {
+        containerForClear.innerHTML = '';
+        console.log('[APPLY_UI] Container cleared for fresh render');
+      }
+
       // ===== MULTI-MODEL: full re-render of delink + half-filled sections =====
       if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
         console.log('[RECALC_MM] Re-rendering multi-model trays:', data.multi_model_allocation.length, 'models');
         const container = idMap.trayInputsContainer;
         if (container) {
-          container.innerHTML = '';
+          // Container already cleared above — no need to clear again
           const trayCapacity = (data && data.draft && data.draft.tray_capacity) || data.tray_capacity || 12;
-          let totalTrayCount = 0;
-          let recalcModelTopAssigned = false;
+          // ===== FLATTEN: collect all trays across all models into one array =====
+          const recalcFlatTrays = [];
           data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
-            const colorClass = 'model-bg-' + (mIdx + 1);
-            const modelLabel = modelAlloc.model_name || modelAlloc.model || modelAlloc.lot_id || ('Model ' + (mIdx + 1));
-            const modelRole = modelAlloc.model_role || (mIdx === 0 ? 'primary' : 'secondary');
+            // ✅ FIX: Use backend model_index if provided, fallback to sequence order
+            const modelIdxValue = modelAlloc.model_index || (mIdx + 1);
+            const backendColorClass = modelAlloc.color_class || null;
+            const colorClass = getModelColorClass(modelIdxValue, backendColorClass);
+            
+            const modelCode = (modelAlloc.model_image_label || modelAlloc.model_name || modelAlloc.model || '').replace(/\s*\[.*?\]\s*/g, '').trim() || ('Model ' + modelIdxValue);
             const allocLotId = modelAlloc.lot_id || '';
             const allocBatchId = modelAlloc.batch_id || '';
-            const labelDiv = document.createElement('div');
-            labelDiv.className = 'tray-section-label';
-            const labelColor = modelRole === 'primary' ? '#028084' : '#1a7a2e';
-            const labelBg = modelRole === 'primary' ? '#e2fbff' : '#e8f4ea';
-            labelDiv.style.cssText = 'font-weight:700;font-size:12px;padding:4px 8px;margin:' + (mIdx > 0 ? '10px' : '0') + ' 0 2px;background:' + labelBg + ';border-radius:4px;color:' + labelColor + ';width:100%;';
-            labelDiv.textContent = (modelRole === 'primary' ? 'Primary: ' : 'Secondary: ') + modelLabel + ' (' + (modelAlloc.allocated_qty || 0) + ' qty)';
-            container.appendChild(labelDiv);
-            // Preserve incoming order but move backend-marked top tray to the end
+
+            // ✅ DEBUG: Log model allocation details
+            console.log('[RECALC_ALLOC_DETAIL]', {
+              model_code: modelCode,
+              model_index: modelIdxValue,
+              backend_color: backendColorClass,
+              assigned_color: colorClass,
+              lot_id: allocLotId,
+              tray_count: (modelAlloc.tray_info || []).length
+            });
+
+            // Sort: TOP TRAYS FIRST, PARTIAL TRAYS LAST
             let traysArr = (modelAlloc.tray_info || []).slice();
             try {
-              const topIndex = traysArr.findIndex(t => Boolean((t && (t.top_tray || t.is_top_tray))));
-              if (topIndex >= 0) {
-                const top = traysArr.splice(topIndex, 1)[0];
-                traysArr.push(top);
-              }
+              const topTrays = traysArr.filter(t => t && t.top_tray);
+              const partialTrays = traysArr.filter(t => t && t.is_partial && !t.top_tray);
+              const regularTrays = traysArr.filter(t => t && !t.top_tray && !t.is_partial);
+              traysArr = [...topTrays, ...regularTrays, ...partialTrays];
             } catch (e) { /* ignore */ }
 
-            let recalcModelInternalTop = false;
+            let modelTopAssigned = false;
             traysArr.forEach(function(tray) {
-              const qty = tray.qty || 0;
-              const isTop = Boolean(tray.top_tray && !recalcModelInternalTop);
-              if (isTop) recalcModelInternalTop = true;
-              const topLabel = isTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
-              const placeholder = modelLabel ? 'Scan ' + modelLabel : 'Scan Tray ID';
-              const div = document.createElement('div');
-              div.className = 'tray-scan-tab';
-              div.innerHTML = '<input type="text" class="tray-id-input ' + colorClass + '" data-expected-qty="' + qty + '" data-lot-id="' + allocLotId + '" data-batch-id="' + allocBatchId + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
-              container.appendChild(div);
-              totalTrayCount++;
+              const isTop = Boolean(tray.top_tray && !modelTopAssigned);
+              if (isTop) modelTopAssigned = true;
+              const flatTray = {
+                qty: tray.qty || 0,
+                isTop,
+                isPartial: Boolean(tray.is_partial && !isTop),
+                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue
+              };
+              recalcFlatTrays.push(flatTray);
+              console.log('[TRAY_COLOR_RECALC]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty);
             });
           });
-          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = '(No of Trays: ' + totalTrayCount + ')'; } catch (e) {}
-          console.log('[RECALC_MM] Rendered', totalTrayCount, 'trays');
+
+          // ===== SINGLE FLAT RENDER: one loop → left → right continuous flow =====
+          let totalTrayCount = 0;
+          recalcFlatTrays.forEach(function(item) {
+            const topLabel = item.isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (item.isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
+            const placeholder = 'Scan ' + item.modelCode + ' (Tray ID)';
+            const div = document.createElement('div');
+            div.className = 'tray-scan-tab';
+            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
+            container.appendChild(div);
+            totalTrayCount++;
+          });
+          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = totalTrayCount; } catch (e) {}
+          console.log('[RECALC_MM] Rendered', totalTrayCount, 'trays with color mapping');
+          // ✅ Restore scanned trays after recalc re-render
+          restoreScannedTrays(container, _recalcSavedScans);
         }
         // Re-render multi-model half-filled section
         try {
-          const halfFilled = data.half_filled_tray_info || [];
-          const halfFilledQty = parseInt(data.half_filled_tray_qty || 0) || 0;
-          const hfSection = document.getElementById('excessLotSection');
-          const hfContainer = document.getElementById('excessTrayContainer');
-          const hfCount = document.getElementById('excessLotCount');
-          if (hfSection && hfContainer && hfCount && halfFilled.length > 0 && halfFilledQty > 0) {
-            hfSection.style.display = 'block';
-            hfCount.innerText = '(Qty: ' + halfFilledQty + ' | No of Trays: ' + halfFilled.length + ')';
-            hfContainer.innerHTML = '';
-            let hfTopTrayAssigned = false;
-            halfFilled.forEach(function(tray) {
-              const mLabel = tray.model || '';
-              const placeholder = mLabel ? 'Scan ' + mLabel : 'Scan Tray ID';
-              const isHfTop = Boolean(tray.top_tray && !hfTopTrayAssigned);
-              if (isHfTop) hfTopTrayAssigned = true;
-              const hfTopLabel = isHfTop ? ' <span style="font-weight:700;">(Top Tray)</span>' : '';
-              const div = document.createElement('div');
-              div.className = 'tray-scan-tab';
-              div.innerHTML = '<label>' + placeholder + '</label><input type="text" class="tray-id-input" style="background:#fff3cd !important;" data-expected-qty="' + (tray.qty || 0) + '" placeholder="' + placeholder + '" readonly><div class="tray-qty">Qty: ' + (tray.qty || 0) + hfTopLabel + '</div>';
-              hfContainer.appendChild(div);
-            });
-            console.log('[RECALC_MM] Rendered', halfFilled.length, 'half-filled trays');
-          } else if (hfSection) {
-            hfSection.style.display = 'none';
-          }
+          renderHalfFilledAutoLink(data);
         } catch (hfErr) { console.warn('[RECALC_MM] half-filled render error', hfErr); }
         // Update secondary lots state from response
         if (data.secondary_lots && data.secondary_lots.length > 0) {
           window._currentSecondaryLots = data.secondary_lots;
         }
       } else {
-        // ===== SINGLE-MODEL: existing delink update =====
-        updateDelinkUI(data.delink_tray_info);
-        renderTrays('half', data.half_filled_tray_info || []);
+        // ===== SINGLE-MODEL: FULL RE-RENDER of delink section =====
+        // CRITICAL: Must rebuild entire DOM. In-place update leaves ghost trays
+        // when BH removes trays (backend returns fewer trays than DOM has).
+        const container = idMap.trayInputsContainer;
+        const delinkData = data.delink_tray_info || [];
+        if (container && delinkData.length > 0) {
+          container.innerHTML = '';
+          let topAssigned = false;
+          delinkData.forEach(function(tray, idx) {
+            const qty = tray.qty || tray.effective_qty || 0;
+            const isTop = Boolean(tray.top_tray && !topAssigned);
+            if (isTop) topAssigned = true;
+            const isPartial = Boolean(tray.is_partial && !isTop);
+            const topLabel = isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
+            const trayLabel = tray.tray_id || ('Tray ' + (idx + 1));
+            const div = document.createElement('div');
+            div.className = 'tray-scan-tab';
+            div.innerHTML = '<input type="text" class="tray-id-input" maxlength="9" data-expected-qty="' + qty + '" data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" data-batch-id="' + (window.currentJigBatchId || window.CURRENT_BATCH_ID || '') + '" placeholder="Scan Model 1 (Tray ID)">' +
+              '<div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
+            container.appendChild(div);
+          });
+          // Re-attach input handlers for the new inputs
+          (function reattachHandlers() {
+            function getCookie(name) {
+              const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+              return v ? v.pop() : '';
+            }
+            container.querySelectorAll('.tray-id-input').forEach(function(inp) {
+              inp.addEventListener('input', function() {
+                const raw = (this.value || '').toString();
+                let value = raw.replace(/[^A-Za-z0-9-]/g, '');
+                if (value.length > 9) value = value.slice(0, 9);
+                this.value = value;
+                if (value.length === 9 && typeof window._scanTrayFn === 'function') {
+                  window._scanTrayFn(value, this);
+                }
+              });
+            });
+          })();
+          console.log('[RECALC_SM] Re-rendered', delinkData.length, 'delink trays');
+          // ✅ Restore scanned trays after single-model recalc re-render
+          restoreScannedTrays(container, _recalcSavedScans);
+        } else if (container && delinkData.length === 0) {
+          container.innerHTML = '<div style="color:#888;padding:8px;">No delink trays</div>';
+        }
+        // ✅ Always render half-filled from backend data (backend is single source of truth)
+        window._lastInitData = Object.assign({}, data, {
+          half_filled: data.half_filled || data.half_filled_tray_info,
+        });
+        window._trayCapacity = parseInt(data.tray_capacity || 12) || 12;
+        renderHalfFilledAutoLink(window._lastInitData);
         renderTrays('extra', data.extra_trays || []);
-        renderTrays('excess', data.excess_info || null);
         const halfWrap = document.getElementById('halfFilledTraySection');
-        if (halfWrap) halfWrap.style.display = ( (data.half_filled_tray_info && data.half_filled_tray_info.length) || (data.extra_trays && data.extra_trays.length) ) ? 'block' : 'none';
+        if (halfWrap) {
+          const halfState = getHalfFilledState(data);
+          halfWrap.style.display = ((halfState.slots && halfState.slots.length) || (data.extra_trays && data.extra_trays.length)) ? 'block' : 'none';
+        }
+        // Update tray count from backend response (single source of truth)
+        if (idMap && idMap.noOfTrays) {
+          const trayCount = (data.tray_count !== undefined) ? data.tray_count : delinkData.length;
+          idMap.noOfTrays.innerText = trayCount;
+        }
       }
       try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
+
+      // ✅ BH GATE: BH only accessible when empty_hooks === 0
+      try {
+        const emptyH = parseInt(data.empty_hooks || 0) || 0;
+        if (emptyH > 0) {
+          window.isModelSelectionComplete = false;
+          window.disableBH();
+        } else {
+          window.isModelSelectionComplete = true;
+          window.enableBH();
+        }
+      } catch (e) { /* ignore */ }
 
       // 🔥 FIX: Update ALL backend-authoritative values from response
       try {
@@ -3934,6 +4959,8 @@ document.addEventListener('DOMContentLoaded', function () {
       if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
     } catch (e) { console.warn('[applyResponseToUI] failed', e); }
   }
+  // Expose for use by clearJigUserInputs and other external scripts
+  window.applyResponseToUI = applyResponseToUI;
 
   // ==========================================================
   // 🔥 RECALCULATION LOCK (SEPARATE FROM INIT LOCK)
@@ -3987,11 +5014,30 @@ document.addEventListener('DOMContentLoaded', function () {
     // Include jig_capacity so backend doesn't fall back to lot_qty
     const jigCap = window.BACKEND_ORIGINAL_CAPACITY || (idMap && idMap.jigCapacityInput && idMap.jigCapacityInput.value) || window.jigCapacity || '';
 
-    const url = `/jig_loading/init-jig-load/?lot_id=${encodeURIComponent(lot)}&batch_id=${encodeURIComponent(batch)}&broken_hooks=${encodeURIComponent(brokenHooks)}&jig_capacity=${encodeURIComponent(jigCap)}${recalcMultiParams}`;
+    const recalcPayload = {
+      lot_id: lot,
+      batch_id: batch,
+      broken_hooks: brokenHooks,
+      jig_capacity: parseInt(jigCap) || 0
+    };
+    if (secLots && secLots.length > 0) {
+      recalcPayload.multi_model = true;
+      recalcPayload.secondary_lots = secLots.map(function(s) {
+        return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
+      });
+    }
     
-    console.log('[RECALC URL]', url);
+    console.log('[RECALC PAYLOAD]', recalcPayload);
 
-    fetch(url, { credentials: 'same-origin' })
+    fetch('/jig_loading/api/load/init/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': window.getCsrfToken()
+      },
+      body: JSON.stringify(recalcPayload)
+    })
       .then(res => {
         if (!res.ok) throw new Error('Recalc API failed');
         return res.json();
@@ -4012,6 +5058,8 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('[RECALC COMPLETE] Lock released');
       });
   }
+  // Expose for use by clearJigUserInputs and other external scripts
+  window.refreshTrayCalculation = refreshTrayCalculation;
 
   // ==========================================================
   // 🔥 BROKEN HOOKS CHANGE → TRIGGER RECALCULATION
@@ -4020,22 +5068,25 @@ document.addEventListener('DOMContentLoaded', function () {
   const bhInput = document.getElementById('brokenBuildupHooksInput');
   window._lastSentBH = null;
   if (bhInput) {
-    bhInput.addEventListener('input', function () {
+    bhInput.addEventListener('change', function () {
+      // 🔒 BH GATE: Enforce multi-model finalization check
+      if (!window.isModelSelectionComplete) {
+        console.warn('[BH_GATE] Cannot change BH before model selection is complete');
+        this.value = parseInt(window.currentBrokenHooks || 0) || 0;
+        window.disableBH();
+        return;
+      }
       const bh = parseInt(this.value) || 0;
       window.currentBrokenHooks = bh;
 
-      // Debounce: wait 300ms after keystroke
-      clearTimeout(window.bhRefreshTimer);
-      window.bhRefreshTimer = setTimeout(() => {
-        // Block duplicate: don't call API if value hasn't changed
-        if (bh === window._lastSentBH) {
-          console.log('[BH_SKIP] Same value, no recalc:', bh);
-          return;
-        }
-        window._lastSentBH = bh;
-        console.log('[BH_CHANGED] Triggering recalc with BH:', bh);
-        refreshTrayCalculation();
-      }, 300);
+      // Block duplicate: don't call API if value hasn't changed
+      if (bh === window._lastSentBH) {
+        console.log('[BH_SKIP] Same value, no recalc:', bh);
+        return;
+      }
+      window._lastSentBH = bh;
+      console.log('[BH_CHANGED] Triggering recalc with BH:', bh);
+      refreshTrayCalculation();
     });
   }
 
@@ -4129,17 +5180,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const tray = data[0];
         const effective = tray.effective_qty != null ? tray.effective_qty : (tray.qty || 0);
+        // Info label explaining half-filled trays
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'half-filled-info-label';
+        infoDiv.style.cssText = 'font-size:11px;color:#856404;background:#fff3cd;padding:4px 8px;border-radius:4px;margin-bottom:6px;';
+        infoDiv.textContent = 'Half-filled tray: capacity not fully met due to BH reduction or lot allocation.';
+        container.appendChild(infoDiv);
         const node = document.createElement('div');
         node.className = 'tray-scan-tab';
-        const modelNoRaw = window.CURRENT_MODEL_NO || '';
-        const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
-        const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan here';
-        const halfLabel = modelNo ? `Scan ${modelNo}` : 'Scan Top Tray ID';
+        const placeholder = 'Scan Top Tray';
         node.innerHTML = `
-          <label>${halfLabel}</label>
-          <input id="halfTrayScanInput" type="text" placeholder="${placeholder}" class="tray-id-input">
+          <label>Top Tray (Half-filled)</label>
+          <input id="halfTrayScanInput" type="text" maxlength="9" placeholder="${placeholder}" class="tray-id-input">
           <div class="tray-qty">Qty: ${effective}</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Original: ${tray.original_qty || tray.qty || 0} — Broken Hooks: ${tray.broken_hooks || 0}</div>
+          <div style="font-size:12px;color:#856404;margin-top:4px;">Reduced from ${tray.original_qty || tray.qty || 0} due to BH: ${tray.broken_hooks || 0}</div>
         `;
         container.appendChild(node);
         const scanInput = document.getElementById('halfTrayScanInput');
@@ -4180,14 +5234,11 @@ document.addEventListener('DOMContentLoaded', function () {
         (data.excess_trays || []).forEach(tray => {
           const div = document.createElement('div');
           div.className = 'tray-scan-tab';
-          const modelNoRaw = window.CURRENT_MODEL_NO || '';
-          const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
-          const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
-          const labelText = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
+          const placeholder = 'Scan Tray ID';
           div.innerHTML = `
-            <label>${labelText}</label>
-            <input type="text" class="tray-id-input" placeholder="${placeholder}">
-            <div class="tray-qty">Qty: ${tray.qty} ${tray.top_tray ? '(Top Tray)' : ''}</div>
+            <label>Excess Tray</label>
+            <input type="text" class="tray-id-input" maxlength="9" placeholder="${placeholder}">
+            <div class="tray-qty">Qty: ${tray.qty} ${tray.top_tray ? '<span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (tray.is_partial ? '<span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '')}</div>
           `;
           container.appendChild(div);
         });
@@ -4219,14 +5270,11 @@ document.addEventListener('DOMContentLoaded', function () {
       (excessInfo.excess_trays || []).forEach(tray => {
         const div = document.createElement('div');
         div.className = 'tray-scan-tab';
-        const modelNoRaw = window.CURRENT_MODEL_NO || '';
-        const modelNo = (modelNoRaw || '').toString().replace(/[^A-Za-z0-9 ]/g, ' ').trim();
-        const placeholder = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
-        const labelText = modelNo ? `Scan ${modelNo}` : 'Scan Tray ID';
+        const placeholder = 'Scan Tray ID';
         div.innerHTML = `
-          <label>${labelText}</label>
-          <input type="text" class="tray-id-input" placeholder="${placeholder}">
-          <div class="tray-qty">Qty: ${tray.qty} ${tray.top_tray ? '(Top Tray)' : ''}</div>
+          <label>Excess Tray</label>
+          <input type="text" class="tray-id-input" maxlength="9" placeholder="${placeholder}">
+          <div class="tray-qty">Qty: ${tray.qty} ${tray.top_tray ? '<span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (tray.is_partial ? '<span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '')}</div>
         `;
         container.appendChild(div);
       });
@@ -4257,30 +5305,214 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- UI State Reset and Modal Lifecycle Fixes -->
 <script nonce="{{ csp_nonce }}">
-// --- UI State Reset Function ---
-function resetJigModalState() {
-  // Clear Broken Hooks input
-  const bhInput = document.getElementById('brokenBuildupHooksInput');
-  if (bhInput) bhInput.value = '';
-  // Clear Jig ID input
+// --- UI State Reset Function (COMPREHENSIVE) ---
+// ---------------------------------------------------------------
+// clearJigUserInputs — FULL RESET of all user-entered and derived state.
+// Calls backend clear API to delete stale draft and get fresh computed state.
+// STRICT RULE: If no trays scanned → loaded=0, BH=0, empty=jig_capacity
+// Used by: Clear button
+// ---------------------------------------------------------------
+function clearJigUserInputs() {
+  console.log('[CLEAR] Starting full state reset...');
+
+  // 1. Jig ID (user types this)
   const jigIdInput = document.getElementById('jigIdInput');
-  if (jigIdInput) jigIdInput.value = '';
-  // Empty delink tray container
-  const delinkTrayContainer = document.getElementById('delinkTrayContainer');
-  if (delinkTrayContainer) delinkTrayContainer.innerHTML = '';
-  // Reset delink tray count
+  if (jigIdInput) { jigIdInput.value = ''; jigIdInput.classList.remove('jig-id-error', 'jig-id-valid'); }
+  // Clear jig-id validation alerts
+  const jigIdError = document.getElementById('jigIdError');
+  if (jigIdError) { jigIdError.textContent = ''; jigIdError.style.display = 'none'; }
+  const jigValid = document.querySelector('.jig-id-valid-alert');
+  if (jigValid) jigValid.style.display = 'none';
+  const jigError = document.querySelector('.jig-id-error-alert');
+  if (jigError) jigError.style.display = 'none';
+
+  // 2. Broken Hooks — ZERO (no exceptions)
+  const bhInput = document.getElementById('brokenBuildupHooksInput');
+  if (bhInput) bhInput.value = 0;
+  window.currentBrokenHooks = 0;
+  window.BACKEND_BROKEN_HOOKS = 0;
+  window._lastSentBH = null;
+
+  // 3. Clear ALL scanned tray inputs
+  const trayInputs = document.querySelectorAll('.tray-id-input');
+  trayInputs.forEach(function(inp) {
+    inp.value = '';
+    inp.classList.remove('validated', 'tray-duplicate-error');
+    inp.style.background = '';
+    inp.style.border = '';
+  });
+  // Clear tray error messages
+  const trayErrors = document.querySelectorAll('.tray-error-message, .tray-duplicate-message');
+  trayErrors.forEach(function(el) { el.textContent = ''; });
+
+  // 4. IMMEDIATE visual reset (zero state) — backend will confirm
+  const jigCap = parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0;
+  window.BACKEND_LOADED_CASES = 0;
+  window.BACKEND_BROKEN_HOOKS = 0;
+  window.BACKEND_EFFECTIVE_CAPACITY = jigCap;
+  window.BACKEND_EMPTY_HOOKS = jigCap;
+  if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+  const emptyHooksEl = document.getElementById('emptyHooksInput');
+  if (emptyHooksEl) emptyHooksEl.value = jigCap;
+
+  // 5. Hide half-filled and excess sections (no trays = no half-filled)
+  const halfFilledSection = document.getElementById('halfFilledTraySection');
+  if (halfFilledSection) { halfFilledSection.style.display = 'none'; halfFilledSection.innerHTML = ''; }
+  const excessLotSection = document.getElementById('excessLotSection');
+  if (excessLotSection) excessLotSection.style.display = 'none';
+
+  // 6. Clear excess message
+  const excessMsg = document.getElementById('excessMessage');
+  if (excessMsg) excessMsg.innerText = '';
+
+  // 7. Call backend CLEAR action to delete stale draft and get fresh state
+  const lotId = window.CURRENT_LOT_ID || window.currentJigLotId;
+  const batchId = window.CURRENT_BATCH_ID || window.currentJigBatchId;
+  if (lotId && batchId) {
+    const csrfToken = (function() { const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; })();
+    fetch('/jig_loading/api/load/update/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({
+        action: 'clear',
+        lot_id: lotId,
+        batch_id: batchId,
+        broken_hooks: 0,
+        scanned_trays: [],
+        jig_capacity: jigCap
+      })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      console.log('[CLEAR_API_RESPONSE]', data);
+      // Apply backend-authoritative state
+      window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+      window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+      window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || 0;
+      window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || 0) || 0;
+      window.BACKEND_BROKEN_HOOKS = 0;
+      if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+      if (emptyHooksEl) emptyHooksEl.value = window.BACKEND_EMPTY_HOOKS;
+      // Re-render delink section from backend (fresh state, BH=0)
+      if (typeof window.applyResponseToUI === 'function') {
+        window.applyResponseToUI(data);
+      }
+      // ✅ Refresh _lastInitData so half-filled has fresh state after clear
+      window._lastInitData = data;
+      window._trayCapacity = parseInt(data.tray_capacity || window._trayCapacity || 12) || 12;
+      console.log('[CLEAR] Backend clear complete: loaded=0, empty=' + window.BACKEND_EMPTY_HOOKS);
+    })
+    .catch(function(err) {
+      console.error('[CLEAR_API_ERROR]', err);
+      // Fallback: at least render zero state locally
+      const loadedDisplay = document.getElementById('loadedCasesQtyDisplay');
+      if (loadedDisplay) loadedDisplay.innerText = '0/' + jigCap;
+    });
+  } else {
+    console.warn('[CLEAR] No lot/batch — local reset only');
+  }
+
+  console.log('[CLEAR] Full state reset triggered');
+}
+
+// ---------------------------------------------------------------
+// resetJigModalState — FULL reset for close/cancel.
+// Clears everything: inputs, display fields, dynamic DOM, globals.
+// Used by: Close (×), Cancel button
+// ---------------------------------------------------------------
+function resetJigModalState() {
+  // 1. Clear user-entered inputs
+  const bhInput = document.getElementById('brokenBuildupHooksInput');
+  if (bhInput) bhInput.value = 0;
+  const jigIdInput = document.getElementById('jigIdInput');
+  if (jigIdInput) { jigIdInput.value = ''; jigIdInput.classList.remove('jig-id-error', 'jig-id-valid'); }
+  const jigIdError = document.getElementById('jigIdError');
+  if (jigIdError) { jigIdError.textContent = ''; jigIdError.style.display = 'none'; }
+
+  // 2. Clear read-only / API-populated display fields (values only, not DOM)
+  const loadedDisplay = document.getElementById('loadedCasesQtyDisplay');
+  if (loadedDisplay) loadedDisplay.innerText = '';
+  const emptyHooksInput = document.getElementById('emptyHooksInput');
+  if (emptyHooksInput) emptyHooksInput.value = '';
+  const lotQtyInput = document.getElementById('reallotQty') || document.getElementById('lotQtyInput');
+  if (lotQtyInput) lotQtyInput.value = '';
+  const jigCapInput = document.getElementById('jigCapacityInput');
+  if (jigCapInput) jigCapInput.value = '';
+  const nickelBath = document.getElementById('nickelBathTypeInput');
+  if (nickelBath) nickelBath.value = '';
+  const trayType = document.getElementById('trayTypeInput');
+  if (trayType) trayType.value = '';
+  const modelCardStrip = document.getElementById('modelCardStrip');
+  if (modelCardStrip) modelCardStrip.innerHTML = '';
+  const excessMsg = document.getElementById('excessMessage');
+  if (excessMsg) excessMsg.innerText = '';
+
+  // 3. Clear dynamic tray content (will be repopulated on next open)
+  const delinkTableSection = document.getElementById('delinkTableSection');
+  if (delinkTableSection) delinkTableSection.innerHTML = '';
   const delinkTrayCount = document.getElementById('delinkTrayCount');
   if (delinkTrayCount) delinkTrayCount.textContent = '0';
-  // Empty and hide half-filled tray section
   const halfFilledSection = document.getElementById('halfFilledTraySection');
-  if (halfFilledSection) {
-    halfFilledSection.style.display = 'none';
-    halfFilledSection.innerHTML = '';
+  if (halfFilledSection) { halfFilledSection.style.display = 'none'; halfFilledSection.innerHTML = ''; }
+  const excessLotSection = document.getElementById('excessLotSection');
+  if (excessLotSection) { excessLotSection.style.display = 'none'; }
+
+  // 4. Reset ALL global window state variables
+  window.BACKEND_LOADED_CASES = 0;
+  window.BACKEND_EMPTY_HOOKS = 0;
+  window.BACKEND_EFFECTIVE_CAPACITY = 0;
+  window.BACKEND_ORIGINAL_CAPACITY = 0;
+  window.BACKEND_BROKEN_HOOKS = 0;
+  window.currentBrokenHooks = 0;
+  window.currentDelinkQty = 0;
+  window._lastSentBH = null;
+  window.isModelSelectionComplete = false;
+
+  // 4b. Fire-and-forget backend clear to delete stale draft
+  const _clearLot = window.CURRENT_LOT_ID || window.currentJigLotId;
+  const _clearBatch = window.CURRENT_BATCH_ID || window.currentJigBatchId;
+  if (_clearLot && _clearBatch) {
+    try {
+      const _csrf = (function() { const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; })();
+      fetch('/jig_loading/api/load/update/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrf },
+        body: JSON.stringify({ action: 'clear', lot_id: _clearLot, batch_id: _clearBatch, broken_hooks: 0, scanned_trays: [] })
+      }).catch(function() {});
+    } catch(e) {}
   }
-  // Clear tray scan DOM (.tray-scan-tabs)
-  const trayScanTabs = document.querySelectorAll('.tray-scan-tabs');
-  trayScanTabs.forEach(tab => tab.innerHTML = '');
-  console.log('[RESET] Jig modal state reset');
+
+  window.currentJigLotId = null;
+  window.currentJigBatchId = null;
+  window.jigCapacity = 0;
+  window.CURRENT_LOT_ID = null;
+  window.CURRENT_BATCH_ID = null;
+  window.CURRENT_MODEL_NO = '';
+  window._pendingSecondaryLots = null;
+  window._pendingSecondaryLot = null;
+  window._currentSecondaryLots = [];
+  window.isInitLoading = false;
+
+  // 5. Reset hidden fields
+  const lotQtyHidden = document.getElementById('lotQtyHidden');
+  if (lotQtyHidden) lotQtyHidden.value = '0';
+
+  // 6. Disable Add Model button
+  const addModelBtn = document.getElementById('addModelBtn');
+  if (addModelBtn) addModelBtn.setAttribute('disabled', 'disabled');
+
+  // 7. Reset modal title extras
+  const modalPsn = document.getElementById('modalPlatingStockNo');
+  if (modalPsn) { modalPsn.innerText = ''; modalPsn.style.display = 'none'; }
+
+  // 8. Clear jig-id validation alerts
+  const jigValid = document.querySelector('.jig-id-valid-alert');
+  if (jigValid) jigValid.style.display = 'none';
+  const jigError = document.querySelector('.jig-id-error-alert');
+  if (jigError) jigError.style.display = 'none';
+
+  console.log('[RESET] Jig modal state fully reset');
 }
 
 // --- Patch openJigModal to call reset ---
@@ -4332,53 +5564,372 @@ if (typeof renderHalfFilled === 'function') {
     return _origRenderHalfFilled.apply(this, arguments);
   };
 }
-// --- Close button handler: reset state and refresh full page on close ---
+// --- Close button handler: reset state on close ---
 document.addEventListener('click', function (e) {
   const btn = e.target.closest('.close-btn');
   if (!btn) return;
+  // Only handle close-btn inside the jig modal
+  const modal = btn.closest('#jigAddModal');
+  if (!modal) return;
   try {
     if (typeof resetJigModalState === 'function') resetJigModalState();
+    if (typeof closeJigModal === 'function') closeJigModal();
   } catch (err) {
     console.warn('[CLOSE_BTN] reset failed', err);
   }
-  // refresh the whole screen to ensure no frontend state persists
-  try { window.location.reload(); } catch (e) { console.warn('reload failed', e); }
 });
+
+// --- Cancel button handler: reset state and close ---
+document.addEventListener('click', function (e) {
+  if (e.target.id !== 'cancelJigBtn') return;
+  try {
+    if (typeof resetJigModalState === 'function') resetJigModalState();
+    if (typeof closeJigModal === 'function') closeJigModal();
+    const modal = document.getElementById('jigAddModal');
+    if (modal) modal.classList.remove('open');
+  } catch (err) {
+    console.warn('[CANCEL_BTN] reset failed', err);
+  }
+});
+
+// --- Clear button handler: clear user-entered inputs only, keep modal open ---
+document.addEventListener('click', function (e) {
+  if (e.target.id !== 'clearJigBtn') return;
+  try {
+    if (typeof clearJigUserInputs === 'function') clearJigUserInputs();
+    console.log('[CLEAR_BTN] User inputs cleared, modal stays open');
+  } catch (err) {
+    console.warn('[CLEAR_BTN] clear failed', err);
+  }
+});
+
+// --- Submit button handler: validate all trays, then call submit API ---
+document.addEventListener('click', function (e) {
+  if (e.target.id !== 'submitJigBtn' && !e.target.closest('#submitJigBtn')) return;
+  e.preventDefault();
+  try {
+    const jigId = (document.getElementById('jigIdInput') || {}).value || '';
+    const lotId = window.CURRENT_LOT_ID || window.currentJigLotId || '';
+    const batchId = window.CURRENT_BATCH_ID || window.currentJigBatchId || '';
+    const brokenHooks = parseInt(window.BACKEND_BROKEN_HOOKS || 0) || 0;
+
+    // 1. Validate Jig ID
+    if (!jigId || jigId.trim().length === 0) {
+      alert('Please scan or enter a Jig ID before submitting.');
+      return;
+    }
+    // 1b. Validate Jig ID format (must match format: J###-#### where ### is capacity)
+    if (typeof window.validateJigIdFormat === 'function') {
+      var fmtResult = window.validateJigIdFormat(jigId.trim().toUpperCase());
+      if (!fmtResult.valid) {
+        alert('Invalid Jig ID: ' + fmtResult.message);
+        var jigInput = document.getElementById('jigIdInput');
+        if (jigInput) jigInput.focus();
+        return;
+      }
+    }
+
+    // 2. Validate lot/batch
+    if (!lotId || !batchId) {
+      alert('Missing lot or batch information. Please re-open the modal.');
+      return;
+    }
+
+    // 3. Collect and validate all tray inputs
+    const trayInputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
+    const scannedTrays = [];
+    const scannedIds = new Set();
+    let hasEmpty = false;
+    let hasDuplicate = false;
+
+    trayInputs.forEach(function(inp) {
+      const val = (inp.value || '').trim();
+      const expectedQty = parseInt(inp.dataset.expectedQty || 0) || 0;
+      const trayLot = inp.dataset.lotId || lotId;
+      const trayBatch = inp.dataset.batchId || batchId;
+
+      if (!val || val.length < 3) {
+        hasEmpty = true;
+        return;
+      }
+      if (scannedIds.has(val.toUpperCase())) {
+        hasDuplicate = true;
+        return;
+      }
+      scannedIds.add(val.toUpperCase());
+      scannedTrays.push({
+        tray_id: val,
+        qty: expectedQty,
+        lot_id: trayLot,
+        batch_id: trayBatch
+      });
+    });
+
+    if (hasEmpty) {
+      alert('All tray slots must be scanned before submitting. Please scan all trays.');
+      return;
+    }
+    if (hasDuplicate) {
+      alert('Duplicate tray IDs detected. Please fix duplicates before submitting.');
+      return;
+    }
+    if (scannedTrays.length === 0) {
+      alert('No trays scanned. Please scan at least one tray before submitting.');
+      return;
+    }
+
+    // 4. Backend enforces capacity — no frontend capacity check needed
+
+    // 5. Collect half-filled tray data
+    const halfFilledTrays = [];
+    const hfContainer = document.getElementById('excessTrayContainer');
+    if (hfContainer) {
+      hfContainer.querySelectorAll('.tray-scan-tab').forEach(function(tab) {
+        const inp = tab.querySelector('.tray-id-input, .half-filled-input');
+        if (inp) {
+          const trayIdVal = (inp.value || '').trim();
+          halfFilledTrays.push({
+            tray_id: trayIdVal || null,
+            qty: parseInt(inp.dataset.expectedQty || 0) || 0,
+            auto_linked: inp.dataset.autoLinked === 'true',
+            linked_to: inp.dataset.linkedTo || null,
+            is_top_half_filled: inp.dataset.isTopHalfFilled === 'true',
+          });
+        }
+      });
+    }
+
+    // 5c. Collect multi-model allocation data
+    const isMultiModel = !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0);
+      // Use full backend-computed allocation (with tray-level detail) for complete DB storage
+      const multiModelAllocation = isMultiModel
+        ? (window._lastMultiModelAllocation && window._lastMultiModelAllocation.length > 0
+          ? window._lastMultiModelAllocation
+          : window._currentSecondaryLots || [])
+        : [];
+      // Validate: if excess/half-filled section is visible, top half-filled tray must have tray_id
+      const excessVisible = document.getElementById('excessLotSection');
+      if (excessVisible && excessVisible.style.display !== 'none') {
+        const topHfInput = excessVisible.querySelector('.half-filled-input[data-is-top-half-filled="true"]');
+        if (topHfInput && !topHfInput.value.trim()) {
+          alert('The half-filled top tray must have a tray ID. Please scan or enter the correct tray ID before submitting.');
+          if (topHfInput) topHfInput.focus();
+          return;
+        }
+      }
+
+    // 6. Call submit API
+    const submitBtn = document.getElementById('submitJigBtn');
+    if (submitBtn) { submitBtn.setAttribute('disabled', 'disabled'); submitBtn.innerText = 'Submitting...'; }
+
+    function getCsrf() {
+      const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+      return v ? v.pop() : '';
+    }
+
+    fetch('/jig_loading/api/load/submit/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({
+        lot_id: lotId,
+        batch_id: batchId,
+        jig_id: jigId.trim(),
+        broken_hooks: brokenHooks,
+        scanned_trays: scannedTrays,
+        jig_capacity: parseInt(window.BACKEND_EFFECTIVE_CAPACITY || window.jigCapacity || 0) || 0,
+        half_filled_trays: halfFilledTrays,
+        is_multi_model: isMultiModel,
+        multi_model_allocation: multiModelAllocation
+      })
+    })
+    .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+    .then(function(result) {
+      if (result.ok && result.data.status === 'success') {
+        // ✅ Show success info with model/lot data — NO confirm dialog
+        const d = result.data;
+        const modelLabel = d.model_image_label || d.lot_id || '';
+        const loadedQty = d.loaded_cases_qty || 0;
+        const lotQty = d.lot_qty || '';
+        const multiInfo = d.no_of_model_cases ? ('\nModels: ' + d.no_of_model_cases) : '';
+        const infoMsg = 'Jig submitted successfully!\n\n' +
+          'Jig: ' + (d.jig_id || '') + '\n' +
+          'Model: ' + modelLabel + '\n' +
+          'Lot: ' + (d.lot_id || '') + '\n' +
+          'Loaded: ' + loadedQty + ' / ' + (d.effective_capacity || '') + '\n' +
+          'Lot Qty: ' + lotQty + multiInfo;
+
+        // Use SweetAlert2 if available, else plain alert
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'success',
+            title: 'Jig Submitted',
+            html: '<div style="text-align:left;font-size:14px;line-height:1.8;">' +
+              '<b>Jig:</b> ' + (d.jig_id || '') + '<br>' +
+              '<b>Model:</b> ' + modelLabel + '<br>' +
+              '<b>Lot:</b> ' + (d.lot_id || '') + '<br>' +
+              '<b>Loaded:</b> ' + loadedQty + ' / ' + (d.effective_capacity || '') + '<br>' +
+              '<b>Lot Qty:</b> ' + lotQty +
+              (d.no_of_model_cases ? '<br><b>Models:</b> ' + d.no_of_model_cases : '') +
+              '</div>',
+            confirmButtonText: 'OK',
+            allowOutsideClick: false,
+          }).then(function() {
+            try {
+              if (typeof resetJigModalState === 'function') resetJigModalState();
+              if (typeof closeJigModal === 'function') closeJigModal();
+              const modal = document.getElementById('jigAddModal');
+              if (modal) modal.classList.remove('open');
+            } catch (e) {}
+            window.location.reload();
+          });
+        } else {
+          alert(infoMsg);
+          try {
+            if (typeof resetJigModalState === 'function') resetJigModalState();
+            if (typeof closeJigModal === 'function') closeJigModal();
+            const modal = document.getElementById('jigAddModal');
+            if (modal) modal.classList.remove('open');
+          } catch (e) {}
+          window.location.reload();
+        }
+      } else {
+        alert('Submit failed: ' + (result.data.message || 'Unknown error'));
+        if (submitBtn) { submitBtn.removeAttribute('disabled'); submitBtn.innerHTML = '<i class="fa fa-check" style="font-size:12px;"></i> Submit'; }
+      }
+    })
+    .catch(function(err) {
+      console.error('[SUBMIT] Error:', err);
+      alert('Submit failed: Network error. Please try again.');
+      if (submitBtn) { submitBtn.removeAttribute('disabled'); submitBtn.innerHTML = '<i class="fa fa-check" style="font-size:12px;"></i> Submit'; }
+    });
+
+  } catch (err) {
+    console.error('[SUBMIT_BTN] handler failed', err);
+    alert('Submit error: ' + err.message);
+  }
+});
+</script>
+
+<!-- Jig ID Real-time Validation -->
+<script nonce="{{ csp_nonce }}">
+(function() {
+  /**
+   * validateJigIdFormat — Checks Jig ID against expected format "J###-####".
+   * Capacity determines first 3 digits: J098-#### for 98, J144-#### for 144.
+   * Returns { valid: boolean, message: string }
+   */
+  function validateJigIdFormat(value) {
+    var capacity = parseInt(window.BACKEND_ORIGINAL_CAPACITY || 0) || 0;
+    if (!capacity) {
+      // Capacity not loaded yet — can't validate format
+      return { valid: true, message: '' };
+    }
+    var expectedPrefix = 'J' + String(capacity).padStart(3, '0') + '-';
+    if (value.length === 0) {
+      return { valid: true, message: '' };  // Empty is neutral (required check is separate)
+    }
+    if (value.length < 9) {
+      return { valid: false, message: 'Jig ID must be 9 characters (e.g. ' + expectedPrefix + '0000)' };
+    }
+    if (!value.startsWith(expectedPrefix)) {
+      return { valid: false, message: 'Expected prefix ' + expectedPrefix + ' for capacity ' + capacity };
+    }
+    // Check that last 4 chars are digits
+    if (!/^\d{4}$/.test(value.substring(5))) {
+      return { valid: false, message: 'Last 4 chars must be digits (e.g. ' + expectedPrefix + '0000)' };
+    }
+    return { valid: true, message: '' };
+  }
+
+  function applyJigIdValidation(inputEl) {
+    var errorDiv = document.getElementById('jigIdError');
+    var val = (inputEl.value || '').toUpperCase();
+    inputEl.value = val;  // force uppercase
+    
+    // Auto-insert hyphen at position 4 if user types without it
+    if (val.length >= 5 && val[4] !== '-' && /^\d/.test(val[4])) {
+      val = val.substring(0, 4) + '-' + val.substring(4);
+      inputEl.value = val;
+    }
+    
+    var result = validateJigIdFormat(val);
+    if (!result.valid) {
+      inputEl.classList.add('jig-id-error');
+      inputEl.classList.remove('jig-id-valid');
+      if (errorDiv) { errorDiv.textContent = result.message; errorDiv.style.display = 'block'; }
+    } else if (val.length === 9) {
+      inputEl.classList.remove('jig-id-error');
+      inputEl.classList.add('jig-id-valid');
+      if (errorDiv) { errorDiv.textContent = ''; errorDiv.style.display = 'none'; }
+    } else {
+      inputEl.classList.remove('jig-id-error', 'jig-id-valid');
+      if (errorDiv) { errorDiv.textContent = ''; errorDiv.style.display = 'none'; }
+    }
+  }
+
+  // Attach handler once DOM is ready
+  document.addEventListener('DOMContentLoaded', function() {
+    var jigInput = document.getElementById('jigIdInput');
+    if (jigInput) {
+      jigInput.addEventListener('input', function() { applyJigIdValidation(jigInput); });
+      jigInput.addEventListener('blur', function() { applyJigIdValidation(jigInput); });
+      // Allow only alphanumeric and hyphen (J + digits + hyphen + digits)
+      jigInput.addEventListener('keypress', function(e) {
+        var char = String.fromCharCode(e.which || e.keyCode);
+        if (!/[a-zA-Z0-9\-]/.test(char)) { e.preventDefault(); }
+      });
+    }
+  });
+
+  // Expose for external usage (submit handler pre-check)
+  window.validateJigIdFormat = validateJigIdFormat;
+})();
 </script>
 
 <!-- Multi-model selection handlers -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
-  // Hook Add Model button to close modal and open JigView with exclusion
+  // Hook dynamic Add Model card to close modal and open JigView with exclusion
   try {
-    const modalAddBtn = document.getElementById('addModelBtn');
-    if (modalAddBtn) {
-      modalAddBtn.addEventListener('click', function (ev) {
+    document.addEventListener('click', function (ev) {
+      const modalAddBtn = ev.target && ev.target.closest ? ev.target.closest('#addModelBtn') : null;
+      if (!modalAddBtn) return;
+      if (modalAddBtn.hasAttribute('disabled')) return;
+
+      // 🔒 Multi-model: Mark model selection incomplete when adding another model
+      window.isModelSelectionComplete = false;
+      window.disableBH();
+      console.log('[ADD_MODEL] BH disabled during model addition');
+
+      try {
+        const primary = window.CURRENT_LOT_ID || window.currentJigLotId || '';
+        const batch = window.currentJigBatchId || window.CURRENT_BATCH_ID || '';
+        if (!primary) {
+          console.warn('Primary lot missing, cannot open Add Model list');
+          return;
+        }
+        // Persist existing secondary lots so they survive the Add Model page navigation
         try {
-          const primary = window.CURRENT_LOT_ID || window.currentJigLotId || '';
-          const batch = window.currentJigBatchId || window.CURRENT_BATCH_ID || '';
-          if (!primary) {
-            console.warn('Primary lot missing, cannot open Add Model list');
-            return;
-          }
-          // Persist existing secondary lots so they survive the Add Model page navigation
-          try {
-            const existingLots = window._currentSecondaryLots || [];
-            sessionStorage.setItem('secondary_lots', JSON.stringify(existingLots));
-            console.log('[ADD_MODEL] Persisted', existingLots.length, 'existing secondary lots');
-          } catch(e) { console.warn('[ADD_MODEL] Failed to store secondary lots', e); }
-          const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.remove('open');
-          // Build exclude param with ALL already-selected lot IDs
-          let excludeIds = [primary];
-          try {
-            (window._currentSecondaryLots || []).forEach(function(s) { if(s.lot_id) excludeIds.push(s.lot_id); });
-          } catch(e) {}
-          const excludeParam = excludeIds.map(function(id){ return encodeURIComponent(id); }).join(',');
-          const url = `/jig_loading/JigView/?exclude_lot_id=${excludeParam}&primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(batch)}`;
-          window.location.href = url;
-        } catch (e) { console.warn('Add Model click failed', e); }
-      });
-    }
+          const existingLots = window._currentSecondaryLots || [];
+          sessionStorage.setItem('secondary_lots', JSON.stringify(existingLots));
+          console.log('[ADD_MODEL] Persisted', existingLots.length, 'existing secondary lots');
+        } catch(e) { console.warn('[ADD_MODEL] Failed to store secondary lots', e); }
+        // ✅ Persist scanned tray values so they survive Add Model page navigation
+        if (typeof window.persistScannedTraysToStorage === 'function') {
+          window.persistScannedTraysToStorage();
+        }
+        const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.remove('open');
+        // Build exclude param with ALL already-selected lot IDs
+        let excludeIds = [primary];
+        try {
+          (window._currentSecondaryLots || []).forEach(function(s) { if(s.lot_id) excludeIds.push(s.lot_id); });
+        } catch(e) {}
+        const excludeParam = excludeIds.map(function(id){ return encodeURIComponent(id); }).join(',');
+        const url = `/jig_loading/JigView/?exclude_lot_id=${excludeParam}&primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(batch)}`;
+        window.location.href = url;
+      } catch (e) { console.warn('Add Model click failed', e); }
+    });
   } catch (e) { /* ignore */ }
 
   const params = new URLSearchParams(window.location.search);
@@ -4500,24 +6051,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const modal = document.getElementById('jigAddModal');
         if (modal) modal.classList.add('open');
         if (window.callInitAPI) {
-          let multiParams = '';
+          const fallbackPayload = { lot_id: primaryLot, batch_id: primaryBatch };
           if (window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0) {
-            try {
-              const secLots = JSON.stringify(window._pendingSecondaryLots.map(function(s) {
-                return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
-              }));
-              multiParams = '&multi_model=true&secondary_lots=' + encodeURIComponent(secLots);
-            } catch (e) {}
+            fallbackPayload.multi_model = true;
+            fallbackPayload.secondary_lots = window._pendingSecondaryLots.map(function(s) {
+              return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
+            });
             window._pendingSecondaryLots = null;
           } else if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
-            try {
-              const secLots = JSON.stringify([window._pendingSecondaryLot]);
-              multiParams = '&multi_model=true&secondary_lots=' + encodeURIComponent(secLots);
-            } catch (e) {}
+            fallbackPayload.multi_model = true;
+            fallbackPayload.secondary_lots = [{
+              lot_id: window._pendingSecondaryLot.lot_id,
+              batch_id: window._pendingSecondaryLot.batch_id || '',
+              qty: parseInt(window._pendingSecondaryLot.qty || 0) || 0
+            }];
             window._pendingSecondaryLot = null;
           }
-          const fallbackUrl = '/jig_loading/init-jig-load/?lot_id=' + encodeURIComponent(primaryLot) + '&batch_id=' + encodeURIComponent(primaryBatch) + multiParams;
-          window.callInitAPI(fallbackUrl);
+          window.callInitAPI(fallbackPayload);
         }
       }
     } catch (err) { console.warn('[MERGE_FLOW] failed', err); }
@@ -4541,7 +6091,7 @@ document.addEventListener('DOMContentLoaded', function () {
     input.classList.add('tray-duplicate-error');
     let m = input.parentNode.querySelector('.tray-duplicate-message');
     if(!m){ m = document.createElement('div'); m.className='tray-duplicate-message'; input.parentNode.appendChild(m); }
-    m.innerText = msg || 'Tray already scanned in this delink';
+    m.innerText = msg || 'Already Scanned';
     console.log('[DUPLICATE_BLOCKED]', normalize(input.value));
   }
   function clearDuplicate(input){
@@ -4583,7 +6133,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('[TRAY_ACCEPTED]', val, key);
       } else if(valueCount[val] > 1){
         // This is a duplicate (2nd or later occurrence)
-        markDuplicate(inp, 'Tray already scanned in this delink');
+        markDuplicate(inp, 'Already Scanned');
         console.log('[DUPLICATE_BLOCKED]', val, key);
       }
     });
@@ -4669,13 +6219,13 @@ document.addEventListener('DOMContentLoaded', function () {
     container.querySelectorAll('.tray-id-input').forEach(attachHandler);
   }
 
-  // Intercept fetch to block client-side duplicate calls to scan-tray endpoint
+  // Intercept fetch to block client-side duplicate calls to update endpoint
   const _fetch = window.fetch ? window.fetch.bind(window) : null;
   if(_fetch){
     window.fetch = function(resource, options){
       try{
         const url = (typeof resource === 'string') ? resource : (resource && resource.url) || '';
-        if(url && url.indexOf('/jig_loading/scan-tray') !== -1){
+        if(url && (url.indexOf('/jig_loading/api/load/update') !== -1 || url.indexOf('/jig_loading/scan-tray') !== -1)){
           try{
             const body = options && options.body ? JSON.parse(options.body) : null;
             const trayId = normalize(body && body.tray_id);
@@ -4684,7 +6234,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('[DUPLICATE_CHECK]', trayId, lot);
             if(s.has(trayId)){
               console.log('[DUPLICATE_BLOCKED] (client)', trayId, lot);
-              document.querySelectorAll && document.querySelectorAll('#delinkTableSection .tray-id-input').forEach(i=>{ if(normalize(i.value)===trayId) markDuplicate(i,'Tray already scanned in this delink'); });
+              document.querySelectorAll && document.querySelectorAll('#delinkTableSection .tray-id-input').forEach(i=>{ if(normalize(i.value)===trayId) markDuplicate(i,'Already Scanned'); });
               return Promise.resolve(new Response(JSON.stringify({ status:'error' }), { status:400, headers: { 'Content-Type':'application/json' } }));
             }
           }catch(e){ console.warn('[DUPLICATE] fetch wrapper parse failed', e); }
@@ -4700,7 +6250,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.jQuery.ajax = function(opts){
       try{
         const url = (opts && opts.url) || '';
-        if(url && url.indexOf('/jig_loading/scan-tray') !== -1){
+        if(url && (url.indexOf('/jig_loading/api/load/update') !== -1 || url.indexOf('/jig_loading/scan-tray') !== -1)){
           let data = opts.data;
           if(typeof data === 'string'){ try{ data = JSON.parse(data); }catch(e){} }
           const trayId = normalize(data && (data.tray_id || data.trayId));
@@ -4772,7 +6322,7 @@ if (window.jQuery) {
   (function($){
     $(document).ajaxSend(function(event, jqXHR, settings){
       try{
-        if(settings && settings.url && settings.url.indexOf('/jig_loading/init-jig-load/') !== -1){
+        if(settings && settings.url && (settings.url.indexOf('/jig_loading/api/load/init/') !== -1 || settings.url.indexOf('/jig_loading/init-jig-load/') !== -1)){
           if(window.initApiInProgress){
             console.log('🚫 Init already in progress — aborting duplicate AJAX');
             try { jqXHR.abort(); } catch(e) {}
@@ -4784,7 +6334,7 @@ if (window.jQuery) {
     });
     $(document).ajaxComplete(function(event, jqXHR, settings){
       try{
-        if(settings && settings.url && settings.url.indexOf('/jig_loading/init-jig-load/') !== -1){
+        if(settings && settings.url && (settings.url.indexOf('/jig_loading/api/load/init/') !== -1 || settings.url.indexOf('/jig_loading/init-jig-load/') !== -1)){
           window.initApiInProgress = false;
         }
       }catch(e){}
