@@ -207,6 +207,9 @@ class IQF_Submitted(models.Model):
     # Per-reason rejection breakdown (populated when rejected_qty > 0)
     rejection_details = models.JSONField(null=True, blank=True, help_text="Per-reason rejection quantities from audit")
 
+    # Remark (mandatory on Proceed / Lot Rejection)
+    remarks = models.CharField(max_length=500, null=True, blank=True, help_text="Mandatory remark entered during Proceed or Lot Rejection")
+
     # Metadata
     is_completed = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

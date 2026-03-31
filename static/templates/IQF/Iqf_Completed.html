@@ -1285,8 +1285,7 @@
             </div>
         </div>
       </div>
-    </div>
-  </div>
+   
   <!-- Image Slider Modal (popup) -->
   <div id="imageSliderModal" class="image-slider-modal">
     <span id="closeImageSliderModal" class="modal-close-BQ">&times;</span>
@@ -1889,511 +1888,137 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 
 
+
 <script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function () {
       document.querySelectorAll('.tray-scan-btn-Jig').forEach(function(link) {
         link.addEventListener('click', async function (e) {
           e.preventDefault();
-    
-          // Get modal elements
+
           const modal = document.getElementById("trayScanModal_DayPlanning");
           const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
           const modalModelNo = document.getElementById("modalModelNo_DayPlanning");
-
           const modalLotQty = document.getElementById("modalLotQty");
           const modalMissingQty = document.getElementById("modalMissingQty");
           const modalPhysicalQty = document.getElementById("modalPhysicalQty");
 
           modal.dataset.batchId = link.getAttribute('data-batch-id');
-    
-          // Get data attributes
-          const batchId = link.getAttribute('data-batch-id');
           const modelNo = link.getAttribute('data-model-no');
           const stockLotId = link.getAttribute('data-stock-lot-id');
-          const noOfTrays = parseInt(link.getAttribute('data-no-of-trays')) || 0;
-          const trayCapacity = link.getAttribute('data-tray-capacity') || "";
           const totalBatchQuantity = link.getAttribute('data-total-batch-quantity') || "0";
           const lotQty = link.getAttribute('data-lot-qty') || "0";
           const missingQty = link.getAttribute('data-missing-qty') || "0";
           const physicalQty = link.getAttribute('data-physical-qty') || "0";
 
-          // ✅ UPDATED: Get brass QC specific stock status data
-          const brassQcAccptance = link.getAttribute('data-brass-qc-accptance') === 'true';
-          const brassQcRejection = link.getAttribute('data-brass-qc-rejection') === 'true';
-          const brassQcFewCasesAccptance = link.getAttribute('data-brass-qc-few-cases-accptance') === 'true';
-    
-          // Set model number in modal
-          if (modalModelNo && modelNo) {
-            modalModelNo.textContent = modelNo;
-          }
+          if (modalModelNo && modelNo) modalModelNo.textContent = modelNo;
+          if (modalLotQty) modalLotQty.textContent = totalBatchQuantity || lotQty || '0';
+          if (modalMissingQty) modalMissingQty.textContent = missingQty || '0';
+          if (modalPhysicalQty) modalPhysicalQty.textContent = physicalQty || '0';
 
-          if (modalLotQty) {
-            modalLotQty.textContent = totalBatchQuantity || lotQty || '0';
-            console.log("✅ Set RW Qty to:", totalBatchQuantity || lotQty || '0');
-          }
-
-          if (modalMissingQty) {
-            modalMissingQty.textContent = missingQty || '0';
-            console.log("✅ Set Missing Qty to:", missingQty || '0');
-          }
-
-          if (modalPhysicalQty) {
-            modalPhysicalQty.textContent = physicalQty || '0';
-            console.log("✅ Set Physical Qty to:", physicalQty || '0');
-          }
-    
-          // Set model image
           const modalUserImg = modal.querySelector('.user-profile img');
           const modelImage = link.getAttribute('data-model-image');
-          if (modalUserImg) {
-            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.jpg";
-          }
-    
-          // ✅ UPDATED: Fetch ONLY rejected tray data
-          let traysData = [];
-          let delinkedTraysData = [];
-          let rejectionSummary = {};
+          if (modalUserImg) modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.jpg";
+
+          // ===== Fetch from CONSOLIDATED API =====
+          let accepted = [], rejected = [], delinked = [], summary = {};
           try {
-            const params = new URLSearchParams({
-              batch_id: batchId,
-              stock_lot_id: stockLotId,
-              lot_id: stockLotId,
-              brass_qc_rejection: brassQcRejection,
-              brass_qc_few_cases_accptance: brassQcFewCasesAccptance
-            });
-            
-            // ✅ UPDATED: Use correct endpoint name
-            const resp = await fetch(`/iqf/iqf_CompleteTable_tray_id_list/?${params}`);
+            const resp = await fetch('/iqf/iqf_lot_details/?lot_id=' + encodeURIComponent(stockLotId) + '&table=complete', { credentials: 'same-origin' });
             const result = await resp.json();
             if (result.success) {
-              // Backend returns { success: true, data: { accepted_trays, rejected_trays, delink_trays, summary } }
-              const payload = result.data || {};
-
-              // Map accepted trays to unified tray objects
-              const accepted = (payload.accepted_trays || []).map(t => ({
-                tray_id: t.tray_id || '',
-                tray_quantity: t.qty || t.tray_quantity || 0,
-                rejected_tray: false,
-                delink_tray: false
-              }));
-
-              // Map rejected trays
-              const rejectedMapped = (payload.rejected_trays || []).map(t => ({
-                tray_id: t.tray_id || '',
-                tray_quantity: t.qty || t.tray_quantity || 0,
-                rejected_tray: true,
-                delink_tray: false,
-                rejection_reason: t.reason || t.rejection_reason || ''
-              }));
-
-              // Delinked trays (if any)
-              const delinked = (payload.delink_trays || []).map(t => ({
-                tray_id: t.tray_id || '',
-                tray_quantity: t.qty || t.tray_quantity || 0,
-                rejected_tray: !!t.rejected_tray,
-                delink_tray: true
-              }));
-
-              // Combine into traysData used by modal builder
-              traysData = [...accepted, ...rejectedMapped];
-              // Include delinked separately so modal can render them if needed
-              delinkedTraysData = delinked;
-              // Rejection summary/fallbacks
-              rejectionSummary = payload.summary || payload.rejection_summary || {};
-
-              console.log('✅ Mapped accepted trays:', accepted);
-              console.log('✅ Mapped rejected trays:', rejectedMapped);
-              console.log('🔗 Fetched delinked trays:', delinked);
-              console.log('📊 Rejection summary:', rejectionSummary);
+              accepted = result.accepted || [];
+              rejected = result.rejected || [];
+              delinked = result.delinked || [];
+              summary = result.summary || {};
             }
-          } catch (e) {
-            console.error('❌ Error fetching tray data:', e);
+          } catch (err) {
+            console.error('Error fetching IQF lot details:', err);
           }
-    
-          // ✅ UPDATED: Build modal content - ONLY show rejected trays
-// ✅ UPDATED: Build modal content - Show both ACCEPTED and REJECTED sections like the first script
-          function buildTableHTML(showValidationColumn = false) {
-            let html = `
-              <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
-                <thead>
-                  <tr>
-                    <th style="width:50px;">S.no</th>
-                    <th>Tray ID</th>
-                    <th>Tray Qty</th>
-                    ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
-                  </tr>
-                </thead>
-                <tbody>
-            `;  let rowCounter = 1;
-  let topTrayShown = false;
 
-  // ✅ SECTION 1: ACCEPTED TRAYS ONLY - Only show if there are accepted trays
-  if (traysData && traysData.length > 0) {
-    const acceptedTrays = traysData.filter(tray => !tray.rejected_tray && !tray.delink_tray);
-    
-    // ✅ FIXED: Only add header if there are accepted trays
-    if (acceptedTrays.length > 0) {
-      html += `
-        <tr style="background-color: #e8f5e8; font-weight: bold;">
-          <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
-            ✅ ACCEPTED TRAYS
-          </td>
-        </tr>
-      `;
-      
-      // Find top tray and render it first (like Brass QC pattern)
-      const topTray = acceptedTrays.find(tray => tray.ip_top_tray || tray.top_tray);
-      
-      if (topTray) {
-        let displayQuantity;
-        if (brassQcAccptance && topTray.top_tray) {
-          displayQuantity = topTray.tray_quantity;
-        } else if (topTray.ip_top_tray && topTray.ip_top_tray_qty !== null) {
-          displayQuantity = topTray.ip_top_tray_qty;
-        } else {
-          displayQuantity = topTray.tray_quantity;
-        }
-        
-        html += `
-          <tr class="top-tray-row" style="background:#e3f2fd;">
-            <td>${rowCounter} (Top Tray)</td>
-            <td>
-              <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
-              <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
-            </td>
-            <td>
-              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
-            </td>
-            ${showValidationColumn ? `
-              <td>
-                <div class="validation-status">
-                  <div class="status-icon fail">
-                    <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                  </div>
-                  <div class="status-icon pass">
-                    <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                  </div>
-                </div>
-              </td>
-            ` : ''}
-          </tr>
-        `;
-        rowCounter++;
-      }
-      
-      // Render other accepted trays (excluding top tray), sorted by tray_id
-      acceptedTrays.filter(tray => !(tray.ip_top_tray || tray.top_tray)).sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || '')).forEach((tray) => {
-        let displayQuantity;
-        if (brassQcAccptance && tray.top_tray) {
-          displayQuantity = tray.tray_quantity;
-        } else if (tray.ip_top_tray && tray.ip_top_tray_qty !== null) {
-          displayQuantity = tray.ip_top_tray_qty;
-        } else {
-          displayQuantity = tray.tray_quantity;
-        }
+          // ===== Build modal HTML =====
+          function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-        html += `
-          <tr>
-            <td>${rowCounter}</td>
-            <td>
-              <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-              <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
-            </td>
-            <td>
-              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
-            </td>
-            ${showValidationColumn ? `
-              <td>
-                <div class="validation-status">
-                  <div class="status-icon fail">
-                    <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                  </div>
-                  <div class="status-icon pass">
-                    <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                  </div>
-                </div>
-              </td>
-            ` : ''}
-          </tr>
-        `;
-        rowCounter++;
-      });
-    }
+          function buildSection(title, bgColor, textColor, badgeBg, badgeLabel, trays, startRow, hideQty) {
+            if (!trays.length) return { html: '', row: startRow };
+            let h = '<tr style="background-color:'+bgColor+';font-weight:bold;"><td colspan="3" style="text-align:center;color:'+textColor+';padding:8px;">'+title+'</td></tr>';
+            let sorted = trays.slice().sort(function(a,b){ if(a.top_tray && !b.top_tray) return -1; if(!a.top_tray && b.top_tray) return 1; return (a.tray_id||'').localeCompare(b.tray_id||''); });
+            let row = startRow;
+            sorted.forEach(function(t){
+              row++;
+              let sno = t.top_tray ? row + ' (Top Tray)' : String(row);
+              let badge = '<span style="background:'+badgeBg+';color:white;padding:2px 6px;border-radius:10px;font-size:10px;margin-left:5px;">'+badgeLabel+'</span>';
+              h += '<tr'+(t.top_tray?' class="top-tray-row" style="background:#e3f2fd;"':'')+'>';
+              h += '<td>'+sno+'</td>';
+              h += '<td><input type="text" class="form-control" value="'+esc(t.tray_id)+'" readonly style="width:100%;" />'+badge+'</td>';
+              if (hideQty || t.qty === '' || t.qty === null || t.qty === undefined) {
+                h += '<td style="text-align:center;color:#bbb;">—</td>';
+              } else {
+                h += '<td><input type="number" class="form-control" value="'+(t.qty||0)+'" readonly style="width:100%;" /></td>';
+              }
+              h += '</tr>';
+            });
+            return { html: h, row: row };
+          }
 
-    // ✅ SECTION 2: REJECTED TRAYS (without delinked)
-    // Sort rejected trays by tray quantity ascending, then tray_id for stability
-    const rejectedTrays = traysData
-      .filter(tray => tray.rejected_tray && !tray.delink_tray)
-      .sort((a, b) => {
-        // Use ip_top_tray_qty if present, else tray_quantity
-        const qtyA = a.ip_top_tray && a.ip_top_tray_qty !== null ? a.ip_top_tray_qty : a.tray_quantity;
-        const qtyB = b.ip_top_tray && b.ip_top_tray_qty !== null ? b.ip_top_tray_qty : b.tray_quantity;
-        if ((qtyA || 0) !== (qtyB || 0)) return (qtyA || 0) - (qtyB || 0);
-        return (a.tray_id || '').localeCompare(b.tray_id || '');
-      });
-    const delinkOnlyTrays = (delinkedTraysData || []).filter(tray => tray.delink_tray);
-    const hasShortage = rejectionSummary.shortage_rejections > 0;
-    
-    if (rejectedTrays.length > 0 || delinkOnlyTrays.length > 0 || hasShortage) {
-      // Determine what types are present
-      const hasRejected = rejectedTrays.length > 0;
-      const hasDelinked = delinkOnlyTrays.length > 0;
-      
-      let headerText = '';
-      let headerColor = '';
-      let bgColor = '';
-      
-      // ✅ Dynamic header based on combinations
-      if (hasRejected && hasShortage) {
-        headerText = '❌ REJECTED & SHORTAGE';
-        headerColor = '#c62828';
-        bgColor = '#ffebee';
-      } else if (hasRejected) {
-        headerText = '❌ REJECTED TRAYS';
-        headerColor = '#c62828';
-        bgColor = '#ffebee';
-      } else if (hasShortage && !hasRejected && !hasDelinked) {
-        headerText = '📦 SHORTAGE';
-        headerColor = '#ff9800';
-        bgColor = '#fff3e0';
-      }
-      
-      if (hasRejected || hasShortage) {
-        html += `
-          <tr style="background-color: ${bgColor}; font-weight: bold;">
-            <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: ${headerColor}; padding: 8px;">
-              ${headerText}
-            </td>
-          </tr>
-        `;
-      }
+          function buildTableHTML() {
+            let html = '';
 
-      // ✅ Determine top tray (prioritize ip_top_tray among rejected trays)
-      let topTray = rejectedTrays.find(tray => tray.ip_top_tray);
-      if (!topTray) {
-        topTray = rejectedTrays.find(tray => tray.top_tray);
-      }
-      
-      // Add top tray first if it exists
-      if (topTray) {
-        let displayQuantity = topTray.ip_top_tray && topTray.ip_top_tray_qty !== null ? 
-                             topTray.ip_top_tray_qty : topTray.tray_quantity;
-
-        let statusTag = '';
-        if (topTray.delink_tray) {
-          statusTag = '<span style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>';
-        } else {
-          statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
-        }
-
-        html += `
-          <tr class="top-tray-row" style="background:#e3f2fd;">
-            <td>${rowCounter} (Top Tray)</td>
-            <td>
-              <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
-              ${statusTag}
-            </td>
-            <td>
-              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
-            </td>
-            ${showValidationColumn ? `
-              <td>
-                <div class="validation-status">
-                  <div class="status-icon fail">
-                    <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                  </div>
-                  <div class="status-icon pass">
-                    <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                  </div>
-                </div>
-              </td>
-            ` : ''}
-          </tr>
-        `;
-        rowCounter++;
-      }
-
-      // Add other rejected trays (excluding top tray)
-      const otherTrays = rejectedTrays.filter(tray => tray !== topTray);
-      otherTrays.forEach((tray) => {
-        let displayQuantity = tray.ip_top_tray && tray.ip_top_tray_qty !== null ? 
-                             tray.ip_top_tray_qty : tray.tray_quantity;
-
-        let statusTag = '';
-        if (tray.delink_tray) {
-          statusTag = '<span style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>';
-        } else {
-          statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
-        }
-        
-        html += `
-          <tr>
-            <td>${rowCounter}</td>
-            <td>
-              <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-              ${statusTag}
-            </td>
-            <td>
-              <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
-            </td>
-            ${showValidationColumn ? `
-              <td>
-                <div class="validation-status">
-                  <div class="status-icon fail">
-                    <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                  </div>
-                  <div class="status-icon pass">
-                    <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                  </div>
-                </div>
-              </td>
-            ` : ''}
-          </tr>
-        `;
-        rowCounter++;
-      });
-
-      // ✅ SECTION 3: DELINKED TRAYS (separate section)
-      if (delinkOnlyTrays.length > 0) {
-        html += `
-          <tr style="background-color: #f8f9fa; font-weight: bold;">
-            <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #6c757d; padding: 8px;">
-              🔗 DELINKED TRAYS
-            </td>
-          </tr>
-        `;
-
-        delinkOnlyTrays.sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || ''));
-        delinkOnlyTrays.forEach((tray) => {
-          html += `
-            <tr>
-              <td>${rowCounter}</td>
-              <td>
-                <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-                <span style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>
-              </td>
-              <td>
-                <input type="number" class="form-control" value="${tray.tray_quantity || 0}" readonly style="width: 100%;" />
-              </td>
-              ${showValidationColumn ? `
-                <td>
-                  <div class="validation-status">
-                    <div class="status-icon fail">
-                      <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                    </div>
-                    <div class="status-icon pass">
-                      <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                    </div>
-                  </div>
-                </td>
-              ` : ''}
-            </tr>
-          `;
-          rowCounter++;
-        });
-      }
-
-      // ✅ Handle SHORTAGE entries (if any)
-      if (hasShortage) {
-        fetch(`/brass_qc/get_shortage_rejections/?lot_id=${encodeURIComponent(stockLotId)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.success && data.shortage_rejections.length > 0) {
-              data.shortage_rejections.forEach((shortage) => {
-                html += `
-                  <tr class="shortage-row">
-                    <td>${rowCounter}</td>
-                    <td>
-                      <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
-                      <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
-                    </td>
-                    <td>
-                      <input type="number" class="form-control" value="${shortage.quantity}" readonly style="width: 100%;" />
-                    </td>
-                    ${showValidationColumn ? `
-                      <td>
-                        <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
-                      </td>
-                    ` : ''}
-                  </tr>
-                `;
-                rowCounter++;
-              });
-              
-              // Update the table content
-              html += '</tbody></table>';
-              detailsDiv.innerHTML = html;
+            // Summary chips ABOVE the table
+            html += '<div style="display:block !important;padding:8px 0 10px;">';
+            html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+            html += '<span style="padding:3px 10px;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:600;">Accepted: '+(summary.accepted_qty||0)+'</span>';
+            html += '<span style="padding:3px 10px;border-radius:8px;background:#ffebee;color:#c62828;font-size:12px;font-weight:600;">Rejected: '+(summary.rejected_qty||0)+'</span>';
+            html += '<span style="padding:3px 10px;border-radius:8px;background:#f5f5f5;color:#616161;font-size:12px;font-weight:600;">Delinked Trays: '+(summary.delink_tray_count||0)+'</span>';
+            html += '<span style="padding:3px 10px;border-radius:8px;background:#e3f2fd;color:#1565c0;font-size:12px;font-weight:600;">Incoming: '+(summary.iqf_incoming_qty||0)+'</span>';
+            html += '</div>';
+            if (summary.status_label) {
+              let lC = summary.status_label==='ACCEPT'?'#2e7d32':summary.status_label==='REJECT'?'#c62828':summary.status_label==='PARTIAL'?'#e65100':'#616161';
+              html += '<div style="margin-top:6px;"><span style="background:'+lC+'22;color:'+lC+';padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;border:1px solid '+lC+'44;">'+esc(summary.status_label)+'</span></div>';
             }
-          })
-          .catch(e => {
-            console.error('Error fetching SHORTAGE details:', e);
-            // Fallback: Add basic SHORTAGE row
-            for (let i = 0; i < rejectionSummary.shortage_rejections; i++) {
-              html += `
-                <tr class="shortage-row">
-                  <td>${rowCounter}</td>
-                  <td>
-                    <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
-                    <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
-                  </td>
-                  <td>
-                    <input type="number" class="form-control" value="?" readonly style="width: 100%;" />
-                  </td>
-                  ${showValidationColumn ? `
-                    <td>
-                      <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
-                    </td>
-                  ` : ''}
-                </tr>
-              `;
-              rowCounter++;
+            html += '</div>';
+
+            // Table starts AFTER summary
+            html += '<table class="table table-bordered table-sm" style="width:100%;margin-bottom:0;"><thead><tr><th style="width:50px;">S.no</th><th>Tray ID</th><th>Tray Qty</th></tr></thead><tbody>';
+
+            let row = 0;
+            let sec;
+
+            sec = buildSection('\u2705 ACCEPTED TRAYS', '#e8f5e8', '#2e7d32', '#4caf50', 'ACCEPTED', accepted, row, false);
+            html += sec.html; row = sec.row;
+
+            sec = buildSection('\u274c REJECTED TRAYS', '#ffebee', '#c62828', '#f44336', 'REJECTED', rejected, row, false);
+            html += sec.html; row = sec.row;
+
+            sec = buildSection('\ud83d\udd17 DELINKED TRAYS', '#f8f9fa', '#6c757d', '#9e9e9e', 'DELINKED', delinked, row, false);
+            html += sec.html; row = sec.row;
+
+            if (!accepted.length && !rejected.length && !delinked.length) {
+              html += '<tr><td colspan="3" style="text-align:center;padding:20px;color:#666;"><i class="fa fa-info-circle" style="margin-right:8px;"></i>No tray data found for this lot.</td></tr>';
             }
+
+            if (summary.remarks) {
+              html += '<tr><td colspan="3" style="font-size:12px;color:#666;"><strong>Remarks:</strong> '+esc(summary.remarks)+'</td></tr>';
+            }
+
             html += '</tbody></table>';
-            detailsDiv.innerHTML = html;
-          });
-        
-        // Return early since we're handling async update
-        return html;
-      }
-    }
-  } else {
-    // ✅ No trays found
-    html += `
-      <tr>
-        <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; padding: 20px; color: #666;">
-          <i class="fa fa-info-circle" style="margin-right: 8px;"></i>
-          No tray data found for this lot.
-        </td>
-      </tr>
-    `;
-  }
-  
-  html += '</tbody></table>';
-  return html;
-}
-          // Show table 
-          detailsDiv.innerHTML = buildTableHTML(false);
-    
-          // Store data for later use
+            return html;
+          }
+
+          detailsDiv.innerHTML = buildTableHTML();
+
           modal.buildTableHTML = buildTableHTML;
-          modal.traysData = traysData;
-          modal.rejectionSummary = rejectionSummary;
-    
-          // Show the modal
+          modal.traysData = { accepted: accepted, rejected: rejected, delinked: delinked };
+          modal.rejectionSummary = summary;
+
           modal.style.display = "block";
           modal.classList.add("open");
         });
       });
-    
-      // Close handler remains the same
+
       const closeBtn = document.getElementById("closeTrayScanModal_DayPlanning");
       if (closeBtn) {
         closeBtn.addEventListener("click", function () {
           const modal = document.getElementById("trayScanModal_DayPlanning");
-          if (modal) {
-            modal.classList.remove("open");
-            modal.style.display = "none";
-          }
+          if (modal) { modal.classList.remove("open"); modal.style.display = "none"; }
         });
       }
     });

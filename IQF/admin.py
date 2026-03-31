@@ -15,7 +15,7 @@ admin.site.register(IQF_OptimalDistribution_Draft)
 
 
 class IQFSubmittedAdmin(admin.ModelAdmin):
-	list_display = ('lot_id', 'batch_id', 'original_lot_qty', 'iqf_incoming_qty', 'total_lot_qty', 'accepted_qty', 'rejected_qty', 'submission_type', 'is_completed', 'created_by', 'created_at')
+	list_display = ('lot_id', 'batch_id', 'original_lot_qty', 'iqf_incoming_qty', 'total_lot_qty', 'accepted_qty', 'rejected_qty', 'submission_type', 'remarks', 'is_completed', 'created_by', 'created_at')
 	list_filter = ('submission_type', 'is_completed', 'created_by')
 	search_fields = ('lot_id', 'batch_id__batch_id')
 	readonly_fields = ('created_at',)

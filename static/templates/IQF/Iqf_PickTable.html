@@ -2437,7 +2437,7 @@
         (json.rejection_data || []).forEach(function(row, idx){
           var tr = document.createElement('tr');
           var brassQty = Number(row.brass_qc_qty || 0);
-          var iqfVal = row.iqf_qty || '';
+          var iqfVal = (row.iqf_qty !== undefined && row.iqf_qty !== null && row.iqf_qty !== '') ? row.iqf_qty : 0;
           var disabledAttr = row.is_editable ? '' : 'disabled';
           tr.innerHTML = '<td>'+(idx+1)+'</td>'+
                          '<td>'+ (row.reason || '') +'</td>'+
@@ -2581,18 +2581,16 @@
     }
 
     // ── DELINKED TRAYS ──
-    if(json.delink_required && json.delink_data){
-      var freedTrays = json.delink_data.freed_trays || json.freed_trays || [];
-      if(freedTrays.length > 0){
+    var freedTrays = (json.delink_data && json.delink_data.freed_trays) || json.freed_trays || [];
+    if(freedTrays.length > 0){
         html += '<div style="border-top:1px solid #e0e0e0;margin:6px 0;"></div>';
         html += '<div style="font-weight:700;font-size:12px;color:#e65100;margin:4px 0 3px;"><i class="fa fa-unlink" style="margin-right:3px;"></i>Delinked Trays</div>';
         html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;">';
-        html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#fff3e0;">Tray ID</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#fff3e0;text-align:right;">Qty</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#fff3e0;">Reason</th></tr>';
+        html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#fff3e0;">Tray ID</th></tr>';
         freedTrays.forEach(function(t){
-          html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;text-align:right;">'+t.qty+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;color:#e65100;">Replaced by new tray</td></tr>';
+          html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td></tr>';
         });
         html += '</table>';
-      }
     }
 
     html += '</div>';
@@ -2674,7 +2672,7 @@
       }
     });
 
-    var payload = { lot_id: lotId, action: action, items: items, accepted_trays: acceptedTrays };
+    var payload = { lot_id: lotId, action: action, items: items, accepted_trays: acceptedTrays, remark: (document.getElementById('iqfAuditNotes').value || '').trim() };
     var csrftoken = getCookie('csrftoken');
 
     var draftBtn = document.getElementById('iqfDraftBtn');
@@ -2693,6 +2691,18 @@
     }).then(function(json){
       if(!json){ if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Empty response from server' }); } else { console.warn('Empty response from server'); } return; }
       if(!json.success){
+        // Handle remark_required error — highlight the remark textarea
+        if(json.remark_required){
+          var remarkEl = document.getElementById('iqfAuditNotes');
+          if(remarkEl){
+            remarkEl.style.border = '2px solid #dc3545';
+            remarkEl.style.boxShadow = '0 0 6px rgba(220,53,69,0.4)';
+            remarkEl.setAttribute('placeholder', 'Remark is mandatory to proceed!');
+            remarkEl.focus();
+            try{ remarkEl.scrollIntoView({behavior:'smooth', block:'center'}); }catch(ex){}
+          }
+          return;
+        }
         // clear previous highlights
         try{ document.querySelectorAll('.rejection-qty-input.input-error').forEach(function(i){ i.classList.remove('input-error'); }); }catch(e){}
         // if server tells which reason_id failed, highlight and focus it
@@ -2775,6 +2785,53 @@
     if(e.target && e.target.id === 'iqfProceedBtn'){
       // 🔒 Use stored lot_id — NEVER re-query DOM (querySelector grabs FIRST row)
       if(!_currentAuditLotId){ console.error('[IQF BUG] No lot_id stored for proceed'); return; }
+
+      // ── Mandate remark before proceed ──
+      var remarkEl = document.getElementById('iqfAuditNotes');
+      var remarkVal = (remarkEl ? remarkEl.value : '').trim();
+      if(!remarkVal){
+        remarkEl.style.border = '2px solid #dc3545';
+        remarkEl.style.boxShadow = '0 0 6px rgba(220,53,69,0.4)';
+        remarkEl.setAttribute('placeholder', 'Remark is mandatory to proceed!');
+        remarkEl.focus();
+        try{ remarkEl.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
+        return;
+      }
+
+      // ── If lot rejection checkbox is checked, call lot rejection API ──
+      var batchRejCb = document.getElementById('batchRejection');
+      if(batchRejCb && batchRejCb.checked){
+        var csrftoken = getCookie('csrftoken');
+        var proceedBtn = document.getElementById('iqfProceedBtn');
+        var draftBtn = document.getElementById('iqfDraftBtn');
+        if(proceedBtn) proceedBtn.disabled = true;
+        if(draftBtn) draftBtn.disabled = true;
+        fetch('/iqf/iqf_lot_rejection/', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+          body: JSON.stringify({ lot_id: _currentAuditLotId, lot_rejection: true, remark: remarkVal })
+        }).then(function(res){ return res.json(); })
+        .then(function(json){
+          if(!json || !json.success){
+            if(proceedBtn) proceedBtn.disabled = false;
+            if(draftBtn) draftBtn.disabled = false;
+            var errMsg = (json && json.error) || 'Failed to process lot rejection';
+            if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: errMsg }); }
+            return;
+          }
+          if(typeof Swal !== 'undefined'){
+            Swal.fire({ icon: 'success', title: 'Lot Rejected', text: 'Full lot rejection applied. Qty: ' + (json.rejected_qty || 0), toast: false, timer: 2000, showConfirmButton: false }).then(function(){ location.reload(); });
+          } else { location.reload(); }
+        }).catch(function(err){
+          if(proceedBtn) proceedBtn.disabled = false;
+          if(draftBtn) draftBtn.disabled = false;
+          console.error('[LOT REJECTION] fetch error', err);
+          if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Network error' }); }
+        });
+        return;
+      }
+
       console.log('[IQF PROCEED] Submitting for lot_id=' + _currentAuditLotId);
       submitAudit(_currentAuditLotId, 'proceed');
     }
@@ -2815,6 +2872,18 @@
             html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#e8f5e9;">S.No</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#e8f5e9;">Tray ID</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#e8f5e9;text-align:right;">Qty</th></tr>';
             json.accept_trays.forEach(function(t, i){
               html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+(i+1)+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;text-align:right;font-weight:600;">'+t.qty+'</td></tr>';
+            });
+            html += '</table>';
+          }
+          // ── DELINKED TRAYS ──
+          var freedTrays = json.freed_trays || [];
+          if(freedTrays.length > 0){
+            html += '<div style="border-top:1px solid #e0e0e0;margin:6px 0;"></div>';
+            html += '<div style="font-weight:700;font-size:12px;color:#e65100;margin:4px 0 3px;"><i class="fa fa-unlink" style="margin-right:3px;"></i>Delinked Trays</div>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;">';
+            html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#fff3e0;">Tray ID</th></tr>';
+            freedTrays.forEach(function(t){
+              html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td></tr>';
             });
             html += '</table>';
           }
@@ -2869,69 +2938,80 @@
     }
   });
 
-  // ── LOT REJECTION CHECKBOX: One-click → backend API → frontend updates ──
+  // ── LOT REJECTION CHECKBOX: UI-only toggle — actual submission happens via Proceed button ──
   document.addEventListener('change', function(e){
     if(!e.target || e.target.id !== 'batchRejection') return;
     var checked = !!e.target.checked;
     var lotId = _currentAuditLotId;
     if(!lotId){ console.error('[LOT REJECTION] No lot_id stored'); e.target.checked = false; return; }
 
-    var csrftoken = getCookie('csrftoken');
-    var cb = e.target;
-    cb.disabled = true;
-
     console.log('[LOT REJECTION] checkbox=' + checked + ', lot_id=' + lotId);
 
-    fetch('/iqf/iqf_lot_rejection/', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
-      body: JSON.stringify({ lot_id: lotId, lot_rejection: checked })
-    }).then(function(res){
-      return res.json().catch(function(){ return { success: false, error: 'Invalid JSON' }; });
-    }).then(function(json){
-      cb.disabled = false;
-      if(!json || !json.success){
-        // Revert checkbox on error
-        cb.checked = !checked;
-        var errMsg = (json && json.error) || 'Failed to process lot rejection';
-        if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: errMsg }); }
-        else { console.error(errMsg); }
-        return;
-      }
+    var rwEl = document.getElementById('modalRwQty');
+    var rwVal = rwEl ? parseInt(rwEl.textContent || '0', 10) : 0;
 
-      if(checked){
-        // Lot rejection activated — update UI from backend response
-        var rwQty = json.iqf_incoming_qty || json.rejected_qty || 0;
-        _applyLotRejectionUI(true, rwQty);
-        document.getElementById('modalRwQty') && (document.getElementById('modalRwQty').textContent = rwQty);
-        if(typeof Swal !== 'undefined'){
-          Swal.fire({ icon: 'success', title: 'Lot Rejected', text: 'Full lot rejection applied. Qty: ' + json.rejected_qty, toast: false, timer: 2000, showConfirmButton: false }).then(function(){ location.reload(); });
-        } else { location.reload(); }
-      } else {
-        // Lot rejection deactivated — restore editable state
-        var rwEl = document.getElementById('modalRwQty');
-        var rwVal = rwEl ? parseInt(rwEl.textContent || '0', 10) : 0;
-        _applyLotRejectionUI(false, rwVal);
-        if(typeof Swal !== 'undefined'){
-          Swal.fire({ icon: 'info', title: 'Restored', text: 'Lot rejection cleared. You can now enter quantities.', toast: false, timer: 1600, showConfirmButton: false });
-        }
+    if(checked){
+      // Apply lot rejection UI locally — do NOT submit to backend yet
+      _applyLotRejectionUI(true, rwVal);
+      // Keep Proceed button enabled for lot rejection (user must enter remark + click Proceed)
+      var proceedBtn = document.getElementById('iqfProceedBtn');
+      if(proceedBtn){ proceedBtn.disabled = false; proceedBtn.style.opacity = '1'; }
+      // Highlight remark field
+      var remarkEl = document.getElementById('iqfAuditNotes');
+      if(remarkEl){
+        remarkEl.style.border = '2px solid #dc3545';
+        remarkEl.style.boxShadow = '0 0 6px rgba(220,53,69,0.4)';
+        remarkEl.setAttribute('placeholder', 'Remark is mandatory to proceed!');
+        remarkEl.focus();
+        try{ remarkEl.scrollIntoView({behavior:'smooth', block:'center'}); }catch(ex){}
       }
-    }).catch(function(err){
-      cb.disabled = false;
-      cb.checked = !checked;
-      console.error('[LOT REJECTION] fetch error', err);
-      if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Network error' }); }
-    });
+    } else {
+      // Restore editable state locally
+      _applyLotRejectionUI(false, rwVal);
+      // Reset remark highlight
+      var remarkEl = document.getElementById('iqfAuditNotes');
+      if(remarkEl){
+        remarkEl.style.border = '';
+        remarkEl.style.boxShadow = '';
+        remarkEl.setAttribute('placeholder', 'Add remark here...');
+      }
+    }
+  });
+
+  // ── Clear remark highlight when user starts typing ──
+  document.addEventListener('input', function(e){
+    if(!e.target || e.target.id !== 'iqfAuditNotes') return;
+    e.target.style.border = '';
+    e.target.style.boxShadow = '';
+    if((e.target.value || '').trim()){
+      e.target.setAttribute('placeholder', 'Add remark here...');
+    }
   });
 
 })();
 </script>
 
-<!-- IQF: UI-only view icon handler. Reads existing data-* attributes and shows trayViewModal. -->
+<!-- IQF: View icon handler — calls CONSOLIDATED API, shows ALL sections (accepted, rejected, delinked). -->
 <script nonce="{{ csp_nonce }}">
 (function(){
   function escapeHtml(s){ if(s===null||s===undefined) return ''; return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+
+  function buildSection(title, color, icon, trays, startIdx){
+    if(!trays || !trays.length) return {html:'', nextIdx: startIdx};
+    var html = '<div style="margin:12px 0 6px;font-weight:700;font-size:13px;color:'+color+';"><i class="fa '+icon+'" style="margin-right:4px;"></i>'+escapeHtml(title)+' ('+trays.length+')</div>';
+    html += '<table style="width:100%;border-collapse:collapse;">';
+    html += '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid '+color+';font-weight:600;font-size:12px;">S.No</th><th style="text-align:left;padding:6px 8px;border-bottom:2px solid '+color+';font-weight:600;font-size:12px;">Tray ID</th><th style="text-align:right;padding:6px 8px;border-bottom:2px solid '+color+';font-weight:600;font-size:12px;">Qty</th><th style="text-align:center;padding:6px 8px;border-bottom:2px solid '+color+';font-weight:600;font-size:12px;">Status</th></tr></thead><tbody>';
+    var idx = startIdx;
+    trays.forEach(function(t){
+      idx++;
+      var badge = '';
+      if(t.top_tray) badge = ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;">Top</span>';
+      var statusBadge = '<span style="background:'+(t.status==='ACCEPT'?'#e8f5e9;color:#2e7d32':t.status==='REJECT'?'#ffebee;color:#c62828':'#f5f5f5;color:#616161')+';padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;">'+escapeHtml(t.status)+'</span>';
+      html += '<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 8px;">'+idx+'</td><td style="padding:6px 8px;">'+escapeHtml(t.tray_id)+badge+'</td><td style="padding:6px 8px;text-align:right;font-weight:600;">'+escapeHtml(String(t.qty||0))+'</td><td style="padding:6px 8px;text-align:center;">'+statusBadge+'</td></tr>';
+    });
+    html += '</tbody></table>';
+    return {html: html, nextIdx: idx};
+  }
 
   function openTrayView(btn){
     if(!btn) return;
@@ -2940,41 +3020,51 @@
     try{
       var lotId = btn.getAttribute('data-stock-lot-id') || btn.dataset.stockLotId || '';
       var modelNo = btn.getAttribute('data-model-no') || btn.dataset.modelNo || '';
-      var batchId = btn.getAttribute('data-batch-id') || btn.dataset.batchId || '';
-      var trayCap = btn.getAttribute('data-tray-capacity') || btn.dataset.trayCapacity || '';
 
-      content.innerHTML = '<div>Loading tray details  </div>';
+      content.innerHTML = '<div style="padding:20px;text-align:center;">Loading tray details...</div>';
+      if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); }
 
-      fetch('/iqf/iqf_tray_details/?lot_id=' + encodeURIComponent(lotId), { credentials: 'same-origin' })
+      fetch('/iqf/iqf_lot_details/?lot_id=' + encodeURIComponent(lotId), { credentials: 'same-origin' })
         .then(function(res){ return res.json().catch(function(){ return { success: false, error: 'invalid json' }; }); })
         .then(function(data){
           if(!data || !data.success){
-            content.innerHTML = '<div>No tray details available</div>';
-            if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); }
+            content.innerHTML = '<div style="padding:16px;color:#999;">No tray details available</div>';
             return;
           }
 
-          // Populate header model placeholder
           try{ var modelSpan = document.getElementById('trayViewModelNo'); if(modelSpan) modelSpan.textContent = modelNo || ''; }catch(e){}
-          var html = '';
-          html += '<div style="margin-bottom:8px;"><strong>Lot Qty:</strong> '+escapeHtml(String(data.total_qty||0))+' &nbsp; <strong>Capacity:</strong> '+escapeHtml(trayCap)+' &nbsp; <strong>No. Trays:</strong> '+escapeHtml(String(data.total_trays||0))+'</div>';
 
-          if(Array.isArray(data.trays) && data.trays.length){
-            html += '<table style="width:100%; border-collapse:collapse;">';
-            html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;font-weight:600;">S.no</th><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;font-weight:600;">Tray ID</th><th style="text-align:right;padding:8px;border-bottom:1px solid #ddd;font-weight:600;">Tray Qty</th></tr></thead><tbody>';
-            data.trays.forEach(function(t, idx){
-              var trayId = t.tray_id || '';
-              var qty = (t.tray_qty === null || t.tray_qty === undefined) ? '' : String(t.tray_qty);
-              html += '<tr><td style="padding:8px;border-bottom:1px solid #f3f3f3;">'+(idx+1)+'</td><td style="padding:8px;border-bottom:1px solid #f3f3f3;">'+escapeHtml(trayId)+'</td><td style="padding:8px;border-bottom:1px solid #f3f3f3;text-align:right;">'+escapeHtml(qty)+'</td></tr>';
-            });
-            html += '</tbody></table>';
-          } else {
-            html += '<div>No trays recorded for this lot</div>';
+          var s = data.summary || {};
+          var html = '';
+          html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
+          html += '<div style="padding:4px 10px;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:600;">Accepted: '+escapeHtml(String(s.accepted_qty||0))+'</div>';
+          html += '<div style="padding:4px 10px;border-radius:8px;background:#ffebee;color:#c62828;font-size:12px;font-weight:600;">Rejected: '+escapeHtml(String(s.rejected_qty||0))+'</div>';
+          html += '<div style="padding:4px 10px;border-radius:8px;background:#f5f5f5;color:#616161;font-size:12px;font-weight:600;">Delinked Trays: '+escapeHtml(String(s.delink_tray_count||0))+'</div>';
+          html += '<div style="padding:4px 10px;border-radius:8px;background:#e3f2fd;color:#1565c0;font-size:12px;font-weight:600;">Incoming: '+escapeHtml(String(s.iqf_incoming_qty||0))+'</div>';
+          html += '</div>';
+
+          if(s.status_label){
+            var lblColor = s.status_label==='ACCEPT'?'#2e7d32':s.status_label==='REJECT'?'#c62828':s.status_label==='PARTIAL'?'#e65100':'#616161';
+            html += '<div style="margin-bottom:10px;"><span style="background:'+lblColor+'22;color:'+lblColor+';padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;border:1px solid '+lblColor+'44;">'+escapeHtml(s.status_label)+'</span></div>';
           }
 
+          var idx = 0;
+          var sec;
+          sec = buildSection('Accepted Trays', '#2e7d32', 'fa-check-circle', data.accepted, idx);
+          html += sec.html; idx = sec.nextIdx;
+          sec = buildSection('Rejected Trays', '#c62828', 'fa-times-circle', data.rejected, idx);
+          html += sec.html; idx = sec.nextIdx;
+          sec = buildSection('Delinked Trays', '#616161', 'fa-unlink', data.delinked, idx);
+          html += sec.html; idx = sec.nextIdx;
+
+          if(!data.accepted.length && !data.rejected.length && !data.delinked.length){
+            html += '<div style="padding:16px;text-align:center;color:#999;">No trays recorded for this lot</div>';
+          }
+
+          if(s.remarks){ html += '<div style="margin-top:10px;font-size:12px;color:#666;"><strong>Remarks:</strong> '+escapeHtml(s.remarks)+'</div>'; }
+
           content.innerHTML = html;
-          if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); }
-        }).catch(function(err){ console.error('tray fetch failed', err); content.innerHTML = '<div>Failed to load trays</div>'; if(modal){ modal.style.right = '0'; modal.setAttribute('aria-hidden','false'); } });
+        }).catch(function(err){ console.error('tray fetch failed', err); content.innerHTML = '<div style="padding:16px;color:#c62828;">Failed to load trays</div>'; });
     }catch(err){ console.error('openTrayView failed', err); }
   }
 

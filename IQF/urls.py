@@ -16,7 +16,15 @@ urlpatterns = [
     path('iqf_lot_rejection/', iqf_lot_rejection, name='iqf_lot_rejection'),
     path('iqf_completed_api/', IQFCompletedTableView.as_view(), name='iqf_completed_api'),
     path('iqf_completed_table/', IQFCompletedPageView.as_view(), name='iqf_completed_table'),
-    path('iqf_accept_table/', iqf_accept_table_redirect, name='iqf_accept_table'),
+    path('iqf_accept_table/', IQFAcceptTablePageView.as_view(), name='iqf_accept_table'),
     path('iqf_rejection_table/', IQFRejectionTableView.as_view(), name='iqf_rejection_table'),
 
+    # ═══ CONSOLIDATED API — SINGLE SOURCE OF TRUTH ═══
+    # ALL view icons, tray modals, and table data MUST call this ONE endpoint.
+    path('iqf_lot_details/', iqf_lot_details, name='iqf_lot_details'),
+
+    # Backward-compatible aliases — all point to the SAME consolidated handler
+    path('iqf_CompleteTable_tray_id_list/', iqf_lot_details, name='iqf_CompleteTable_tray_id_list'),
+    path('iqf_accept_CompleteTable_tray_id_list/', iqf_lot_details, name='iqf_accept_CompleteTable_tray_id_list'),
+    path('iqf_RejectTable_tray_id_list/', iqf_lot_details, name='iqf_RejectTable_tray_id_list'),
 ]

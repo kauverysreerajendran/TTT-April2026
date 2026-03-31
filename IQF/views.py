@@ -615,8 +615,13 @@ def iqf_submit_audit(request):
     lot_id = data.get('lot_id')
     action = data.get('action')
     items = data.get('items') or []
+    remark = (data.get('remark') or '').strip()
     if not lot_id or not action or action not in ('draft', 'proceed'):
         return Response({'success': False, 'error': 'Missing or invalid parameters'}, status=400)
+
+    # Remark is mandatory when proceeding
+    if action == 'proceed' and not remark:
+        return Response({'success': False, 'error': 'Remark is mandatory to proceed', 'remark_required': True}, status=400)
 
     try:
         # ─── 1. SINGLE SOURCE OF TRUTH: rw_qty from Brass QC/Audit rejection ───
@@ -1160,6 +1165,7 @@ def iqf_submit_audit(request):
                     'full_reject_data': full_reject_data,
                     'partial_reject_data': partial_reject_data,
                     'rejection_details': rejection_details,
+                    'remarks': remark,
                     'is_completed': True,
                     'created_by': request.user,
                 }
@@ -1421,43 +1427,77 @@ def iqf_tray_details(request):
         print('[IQF TRAY API ERROR]', str(e))
         return Response({'success': False, 'error': str(e)}, status=500)
 
-# IQF Completed Table API: returns all lots that have completed IQF processing (rejected, accepted, or few cases acceptance) but not yet sent back to Brass QC via pick table
+# IQF Completed Table API: returns all lots from IQF_Submitted (SINGLE SOURCE OF TRUTH)
 @method_decorator(login_required, name='dispatch')
 class IQFCompletedTableView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
-            print('[IQF COMPLETED API] Called')
+            print('[IQF COMPLETED API] Called — SOURCE: IQF_Submitted')
 
-            queryset = TotalStockModel.objects.select_related(
-                'batch_id',
-                'batch_id__model_stock_no',
-                'batch_id__version',
-                'batch_id__location'
-            ).filter(
-                send_brass_audit_to_iqf=False
-            ).filter(
-                Q(iqf_rejection=True) | Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True)
-            ).order_by('-bq_last_process_date_time')
+            # SINGLE SOURCE OF TRUTH: IQF_Submitted table
+            submitted_qs = IQF_Submitted.objects.select_related(
+                'batch_id', 'batch_id__model_stock_no', 'batch_id__version',
+                'batch_id__location', 'created_by'
+            ).filter(is_completed=True).order_by('-created_at')
 
             data = []
-            for obj in queryset:
-                trays = IQFTrayId.objects.filter(lot_id=obj.lot_id, batch_id=obj.batch_id)
-                tray_list = [{'tray_id': t.tray_id, 'tray_qty': t.tray_quantity} for t in trays]
+            for sub in submitted_qs:
+                # Determine status label
+                if sub.submission_type == 'FULL_ACCEPT':
+                    status_label = 'ACCEPT'
+                elif sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'):
+                    status_label = 'REJECT'
+                elif sub.submission_type == 'PARTIAL':
+                    status_label = 'PARTIAL'
+                else:
+                    status_label = sub.submission_type
+
+                # Extract tray data from stored snapshots
+                accept_data = sub.partial_accept_data or sub.full_accept_data
+                reject_data = sub.partial_reject_data or sub.full_reject_data
+
+                accepted_trays = []
+                if accept_data and accept_data.get('trays'):
+                    accepted_trays = [{'tray_id': t.get('tray_id', ''), 'tray_qty': int(t.get('qty', 0))} for t in accept_data['trays'] if int(t.get('qty', 0)) > 0]
+
+                rejected_trays = []
+                if reject_data and reject_data.get('trays'):
+                    rejected_trays = [{'tray_id': t.get('tray_id', ''), 'tray_qty': int(t.get('qty', 0))} for t in reject_data['trays'] if int(t.get('qty', 0)) > 0]
+
+                # Compute delinked from original snapshot
+                delinked_trays = []
+                accept_ids = {t['tray_id'] for t in accepted_trays}
+                reject_ids = {t['tray_id'] for t in rejected_trays}
+                orig = sub.original_data or {}
+                for t in orig.get('trays', []):
+                    tid = t.get('tray_id', '')
+                    if tid and tid not in accept_ids and tid not in reject_ids:
+                        delinked_trays.append({'tray_id': tid, 'tray_qty': int(t.get('qty', 0))})
+
                 data.append({
-                    'lot_id': obj.lot_id,
-                    'batch_id': obj.batch_id.batch_id if obj.batch_id else '',
-                    'model_no': getattr(obj.batch_id.model_stock_no, 'model_no', '') if obj.batch_id else '',
-                    'location': getattr(obj.batch_id.location, 'location_name', '') if obj.batch_id and getattr(obj.batch_id, 'location', None) else '',
-                    'iqf_rejection_qty': getattr(obj, 'iqf_rejection_qty', None),
-                    'iqf_accepted_qty': getattr(obj, 'iqf_accepted_qty', None),
-                    'status': 'REJECTED' if obj.iqf_rejection else ('ACCEPTED' if obj.iqf_acceptance else 'COMPLETED'),
-                    'last_updated': obj.bq_last_process_date_time,
-                    'tray_details': tray_list
+                    'lot_id': sub.lot_id,
+                    'batch_id': sub.batch_id.batch_id if sub.batch_id else '',
+                    'model_no': getattr(sub.batch_id.model_stock_no, 'model_no', '') if sub.batch_id and getattr(sub.batch_id, 'model_stock_no', None) else '',
+                    'location': getattr(sub.batch_id.location, 'location_name', '') if sub.batch_id and getattr(sub.batch_id, 'location', None) else '',
+                    'iqf_incoming_qty': sub.iqf_incoming_qty,
+                    'iqf_accepted_qty': sub.accepted_qty,
+                    'iqf_rejection_qty': sub.rejected_qty,
+                    'delink_qty': sum(t['tray_qty'] for t in delinked_trays),
+                    'submission_type': sub.submission_type,
+                    'status_label': status_label,
+                    'status': status_label,
+                    'last_updated': sub.created_at,
+                    'remarks': sub.remarks or '',
+                    'created_by': sub.created_by.username if sub.created_by else '',
+                    'tray_details': accepted_trays + rejected_trays + delinked_trays,
+                    'accepted_trays': accepted_trays,
+                    'rejected_trays': rejected_trays,
+                    'delinked_trays': delinked_trays,
                 })
 
-            print(f'[IQF COMPLETED API] Count: {len(data)}')
+            print(f'[IQF COMPLETED API] Count: {len(data)}, Source: IQF_Submitted')
             return Response({'success': True, 'count': len(data), 'data': data})
         except Exception as e:
             print('[IQF COMPLETED ERROR]', str(e))
@@ -1471,16 +1511,168 @@ class IQFCompletedPageView(APIView):
     template_name = 'IQF/Iqf_Completed.html'
 
     def get(self, request):
-        # Page only — frontend will call `iqf_completed_api` to fetch data
-        return Response({}, template_name=self.template_name)
+        """IQF Completed Page — renders table data from IQF_Submitted (SINGLE SOURCE OF TRUTH)."""
+        try:
+            submitted_qs = IQF_Submitted.objects.select_related(
+                'batch_id', 'batch_id__model_stock_no', 'batch_id__version',
+                'batch_id__location', 'created_by'
+            ).filter(is_completed=True).order_by('-created_at')
+
+            master_data = []
+            for sub in submitted_qs:
+                batch = sub.batch_id
+                if not batch:
+                    continue
+
+                # Status label
+                if sub.submission_type == 'FULL_ACCEPT':
+                    status_label = 'ACCEPT'
+                elif sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'):
+                    status_label = 'REJECT'
+                elif sub.submission_type == 'PARTIAL':
+                    status_label = 'PARTIAL'
+                else:
+                    status_label = sub.submission_type
+
+                # Model images
+                images = []
+                if batch.model_stock_no:
+                    for img in batch.model_stock_no.images.all():
+                        if img.master_image:
+                            images.append(img.master_image.url)
+                if not images:
+                    images = [static('assets/images/imagePlaceholder.jpg')]
+
+                # Tray count from stored snapshot
+                accept_data = sub.partial_accept_data or sub.full_accept_data
+                reject_data = sub.partial_reject_data or sub.full_reject_data
+                accept_trays = (accept_data or {}).get('trays', [])
+                reject_trays = (reject_data or {}).get('trays', [])
+                total_trays = len([t for t in accept_trays if int(t.get('qty', 0)) > 0]) + len([t for t in reject_trays if int(t.get('qty', 0)) > 0])
+
+                master_data.append({
+                    'batch_id': batch.batch_id,
+                    'stock_lot_id': sub.lot_id,
+                    'iqf_last_process_date_time': sub.created_at,
+                    'plating_stk_no': batch.plating_stk_no or '',
+                    'polishing_stk_no': batch.polishing_stk_no or '',
+                    'plating_color': batch.plating_color or '',
+                    'polish_finish': batch.polish_finish or '',
+                    'location__location_name': batch.location.location_name if batch.location else '',
+                    'tray_type': batch.tray_type or '',
+                    'tray_capacity': batch.tray_capacity or 0,
+                    'no_of_trays': total_trays,
+                    'display_quantity': sub.iqf_incoming_qty,
+                    'iqf_accepted_qty': sub.accepted_qty,
+                    'iqf_rejection_qty': sub.rejected_qty,
+                    'iqf_acceptance': sub.submission_type == 'FULL_ACCEPT',
+                    'iqf_rejection': sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'),
+                    'iqf_few_cases_acceptance': sub.submission_type == 'PARTIAL',
+                    'iqf_accepted_qty_verified': True,
+                    'iqf_missing_qty': 0,
+                    'iqf_physical_qty': sub.iqf_incoming_qty,
+                    'iqf_hold_lot': False,
+                    'brass_rejection_total_qty': sub.iqf_incoming_qty,
+                    'brass_onhold_picking': False,
+                    'last_process_module': 'IQF',
+                    'iqf_accepted_tray_scan_status': True,
+                    'Moved_to_D_Picker': False,
+                    'model_images': images,
+                    'status_label': status_label,
+                    'submission_type': sub.submission_type,
+                    'remarks': sub.remarks or '',
+                    'tray_qty_list': '',
+                })
+
+            return Response({'master_data': master_data}, template_name=self.template_name)
+        except Exception as e:
+            print(f'[IQF COMPLETED PAGE ERROR] {e}')
+            traceback.print_exc()
+            return Response({'master_data': []}, template_name=self.template_name)
 
 
-# Redirect stub for legacy accept-table link
-def iqf_accept_table_redirect(request):
-    return redirect('iqf_picktable')
+# IQF Accept Table — renders accepted lots from IQF_Submitted (SINGLE SOURCE OF TRUTH)
+@method_decorator(login_required, name='dispatch')
+class IQFAcceptTablePageView(APIView):
+    renderer_classes = [TemplateHTMLRenderer]
+    template_name = 'IQF/Iqf_AcceptTable.html'
+
+    def get(self, request):
+        """IQF Accept Table — shows only ACCEPTED lots from IQF_Submitted."""
+        try:
+            submitted_qs = IQF_Submitted.objects.select_related(
+                'batch_id', 'batch_id__model_stock_no', 'batch_id__version',
+                'batch_id__location', 'created_by'
+            ).filter(
+                is_completed=True, accepted_qty__gt=0
+            ).exclude(
+                submission_type__in=['FULL_REJECT', 'LOT_REJECTION']
+            ).order_by('-created_at')
+
+            master_data = []
+            for sub in submitted_qs:
+                batch = sub.batch_id
+                if not batch:
+                    continue
+
+                # Model images
+                images = []
+                if batch.model_stock_no:
+                    for img in batch.model_stock_no.images.all():
+                        if img.master_image:
+                            images.append(img.master_image.url)
+                if not images:
+                    images = [static('assets/images/imagePlaceholder.jpg')]
+
+                # Tray info from snapshot
+                accept_data = sub.partial_accept_data or sub.full_accept_data
+                accept_trays = (accept_data or {}).get('trays', [])
+                total_trays = len([t for t in accept_trays if int(t.get('qty', 0)) > 0])
+
+                # Accepted comment from IQF_Accepted_TrayID_Store
+                comment_obj = IQF_Accepted_TrayID_Store.objects.filter(lot_id=sub.lot_id).first()
+                accepted_comment = comment_obj.accepted_comment if comment_obj else ''
+
+                master_data.append({
+                    'batch_id': batch.batch_id,
+                    'stock_lot_id': sub.lot_id,
+                    'iqf_last_process_date_time': sub.created_at,
+                    'plating_stk_no': batch.plating_stk_no or '',
+                    'polishing_stk_no': batch.polishing_stk_no or '',
+                    'plating_color': batch.plating_color or '',
+                    'polish_finish': batch.polish_finish or '',
+                    'location__location_name': batch.location.location_name if batch.location else '',
+                    'tray_type': batch.tray_type or '',
+                    'tray_capacity': batch.tray_capacity or 0,
+                    'no_of_trays': total_trays,
+                    'iqf_accepted_qty': sub.accepted_qty,
+                    'iqf_rejection_qty': sub.rejected_qty,
+                    'iqf_acceptance': sub.submission_type == 'FULL_ACCEPT',
+                    'iqf_rejection': sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'),
+                    'iqf_few_cases_acceptance': sub.submission_type == 'PARTIAL',
+                    'iqf_accepted_qty_verified': True,
+                    'iqf_missing_qty': 0,
+                    'iqf_physical_qty': sub.iqf_incoming_qty,
+                    'brass_onhold_picking': False,
+                    'last_process_module': 'IQF',
+                    'iqf_accepted_tray_scan_status': True,
+                    'Moved_to_D_Picker': False,
+                    'model_images': images,
+                    'status_label': 'ACCEPT' if sub.submission_type == 'FULL_ACCEPT' else 'PARTIAL',
+                    'submission_type': sub.submission_type,
+                    'accepted_comment': accepted_comment or '',
+                    'IQF_pick_remarks': sub.remarks or '',
+                    'tray_qty_list': '',
+                })
+
+            return Response({'master_data': master_data}, template_name=self.template_name)
+        except Exception as e:
+            print(f'[IQF ACCEPT TABLE ERROR] {e}')
+            traceback.print_exc()
+            return Response({'master_data': []}, template_name=self.template_name)
 
 
-# Redirect stub for legacy rejection-table link
+# IQF - Reject table
 @method_decorator(login_required, name='dispatch')
 class IQFRejectionTableView(APIView):
     renderer_classes = [TemplateHTMLRenderer]
@@ -1536,18 +1728,42 @@ class IQFRejectionTableView(APIView):
                     model_no = sub.batch_id.model_stock_no.model_no or ''
                     plating_stk_no = sub.batch_id.plating_stk_no or ''
 
+                # Compute delinked trays from original snapshot
+                delinked_trays = []
+                accept_ids = {t['tray_id'] for t in accept_trays}
+                reject_ids = {t['tray_id'] for t in reject_trays}
+                orig = sub.original_data or {}
+                for t in orig.get('trays', []):
+                    tid = t.get('tray_id', '')
+                    if tid and tid not in accept_ids and tid not in reject_ids:
+                        delinked_trays.append({
+                            'tray_id': tid,
+                            'qty': int(t.get('qty', 0)),
+                        })
+
+                # Status label
+                if sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'):
+                    status_label = 'REJECT'
+                elif sub.submission_type == 'PARTIAL':
+                    status_label = 'PARTIAL'
+                else:
+                    status_label = sub.submission_type
+
                 rows.append({
                     'lot_id': sub.lot_id,
                     'batch_id': sub.batch_id.batch_id if sub.batch_id else '',
                     'model_no': model_no,
                     'plating_stk_no': plating_stk_no,
                     'submission_type': sub.submission_type,
+                    'status_label': status_label,
                     'iqf_incoming_qty': sub.iqf_incoming_qty,
                     'accepted_qty': sub.accepted_qty,
                     'rejected_qty': sub.rejected_qty,
+                    'delink_qty': sum(t['qty'] for t in delinked_trays),
                     'reasons': reasons_list,
                     'reject_trays': reject_trays,
                     'accept_trays': accept_trays,
+                    'delinked_trays': delinked_trays,
                     'created_by': sub.created_by.username if sub.created_by else '',
                     'created_at': sub.created_at,
                 })
@@ -1594,6 +1810,18 @@ def iqf_verify_trays_confirm(request):
         if accept_data and accept_data.get('trays'):
             accept_trays = accept_data['trays']
 
+        # ── Compute freed (delinked) trays dynamically from stored snapshots ──
+        freed_trays = []
+        original_data = sub.original_data or {}
+        original_trays = original_data.get('trays', [])
+        if original_trays:
+            accept_tray_ids = {t.get('tray_id', '') for t in accept_trays}
+            reject_tray_ids = {t.get('tray_id', '') for t in reject_trays}
+            for t in original_trays:
+                tid = t.get('tray_id', '')
+                if tid and tid not in accept_tray_ids and tid not in reject_tray_ids:
+                    freed_trays.append({'tray_id': tid, 'qty': t.get('qty', 0)})
+
         return Response({
             'success': True,
             'lot_id': lot_id,
@@ -1603,6 +1831,7 @@ def iqf_verify_trays_confirm(request):
             'rejected_qty': sub.rejected_qty,
             'reject_trays': reject_trays,
             'accept_trays': accept_trays,
+            'freed_trays': freed_trays,
             'rejection_details': sub.rejection_details or [],
         })
 
@@ -1947,11 +2176,16 @@ def iqf_lot_rejection(request):
     data = request.data
     lot_id = data.get('lot_id')
     lot_rejection = data.get('lot_rejection')
+    remark = (data.get('remark') or '').strip()
 
     if not lot_id:
         return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
     if lot_rejection is None:
         return Response({'success': False, 'error': 'Missing lot_rejection flag'}, status=400)
+
+    # Remark is mandatory when activating lot rejection
+    if bool(lot_rejection) and not remark:
+        return Response({'success': False, 'error': 'Remark is mandatory for lot rejection', 'remark_required': True}, status=400)
 
     lot_rejection = bool(lot_rejection)
 
@@ -2059,6 +2293,7 @@ def iqf_lot_rejection(request):
                         'full_reject_data': full_reject_data,
                         'partial_reject_data': None,
                         'rejection_details': None,
+                        'remarks': remark,
                         'is_completed': True,
                         'created_by': request.user,
                     }
@@ -2148,5 +2383,194 @@ def iqf_lot_rejection(request):
 
     except Exception as e:
         print(f'[IQF LOT REJECTION ERROR] {e}')
+        traceback.print_exc()
+        return Response({'success': False, 'error': 'Server error'}, status=500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── CONSOLIDATED IQF LOT DETAILS API — SINGLE SOURCE OF TRUTH ──
+# All IQF tables (Accept, Reject, Completed, View Icon) MUST use this endpoint.
+# SOURCE: IQF_Submitted table ONLY. No duplicate storage, no secondary queries.
+# ═══════════════════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def iqf_lot_details(request):
+    """SINGLE consolidated API for ALL IQF lot data.
+
+    SOURCE OF TRUTH: IQF_Submitted table ONLY.
+    Returns accepted, rejected, delinked data + summary with status labels.
+
+    Query params: ?lot_id=X&table=accept|reject|complete (optional filter)
+    - table=accept  → only accepted trays returned
+    - table=reject  → only rejected trays returned
+    - table=complete → all trays, but delinked qty hidden (set to '')
+    - omitted → full response (PickTable view icon)
+    Response: { lot_id, accepted, rejected, delinked, rejection_reasons, summary }
+    """
+    lot_id = request.GET.get('lot_id')
+    table_filter = request.GET.get('table', '').strip().lower()
+    if not lot_id:
+        return Response({'success': False, 'error': 'lot_id required'}, status=400)
+
+    print(f"[IQF LOT DETAILS] Input lot_id: {lot_id}")
+
+    try:
+        sub = IQF_Submitted.objects.select_related(
+            'batch_id', 'batch_id__model_stock_no', 'created_by'
+        ).filter(lot_id=lot_id, is_completed=True).last()
+
+        if not sub:
+            print(f"[IQF LOT DETAILS] No IQF_Submitted record for lot {lot_id}")
+            return Response({
+                'success': True,
+                'lot_id': lot_id,
+                'accepted': [],
+                'rejected': [],
+                'delinked': [],
+                'rejection_reasons': [],
+                'summary': {
+                    'accepted_qty': 0,
+                    'rejected_qty': 0,
+                    'delink_qty': 0,
+                    'iqf_incoming_qty': 0,
+                    'original_lot_qty': 0,
+                    'submission_type': '',
+                    'status_label': 'NOT_PROCESSED',
+                    'remarks': '',
+                    'created_by': '',
+                    'created_at': '',
+                },
+                'source': 'IQF_Submitted',
+            })
+
+        print(f"[IQF LOT DETAILS] Found: type={sub.submission_type}, "
+              f"accepted={sub.accepted_qty}, rejected={sub.rejected_qty}")
+
+        # ── Extract ACCEPTED trays ──
+        accepted = []
+        accept_data = sub.partial_accept_data or sub.full_accept_data
+        if accept_data and accept_data.get('trays'):
+            for t in accept_data['trays']:
+                qty = int(t.get('qty', 0))
+                if qty <= 0:
+                    continue
+                accepted.append({
+                    'tray_id': t.get('tray_id', ''),
+                    'qty': qty,
+                    'top_tray': bool(t.get('top_tray', t.get('is_top_tray', False))),
+                    'status': 'ACCEPT',
+                })
+
+        # ── Extract REJECTED trays ──
+        rejected = []
+        reject_data = sub.partial_reject_data or sub.full_reject_data
+        if reject_data and reject_data.get('trays'):
+            for t in reject_data['trays']:
+                qty = int(t.get('qty', 0))
+                if qty <= 0:
+                    continue
+                rejected.append({
+                    'tray_id': t.get('tray_id', ''),
+                    'qty': qty,
+                    'top_tray': bool(t.get('top_tray', False)),
+                    'status': 'REJECT',
+                })
+
+        # ── Compute DELINKED trays from original snapshot ──
+        delinked = []
+        accept_tray_ids = {t['tray_id'] for t in accepted}
+        reject_tray_ids = {t['tray_id'] for t in rejected}
+
+        original_data = sub.original_data or {}
+        original_trays = original_data.get('trays', [])
+        if original_trays:
+            for t in original_trays:
+                tid = t.get('tray_id', '')
+                if tid and tid not in accept_tray_ids and tid not in reject_tray_ids:
+                    delinked.append({
+                        'tray_id': tid,
+                        'qty': int(t.get('qty', 0)),
+                        'top_tray': bool(t.get('top_tray', False)),
+                        'status': 'DELINK',
+                    })
+
+        # Fallback: check IQFTrayId for explicitly delinked trays
+        if not delinked:
+            delinked_qs = IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=True)
+            for t in delinked_qs:
+                if t.tray_id not in accept_tray_ids and t.tray_id not in reject_tray_ids:
+                    delinked.append({
+                        'tray_id': t.tray_id,
+                        'qty': int(t.tray_quantity or 0),
+                        'top_tray': bool(t.top_tray),
+                        'status': 'DELINK',
+                    })
+
+        # ── Determine status label ──
+        if sub.submission_type == 'FULL_ACCEPT':
+            status_label = 'ACCEPT'
+        elif sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'):
+            status_label = 'REJECT'
+        elif sub.submission_type == 'PARTIAL':
+            status_label = 'PARTIAL'
+        else:
+            status_label = sub.submission_type
+
+        # ── Rejection reasons from stored details ──
+        rejection_reasons = []
+        if sub.rejection_details:
+            for rd in sub.rejection_details:
+                rejection_reasons.append({
+                    'reason': rd.get('reason_text', ''),
+                    'reason_id': rd.get('reason_id', ''),
+                    'qty': rd.get('iqf_qty', 0),
+                })
+
+        delink_qty = sum(t['qty'] for t in delinked)
+        delink_tray_count = len(delinked)
+
+        # ── Table-specific filtering ──
+        # Accept table: show ONLY accepted trays
+        if table_filter == 'accept':
+            rejected = []
+            delinked = []
+        # Reject table: show ONLY rejected trays
+        elif table_filter == 'reject':
+            accepted = []
+            delinked = []
+        # Complete table: show all, but hide delinked qty
+        elif table_filter == 'complete':
+            for t in delinked:
+                t['qty'] = ''
+
+        response = {
+            'success': True,
+            'lot_id': lot_id,
+            'accepted': accepted,
+            'rejected': rejected,
+            'delinked': delinked,
+            'rejection_reasons': rejection_reasons,
+            'summary': {
+                'accepted_qty': sub.accepted_qty,
+                'rejected_qty': sub.rejected_qty,
+                'delink_qty': delink_qty,
+                'delink_tray_count': delink_tray_count,
+                'iqf_incoming_qty': sub.iqf_incoming_qty,
+                'original_lot_qty': sub.original_lot_qty,
+                'submission_type': sub.submission_type,
+                'status_label': status_label,
+                'remarks': sub.remarks or '',
+                'created_by': sub.created_by.username if sub.created_by else '',
+                'created_at': sub.created_at.isoformat() if sub.created_at else '',
+            },
+            'source': 'IQF_Submitted',
+        }
+
+        print(f"[IQF LOT DETAILS] Response: accepted={len(accepted)}, "
+              f"rejected={len(rejected)}, delinked={len(delinked)}, status={status_label}")
+        return Response(response)
+
+    except Exception as e:
+        print(f"[IQF LOT DETAILS ERROR] {e}")
         traceback.print_exc()
         return Response({'success': False, 'error': 'Server error'}, status=500)
