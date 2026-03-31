@@ -161,6 +161,81 @@ class IQFPickTableView(APIView):
         lot_id = request.GET.get('lot_id')
         iqf_rejection_reasons = IQF_Rejection_Table.objects.all()
 
+        # ── Dynamic Re-entry: Brass Audit Rejection → IQF Reprocessing ──
+        # Detect lots rejected from Brass Audit (batch or partial) that were
+        # previously processed by IQF. Use IQF_Submitted existence as indicator
+        # since IQF flags get reset when Brass QC accepts the lot onward.
+        iqf_submitted_lot_ids = set(
+            IQF_Submitted.objects.values_list('lot_id', flat=True)
+        )
+
+        if iqf_submitted_lot_ids:
+            # Case 1: Batch rejection from Brass Audit
+            batch_reentry = TotalStockModel.objects.filter(
+                brass_audit_rejection=True,
+                send_brass_audit_to_iqf=False,
+                lot_id__in=iqf_submitted_lot_ids,
+            )
+            batch_ids = list(batch_reentry.values_list('lot_id', flat=True))
+            if batch_ids:
+                batch_reentry.update(
+                    send_brass_audit_to_iqf=True,
+                    iqf_acceptance=False,
+                    iqf_rejection=False,
+                    iqf_few_cases_acceptance=False,
+                    iqf_accepted_qty_verified=False,
+                    iqf_onhold_picking=False,
+                    brass_audit_rejection=False,
+                    send_brass_audit_to_qc=False,
+                )
+                # Clean stale IQF data so lot gets fresh processing
+                for lid in batch_ids:
+                    IQF_Submitted.objects.filter(lot_id=lid).delete()
+                    IQF_Draft_Store.objects.filter(lot_id=lid).delete()
+                    IQF_Accepted_TrayID_Store.objects.filter(lot_id=lid).delete()
+                    IQF_Accepted_TrayScan.objects.filter(lot_id=lid).delete()
+                    IQF_Rejected_TrayScan.objects.filter(lot_id=lid).delete()
+                    IQF_Rejection_ReasonStore.objects.filter(lot_id=lid).delete()
+                    IQFTrayId.objects.filter(lot_id=lid).delete()
+                    IQF_OptimalDistribution_Draft.objects.filter(lot_id=lid).delete()
+                print(f"🔄 [IQF RE-ENTRY BATCH] Reset {len(batch_ids)} lot(s) for IQF reprocessing: {batch_ids}")
+
+            # Case 2: Partial rejection from Brass Audit (lot accepted with rejections)
+            partial_rej_lot_ids = set(
+                Brass_Audit_Rejection_ReasonStore.objects.filter(
+                    batch_rejection=False
+                ).values_list('lot_id', flat=True)
+            ) & iqf_submitted_lot_ids
+
+            if partial_rej_lot_ids:
+                partial_reentry = TotalStockModel.objects.filter(
+                    brass_audit_few_cases_accptance=True,
+                    brass_audit_accepted_tray_scan_status=True,
+                    send_brass_audit_to_iqf=False,
+                    lot_id__in=partial_rej_lot_ids,
+                )
+                partial_ids = list(partial_reentry.values_list('lot_id', flat=True))
+                if partial_ids:
+                    partial_reentry.update(
+                        send_brass_audit_to_iqf=True,
+                        iqf_acceptance=False,
+                        iqf_rejection=False,
+                        iqf_few_cases_acceptance=False,
+                        iqf_accepted_qty_verified=False,
+                        iqf_onhold_picking=False,
+                    )
+                    # Clean stale IQF data so lot gets fresh processing
+                    for lid in partial_ids:
+                        IQF_Submitted.objects.filter(lot_id=lid).delete()
+                        IQF_Draft_Store.objects.filter(lot_id=lid).delete()
+                        IQF_Accepted_TrayID_Store.objects.filter(lot_id=lid).delete()
+                        IQF_Accepted_TrayScan.objects.filter(lot_id=lid).delete()
+                        IQF_Rejected_TrayScan.objects.filter(lot_id=lid).delete()
+                        IQF_Rejection_ReasonStore.objects.filter(lot_id=lid).delete()
+                        IQFTrayId.objects.filter(lot_id=lid).delete()
+                        IQF_OptimalDistribution_Draft.objects.filter(lot_id=lid).delete()
+                    print(f"🔄 [IQF RE-ENTRY PARTIAL] Reset {len(partial_ids)} lot(s) for IQF reprocessing: {partial_ids}")
+
         # ✅ CHANGED: Query TotalStockModel directly instead of ModelMasterCreation
         brass_rejection_qty_subquery = Brass_QC_Rejection_ReasonStore.objects.filter(
             lot_id=OuterRef('lot_id')
@@ -190,7 +265,7 @@ class IQFPickTableView(APIView):
             # ✅ Direct filtering on TotalStockModel fields (no more subquery filtering)
             Q(send_brass_audit_to_iqf=True)
         ).exclude(
-            Q(brass_audit_accptance=True) |
+            Q(brass_audit_accptance=True, send_brass_audit_to_iqf=False) |
             Q(iqf_acceptance=True) |
             Q(iqf_rejection=True) |
             Q(send_brass_audit_to_iqf=True, brass_audit_onhold_picking=True)|
@@ -1322,16 +1397,19 @@ def iqf_tray_details(request):
                 'source': 'IQF_Submitted',
             })
 
-        # FALLBACK: Dynamic aggregation from Brass_QC_Rejected_TrayScan (pre-IQF completion)
-        print(f"[IQF TRAY API] Fallback: Dynamic aggregation from Brass_QC_Rejected_TrayScan for lot: {lot_id}")
+        # FALLBACK: Dynamic aggregation from rejection scan logs (pre-IQF completion)
+        # ✅ FIX: Check Brass Audit FIRST — for re-entry lots from Brass Audit partial
+        # rejection, fresh data is in Brass_Audit_Rejected_TrayScan. Old/stale
+        # Brass_QC_Rejected_TrayScan records from the first cycle would give wrong qty.
+        print(f"[IQF TRAY API] Fallback: Dynamic aggregation for lot: {lot_id}")
 
         # SOURCE OF TRUTH: Aggregate rejected_tray_quantity per tray from rejection scan logs
         # rejected_tray_quantity is CharField, so aggregate in Python
-        brass_reject_rows = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+        brass_reject_rows = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
 
-        # If no Brass QC rows, try Brass Audit as fallback
+        # If no Brass Audit rows, try Brass QC as fallback
         if not brass_reject_rows.exists():
-            brass_reject_rows = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+            brass_reject_rows = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
 
         # Aggregate per tray_id (field is rejected_tray_id in Brass_QC_Rejected_TrayScan)
         tray_qty_map = {}
@@ -2703,10 +2781,13 @@ def iqf_lot_details(request):
 
             # ── FALLBACK: Lot not yet processed in IQF — show incoming trays ──
             # Same aggregation logic as iqf_tray_details fallback
+            # ✅ FIX: Check Brass Audit FIRST — for re-entry lots from Brass Audit
+            # partial rejection, fresh data is in Brass_Audit_Rejected_TrayScan.
+            # Old Brass_QC_Rejected_TrayScan has stale records from cycle 1.
             tray_qty_map = {}
-            brass_reject_rows = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+            brass_reject_rows = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
             if not brass_reject_rows.exists():
-                brass_reject_rows = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+                brass_reject_rows = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
             for row in brass_reject_rows:
                 tray_id = getattr(row, 'rejected_tray_id', None) or getattr(row, 'tray_id', None) or ''
                 if not tray_id:
