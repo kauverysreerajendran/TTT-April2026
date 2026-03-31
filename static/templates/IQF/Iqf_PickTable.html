@@ -1408,6 +1408,42 @@
 #iqfInfoModalBody::-webkit-scrollbar-thumb { background:#bdbdbd; border-radius:3px; }
 #iqfInfoModalBody::-webkit-scrollbar-thumb:hover { background:#9e9e9e; }
 
+/* ═══ IQF Accept → Delink & Reject Allocation Modal ═══ */
+#iqfDelinkModalOverlay { backdrop-filter: blur(2px); }
+#iqfDelinkModalOverlay .delink-modal-container { background:#fff; border-radius:14px; width:90%; max-width:700px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 12px 36px rgba(0,0,0,0.18); animation:iqfInfoSlideIn 0.3s ease; }
+#iqfDelinkModalOverlay .delink-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid #e0e0e0; background:#f8f9fa; border-radius:14px 14px 0 0; }
+#iqfDelinkModalOverlay .delink-body { flex:1; overflow-y:auto; padding:14px 20px; }
+#iqfDelinkModalOverlay .delink-body::-webkit-scrollbar { width:6px; }
+#iqfDelinkModalOverlay .delink-body::-webkit-scrollbar-track { background:#f5f5f5; border-radius:3px; }
+#iqfDelinkModalOverlay .delink-body::-webkit-scrollbar-thumb { background:#bdbdbd; border-radius:3px; }
+#iqfDelinkModalOverlay .delink-footer { display:flex; justify-content:flex-end; gap:10px; padding:12px 20px; border-top:1px solid #e0e0e0; background:#f8f9fa; border-radius:0 0 14px 14px; }
+#iqfDelinkModalOverlay .delink-badge-bar { padding:10px 20px; display:flex; gap:10px; flex-wrap:wrap; border-bottom:1px solid #f0f0f0; }
+#iqfDelinkModalOverlay .delink-badge { padding:4px 14px; border-radius:8px; font-size:12px; font-weight:600; }
+#iqfDelinkModalOverlay .delink-tray-table { width:100%; border-collapse:collapse; font-size:12px; }
+#iqfDelinkModalOverlay .delink-tray-table th { text-align:left; padding:6px 8px; border-bottom:2px solid #1a237e; font-weight:600; font-size:12px; }
+#iqfDelinkModalOverlay .delink-tray-table td { padding:6px 8px; }
+#iqfDelinkModalOverlay .delink-tray-table tr { border-bottom:1px solid #f0f0f0; }
+#iqfDelinkModalOverlay .delink-tray-table tr.row-accepted { background:#f0fff4; }
+#iqfDelinkModalOverlay .delink-tray-table tr.row-delinked { background:#fff3e0; }
+#iqfDelinkModalOverlay .delink-tray-table tr.row-reject { background:#ffebee; }
+#iqfDelinkModalOverlay .delink-tray-table tr.row-pending { background:#e3f2fd; }
+#iqfDelinkModalOverlay .delink-reject-table { width:100%; border-collapse:collapse; font-size:12px; }
+#iqfDelinkModalOverlay .delink-reject-table th { text-align:left; padding:6px 8px; border-bottom:2px solid #c62828; background:#ffebee; font-weight:600; font-size:12px; }
+#iqfDelinkModalOverlay .delink-reject-table td { padding:6px 8px; border-bottom:1px solid #f0f0f0; }
+#iqfDelinkModalOverlay .delink-cb { width:16px; height:16px; cursor:pointer; accent-color:#e65100; }
+#iqfDelinkModalOverlay .delink-cb:disabled { opacity:0.5; cursor:not-allowed; accent-color:#2e7d32; }
+#iqfDelinkModalOverlay .delink-btn { padding:8px 22px; border-radius:6px; font-weight:600; font-size:13px; cursor:pointer; }
+#iqfDelinkModalOverlay .delink-btn-cancel { border:1px solid #ccc; background:#fff; color:#333; }
+#iqfDelinkModalOverlay .delink-btn-confirm { border:none; background:#28a745; color:#fff; }
+#iqfDelinkModalOverlay .delink-btn-confirm:hover { background:#218838; }
+#iqfDelinkModalOverlay .delink-btn-cancel:hover { background:#f5f5f5; }
+#iqfDelinkModalOverlay .delink-status-badge { padding:2px 10px; border-radius:8px; font-size:11px; font-weight:600; display:inline-block; }
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+  #iqfDelinkModalOverlay .delink-modal-container { width:95%; max-width:95vw; }
+  #iqfDelinkModalOverlay .delink-cb { width:22px; height:22px; }
+  #iqfDelinkModalOverlay .delink-tray-table { font-size:14px; }
+  #iqfDelinkModalOverlay .delink-tray-table th, #iqfDelinkModalOverlay .delink-tray-table td { padding:8px 10px; }
+}
 
 </style>
 
@@ -2345,6 +2381,67 @@
   </div>
 </div>
 
+<!-- ═══ IQF Accept → Delink & Reject Allocation Modal ═══ -->
+<div id="iqfDelinkModalOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:31000; align-items:center; justify-content:center;">
+  <div class="delink-modal-container">
+    <!-- Header -->
+    <div class="delink-header">
+      <div>
+        <div style="font-weight:700; font-size:15px; color:#1a237e;">Delink & Reject Allocation</div>
+        <div id="iqfDelinkLotBadge" style="font-size:11px; color:#666; margin-top:2px;"></div>
+      </div>
+      <button id="iqfDelinkModalClose" style="background:none; border:none; font-size:20px; cursor:pointer; color:#666; padding:4px 8px;" aria-label="Close">&times;</button>
+    </div>
+    <!-- Summary badges -->
+    <div class="delink-badge-bar">
+      <span class="delink-badge" style="background:#e3f2fd;">📦 RW Qty: <b id="iqfDelinkRwQty">0</b></span>
+      <span class="delink-badge" style="background:#e8f5e9;">✅ Accepted: <b id="iqfDelinkAccQty">0</b></span>
+      <span class="delink-badge" style="background:#ffebee;">❌ Rejected: <b id="iqfDelinkRejQty">0</b></span>
+      <span class="delink-badge" style="background:#fff3e0;">🔓 Max Delink: <b id="iqfDelinkMaxCount">0</b></span>
+    </div>
+    <!-- Body -->
+    <div class="delink-body">
+      <!-- Tray table -->
+      <div style="font-weight:700; font-size:13px; color:#333; margin-bottom:6px;">Original Lot Tray Details</div>
+      <table class="delink-tray-table">
+        <thead>
+          <tr>
+            <th style="text-align:center; width:40px;">Delink</th>
+            <th style="width:40px;">S.No</th>
+            <th>Tray ID</th>
+            <th style="text-align:right;">Qty</th>
+            <th style="text-align:center;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="iqfDelinkTrayTableBody">
+        </tbody>
+      </table>
+      <div id="iqfDelinkLimitMsg" style="font-size:11px; padding:6px 8px; margin-top:6px; border-radius:4px; display:none;"></div>
+
+      <!-- Reject Allocation Section -->
+      <div id="iqfDelinkRejectSection" style="margin-top:14px; display:none;">
+        <div style="font-weight:700; font-size:13px; color:#b71c1c; margin-bottom:6px;"><i class="fa fa-times-circle" style="margin-right:4px;"></i>Reject Tray Allocation</div>
+        <table class="delink-reject-table">
+          <thead>
+            <tr>
+              <th style="width:40px;">S.No</th>
+              <th>Tray ID</th>
+              <th style="text-align:right;">Reject Qty</th>
+            </tr>
+          </thead>
+          <tbody id="iqfDelinkRejectTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div class="delink-footer">
+      <button id="iqfDelinkCancelBtn" class="delink-btn delink-btn-cancel">Cancel</button>
+      <button id="iqfDelinkConfirmBtn" class="delink-btn delink-btn-confirm">Confirm & Proceed</button>
+    </div>
+  </div>
+</div>
+
 {% block script %}
 
 <!-- Fetches and displays audit data.
@@ -2735,10 +2832,10 @@
             } else {
               console.log(title+" - "+msg); location.reload();
             }
-          } else if(json.submission_type === 'PARTIAL' && json.reject_required){
-            // ── PARTIAL ACCEPT: Single-step confirm modal with reject + delink info ──
-            console.log('[IQF PARTIAL] reject_required=' + json.reject_required + ', delink_required=' + json.delink_required);
-            _showPartialRejectDelinkFlow(json);
+          } else if(json.submission_type === 'PARTIAL' && json.open_delink_modal){
+            // ── PARTIAL ACCEPT: Open Delink & Reject Allocation modal ──
+            console.log('[IQF PARTIAL] open_delink_modal=true, rejected_qty=' + json.rejected_qty);
+            window._iqfOpenDelinkModalFromProceed(json);
           } else {
             var title = (action === 'draft') ? 'Draft saved' : 'Submitted successfully';
             if(typeof Swal !== 'undefined'){
@@ -2837,12 +2934,15 @@
     }
 
     // ── Verify Tray button (pick table action column) ──
+    // Opens the DELINK MODAL — user must manually select delinks and click Confirm.
+    // NO auto-allocation popup. NO auto-finalization. Backend decides, frontend renders.
     var verifyBtn = e.target.closest('.iqf-verify-tray-btn');
     if(verifyBtn){
       var lotId = verifyBtn.getAttribute('data-stock-lot-id') || '';
       if(!lotId){ console.error('[VERIFY TRAY] No lot_id'); return; }
       verifyBtn.disabled = true;
-      var csrftoken = getCookie('csrftoken');
+
+      // Fetch saved IQF_Submitted data to get accepted_tray_ids and rejected_qty
       fetch('/iqf/iqf_verify_trays_confirm/?lot_id=' + encodeURIComponent(lotId))
         .then(function(res){ return res.json(); })
         .then(function(json){
@@ -2851,85 +2951,14 @@
             Swal.fire({ icon: 'error', title: 'Error', text: (json && json.error) || 'Failed to fetch verification data' });
             return;
           }
-          // Build confirm popup (same layout as _showPartialRejectDelinkFlow)
-          var html = '<div style="max-height:350px;overflow-y:auto;padding:4px;">';
-          html += '<div style="display:flex;gap:8px;margin-bottom:10px;justify-content:center;">';
-          html += '<span style="background:#e8f5e9;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:600;">Accepted: '+json.accepted_qty+'</span>';
-          html += '<span style="background:#ffebee;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:600;">Rejected: '+json.rejected_qty+'</span>';
-          html += '</div>';
-          if(json.reject_trays && json.reject_trays.length > 0){
-            html += '<div style="font-weight:700;font-size:12px;color:#b71c1c;margin:6px 0 4px;"><i class="fa fa-times-circle" style="margin-right:3px;"></i>Reject Tray Allocation</div>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;">';
-            html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#ffebee;">S.No</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#ffebee;">Tray ID</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#ffebee;text-align:right;">Qty</th></tr>';
-            json.reject_trays.forEach(function(t, i){
-              html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+(i+1)+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;text-align:right;font-weight:600;">'+t.qty+'</td></tr>';
-            });
-            html += '</table>';
-          }
-          if(json.accept_trays && json.accept_trays.length > 0){
-            html += '<div style="font-weight:700;font-size:12px;color:#1b5e20;margin:6px 0 4px;"><i class="fa fa-check-circle" style="margin-right:3px;"></i>Accepted Tray Allocation</div>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;">';
-            html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#e8f5e9;">S.No</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#e8f5e9;">Tray ID</th><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#e8f5e9;text-align:right;">Qty</th></tr>';
-            json.accept_trays.forEach(function(t, i){
-              html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+(i+1)+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td><td style="border:1px solid #e0e0e0;padding:3px 6px;text-align:right;font-weight:600;">'+t.qty+'</td></tr>';
-            });
-            html += '</table>';
-          }
-          // ── DELINKED TRAYS ──
-          var freedTrays = json.freed_trays || [];
-          if(freedTrays.length > 0){
-            html += '<div style="border-top:1px solid #e0e0e0;margin:6px 0;"></div>';
-            html += '<div style="font-weight:700;font-size:12px;color:#e65100;margin:4px 0 3px;"><i class="fa fa-unlink" style="margin-right:3px;"></i>Delinked Trays</div>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;">';
-            html += '<tr><th style="border:1px solid #e0e0e0;padding:3px 6px;background:#fff3e0;">Tray ID</th></tr>';
-            freedTrays.forEach(function(t){
-              html += '<tr><td style="border:1px solid #e0e0e0;padding:3px 6px;">'+t.tray_id+'</td></tr>';
-            });
-            html += '</table>';
-          }
-          html += '</div>';
-          // Show in iqfInfoModal
-          var overlay = document.getElementById('iqfInfoModalOverlay');
-          var titleEl = document.getElementById('iqfInfoModalTitle');
-          var bodyEl = document.getElementById('iqfInfoModalBody');
-          var footerEl = document.getElementById('iqfInfoModalFooter');
-          var closeBtn = document.getElementById('iqfInfoModalClose');
-          titleEl.textContent = 'Confirm IQF Submission';
-          bodyEl.innerHTML = html;
-          footerEl.innerHTML = '<button id="iqfInfoCancelBtn" style="padding:8px 20px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#333;font-weight:600;font-size:13px;cursor:pointer;">Close</button><button id="iqfInfoConfirmBtn" style="padding:8px 20px;border:none;border-radius:6px;background:#28a745;color:#fff;font-weight:600;font-size:13px;cursor:pointer;">Confirm & Continue</button>';
-          footerEl.style.display = 'flex';
-          footerEl.style.justifyContent = 'flex-end';
-          footerEl.style.gap = '8px';
-          overlay.style.display = 'flex';
-          function _closeVerifyModal(){
-            overlay.style.display = 'none';
-            bodyEl.innerHTML = '';
-            footerEl.innerHTML = '';
-            footerEl.style.display = 'none';
-            closeBtn.removeEventListener('click', _closeVerifyModal);
-          }
-          closeBtn.addEventListener('click', _closeVerifyModal);
-          document.getElementById('iqfInfoCancelBtn').addEventListener('click', _closeVerifyModal);
-          document.getElementById('iqfInfoConfirmBtn').addEventListener('click', function(){
-            var cBtn = document.getElementById('iqfInfoConfirmBtn');
-            if(cBtn) cBtn.disabled = true;
-            fetch('/iqf/iqf_verify_trays_confirm/', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
-              body: JSON.stringify({ lot_id: lotId })
-            }).then(function(res){ return res.json(); })
-            .then(function(resp){
-              _closeVerifyModal();
-              if(resp && resp.success){
-                Swal.fire({ icon: 'success', title: 'Submitted successfully', toast: false, timer: 1600, showConfirmButton: false }).then(function(){ location.reload(); });
-              } else {
-                Swal.fire({ icon: 'error', title: 'Error', text: resp.error || 'Failed to finalize' });
-              }
-            }).catch(function(err){
-              _closeVerifyModal();
-              Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to finalize submission' });
-            });
-          });
+          // Extract accepted tray IDs from saved IQF_Submitted data
+          var accIds = (json.accept_trays || []).map(function(t){ return t.tray_id; });
+          var rejTotal = json.rejected_qty || 0;
+
+          console.log('[VERIFY TRAY] Opening delink modal: lot=' + lotId + ', rej=' + rejTotal + ', accepted=' + accIds.length);
+
+          // Open delink modal — user controls delink selection, backend computes reject allocation
+          window._iqfOpenDelinkModal(lotId, rejTotal, accIds);
         }).catch(function(err){
           verifyBtn.disabled = false;
           console.error('[VERIFY TRAY] Fetch failed', err);
@@ -3036,28 +3065,30 @@
 
           var s = data.summary || {};
           var html = '';
-          html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
-          html += '<div style="padding:4px 10px;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:600;">Accepted: '+escapeHtml(String(s.accepted_qty||0))+'</div>';
-          html += '<div style="padding:4px 10px;border-radius:8px;background:#ffebee;color:#c62828;font-size:12px;font-weight:600;">Rejected: '+escapeHtml(String(s.rejected_qty||0))+'</div>';
-          html += '<div style="padding:4px 10px;border-radius:8px;background:#f5f5f5;color:#616161;font-size:12px;font-weight:600;">Delinked Trays: '+escapeHtml(String(s.delink_tray_count||0))+'</div>';
-          html += '<div style="padding:4px 10px;border-radius:8px;background:#e3f2fd;color:#1565c0;font-size:12px;font-weight:600;">Incoming: '+escapeHtml(String(s.iqf_incoming_qty||0))+'</div>';
-          html += '</div>';
-
-          if(s.status_label){
-            var lblColor = s.status_label==='ACCEPT'?'#2e7d32':s.status_label==='REJECT'?'#c62828':s.status_label==='PARTIAL'?'#e65100':'#616161';
-            html += '<div style="margin-bottom:10px;"><span style="background:'+lblColor+'22;color:'+lblColor+';padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;border:1px solid '+lblColor+'44;">'+escapeHtml(s.status_label)+'</span></div>';
-          }
+          // ── IQF pick table: no history info — always treated as fresh lot ──
+          // html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
+          // html += '<div ...>Accepted: ...</div>';
+          // html += '<div ...>Rejected: ...</div>';
+          // html += '<div ...>Delinked Trays: ...</div>';
+          // html += '<div ...>Incoming: ...</div>';
+          // html += '</div>';
+          // if(s.status_label){ ... }
 
           var idx = 0;
           var sec;
-          sec = buildSection('Accepted Trays', '#2e7d32', 'fa-check-circle', data.accepted, idx);
+          // Dynamic section title: "Incoming Trays" for pre-IQF lots, "Accepted Trays" after IQF processing
+          var acceptTitle = (data.accepted.length && data.accepted[0].status === 'INCOMING') ? 'Incoming Trays' : 'Accepted Trays';
+          var acceptColor = (acceptTitle === 'Incoming Trays') ? '#1565c0' : '#2e7d32';
+          var acceptIcon  = (acceptTitle === 'Incoming Trays') ? 'fa-inbox' : 'fa-check-circle';
+          sec = buildSection(acceptTitle, acceptColor, acceptIcon, data.accepted, idx);
           html += sec.html; idx = sec.nextIdx;
-          sec = buildSection('Rejected Trays', '#c62828', 'fa-times-circle', data.rejected, idx);
-          html += sec.html; idx = sec.nextIdx;
-          sec = buildSection('Delinked Trays', '#616161', 'fa-unlink', data.delinked, idx);
-          html += sec.html; idx = sec.nextIdx;
+          // ── HIDDEN: Rejected & Delinked tray history not needed in IQF pick table ──
+          // sec = buildSection('Rejected Trays', '#c62828', 'fa-times-circle', data.rejected, idx);
+          // html += sec.html; idx = sec.nextIdx;
+          // sec = buildSection('Delinked Trays', '#616161', 'fa-unlink', data.delinked, idx);
+          // html += sec.html; idx = sec.nextIdx;
 
-          if(!data.accepted.length && !data.rejected.length && !data.delinked.length){
+          if(!data.accepted.length){
             html += '<div style="padding:16px;text-align:center;color:#999;">No trays recorded for this lot</div>';
           }
 
@@ -3268,6 +3299,8 @@ document.addEventListener('click', function(evt){
     if(section) section.style.display = 'none';
     var tbody = document.getElementById('iqf-accepted-tray-slots-body');
     if(tbody) tbody.innerHTML = '';
+    // Reset delink modal state
+    if(typeof window._iqfResetDelinkModal === 'function') window._iqfResetDelinkModal();
   };
 
   // ── Store current lot_id and rejection total for validation calls ──
@@ -3279,6 +3312,11 @@ document.addEventListener('click', function(evt){
   window._iqfFetchTraySlots = function(lotId, rejTotal){
     _validationLotId = lotId;
     _validationRejTotal = rejTotal || 0;
+    // Expose globally for delink modal
+    window._iqfValidationLotId = lotId;
+    window._iqfValidationRejTotal = rejTotal || 0;
+    // Reset delink modal state on new fetch
+    if(typeof window._iqfResetDelinkModal === 'function') window._iqfResetDelinkModal();
     _origFetch(lotId, rejTotal);
   };
 
@@ -3345,6 +3383,8 @@ document.addEventListener('click', function(evt){
           // Auto-select for re-entry
           try{ inp.select(); }catch(e){}
         }
+
+        // (Delink modal now opens from PARTIAL response after Proceed click — no auto-open)
       })
       .catch(function(err){
         console.error('[TRAY VALIDATE] fetch failed', err);
@@ -3352,6 +3392,445 @@ document.addEventListener('click', function(evt){
         if(statusEl){ statusEl.textContent = 'Error'; statusEl.className = 'tray-scan-status status-invalid'; }
       });
   };
+
+})();
+</script>
+
+<!-- IQF Accept → Delink & Reject Allocation Modal — Pure fetch + render. Zero frontend logic. -->
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var _delinkLotId = null;
+  var _delinkRejTotal = 0;
+  var _delinkAcceptedTrayIds = [];
+  var _delinkModalData = null;
+  var _delinkModalShown = false;
+
+  function getCookie(name){
+    var cookieValue = null;
+    if(document.cookie && document.cookie !== ''){
+      var cookies = document.cookie.split(';');
+      for(var i = 0; i < cookies.length; i++){
+        var cookie = cookies[i].trim();
+        if(cookie.substring(0, name.length + 1) === (name + '=')){
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function escapeHtml(s){
+    if(s===null||s===undefined) return '';
+    return String(s).replace(/[&<>"']/g, function(m){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+  }
+
+  // ── Render entire modal from backend data — ZERO frontend logic ──
+  function renderModal(data){
+    _delinkModalData = data;
+
+    document.getElementById('iqfDelinkLotBadge').textContent = 'Lot: ' + escapeHtml(data.lot_id || '');
+    document.getElementById('iqfDelinkAccQty').textContent = data.accepted_qty || 0;
+    document.getElementById('iqfDelinkRejQty').textContent = data.rejected_qty || 0;
+    document.getElementById('iqfDelinkMaxCount').textContent = data.max_delink_count || 0;
+    document.getElementById('iqfDelinkRwQty').textContent = data.rw_qty || 0;
+
+    // ── Tray table ──
+    var tbody = document.getElementById('iqfDelinkTrayTableBody');
+    tbody.innerHTML = '';
+    var delinkedSet = {};
+    (data.delinked_tray_ids || []).forEach(function(tid){ delinkedSet[tid] = true; });
+
+    (data.original_trays || []).forEach(function(tray, idx){
+      var tr = document.createElement('tr');
+      var isAccepted = tray.status === 'ACCEPTED';
+      var isDelinked = tray.status === 'DELINKED';
+      var isReject   = tray.status === 'REJECT';
+      var isPending  = tray.status === 'PENDING';
+
+      if(isAccepted) tr.className = 'row-accepted';
+      else if(isDelinked) tr.className = 'row-delinked';
+      else if(isReject) tr.className = 'row-reject';
+      else if(isPending) tr.className = 'row-pending';
+
+      // Checkbox cell
+      var tdCb = document.createElement('td');
+      tdCb.style.textAlign = 'center';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'delink-cb';
+      cb.setAttribute('data-tray-id', tray.tray_id);
+
+      if(isAccepted){
+        cb.checked = true;
+        cb.disabled = true;
+        cb.title = 'Accepted — locked';
+      } else if(isDelinked){
+        cb.checked = true;
+        cb.disabled = false;
+        cb.classList.add('iqf-delink-checkbox');
+        cb.title = 'Selected for delink — click to unselect';
+      } else if(isReject){
+        cb.checked = false;
+        cb.disabled = true;
+        cb.title = 'Assigned for reject allocation';
+      } else {
+        // PENDING — available for delink selection
+        cb.checked = false;
+        cb.disabled = false;
+        cb.classList.add('iqf-delink-checkbox');
+        cb.title = 'Select to delink this tray';
+      }
+      tdCb.appendChild(cb);
+      tr.appendChild(tdCb);
+
+      // S.No
+      var tdNo = document.createElement('td');
+      tdNo.textContent = idx + 1;
+      tr.appendChild(tdNo);
+
+      // Tray ID
+      var tdId = document.createElement('td');
+      tdId.innerHTML = escapeHtml(tray.tray_id) + (tray.top_tray ? ' <span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;">Top</span>' : '');
+      tr.appendChild(tdId);
+
+      // Original Qty
+      var tdQty = document.createElement('td');
+      tdQty.style.textAlign = 'right';
+      tdQty.style.fontWeight = '600';
+      tdQty.textContent = tray.original_qty || tray.capacity || 0;
+      tr.appendChild(tdQty);
+
+      // Status badge
+      var tdStatus = document.createElement('td');
+      tdStatus.style.textAlign = 'center';
+      var badgeHtml = '';
+      if(isAccepted){
+        badgeHtml = '<span class="delink-status-badge" style="background:#e8f5e9;color:#2e7d32;">ACCEPTED</span>';
+      } else if(isDelinked){
+        badgeHtml = '<span class="delink-status-badge" style="background:#fff3e0;color:#e65100;">Moved to Delink</span>';
+      } else if(isReject){
+        badgeHtml = '<span class="delink-status-badge" style="background:#ffebee;color:#c62828;">REJECT (' + (tray.reject_qty || 0) + ')</span>';
+      } else {
+        badgeHtml = '<span class="delink-status-badge" style="background:#e3f2fd;color:#1565c0;">Delink or Reject</span>';
+      }
+      tdStatus.innerHTML = badgeHtml;
+      tr.appendChild(tdStatus);
+
+      tbody.appendChild(tr);
+    });
+
+    // ── Reject allocation table ──
+    var rejectSection = document.getElementById('iqfDelinkRejectSection');
+    var rejectTbody = document.getElementById('iqfDelinkRejectTableBody');
+    var rejectAlloc = data.reject_allocation || [];
+
+    if(rejectAlloc.length > 0){
+      rejectSection.style.display = 'block';
+      rejectTbody.innerHTML = '';
+      rejectAlloc.forEach(function(r, i){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>'+(i+1)+'</td><td>'+escapeHtml(r.tray_id)+'</td><td style="text-align:right;font-weight:600;">'+r.qty+'</td>';
+        rejectTbody.appendChild(tr);
+      });
+    } else {
+      rejectSection.style.display = 'none';
+      rejectTbody.innerHTML = '';
+    }
+
+    // ── Capacity validation bar ──
+    var limitMsg = document.getElementById('iqfDelinkLimitMsg');
+    var currentDelinks = (data.delinked_tray_ids || []).length;
+    var poolCap = data.reject_pool_capacity || 0;
+    var rejNeeded = data.rejected_qty || 0;
+    var capacitySufficient = poolCap >= rejNeeded;
+
+    // Always show capacity info when reject > 0
+    if(rejNeeded > 0){
+      limitMsg.style.display = 'block';
+      var capHtml = '<div style="margin-bottom:4px;"><b>Reject Pool Capacity:</b> ' + poolCap + ' / ' + rejNeeded + ' required';
+      if(capacitySufficient){
+        capHtml += ' <span style="color:#2e7d32;">✓</span>';
+      } else {
+        capHtml += ' <span style="color:#c62828;">✗ Insufficient</span>';
+      }
+      capHtml += '</div>';
+
+      if(!capacitySufficient){
+        limitMsg.style.background = '#ffebee';
+        limitMsg.style.color = '#c62828';
+        limitMsg.innerHTML = capHtml + '<i class="fa fa-exclamation-triangle"></i> <b>Selected trays cannot fulfill reject quantity.</b> Please select fewer trays for delink.';
+      } else if(data.max_delink_count > 0 && !data.delink_complete){
+        limitMsg.style.background = '#e3f2fd';
+        limitMsg.style.color = '#1565c0';
+        limitMsg.innerHTML = capHtml + '<i class="fa fa-info-circle"></i> Select trays for delink. Selected: <b>' + currentDelinks + '</b> / <b>' + data.max_delink_count + '</b> max';
+      } else if(data.delink_complete){
+        limitMsg.style.background = '#e8f5e9';
+        limitMsg.style.color = '#2e7d32';
+        limitMsg.innerHTML = capHtml + '<i class="fa fa-check-circle"></i> Delink selection complete. Reject allocation shown below.';
+      } else {
+        // max_delink_count = 0 — all trays needed for reject
+        limitMsg.style.background = '#fff3e0';
+        limitMsg.style.color = '#e65100';
+        limitMsg.innerHTML = capHtml + '<i class="fa fa-info-circle"></i> All remaining trays reserved for reject allocation. No delink available.';
+      }
+    } else {
+      limitMsg.style.display = 'none';
+    }
+
+    // ── Confirm button state ──
+    var confirmBtn = document.getElementById('iqfDelinkConfirmBtn');
+    if(!capacitySufficient && rejNeeded > 0){
+      // Capacity insufficient — block
+      if(confirmBtn){ confirmBtn.disabled = true; confirmBtn.style.opacity = '0.5'; }
+    } else if(data.delink_complete && data.reject_fully_allocated){
+      // Everything ready
+      if(confirmBtn){ confirmBtn.disabled = false; confirmBtn.style.opacity = '1'; }
+    } else if(data.max_delink_count === 0 && capacitySufficient){
+      // No delinks possible but capacity sufficient (all trays for reject)
+      if(confirmBtn){ confirmBtn.disabled = false; confirmBtn.style.opacity = '1'; }
+    } else {
+      // Delink selection not complete yet
+      if(confirmBtn){ confirmBtn.disabled = true; confirmBtn.style.opacity = '0.5'; }
+    }
+
+    console.log('[DELINK MODAL] Rendered: trays=' + (data.original_trays||[]).length +
+      ', accepted=' + data.accepted_qty + ', rejected=' + data.rejected_qty +
+      ', delinked=' + currentDelinks + '/' + data.max_delink_count);
+  }
+
+  // ── Fetch from backend and re-render (POST with delink selections) ──
+  function fetchAndRender(delinkedIds){
+    var csrftoken = getCookie('csrftoken');
+    fetch('/iqf/iqf_accept_delink_modal/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+      body: JSON.stringify({
+        lot_id: _delinkLotId,
+        iqf_rejection_total: _delinkRejTotal,
+        accepted_tray_ids: _delinkAcceptedTrayIds,
+        delinked_tray_ids: delinkedIds
+      })
+    })
+    .then(function(res){ return res.json().catch(function(){ return { success: false }; }); })
+    .then(function(data){
+      if(data && data.success){
+        renderModal(data);
+      } else {
+        console.error('[DELINK MODAL] Recompute failed', data);
+      }
+    })
+    .catch(function(err){
+      console.error('[DELINK MODAL] POST failed', err);
+    });
+  }
+
+  // ── Checkbox change handler — validate limit then re-fetch ──
+  document.addEventListener('change', function(e){
+    if(!e.target || !e.target.classList.contains('iqf-delink-checkbox')) return;
+
+    var checked = e.target.checked;
+    // Collect all currently checked delink checkboxes
+    var checkboxes = document.querySelectorAll('#iqfDelinkTrayTableBody .iqf-delink-checkbox');
+    var delinkedIds = [];
+    checkboxes.forEach(function(cb){
+      if(cb.checked) delinkedIds.push(cb.getAttribute('data-tray-id'));
+    });
+
+    // Client-side limit guard (backend also enforces)
+    var max = (_delinkModalData && _delinkModalData.max_delink_count) || 0;
+    if(checked && delinkedIds.length > max){
+      e.target.checked = false;
+      var limitMsg = document.getElementById('iqfDelinkLimitMsg');
+      if(limitMsg){
+        limitMsg.style.display = 'block';
+        limitMsg.style.background = '#ffebee';
+        limitMsg.style.color = '#c62828';
+        limitMsg.innerHTML = '<i class="fa fa-exclamation-circle"></i> <b>Delink limit reached!</b> Maximum <b>' + max + '</b> tray(s) allowed.';
+        setTimeout(function(){
+          if(_delinkModalData && _delinkModalData.max_delink_count > 0){
+            var cur = ((_delinkModalData.delinked_tray_ids)||[]).length;
+            limitMsg.style.background = '#fff3e0';
+            limitMsg.style.color = '#e65100';
+            limitMsg.innerHTML = '<i class="fa fa-info-circle"></i> You can delink up to <b>' + max + '</b> tray(s). Selected: <b>' + cur + '</b>';
+          }
+        }, 2000);
+      }
+      return;
+    }
+
+    // Re-fetch with new delink selection — backend recomputes everything
+    fetchAndRender(delinkedIds);
+  });
+
+  // ── Open modal — initial GET fetch ──
+  window._iqfOpenDelinkModal = function(lotId, rejTotal, acceptedTrayIds){
+    _delinkLotId = lotId;
+    _delinkRejTotal = rejTotal;
+    _delinkAcceptedTrayIds = acceptedTrayIds || [];
+
+    var overlay = document.getElementById('iqfDelinkModalOverlay');
+    overlay.style.display = 'flex';
+
+    // Show loading state
+    document.getElementById('iqfDelinkTrayTableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#999;">Loading tray data...</td></tr>';
+    document.getElementById('iqfDelinkRejectSection').style.display = 'none';
+
+    var params = 'lot_id=' + encodeURIComponent(lotId) +
+      '&iqf_rejection_total=' + rejTotal +
+      '&accepted_tray_ids=' + encodeURIComponent(acceptedTrayIds.join(','));
+
+    fetch('/iqf/iqf_accept_delink_modal/?' + params, { credentials: 'same-origin' })
+      .then(function(res){ return res.json().catch(function(){ return { success: false }; }); })
+      .then(function(data){
+        if(data && data.success){
+          renderModal(data);
+        } else {
+          console.error('[DELINK MODAL] Load failed', data);
+          _closeDelinkModal();
+        }
+      })
+      .catch(function(err){
+        console.error('[DELINK MODAL] Fetch failed', err);
+        _closeDelinkModal();
+      });
+  };
+
+  // ── Close modal ──
+  function _closeDelinkModal(){
+    var overlay = document.getElementById('iqfDelinkModalOverlay');
+    if(overlay) overlay.style.display = 'none';
+    _delinkLotId = null;
+    _delinkRejTotal = 0;
+    _delinkAcceptedTrayIds = [];
+    _delinkModalData = null;
+  }
+
+  // ── Reset state (called when tray slots are refetched or audit modal closes) ──
+  window._iqfResetDelinkModal = function(){
+    _delinkModalShown = false;
+    _closeDelinkModal();
+  };
+
+  // ── Auto-detect all tray scans complete → open modal ──
+  window._iqfCheckAllScansDone = function(){
+    if(_delinkModalShown) return;
+
+    var inputs = document.querySelectorAll('#iqf-accepted-tray-slots-body .tray-scan-input');
+    if(inputs.length === 0) return;
+
+    var allDone = true;
+    var acceptedTrayIds = [];
+    inputs.forEach(function(inp){
+      if(!inp.classList.contains('scan-valid') && !inp.classList.contains('scan-delink')){
+        allDone = false;
+      } else {
+        var val = (inp.value || '').trim().toUpperCase();
+        if(val) acceptedTrayIds.push(val);
+      }
+    });
+
+    if(!allDone || acceptedTrayIds.length !== inputs.length) return;
+
+    var lotId = window._iqfValidationLotId;
+    var rejTotal = window._iqfValidationRejTotal || 0;
+
+    // Only open for PARTIAL flow (rejection > 0 and acceptance > 0)
+    if(!lotId || rejTotal <= 0) return;
+
+    _delinkModalShown = true;
+    console.log('[DELINK MODAL] All ' + inputs.length + ' tray scans complete — auto-opening modal');
+    window._iqfOpenDelinkModal(lotId, rejTotal, acceptedTrayIds);
+  };
+
+  // ── Open delink modal from PARTIAL submit response — called by submitAudit handler ──
+  window._iqfOpenDelinkModalFromProceed = function(submitJson){
+    var lotId = submitJson.lot_id || '';
+    var rejTotal = submitJson.rejected_qty || 0;
+
+    // Collect accepted tray IDs from the scan inputs
+    var acceptedTrayIds = [];
+    var slotInputs = document.querySelectorAll('#iqf-accepted-tray-slots-body .tray-scan-input');
+    slotInputs.forEach(function(inp){
+      var tid = (inp.value || '').trim().toUpperCase();
+      if(tid) acceptedTrayIds.push(tid);
+    });
+
+    console.log('[DELINK MODAL] Opening from PARTIAL response: lot=' + lotId + ', rej=' + rejTotal + ', accepted=' + acceptedTrayIds.length);
+    window._iqfOpenDelinkModal(lotId, rejTotal, acceptedTrayIds);
+  };
+
+  // ── Close / Cancel / Confirm handlers ──
+  document.addEventListener('click', function(e){
+    if(!e.target) return;
+
+    if(e.target.id === 'iqfDelinkModalClose' || e.target.id === 'iqfDelinkCancelBtn'){
+      _closeDelinkModal();
+    }
+
+    if(e.target.id === 'iqfDelinkConfirmBtn'){
+      if(e.target.disabled) return;
+      e.target.disabled = true;
+      e.target.style.opacity = '0.5';
+      e.target.textContent = 'Processing...';
+
+      // Collect final delink selections
+      var checkboxes = document.querySelectorAll('#iqfDelinkTrayTableBody .iqf-delink-checkbox');
+      var delinkedIds = [];
+      checkboxes.forEach(function(cb){
+        if(cb.checked) delinkedIds.push(cb.getAttribute('data-tray-id'));
+      });
+
+      var csrftoken = getCookie('csrftoken');
+
+      // POST to backend with confirm=true to update IQF_Submitted and finalize
+      fetch('/iqf/iqf_accept_delink_modal/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+        body: JSON.stringify({
+          lot_id: _delinkLotId,
+          iqf_rejection_total: _delinkRejTotal,
+          accepted_tray_ids: _delinkAcceptedTrayIds,
+          delinked_tray_ids: delinkedIds,
+          confirm: true
+        })
+      })
+      .then(function(res){ return res.json().catch(function(){ return { success: false }; }); })
+      .then(function(data){
+        if(data && data.success){
+          _closeDelinkModal();
+          // Close audit modal and reload page
+          var auditOverlay = document.getElementById('iqfRejectionModalOverlay');
+          if(auditOverlay) auditOverlay.classList.remove('active');
+          _currentAuditLotId = null;
+          if(typeof window._iqfResetTraySlots === 'function') window._iqfResetTraySlots();
+          if(typeof Swal !== 'undefined'){
+            Swal.fire({ icon: 'success', title: 'Submitted successfully', toast: false, timer: 1600, showConfirmButton: false }).then(function(){ location.reload(); });
+          } else {
+            location.reload();
+          }
+        } else {
+          var confirmBtn = document.getElementById('iqfDelinkConfirmBtn');
+          if(confirmBtn){ confirmBtn.disabled = false; confirmBtn.style.opacity = '1'; confirmBtn.textContent = 'Confirm & Proceed'; }
+          if(typeof Swal !== 'undefined'){
+            Swal.fire({ icon: 'error', title: 'Error', text: (data && data.error) || 'Failed to finalize' });
+          }
+        }
+      })
+      .catch(function(err){
+        console.error('[DELINK MODAL] Confirm failed', err);
+        var confirmBtn = document.getElementById('iqfDelinkConfirmBtn');
+        if(confirmBtn){ confirmBtn.disabled = false; confirmBtn.style.opacity = '1'; confirmBtn.textContent = 'Confirm & Proceed'; }
+        if(typeof Swal !== 'undefined'){
+          Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to finalize submission' });
+        }
+      });
+    }
+  });
 
 })();
 </script>

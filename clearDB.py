@@ -53,6 +53,7 @@ def clear_database():
     IQF_Rejected_TrayScan.objects.all().delete()
     IQF_Rejection_ReasonStore.objects.all().delete()
     IQFTrayId.objects.all().delete()
+    IQF_Submitted.objects.all().delete()
     # Optional/related IQF tables
     # NOTE: preserve IQF_Rejection_Table — do NOT delete it during clearDB
     # (previously: IQF_Rejection_Table.objects.all().delete())
