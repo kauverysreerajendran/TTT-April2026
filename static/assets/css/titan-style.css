@@ -2622,11 +2622,11 @@ td:first-child * {
   transition: 0.3s;
 }
 
-.hold-toggle-switch input:checked + .hold-slider:before {
+/*  .hold-toggle-switch input:checked + .hold-slider:before {
   transform: translateX(16px);
-  background-color: #007bff; /* Blue circle when ON */
+  background-color: #007bff; 
   border-color: #007bff;
-}
+} */
 
 .hold-toggle-switch input:not(:checked) + .hold-slider:before {
   background-color: #bbb; /* Grey circle when OFF */

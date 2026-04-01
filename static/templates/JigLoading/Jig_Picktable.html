@@ -106,7 +106,6 @@
   border-radius: 5px;
   object-fit: contain;
   background: #f1f5f9;
-  border: 1px solid #e2e8f0;
   flex-shrink: 0;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
@@ -307,6 +306,7 @@
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
   color: #263238;
   letter-spacing: 0.2px;
+  width: 100%;
 }
 .tray-id-input.validated {
   background: linear-gradient(135deg, #e8f5e9, #c8e6c9) !important;
@@ -2257,6 +2257,13 @@
   background-color: #fff5bd !important;
 }
 
+/* ✅ Active Row Highlight (UI State) — Yellow like Brass QC */
+.active-row,
+.active-row td {
+  background-color: #fffacd !important;
+  transition: all 0.2s ease;
+}
+
 /* ✅ ISSUE #7: Hold/Unhold Toggle Switch Styling */
 .hold-toggle-switch {
   display: inline-flex;
@@ -2274,7 +2281,7 @@
 .hold-slider {
   display: inline-block;
   width: 40px;
-  height: 20px;
+  height: 18px;
   background-color: #ccc;
   border-radius: 10px;
   position: relative;
@@ -2288,20 +2295,20 @@
   position: absolute;
   width: 16px;
   height: 16px;
-  background-color: white;
+  background-color: #3884d4;
   border-radius: 50%;
-  top: 2px;
+  top: 0px;
   left: 2px;
   transition: left 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .hold-toggle-switch input[type="checkbox"]:checked + .hold-slider {
-  background-color: #4caf50;
+  background-color: #bcbcbc;
 }
 
 .hold-toggle-switch input[type="checkbox"]:checked + .hold-slider::after {
-  left: 22px;
+  left: 20px;
 }
 
 /* Hover effect */
@@ -2423,6 +2430,45 @@ tr.row-inactive td:first-child {
 .btn-edit-half-filled:hover {
   background: #e0a800 !important;
   transform: scale(1.05);
+}
+
+/* Error 2: BH disabled visual styling */
+#brokenBuildupHooksInput:disabled {
+  background-color: #e9ecef !important;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Error 3: Visual indicators for Loaded Cases Qty and Empty Hooks */
+.metric-success {
+  background: #e6f7ee !important;
+  color: #28a745 !important;
+  border-color: #28a745 !important;
+}
+.metric-warning {
+  background: #fff4e5 !important;
+  color: #ff9800 !important;
+  border-color: #ff9800 !important;
+}
+.metric-neutral {
+  background: linear-gradient(135deg,#f8fafc,#f1f5f9) !important;
+  color: #1e293b !important;
+}
+.empty-hooks-warning {
+  background: #fff4e5 !important;
+  color: #ff9800 !important;
+  font-weight: 700 !important;
+}
+.empty-hooks-success {
+  background: #e6f7ee !important;
+  color: #28a745 !important;
+  font-weight: 700 !important;
+}
+
+/* Error 5: Editable half-filled top tray highlight */
+.editable-highlight {
+  border: 2px solid #17a2b8 !important;
+  background-color: #e8f7fb !important;
 }
 </style>
 
@@ -2595,10 +2641,11 @@ tr.row-inactive td:first-child {
                   data-batch-id="{{ data.batch_id }}"
                   style="
                     width: 60px;
-                    padding: 2px 6px;
+                    padding: 6px 6px;
                     font-size: 13px;
                     border: 1px solid #ccc;
-                    border-radius: 4px;
+                    border-radius: 14px;
+                    background: linear-gradient(90deg, #e2fbff75 -1%, #b2ebf2 33%, #ffe0b2 93%, #f8bbd0 100%)
                   "
                   readonly
                 />
@@ -2627,7 +2674,7 @@ tr.row-inactive td:first-child {
               <td>
                 <div class="d-flex">
                   <div
-                    title="Tray Scan"
+                    title="Loading"
                     class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                     style="
                       width: 20px;
@@ -2639,6 +2686,7 @@ tr.row-inactive td:first-child {
                       padding-top: 1px;
                       padding-right: 1px;
                       background: #bdbdbd;
+                      cursor: pointer;
                     "
                   >
                     L
@@ -3171,7 +3219,7 @@ tr.row-inactive td:first-child {
 
     <!-- Form Fields -->
     <form id="jigAddForm" autocomplete="off">
-      <div class="form-fields-grid" style="display:flex; flex-direction:row; gap:14px; margin-bottom:20px; flex-wrap:nowrap;">
+      <div class="form-fields-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:14px; margin-bottom:20px;">
         <div class="form-group" style="min-width:120px; flex:1;">
           <label for="jigIdInput">Jig ID</label>
           <input type="text" id="jigIdInput" maxlength="9" required placeholder="Enter Jig ID" style="width:100%;" />
@@ -3196,7 +3244,7 @@ tr.row-inactive td:first-child {
         <div class="form-group" style="min-width:130px; flex:1;">
           <label for="loadedCasesQtyInput">Loaded Cases Qty</label>
           <span id="loadedCasesQtyDisplay" style="display:inline-flex; width:100%; border:1.5px solid #e2e8f0; background:linear-gradient(135deg,#f8fafc,#f1f5f9); font-weight:700; text-align:center; align-items:center; justify-content:center; border-radius:10px; padding:9px 0; font-size:13px; color:#1e293b; box-shadow:0 1px 2px rgba(0,0,0,0.03);" tabindex="-1" draggable="false" ondragstart="return false;" ondrop="return false;" onmousedown="if(event.detail>1){event.preventDefault();}"></span>
-          <span id="excessMessage" style="color:#dc3545; font-size:11px; margin-top:4px; display:block; font-weight:500;"></span>
+          <span id="excessMessage" style="margin-left: 35px;color:#dc3545; font-size:11px; margin-top:4px; display:block; font-weight:500;"></span>
           <input type="hidden" id="lotQtyHidden" value="0" />
         </div>
         <div class="form-group" style="min-width:100px; flex:0.8;">
@@ -3221,6 +3269,15 @@ tr.row-inactive td:first-child {
         <span id="delinkTrayCount"></span> Trays
       </span>
     </span>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#028084; cursor:pointer; margin:0; user-select:none;">
+        <input type="checkbox" id="delinkAllCheckbox" style="width:16px; height:16px; accent-color:#028084; cursor:pointer;" />
+        Delink All
+      </label>
+      <button type="button" id="userScanBtn" style="padding:5px 14px; font-size:12px; font-weight:600; border-radius:20px; background: linear-gradient(135deg, #e0f7fa, #e8f5e9) !important;; color:#028084; border:1.5px solid #028084; cursor:pointer; transition:all 0.2s;" title="Switch to manual scan mode — clears auto-validated trays">
+        User Scan
+      </button>
+    </div>
   </div>
 </div>
 
@@ -3229,7 +3286,7 @@ tr.row-inactive td:first-child {
 <!-- Excess Lot Section -->
 <div id="excessLotSection" class="delink-section" style="display:none; margin-top:12px;">
   <div class="delink-header" style="display:flex; align-items:center; justify-content:space-between;">
-    <span>Half Filled Tray Scan <span id="excessLotCount" class="delink-count" style="margin-left:10px; background:rgba(2,128,132,0.08); padding:3px 10px; border-radius:20px;"></span></span>
+    <span>Excess Lot Tray Scan <span id="excessLotCount" class="delink-count" style="margin-left:10px; background:rgba(2,128,132,0.08); padding:3px 10px; border-radius:20px;"></span></span>
   </div>
   <div class="delink-content">
     <div id="excessTrayContainer" class="tray-scan-tabs"></div>
@@ -3261,7 +3318,7 @@ tr.row-inactive td:first-child {
 
 <!-- ✅ SweetAlert2 for improved confirmation dialogs -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 
 <!-- // Event delegation for .jig-view-btn to open modal -->
 <script nonce="{{ csp_nonce }}">
@@ -3328,6 +3385,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.id === 'closeNewPopupModal_Jig' || e.target.closest('#newPopupModal_Jig .tray-scan-close')) {
       const m = document.getElementById('newPopupModal_Jig');
       if (m) m.classList.remove('open');
+      // ✅ Clear active row highlight when modal closes
+      if (window.clearActiveRow) window.clearActiveRow();
     }
   });
 
@@ -3669,6 +3728,28 @@ document.addEventListener('DOMContentLoaded', function () {
         restoredCount++;
       }
     });
+    // ✅ BUG FIX #2: Fallback — if key-based match restored nothing, try flat-position restore.
+    // This handles the case where capture was single-model (no model-index) but render is multi-model,
+    // and lot_id might differ slightly between modes.
+    if (restoredCount === 0) {
+      var flatValues = [];
+      var keys = Object.keys(saved);
+      keys.forEach(function(k) { flatValues = flatValues.concat(saved[k]); });
+      if (flatValues.length > 0) {
+        var inputs = container.querySelectorAll('.tray-id-input');
+        for (var fi = 0; fi < Math.min(flatValues.length, inputs.length); fi++) {
+          if (flatValues[fi].value) {
+            inputs[fi].value = flatValues[fi].value;
+            if (flatValues[fi].validated) {
+              inputs[fi].classList.add('validated');
+              inputs[fi].readOnly = true;
+            }
+            restoredCount++;
+          }
+        }
+        if (restoredCount > 0) console.log('[RESTORE_SCAN] Fallback position-based restored', restoredCount, 'scanned trays');
+      }
+    }
     if (restoredCount > 0) console.log('[RESTORE_SCAN] Restored', restoredCount, 'scanned trays');
   }
   // Persist scanned trays to sessionStorage (survives page navigation)
@@ -3795,8 +3876,15 @@ document.addEventListener('DOMContentLoaded', function () {
     strip.appendChild(addCard);
 
     // Enable/disable Add Model based on planned empty hooks
+    // Use response value if available, otherwise use stored global (survives re-renders from scan responses)
     try {
-      const plannedEmpty = parseInt(data.planned_empty_hooks || 0) || 0;
+      var plannedEmpty = 0;
+      if (typeof data.planned_empty_hooks !== 'undefined' && data.planned_empty_hooks !== null) {
+        plannedEmpty = parseInt(data.planned_empty_hooks || 0) || 0;
+        window._PLANNED_EMPTY_HOOKS = plannedEmpty;  // persist for re-renders
+      } else {
+        plannedEmpty = parseInt(window._PLANNED_EMPTY_HOOKS || 0) || 0;
+      }
       if (plannedEmpty > 0) {
         addCard.removeAttribute('disabled');
         addCard.title = 'Add secondary model(s) — ' + plannedEmpty + ' hooks remaining';
@@ -3931,6 +4019,25 @@ document.addEventListener('DOMContentLoaded', function () {
           return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
         });
         console.log('[MM] Models List Updated:', window._pendingSecondaryLots.length, 'secondary models');
+        // Include previously scanned trays so backend computes loaded_cases_qty from scanned only
+        try {
+          var rawScans = sessionStorage.getItem('scanned_trays');
+          if (rawScans) {
+            var savedScans = JSON.parse(rawScans);
+            var scannedList = [];
+            Object.keys(savedScans).forEach(function(key) {
+              (savedScans[key] || []).forEach(function(entry) {
+                if (entry.value && entry.validated) {
+                  scannedList.push({ tray_id: entry.value });
+                }
+              });
+            });
+            if (scannedList.length > 0) {
+              initPayload.scanned_trays = scannedList;
+              console.log('[MERGE_INIT] Included', scannedList.length, 'scanned trays in init payload');
+            }
+          }
+        } catch(e) { console.warn('[MERGE_INIT] Failed to read scanned trays from storage', e); }
       } else if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
         initPayload.multi_model = true;
         initPayload.secondary_lots = [{
@@ -3960,6 +4067,14 @@ document.addEventListener('DOMContentLoaded', function () {
       if (idMap.nickelBathTypeInput) idMap.nickelBathTypeInput.value = data.draft.nickel_bath_type || data.nickel_bath_type || '';
       if (idMap.trayTypeInput) idMap.trayTypeInput.value = data.draft.tray_type || data.tray_type || '';
 
+      // ✅ BUG FIX #3: Apply backend-driven dynamic placeholders
+      try {
+        if (data.placeholders) {
+          var jigInput = document.getElementById('jigIdInput');
+          if (jigInput && data.placeholders.jig_id) jigInput.placeholder = data.placeholders.jig_id;
+        }
+      } catch(e) { /* ignore */ }
+
       // expose current lot and model for frontend validation/UI
       try {
         window.CURRENT_LOT_ID = lotId;
@@ -3974,9 +4089,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // BACKEND authoritative values (single source of truth)
       // STRICT: Use ONLY top-level response fields, never draft (draft may be stale)
-      // ✅ Loaded cases starts at 0 on init — increments only after valid tray scan
       try {
-        window.BACKEND_LOADED_CASES = 0;
+        window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
       } catch (e) { window.BACKEND_LOADED_CASES = 0; }
 
       try {
@@ -3995,6 +4109,9 @@ document.addEventListener('DOMContentLoaded', function () {
         window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
       } catch (e) { window.BACKEND_EMPTY_HOOKS = 0; }
 
+      // Backend now returns loaded_cases_qty=0 on fresh init and correct scanned-based value on merge.
+      // No frontend override needed — backend is the single source of truth.
+
       // Update UI elements directly from backend-provided values (no calculations here)
       if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
 
@@ -4002,9 +4119,24 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
           const el = idMap.loadedCasesInput;
           if (!el) return;
-          const text = `${parseInt(window.BACKEND_LOADED_CASES || 0)}/${parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0)}`;
+          const loaded = parseInt(window.BACKEND_LOADED_CASES || 0);
+          const cap = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0);
+          const text = `${loaded}/${cap}`;
           if (el.tagName === 'SPAN' || el.tagName === 'DIV') el.innerText = text;
           else el.value = text;
+          // ✅ Error 3: Visual indicators
+          el.classList.remove('metric-success', 'metric-warning', 'metric-neutral');
+          if (loaded >= cap && cap > 0) el.classList.add('metric-success');
+          else if (loaded > 0) el.classList.add('metric-warning');
+          else el.classList.add('metric-neutral');
+          // ✅ Error 3: Empty hooks visual indicator
+          var emptyEl = document.getElementById('emptyHooksInput');
+          if (emptyEl) {
+            var emptyVal = parseInt(window.BACKEND_EMPTY_HOOKS || 0);
+            emptyEl.classList.remove('empty-hooks-success', 'empty-hooks-warning');
+            if (emptyVal === 0) emptyEl.classList.add('empty-hooks-success');
+            else emptyEl.classList.add('empty-hooks-warning');
+          }
           console.log('[updateLoadedDisplay] Updated to:', text);
         } catch (e) { console.error('[updateLoadedDisplay] Unexpected error:', e); }
       };
@@ -4035,7 +4167,7 @@ document.addEventListener('DOMContentLoaded', function () {
       } catch (e) { console.warn('Secondary lots persist failed', e); }
       // Render model card strip after secondary-lots state is ready
       try { renderModelCardStrip(data); } catch (e) { console.warn('[MODEL_CARDS] init render failed', e); }
-      // STRICT: BH from backend response ONLY (not stale window.currentBrokenHooks)
+      // ✅ BH GATE: Use backend bh_editable flag (Error 2 fix)
       if (idMap.brokenHooksInput) {
         const backendBH = parseInt(data.broken_hooks || 0) || 0;
         // Populate BH dropdown based on jig capacity
@@ -4053,17 +4185,25 @@ document.addEventListener('DOMContentLoaded', function () {
           bhSelect.appendChild(opt);
         }
         window.currentBrokenHooks = backendBH;
-        // ✅ BH GATE: BH only accessible when empty_hooks === 0 (jig fully allocated)
-        // Applies to BOTH single-model and multi-model
-        const emptyHForBH = parseInt(data.empty_hooks || 0) || 0;
-        if (emptyHForBH > 0) {
-          window.isModelSelectionComplete = false;
-          window.disableBH();
-          console.log('[BH_DISABLE] empty_hooks=' + emptyHForBH + ' — BH disabled');
-        } else {
+        // ✅ Error 2: Backend controls BH editability
+        if (data.bh_editable === true) {
           window.isModelSelectionComplete = true;
           window.enableBH();
-          console.log('[BH_ENABLE] empty_hooks=0 — BH enabled');
+          console.log('[BH_ENABLE] Backend bh_editable=true');
+        } else if (data.bh_editable === false) {
+          window.isModelSelectionComplete = false;
+          window.disableBH();
+          console.log('[BH_DISABLE] Backend bh_editable=false');
+        } else {
+          // Fallback: old empty_hooks gate
+          const emptyHForBH = parseInt(data.empty_hooks || 0) || 0;
+          if (emptyHForBH > 0) {
+            window.isModelSelectionComplete = false;
+            window.disbleBH();
+          } else {
+            window.isModelSelectionComplete = true;
+            window.enableBH();
+          }
         }
       }
       // Initialize current delink qty from server draft (backend is authoritative)
@@ -4076,7 +4216,8 @@ document.addEventListener('DOMContentLoaded', function () {
       if (container) {
         // ✅ Capture scanned trays BEFORE clearing (in-page state)
         const _initSavedScans = captureScannedTrays(container);
-        // HARD RESET state
+        // ✅ BUG FIX #2: Only clear container for single-model init (preserve primary trays on multi-model add)
+        // For multi-model, the full re-render below handles everything correctly
         window.delinkData = [];
         container.innerHTML = '';
 
@@ -4126,11 +4267,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 qty: tray.qty || 0,
                 isTop,
                 isPartial: Boolean(tray.is_partial && !isTop),
-                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue
+                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue,
+                autoTrayId: tray.tray_id || ''  // Backend-known tray ID for Delink All
               };
               allFlatTrays.push(flatTray);
               // ✅ DEBUG: Log each tray's color assignment
-              console.log('[TRAY_COLOR]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty);
+              console.log('[TRAY_COLOR]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty, 'trayId=' + flatTray.autoTrayId);
             });
           });
 
@@ -4141,7 +4283,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const placeholder = 'Scan ' + item.modelCode + ' (Tray ID)';
             const div = document.createElement('div');
             div.className = 'tray-scan-tab';
-            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
+            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" data-auto-tray-id="' + (item.autoTrayId || '') + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
             container.appendChild(div);
             totalTrayCount++;
           });
@@ -4212,22 +4354,37 @@ document.addEventListener('DOMContentLoaded', function () {
             div.className = 'tray-scan-tab';
             const topLabel = isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
             const trayLabel = t.tray_id || ('Tray ' + (idx + 1));
-            const placeholder = 'Scan Model 1 (Tray ID)';
+            const modelDisplay = window.CURRENT_MODEL_NO || 'Model';
+            const placeholder = 'Scan ' + modelDisplay + ' (Tray ID)';
+            const autoTrayIdSm = t.tray_id || '';
             if (isPlaceholder) {
               div.innerHTML = `\n              <div class="tray-qty" style="color:#888;font-style:italic;">Qty: ${qty}${topLabel}</div>\n              <div style="font-size:11px;color:#aaa;">(virtual slot — scan real tray)</div>\n            `;
             } else {
-              div.innerHTML = `\n              <input type="text" class="tray-id-input" maxlength="9" data-expected-qty="${qty}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
+              div.innerHTML = `\n              <input type="text" class="tray-id-input" maxlength="9" data-expected-qty="${qty}" data-auto-tray-id="${autoTrayIdSm}" placeholder="${placeholder}">\n              <div class="tray-qty">Qty: ${qty}${topLabel}</div>\n            `;
             }
             container.appendChild(div);
           });
         }
 
-        // Compute authoritative delink total from authoritative source and trigger recalculation
+        // Compute authoritative delink total from SCANNED (validated) inputs only
+        // NEVER use draft.delink_tray_qty here — that's the PLANNED total, not scanned total
         try {
-          // Prefer persisted draft delink_tray_qty (sum of actually scanned trays) over plan total
-          const persistedDelink = parseInt((data && data.draft && data.draft.delink_tray_qty) || 0) || 0;
-          window.currentDelinkQty = persistedDelink;
-          console.log('[DELINK_INIT] currentDelinkQty set to (persisted):', window.currentDelinkQty);
+          // Count only validated (scanned) tray inputs in the DOM
+          let scannedDelinkTotal = 0;
+          if (container) {
+            container.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
+              try {
+                const parent = inp.parentNode;
+                const qtyEl = parent && parent.querySelector && parent.querySelector('.tray-qty');
+                if (qtyEl) {
+                  const match = (qtyEl.textContent || '').match(/\d+/);
+                  if (match) scannedDelinkTotal += parseInt(match[0]) || 0;
+                }
+              } catch (e) {}
+            });
+          }
+          window.currentDelinkQty = scannedDelinkTotal;
+          console.log('[DELINK_INIT] currentDelinkQty set to (scanned only):', window.currentDelinkQty);
           if (typeof window.safeLCQRecalculation === 'function') window.safeLCQRecalculation('init_delink');
         } catch (e) { console.warn('[DELINK_INIT] failed to compute delink total', e); }
 
@@ -4240,16 +4397,26 @@ document.addEventListener('DOMContentLoaded', function () {
           }
 
           function showSmallInfo(input, msg) {
+            // ✅ BUG FIX #4: Show validation message inline next to qty inside the tray card
+            const parentCard = input.closest('.tray-scan-tab');
+            if (!parentCard) return;
+            // Remove any existing info msg in this card
+            const existing = parentCard.querySelector('.tray-info-msg');
+            if (existing) existing.remove();
             let info = document.createElement('div');
             info.className = 'tray-info-msg';
             info.innerText = msg;
-            info.style.position = 'absolute';
-            info.style.top = '100%';
-            info.style.left = '4px';
-            info.style.fontSize = '12px';
-            info.style.color = '#666';
-            input.parentNode.appendChild(info);
-            setTimeout(() => { try { info.remove(); } catch (e) {} }, 1500);
+            info.style.fontSize = '11px';
+            info.style.marginTop = '4px';
+            info.style.fontWeight = '600';
+            // Color based on message type
+            if (msg === 'Accepted') {
+              info.style.color = '#28a745';
+            } else {
+              info.style.color = '#dc3545';
+            }
+            parentCard.appendChild(info);
+            setTimeout(() => { try { info.remove(); } catch (e) {} }, 3000);
           }
 
           function moveToNextInput(currentInput) {
@@ -4309,7 +4476,12 @@ document.addEventListener('DOMContentLoaded', function () {
                   allow_new_half_filled: allowNewHalfFilled,
                   broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
                   jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
-                  scanned_trays: scannedTrays
+                  scanned_trays: scannedTrays,
+                  // Multi-model context for aggregated computation
+                  multi_model: !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0),
+                  secondary_lots: (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }),
+                  primary_lot_id: window.CURRENT_LOT_ID || '',
+                  primary_batch_id: window.CURRENT_BATCH_ID || ''
                 })
               });
               const data = await resp.json();
@@ -4355,13 +4527,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 moveToNextInput(inputEl);
                 }
-                // ✅ BH GATE: re-apply after every scan (empty_hooks may change)
+                // ✅ Error 2: BH GATE from backend bh_editable
                 try {
-                  if (window.BACKEND_EMPTY_HOOKS > 0) {
-                    if (typeof window.disableBH === 'function') window.disableBH();
-                  } else {
+                  if (data.bh_editable === true) {
                     window.isModelSelectionComplete = true;
                     if (typeof window.enableBH === 'function') window.enableBH();
+                  } else if (data.bh_editable === false) {
+                    if (typeof window.disableBH === 'function') window.disableBH();
+                  } else {
+                    if (window.BACKEND_EMPTY_HOOKS > 0) {
+                      if (typeof window.disableBH === 'function') window.disableBH();
+                    } else {
+                      window.isModelSelectionComplete = true;
+                      if (typeof window.enableBH === 'function') window.enableBH();
+                    }
                   }
                 } catch (_bhg) {}
                 if (data.validation_status !== 'success') {
@@ -4468,7 +4647,12 @@ document.addEventListener('DOMContentLoaded', function () {
                   batch_id: inp.dataset.batchId || window.currentJigBatchId || window.CURRENT_BATCH_ID,
                   broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
                   jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
-                  scanned_trays: remainingTrays
+                  scanned_trays: remainingTrays,
+                  // Multi-model context for aggregated computation
+                  multi_model: !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0),
+                  secondary_lots: (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }),
+                  primary_lot_id: window.CURRENT_LOT_ID || '',
+                  primary_batch_id: window.CURRENT_BATCH_ID || ''
                 })
               });
               const respData = await resp.json();
@@ -4482,13 +4666,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
                 if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
                 console.log('[UNSCAN_KB] State synced: loaded=' + window.BACKEND_LOADED_CASES + ', empty=' + window.BACKEND_EMPTY_HOOKS);
-                  // ✅ BH GATE: re-apply after unscan
+                  // ✅ Error 2: BH GATE from backend bh_editable (after unscan)
                   try {
-                    if (window.BACKEND_EMPTY_HOOKS > 0) {
-                      if (typeof window.disableBH === 'function') window.disableBH();
-                    } else {
+                    if (respData.bh_editable === true) {
                       window.isModelSelectionComplete = true;
                       if (typeof window.enableBH === 'function') window.enableBH();
+                    } else if (respData.bh_editable === false) {
+                      if (typeof window.disableBH === 'function') window.disableBH();
+                    } else {
+                      if (window.BACKEND_EMPTY_HOOKS > 0) {
+                        if (typeof window.disableBH === 'function') window.disableBH();
+                      } else {
+                        window.isModelSelectionComplete = true;
+                        if (typeof window.enableBH === 'function') window.enableBH();
+                      }
                     }
                   } catch (_bhg) {}
                   // ✅ Refresh half-filled from unscan response
@@ -4650,8 +4841,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (delinkCompleted && trayId) {
           if (isTopHf && isAutoLinked && isEditable) {
+          // ✅ BUG FIX #3: Directly editable input (no edit button) — pre-filled with auto-linked tray
+          // ✅ Error 5: editable-highlight class for clear visual indication
           let inputHtml = '<div class="half-filled-input-row">';
-          inputHtml += '<input type="text" class="tray-id-input half-filled-input validated" maxlength="9" ';
+          inputHtml += '<input type="text" class="tray-id-input half-filled-input validated editable-highlight" maxlength="9" ';
           inputHtml += 'value="' + trayId + '" ';
           inputHtml += 'data-expected-qty="' + qty + '" ';
           inputHtml += 'data-auto-linked="true" ';
@@ -4659,40 +4852,28 @@ document.addEventListener('DOMContentLoaded', function () {
           inputHtml += 'data-is-top-half-filled="true" ';
           inputHtml += 'data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" ';
           inputHtml += 'data-batch-id="' + (window.CURRENT_BATCH_ID || '') + '" ';
-          inputHtml += 'readonly ';
           inputHtml += 'style="width: 100%; background:#d4edda !important; border:2px solid #28a745; font-weight:700; color:#155724; flex:1;">';
-          inputHtml += '<button type="button" class="btn-edit-half-filled" style="background:#ffc107; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; font-weight:600; color:#333; white-space:nowrap;" title="Edit tray ID">';
-          inputHtml += '<i class="fa fa-pencil"></i>';
-          inputHtml += '</button>';
           inputHtml += '</div>';
           inputHtml += '<div class="tray-qty">Qty: ' + qty + ' <span style="font-weight:700;color:#28a745;">(Auto-linked from Partial)</span></div>';
           inputHtml += '<div class="half-filled-auto-tag" style="font-size:11px; color:#155724; margin-top:2px;">Linked to delink tray: ' + linkedTo + '</div>';
           div.innerHTML = inputHtml;
 
-          // Attach edit handler
+          // ✅ Attach scan handler — input is directly editable, user can clear and re-scan
           setTimeout(function() {
-            const editBtn = div.querySelector('.btn-edit-half-filled');
             const input = div.querySelector('.half-filled-input');
-            if (editBtn && input) {
-              editBtn.addEventListener('click', function() {
-                input.removeAttribute('readonly');
-                input.classList.remove('validated');
-                input.dataset.autoLinked = 'false';
-                input.style.background = '#fff3cd';
-                input.style.border = '2px solid #ffc107';
-                input.style.color = '#333';
-                input.value = '';
-                input.focus();
-                // Update tag
-                const tag = div.querySelector('.half-filled-auto-tag');
-                if (tag) tag.innerHTML = '<span style="color:#856404;">Scan Tray ID</span>';
-                console.log('[HALF_FILLED_EDIT] User editing top half-filled tray');
-              });
-              // Re-validate on 9-char input
+            if (input) {
               input.addEventListener('input', function() {
                 const raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
                 if (raw.length > 9) this.value = raw.slice(0, 9);
                 else this.value = raw;
+                // Remove validated state when user edits
+                if (raw !== trayId) {
+                  this.classList.remove('validated');
+                  this.dataset.autoLinked = 'false';
+                  this.style.background = '#fff3cd';
+                  this.style.border = '2px solid #ffc107';
+                  this.style.color = '#333';
+                }
                 if (raw.length === 9 && typeof window._scanTrayFn === 'function') {
                   window._scanTrayFn(raw, this);
                 }
@@ -4706,16 +4887,40 @@ document.addEventListener('DOMContentLoaded', function () {
               'value="' + displayId + '" ' +
               'data-expected-qty="' + qty + '" ' +
               'readonly disabled>' +
-              '<div class="tray-qty">Qty: ' + qty + ' <span style="font-weight:600;color:#17a2b8;">(' + displayId + ')</span></div>';
+              '<div class="tray-qty">Qty: ' + qty + '</div>';
           }
         } else {
+          // ✅ FIX: Show scannable half-filled inputs IMMEDIATELY when excess exists
+          // (not gated on delink completion — backend controls when tray IDs are available)
+          var hfIsEditable = (idx === 0);  // First slot is always editable
+          var hfPlaceholder = hfIsEditable ? 'Scan Tray ID' : 'Auto-assigned';
           div.innerHTML = '<div class="half-filled-input-row">' +
             '<input type="text" class="tray-id-input half-filled-slot-input" maxlength="9" ' +
             'data-expected-qty="' + qty + '" ' +
-            'placeholder="Scan Tray ID" readonly>' +
+            'data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" ' +
+            'data-batch-id="' + (window.CURRENT_BATCH_ID || '') + '" ' +
+            'data-is-top-half-filled="' + (idx === 0 ? 'true' : 'false') + '" ' +
+            'placeholder="' + hfPlaceholder + '" ' +
+            (hfIsEditable ? '' : 'readonly ') + '>' +
             '</div>' +
             '<div class="tray-qty">Qty: ' + qty + ' <span class="half-filled-slot-label">(' + slotLabel + ')</span></div>' +
-            '<div class="half-filled-auto-tag">Tray ID will be assigned after delink completion</div>';
+            '<div class="half-filled-auto-tag">' + (hfIsEditable ? '<span style="color:#856404;">Scan or enter tray ID</span>' : 'Auto-assigned after delink') + '</div>';
+          // Attach scan handler for editable first slot
+          if (hfIsEditable) {
+            setTimeout(function() {
+              var hfInput = div.querySelector('.half-filled-slot-input');
+              if (hfInput) {
+                hfInput.addEventListener('input', function() {
+                  var raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
+                  if (raw.length > 9) raw = raw.slice(0, 9);
+                  this.value = raw;
+                  if (raw.length === 9 && typeof window._scanTrayFn === 'function') {
+                    window._scanTrayFn(raw, this);
+                  }
+                });
+              }
+            }, 50);
+          }
         }
 
         container.appendChild(div);
@@ -4723,16 +4928,37 @@ document.addEventListener('DOMContentLoaded', function () {
       console.log('[HALF_FILLED_RENDER] Rendered', halfFilledSlots.length, 'half-filled slots');
     } else if (excessQty > 0) {
       (excessInfo.excess_trays || []).forEach(function(tray, idx) {
+        var exIsEditable = (idx === 0);  // First excess tray is editable
         const div = document.createElement('div');
         div.className = 'tray-scan-tab half-filled-slot-card';
         div.innerHTML = '<div class="half-filled-input-row">' +
           '<input type="text" class="tray-id-input half-filled-slot-input" maxlength="9" ' +
           'data-expected-qty="' + (tray.qty || 0) + '" ' +
-          'placeholder="Scan Tray ID" readonly>' +
+          'data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" ' +
+          'data-batch-id="' + (window.CURRENT_BATCH_ID || '') + '" ' +
+          'data-is-top-half-filled="' + (idx === 0 ? 'true' : 'false') + '" ' +
+          'placeholder="' + (exIsEditable ? 'Scan Tray ID' : 'Auto-assigned') + '" ' +
+          (exIsEditable ? '' : 'readonly ') + '>' +
           '</div>' +
           '<div class="tray-qty">Qty: ' + (tray.qty || 0) + ' <span class="half-filled-slot-label">(Slot ' + (idx + 1) + ')</span></div>' +
-          '<div class="half-filled-auto-tag">Tray ID will be assigned after delink completion</div>';
+          '<div class="half-filled-auto-tag">' + (exIsEditable ? '<span style="color:#856404;">Scan or enter tray ID</span>' : 'Auto-assigned after delink') + '</div>';
         container.appendChild(div);
+        // Attach scan handler for editable first slot
+        if (exIsEditable) {
+          setTimeout(function() {
+            var hfInput = div.querySelector('.half-filled-slot-input');
+            if (hfInput) {
+              hfInput.addEventListener('input', function() {
+                var raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
+                if (raw.length > 9) raw = raw.slice(0, 9);
+                this.value = raw;
+                if (raw.length === 9 && typeof window._scanTrayFn === 'function') {
+                  window._scanTrayFn(raw, this);
+                }
+              });
+            }
+          }, 50);
+        }
       });
     }
   }
@@ -4828,10 +5054,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 qty: tray.qty || 0,
                 isTop,
                 isPartial: Boolean(tray.is_partial && !isTop),
-                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue
+                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue,
+                autoTrayId: tray.tray_id || ''  // Backend-known tray ID for Delink All
               };
               recalcFlatTrays.push(flatTray);
-              console.log('[TRAY_COLOR_RECALC]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty);
+              console.log('[TRAY_COLOR_RECALC]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty, 'trayId=' + flatTray.autoTrayId);
             });
           });
 
@@ -4842,7 +5069,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const placeholder = 'Scan ' + item.modelCode + ' (Tray ID)';
             const div = document.createElement('div');
             div.className = 'tray-scan-tab';
-            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
+            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" data-auto-tray-id="' + (item.autoTrayId || '') + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
             container.appendChild(div);
             totalTrayCount++;
           });
@@ -4877,7 +5104,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const trayLabel = tray.tray_id || ('Tray ' + (idx + 1));
             const div = document.createElement('div');
             div.className = 'tray-scan-tab';
-            div.innerHTML = '<input type="text" class="tray-id-input" maxlength="9" data-expected-qty="' + qty + '" data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" data-batch-id="' + (window.currentJigBatchId || window.CURRENT_BATCH_ID || '') + '" placeholder="Scan Model 1 (Tray ID)">' +
+            const modelDisplay = window.CURRENT_MODEL_NO || 'Model';
+            div.innerHTML = '<input type="text" class="tray-id-input" maxlength="9" data-expected-qty="' + qty + '" data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" data-batch-id="' + (window.currentJigBatchId || window.CURRENT_BATCH_ID || '') + '" data-auto-tray-id="' + (tray.tray_id || '') + '" placeholder="Scan ' + modelDisplay + ' (Tray ID)">' +
               '<div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
             container.appendChild(div);
           });
@@ -4925,15 +5153,24 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
 
-      // ✅ BH GATE: BH only accessible when empty_hooks === 0
+      // ✅ Error 2: BH gate from backend bh_editable flag
       try {
-        const emptyH = parseInt(data.empty_hooks || 0) || 0;
-        if (emptyH > 0) {
+        if (data.bh_editable === true) {
+          window.isModelSelectionComplete = true;
+          window.enableBH();
+        } else if (data.bh_editable === false) {
           window.isModelSelectionComplete = false;
           window.disableBH();
         } else {
-          window.isModelSelectionComplete = true;
-          window.enableBH();
+          // Fallback: old empty_hooks gate
+          const emptyH = parseInt(data.empty_hooks || 0) || 0;
+          if (emptyH > 0) {
+            window.isModelSelectionComplete = false;
+            window.disableBH();
+          } else {
+            window.isModelSelectionComplete = true;
+            window.enableBH();
+          }
         }
       } catch (e) { /* ignore */ }
 
@@ -4968,7 +5205,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // Recalculation CAN be called multiple times, but not concurrently
   window.isRecalculating = false;
 
-  function refreshTrayCalculation(data) {
+  function refreshTrayCalculation(data, options) {
+    options = options || {};
     // If data provided, apply UI update (internal refresh)
     if (data) {
       window.isInternalUpdate = true;
@@ -5029,6 +5267,26 @@ document.addEventListener('DOMContentLoaded', function () {
     
     console.log('[RECALC PAYLOAD]', recalcPayload);
 
+    // ✅ BUG FIX #4/#5: For BH changes, send scanned_trays so backend preserves
+    //    delink_completed status and loaded_cases_qty (prevents excess section reset)
+    if (options.bhUpdate) {
+      var bhScannedTrays = [];
+      var bhContainer = document.getElementById('delinkTableSection');
+      if (bhContainer) {
+        bhContainer.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
+          if (inp.value) bhScannedTrays.push({ tray_id: inp.value, qty: parseInt(inp.dataset.expectedQty || 0) || 0 });
+        });
+      }
+      var bhExcessContainer = document.getElementById('excessTrayContainer');
+      if (bhExcessContainer) {
+        bhExcessContainer.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
+          if (inp.value) bhScannedTrays.push({ tray_id: inp.value, qty: parseInt(inp.dataset.expectedQty || 0) || 0 });
+        });
+      }
+      recalcPayload.scanned_trays = bhScannedTrays;
+      console.log('[BH_RECALC] Including', bhScannedTrays.length, 'scanned trays in recalc');
+    }
+
     fetch('/jig_loading/api/load/init/', {
       method: 'POST',
       credentials: 'same-origin',
@@ -5086,7 +5344,15 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       window._lastSentBH = bh;
       console.log('[BH_CHANGED] Triggering recalc with BH:', bh);
-      refreshTrayCalculation();
+      // ✅ BUG FIX #5: Uncheck Delink All checkbox when BH changes (trays reset)
+      try {
+        var delinkCb = document.getElementById('delinkAllCheckbox');
+        if (delinkCb && delinkCb.checked) {
+          delinkCb.checked = false;
+          console.log('[BH_CHANGED] Delink All checkbox unchecked');
+        }
+      } catch (e) { /* ignore */ }
+      refreshTrayCalculation(null, {bhUpdate: true});
     });
   }
 
@@ -5247,7 +5513,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ==========================================================
-  // 🔥 EXCESS RENDER - Half filled tray scan
+  // 🔥 EXCESS LOT RENDER - Half filled tray scan
   // ==========================================================
   function renderExcessSection(excessInfo) {
     try {
@@ -5380,7 +5646,12 @@ function clearJigUserInputs() {
         batch_id: batchId,
         broken_hooks: 0,
         scanned_trays: [],
-        jig_capacity: jigCap
+        jig_capacity: jigCap,
+        // Multi-model context for aggregated computation
+        multi_model: !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0),
+        secondary_lots: (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }),
+        primary_lot_id: window.CURRENT_LOT_ID || '',
+        primary_batch_id: window.CURRENT_BATCH_ID || ''
       })
     })
     .then(function(res) { return res.json(); })
@@ -5740,7 +6011,12 @@ document.addEventListener('click', function (e) {
         jig_capacity: parseInt(window.BACKEND_EFFECTIVE_CAPACITY || window.jigCapacity || 0) || 0,
         half_filled_trays: halfFilledTrays,
         is_multi_model: isMultiModel,
-        multi_model_allocation: multiModelAllocation
+        multi_model_allocation: multiModelAllocation,
+        // Multi-model context for aggregated computation
+        multi_model: isMultiModel,
+        secondary_lots: isMultiModel ? (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }) : [],
+        primary_lot_id: window.CURRENT_LOT_ID || lotId,
+        primary_batch_id: window.CURRENT_BATCH_ID || batchId
       })
     })
     .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
@@ -5808,6 +6084,186 @@ document.addEventListener('click', function (e) {
     console.error('[SUBMIT_BTN] handler failed', err);
     alert('Submit error: ' + err.message);
   }
+});
+</script>
+
+<!-- ✅ Active Row Highlighting (UI State Management) -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  // ===== Active Row Highlighting State =====
+  let activeRowId = null;
+
+  // Set active row
+  window.setActiveRow = function(rowId) {
+    if (!rowId) return;
+    activeRowId = rowId;
+    updateActiveRowUI();
+  };
+
+  // Clear active row
+  window.clearActiveRow = function() {
+    activeRowId = null;
+    updateActiveRowUI();
+  };
+
+  // Update UI
+  function updateActiveRowUI() {
+    // Remove highlight from all rows
+    document.querySelectorAll('tbody tr.active-row').forEach(function(row) {
+      row.classList.remove('active-row');
+    });
+    // Add highlight to active row
+    if (activeRowId) {
+      const activeRow = document.querySelector(
+        'tbody tr[data-batch-id="' + activeRowId.split('||')[0] + '"][data-stock-lot-id="' + activeRowId.split('||')[1] + '"]'
+      );
+      if (activeRow) {
+        activeRow.classList.add('active-row');
+      }
+    }
+  }
+
+  // ===== HOLD TOGGLE STATE TRACKING =====
+  let rowOriginalPositions = {}; // Maps "batchId||lotId" to original row index
+
+  // ===== SET ACTIVE ROW TRIGGERS =====
+  // Attach to: hold-slider, jig-delete-batch-btn, open-jig-modal-btn, tray-scan-btn-Jig
+  setTimeout(function() {
+    // Hold Toggle
+    document.querySelectorAll('.hold-slider').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (row) {
+          const batchId = row.dataset.batchId;
+          const lotId = row.dataset.stockLotId;
+          const rowKey = batchId + '||' + lotId;
+          
+          // Get checkbox state (check after click propagates)
+          const checkbox = row.querySelector('input.hold-toggle-btn');
+          setTimeout(function() {
+            const isNowChecked = checkbox ? checkbox.checked : false;
+            
+            if (isNowChecked) {
+              // ✅ HOLD ON: Store original position and move to top
+              const tbody = row.parentElement;
+              const allRows = Array.from(tbody.querySelectorAll('tr'));
+              const originalIndex = allRows.indexOf(row);
+              rowOriginalPositions[rowKey] = originalIndex;
+              
+              setActiveRow(rowKey);
+              if (tbody && tbody.firstElementChild !== row) {
+                tbody.insertBefore(row, tbody.firstElementChild);
+              }
+            } else {
+              // ✅ HOLD OFF: Restore to original position
+              const tbody = row.parentElement;
+              if (tbody && rowOriginalPositions[rowKey] !== undefined) {
+                const originalIndex = rowOriginalPositions[rowKey];
+                
+                // First, temporarily remove row to get accurate count
+                row.remove();
+                
+                // Now get all rows without the moved row
+                const allRows = Array.from(tbody.querySelectorAll('tr'));
+                
+                if (originalIndex >= allRows.length) {
+                  // Original position no longer valid (rows were deleted), append to end
+                  tbody.appendChild(row);
+                } else if (originalIndex === 0) {
+                  // Insert at beginning
+                  tbody.insertBefore(row, tbody.firstElementChild);
+                } else {
+                  // Insert before the row that's now at originalIndex
+                  const targetRow = allRows[originalIndex];
+                  tbody.insertBefore(row, targetRow);
+                }
+              }
+              clearActiveRow();
+            }
+          }, 0);
+        }
+      });
+    });
+
+    // Delete Button
+    document.querySelectorAll('.jig-delete-batch-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (row) {
+          const batchId = row.dataset.batchId;
+          const lotId = row.dataset.stockLotId;
+          setActiveRow(batchId + '||' + lotId);
+        }
+      });
+    });
+
+    // Open Jig Modal Button
+    document.querySelectorAll('.open-jig-modal-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (row) {
+          const batchId = row.dataset.batchId;
+          const lotId = row.dataset.stockLotId;
+          setActiveRow(batchId + '||' + lotId);
+        }
+      });
+    });
+
+    // Tray Scan Button
+    document.querySelectorAll('.tray-scan-btn-Jig').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        const row = e.target.closest('tr');
+        if (row) {
+          const batchId = row.dataset.batchId;
+          const lotId = row.dataset.stockLotId;
+          setActiveRow(batchId + '||' + lotId);
+        }
+      });
+    });
+  }, 100);
+
+  // ===== CLEAR ACTIVE ROW TRIGGERS =====
+  // Attach to: closeNewPopupModal_Jig, close-btn, submitJigBtn, draftJigBtn, cancelJigBtn
+  setTimeout(function() {
+    // Close Modal Button
+    const closeBtn = document.getElementById('closeNewPopupModal_Jig');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        clearActiveRow();
+      });
+    }
+
+    // Generic close buttons
+    document.querySelectorAll('.close-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        clearActiveRow();
+      });
+    });
+
+    // Submit Button
+    const submitBtn = document.getElementById('submitJigBtn');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', function() {
+        clearActiveRow();
+      });
+    }
+
+    // Draft Button
+    const draftBtn = document.getElementById('draftJigBtn');
+    if (draftBtn) {
+      draftBtn.addEventListener('click', function() {
+        clearActiveRow();
+      });
+    }
+
+    // Cancel Button
+    const cancelBtn = document.getElementById('cancelJigBtn');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function() {
+        clearActiveRow();
+      });
+    }
+  }, 100);
 });
 </script>
 
@@ -5887,6 +6343,204 @@ document.addEventListener('click', function (e) {
 })();
 </script>
 
+<!-- Delink All Checkbox Handler -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+  var delinkAllCb = document.getElementById('delinkAllCheckbox');
+  if (!delinkAllCb) return;
+
+  delinkAllCb.addEventListener('change', async function () {
+    var container = document.getElementById('delinkTableSection');
+    if (!container) return;
+
+    var isChecked = this.checked;
+    console.log('[DELINK_ALL] Checkbox:', isChecked ? 'CHECKED' : 'UNCHECKED');
+
+    if (isChecked) {
+      // ✅ DELINK ALL: Auto-validate every unscanned tray input
+      var inputs = Array.from(container.querySelectorAll('.tray-id-input:not(.validated)'));
+      console.log('[DELINK_ALL] Auto-validating', inputs.length, 'unscanned trays');
+
+      for (var i = 0; i < inputs.length; i++) {
+        var inp = inputs[i];
+        var lotId = inp.dataset.lotId || window.CURRENT_LOT_ID || '';
+        var batchId = inp.dataset.batchId || window.CURRENT_BATCH_ID || '';
+        var expectedQty = parseInt(inp.dataset.expectedQty || 0) || 0;
+
+        // Fetch the expected tray for this slot from backend
+        // Use the backend's known tray list to auto-fill
+        try {
+          var allScanned = [];
+          container.querySelectorAll('.tray-id-input.validated').forEach(function(scannedInp) {
+            if (scannedInp.value) allScanned.push({ tray_id: scannedInp.value, qty: parseInt(scannedInp.dataset.expectedQty || 0) || 0 });
+          });
+
+          // Call update API with delink_all action to get auto-assigned tray
+          var csrfVal = (function() { var v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; })();
+          var resp = await fetch('/jig_loading/api/load/update/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfVal },
+            body: JSON.stringify({
+              action: 'scan_tray',
+              tray_id: inp.dataset.autoTrayId || '',
+              lot_id: lotId,
+              batch_id: batchId,
+              broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
+              jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
+              scanned_trays: allScanned,
+              allow_reuse_delink: false,
+              allow_new_half_filled: false,
+              multi_model: !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0),
+              secondary_lots: (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }),
+              primary_lot_id: window.CURRENT_LOT_ID || '',
+              primary_batch_id: window.CURRENT_BATCH_ID || ''
+            })
+          });
+
+          if (resp.ok) {
+            var data = await resp.json();
+            if (data.validation_status === 'success') {
+              inp.value = data.tray_id || inp.dataset.autoTrayId || ('AUTO-' + (i + 1));
+              inp.classList.add('validated');
+              inp.readOnly = true;
+              // Update backend state
+              window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+              window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+              window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || window.BACKEND_EFFECTIVE_CAPACITY;
+              if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+              var emptyEl = document.getElementById('emptyHooksInput');
+              if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
+              // Refresh half-filled
+              if (data.half_filled_tray_info && typeof window.renderHalfFilledAutoLink === 'function') {
+                window._lastInitData = Object.assign({}, window._lastInitData || {}, data, {
+                  half_filled: data.half_filled || data.half_filled_tray_info,
+                  half_filled_tray_info: data.half_filled_tray_info,
+                });
+                window.renderHalfFilledAutoLink(window._lastInitData);
+              }
+              console.log('[DELINK_ALL] Tray', i + 1, 'auto-validated:', inp.value);
+            } else {
+              console.warn('[DELINK_ALL] Tray', i + 1, 'validation failed:', data.message);
+            }
+          }
+        } catch (err) {
+          console.error('[DELINK_ALL] Auto-validate error for tray', i + 1, err);
+        }
+      }
+      console.log('[DELINK_ALL] Auto-validation complete');
+    } else {
+      // ❌ UNCHECKED: Clear ONLY delink tray inputs — preserve models, excess, half-filled
+      console.log('[DELINK_ALL] Unchecking — clearing delink trays ONLY');
+      var allInputs = container.querySelectorAll('.tray-id-input');
+      allInputs.forEach(function(inp) {
+        inp.value = '';
+        inp.classList.remove('validated');
+        inp.readOnly = false;
+        inp.style.background = '';
+        inp.style.border = '';
+      });
+
+      // Reset loaded to 0 but preserve models and half-filled
+      window.BACKEND_LOADED_CASES = 0;
+      window.BACKEND_EMPTY_HOOKS = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0) || 0;
+      if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+      var emptyEl = document.getElementById('emptyHooksInput');
+      if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
+
+      // ✅ BUG FIX #1: Also clear excess lot section tray inputs on uncheck
+      var excessContainer = document.getElementById('excessTrayContainer');
+      if (excessContainer) {
+        var excessInputs = excessContainer.querySelectorAll('.tray-id-input');
+        excessInputs.forEach(function(inp) {
+          inp.value = '';
+          inp.classList.remove('validated');
+          inp.readOnly = false;
+          inp.style.background = '';
+          inp.style.border = '';
+          inp.style.color = '';
+        });
+        console.log('[DELINK_ALL] Excess tray inputs also cleared.');
+      }
+
+      // 🚫 DO NOT clear models, lot qty, or section visibility
+      console.log('[DELINK_ALL] Delink + excess trays cleared. Models preserved.');
+
+      // ✅ Error 7: Re-render half-filled in "waiting for delink" state (no tray IDs)
+      if (typeof window.renderHalfFilledAutoLink === 'function' && window._lastInitData) {
+        var freshState = Object.assign({}, window._lastInitData, { delink_completed: false });
+        // Clear tray_ids so half-filled shows placeholder inputs
+        if (freshState.half_filled && typeof freshState.half_filled === 'object') {
+          freshState.half_filled = Object.assign({}, freshState.half_filled, { tray_ids: null });
+        }
+        if (freshState.half_filled_tray_info && typeof freshState.half_filled_tray_info === 'object') {
+          freshState.half_filled_tray_info = Object.assign({}, freshState.half_filled_tray_info, { tray_ids: null });
+        }
+        window.renderHalfFilledAutoLink(freshState);
+        console.log('[DELINK_ALL] Half-filled re-rendered in waiting state');
+      }
+    }
+  });
+
+  // ✅ Error 6: User Scan button handler — clears all auto-validated trays for manual scanning
+  var userScanBtn = document.getElementById('userScanBtn');
+  if (userScanBtn) {
+    userScanBtn.addEventListener('click', function() {
+      console.log('[USER_SCAN] Switching to manual scan mode');
+      // Uncheck Delink All
+      var delinkCb = document.getElementById('delinkAllCheckbox');
+      if (delinkCb && delinkCb.checked) delinkCb.checked = false;
+      // Clear all delink tray inputs
+      var container = document.getElementById('delinkTableSection');
+      if (container) {
+        container.querySelectorAll('.tray-id-input').forEach(function(inp) {
+          inp.value = '';
+          inp.classList.remove('validated');
+          inp.readOnly = false;
+          inp.style.background = '';
+          inp.style.border = '';
+        });
+      }
+      // Clear excess tray inputs
+      var excessContainer = document.getElementById('excessTrayContainer');
+      if (excessContainer) {
+        excessContainer.querySelectorAll('.tray-id-input').forEach(function(inp) {
+          inp.value = '';
+          inp.classList.remove('validated');
+          inp.readOnly = false;
+          inp.style.background = '';
+          inp.style.border = '';
+          inp.style.color = '';
+        });
+      }
+      // Reset loaded to 0
+      window.BACKEND_LOADED_CASES = 0;
+      window.BACKEND_EMPTY_HOOKS = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0) || 0;
+      if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+      var emptyEl = document.getElementById('emptyHooksInput');
+      if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
+      // Re-render half-filled in waiting state
+      if (typeof window.renderHalfFilledAutoLink === 'function' && window._lastInitData) {
+        var freshState = Object.assign({}, window._lastInitData, { delink_completed: false });
+        if (freshState.half_filled && typeof freshState.half_filled === 'object') {
+          freshState.half_filled = Object.assign({}, freshState.half_filled, { tray_ids: null });
+        }
+        if (freshState.half_filled_tray_info && typeof freshState.half_filled_tray_info === 'object') {
+          freshState.half_filled_tray_info = Object.assign({}, freshState.half_filled_tray_info, { tray_ids: null });
+        }
+        window.renderHalfFilledAutoLink(freshState);
+      }
+      // Focus first tray input
+      if (container) {
+        var firstInput = container.querySelector('.tray-id-input');
+        if (firstInput) setTimeout(function() { firstInput.focus(); }, 100);
+      }
+      console.log('[USER_SCAN] Manual mode enabled, all inputs cleared');
+    });
+  }
+});
+</script>
+
 <!-- Multi-model selection handlers -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
@@ -5938,6 +6592,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Reveal per-row checkbox (keeps table structure intact)
   document.querySelectorAll('.add-model-checkbox').forEach(cb => cb.style.display = 'inline-block');
+
+  // ✅ BUG FIX #1: Add Exit button to return to modal without selecting a model
+  try {
+    var exitBtn = document.createElement('button');
+    exitBtn.type = 'button';
+    exitBtn.className = 'btn btn-secondary';
+    exitBtn.style.cssText = 'margin-left:12px; padding:6px 18px; font-size:13px; font-weight:600; border-radius:50px; background:#ff4747; color:#fff; border:none; cursor:pointer;';
+    exitBtn.innerHTML = 'Exit';
+    exitBtn.title = 'Return to Jig Loading modal without adding a model';
+    exitBtn.addEventListener('click', function() {
+      var primary = params.get('primary_lot_id') || params.get('primary_lot') || params.get('exclude_lot_id') || '';
+      var primaryBatch = params.get('primary_batch_id') || params.get('primary_batch') || '';
+      var redirectUrl = '/jig_loading/JigView/?primary_lot_id=' + encodeURIComponent(primary) + '&primary_batch_id=' + encodeURIComponent(primaryBatch) + '&merge_model=1';
+      window.location.href = redirectUrl;
+    });
+    var headerArea = document.querySelector('.d-flex.align-items-center.gap-2.mb-4');
+    if (headerArea) headerArea.appendChild(exitBtn);
+  } catch(e) { console.warn('[EXIT_BTN] Failed to add:', e); }
 
   // NEW: Use sessionStorage and single-redirect flow on checkbox select
   document.querySelectorAll('.add-model-checkbox').forEach(cb => {
@@ -6057,6 +6729,20 @@ document.addEventListener('DOMContentLoaded', function () {
             fallbackPayload.secondary_lots = window._pendingSecondaryLots.map(function(s) {
               return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 };
             });
+            // Include scanned trays from sessionStorage for correct loaded_cases_qty
+            try {
+              var rawF = sessionStorage.getItem('scanned_trays');
+              if (rawF) {
+                var savedF = JSON.parse(rawF);
+                var listF = [];
+                Object.keys(savedF).forEach(function(key) {
+                  (savedF[key] || []).forEach(function(entry) {
+                    if (entry.value && entry.validated) listF.push({ tray_id: entry.value });
+                  });
+                });
+                if (listF.length > 0) fallbackPayload.scanned_trays = listF;
+              }
+            } catch(e) {}
             window._pendingSecondaryLots = null;
           } else if (window._pendingSecondaryLot && window._pendingSecondaryLot.lot_id) {
             fallbackPayload.multi_model = true;
