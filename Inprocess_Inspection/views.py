@@ -220,6 +220,38 @@ class InprocessInspectionView(TemplateView):
             enhanced_jig_detail.inprocess_hold_lot = hold_info['inprocess_hold_lot']
             enhanced_jig_detail.inprocess_release_lot = hold_info['inprocess_release_lot']
         
+            # FIX BUG 1 & 3: For multi-model, display all model names with model qty
+            # and use original_lot_qty instead of loaded_cases_qty for display
+            try:
+                if jig_detail.is_multi_model and jig_detail.multi_model_allocation:
+                    mm_data = jig_detail.multi_model_allocation
+                    if isinstance(mm_data, str):
+                        import json
+                        mm_data = json.loads(mm_data)
+                    
+                    # Build multi-model display: "M1, M2, M3"
+                    model_names = []
+                    total_qty = 0
+                    for i, m in enumerate(mm_data, 1):
+                        model_name = m.get('model_name', '')
+                        allocated_qty = m.get('allocated_qty', 0)
+                        if model_name:
+                            model_names.append(f"M{i}")
+                            total_qty += int(allocated_qty)
+                    
+                    # Store multi-model display format for template
+                    enhanced_jig_detail.multi_model_display = ', '.join(model_names) if model_names else jig_detail.plating_stock_num
+                    enhanced_jig_detail.display_lot_qty = jig_detail.original_lot_qty  # Use original for display
+                    enhanced_jig_detail.stored_model_names = [m.get('model_name', '') for m in mm_data]  # For hover tooltip
+                else:
+                    enhanced_jig_detail.multi_model_display = jig_detail.plating_stock_num or ''
+                    enhanced_jig_detail.display_lot_qty = jig_detail.original_lot_qty
+                    enhanced_jig_detail.stored_model_names = []
+            except Exception as e:
+                enhanced_jig_detail.multi_model_display = jig_detail.plating_stock_num or ''
+                enhanced_jig_detail.display_lot_qty = jig_detail.original_lot_qty
+                enhanced_jig_detail.stored_model_names = []
+        
             processed_jig_details.append(enhanced_jig_detail)
             
             print(f"✅ Final Results for JigDetail #{idx+1}:")

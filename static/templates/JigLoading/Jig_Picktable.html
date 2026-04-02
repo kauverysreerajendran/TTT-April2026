@@ -182,7 +182,6 @@
   max-width: 100px;
   padding: 4px 8px;
   border-radius: 7px;
-  border: 1.5px dashed rgba(2,128,132,0.25);
   background: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(240,255,254,0.3) 100%);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -2470,6 +2469,183 @@ tr.row-inactive td:first-child {
   border: 2px solid #17a2b8 !important;
   background-color: #e8f7fb !important;
 }
+
+/* ============================================================
+   UNIFIED TRAY TABLE — Delink + Excess combined
+   ============================================================ */
+#unifiedTrayTable {
+  border-collapse: collapse;
+  width: 100%;
+}
+#unifiedTrayTable thead th {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-bottom: 2px solid #028084;
+  white-space: nowrap;
+}
+#unifiedTrayTable tbody td {
+  padding: 7px 10px;
+  vertical-align: middle;
+  border-bottom: 1px solid #e8edf2;
+}
+#unifiedTrayTable tbody tr:hover {
+  background: #f0fffe;
+}
+#unifiedTrayTable tbody tr.unified-row-excess {
+  background: #fff8e1;
+}
+#unifiedTrayTable tbody tr.unified-row-excess:hover {
+  background: #fff3cd;
+}
+#unifiedTrayTable tbody tr.unified-row-partial-excess {
+  background: #ffe8cc;
+  font-style: italic;
+}
+#unifiedTrayTable tbody tr.unified-row-partial-excess:hover {
+  background: #ffddb3;
+}
+/* Status badges */
+.unified-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.unified-status-badge.status-fully-delinked {
+  background: #d4edda;
+  color: #155724;
+}
+.unified-status-badge.status-partial-delink {
+  background: #fff3cd;
+  color: #856404;
+}
+.unified-status-badge.status-partial-excess {
+  background: #ffe0b2;
+  color: #e65100;
+}
+.unified-status-badge.status-excess {
+  background: #fce4ec;
+  color: #c62828;
+}
+/* Scan input inside table */
+#unifiedTrayTable .unified-scan-input {
+  width: 100%;
+  max-width: 130px;
+  padding: 5px 8px;
+  border: 1.5px solid #b2dfdb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f0fffe;
+  color: #1e293b;
+  transition: all 0.2s;
+}
+#unifiedTrayTable .unified-scan-input:focus {
+  border-color: #028084;
+  box-shadow: 0 0 0 2px rgba(2,128,132,0.12);
+  background: #fff;
+  outline: none;
+}
+#unifiedTrayTable .unified-scan-input.validated {
+  background: #d4edda !important;
+  border-color: #28a745 !important;
+  color: #155724;
+}
+#unifiedTrayTable .unified-scan-label {
+  font-size: 10px;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+/* ============================================================
+   SPLIT PANEL — 2-column Delink + Excess layout
+   ============================================================ */
+.split-panel-container {
+  display: flex;
+  gap: 12px;
+  min-height: 200px;
+}
+.split-panel-left {
+  flex: 1;
+  min-width: 0;
+  border-right: 2px solid #e8edf2;
+  padding-right: 10px;
+}
+.split-panel-right {
+  flex: 0 0 340px;
+  min-width: 280px;
+}
+@media (max-width: 860px) {
+  .split-panel-container { flex-direction: column; }
+  .split-panel-left { border-right: none; border-bottom: 2px solid #e8edf2; padding-right: 0; padding-bottom: 10px; }
+  .split-panel-right { flex: 1; min-width: 100%; }
+}
+/* Delink panel table */
+#delinkPanelTable { border-collapse: collapse; width: 100%; }
+#delinkPanelTable thead th { font-size: 11px; font-weight: 500; padding: 6px 8px; border-bottom: 2px solid #028084; white-space: nowrap; }
+#delinkPanelTable tbody td { padding: 6px 8px; vertical-align: middle; border-bottom: 1px solid #e8edf2; }
+#delinkPanelTable tbody tr:hover { background: #f0fffe; }
+#delinkPanelTable tbody tr.delink-row-scanned { background: #d4edda; }
+#delinkPanelTable tbody tr.delink-row-disabled { background: #f1f3f5; opacity: 0.7; }
+/* Multi-model row colors in delink panel */
+#delinkPanelTable tbody tr.model-bg-1 { background: #e2fbff; }
+#delinkPanelTable tbody tr.model-bg-2 { background: #fff4e6; }
+#delinkPanelTable tbody tr.model-bg-3 { background: #fff9c4; }
+#delinkPanelTable tbody tr.model-bg-4 { background: #e1bee7; }
+#delinkPanelTable tbody tr.model-bg-5 { background: #c8e6c9; }
+#delinkPanelTable tbody tr.model-bg-1.delink-row-scanned { background: linear-gradient(135deg, #d4edda, #e2fbff); }
+#delinkPanelTable tbody tr.model-bg-2.delink-row-scanned { background: linear-gradient(135deg, #d4edda, #fff4e6); }
+#delinkPanelTable tbody tr.model-bg-3.delink-row-scanned { background: linear-gradient(135deg, #d4edda, #fff9c4); }
+#delinkPanelTable tbody tr.model-bg-4.delink-row-scanned { background: linear-gradient(135deg, #d4edda, #e1bee7); }
+#delinkPanelTable tbody tr.model-bg-5.delink-row-scanned { background: linear-gradient(135deg, #d4edda, #c8e6c9); }
+/* Allocation status badge styles */
+.unified-status-badge.status-delinked { background: #d4edda; color: #155724; border: 1px solid #28a745; }
+.unified-status-badge.status-top-tray { background: #d0f0f2; color: #014d4e; border: 1px solid #028084; }
+.unified-status-badge.status-excess-allocated { background: #fff4e6; color: #e67e22; border: 1px solid #e67e22; }
+/* Excess panel table */
+#excessPanelTable { border-collapse: collapse; width: 100%; }
+#excessPanelTable thead th { font-size: 11px; font-weight: 500; padding: 6px 8px; border-bottom: 2px solid #028084; white-space: nowrap; color: #1e293b; }
+#excessPanelTable tbody td { padding: 6px 8px; vertical-align: middle; border-bottom: 1px solid #e8edf2; font-weight: 400; }
+#excessPanelTable tbody tr:hover { background: #e6f7f8; }
+/* Scan inputs inside split panels */
+.split-scan-input {
+  width: 100%;
+  max-width: 120px;
+  padding: 4px 7px;
+  border: 1.5px solid #b2dfdb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f0fffe;
+  color: #1e293b;
+  transition: all 0.2s;
+}
+.split-scan-input:focus { border-color: #028084; box-shadow: 0 0 0 2px rgba(2,128,132,0.12); background: #fff; outline: none; }
+.split-scan-input.validated { background: #d4edda !important; border-color: #28a745 !important; color: #155724; }
+.split-scan-input.error-input { background: #fce4ec !important; border-color: #dc3545 !important; color: #c62828; }
+.split-scan-input:disabled { background: #f1f3f5 !important; color: #999; cursor: not-allowed; }
+.split-scan-label { font-size: 9px; color: #64748b; margin-left: 3px; }
+/* Delink checkbox disabled state (selection limit reached) */
+.delink-row-checkbox:disabled { opacity: 0.4; cursor: not-allowed; }
+.delink-row-checkbox.locked { pointer-events: none; accent-color: #028084; }
+/* Excess top tray lock state */
+.excess-scan-input.validated { background: #d4edda !important; border-color: #28a745 !important; }
+.excess-scan-input:disabled { background: #e8edf2 !important; color: #666; cursor: not-allowed; }
+/* ===== STATUS DIFFERENTIATION BADGES ===== */
+.unified-status-badge.status-delinked { background: #d4edda; color: #155724; border: 1px solid #28a745; }
+.unified-status-badge.status-top-tray { background: #d0f0f2; color: #014d4e; border: 1px solid #028084; }
+.unified-status-badge.status-excess-allocated { background: #fff4e6; color: #e67e22; border: 1px solid #e67e22; }
+/* Excess row scanned / locked state */
+#excessPanelTable tbody tr.excess-row-scanned { background: #fff4e6; }
+#excessPanelTable tbody tr.excess-row-top-tray { background: #d0f0f2; }
+.excess-row-checkbox { width:14px; height:14px; accent-color:#e67e22; cursor:pointer; }
+.excess-row-checkbox:disabled { opacity:0.4; cursor:not-allowed; }
+.excess-row-checkbox.locked { pointer-events:none; accent-color:#028084; }
+/* Total Delink Qty bar */
+.delink-total-bar { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:linear-gradient(135deg,#d4edda,#e8f5e9); border-radius:8px; margin-top:6px; font-size:12px; font-weight:600; color:#155724; border:1px solid #28a745; }
 </style>
 
 <div class="content-wrapper">
@@ -3260,38 +3436,108 @@ tr.row-inactive td:first-child {
       </div>
     </form>
 
-    <!-- Delink Information Section -->
+    <!-- ============================================================
+         SPLIT LAYOUT: Delink (LEFT) + Excess/Partial (RIGHT)
+         ============================================================ -->
 <div class="delink-section">
+  <!-- HEADER -->
   <div class="delink-header" style="display:flex; align-items:center; justify-content:space-between;">
     <span>
-      Delink Information
+      Delink &amp; Excess Lot Information
       <span style="font-size:12px; color:#028084; font-weight:700; margin-left:12px; background:rgba(2,128,132,0.08); padding:3px 10px; border-radius:20px;">
-        <span id="delinkTrayCount"></span> Trays
+        <span id="delinkTrayCount">0</span> Trays
+<span id="unifiedJigCapBadge" style="margin-left:8px; color:#e67e22; font-weight:700;"></span>
+        <span id="delinkStatsBadge" style="margin-left:8px; font-size:11px; color:#155724; font-weight:600; background:#d4edda; padding:2px 8px; border-radius:12px; display:none;"></span>
       </span>
     </span>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#028084; cursor:pointer; margin:0; user-select:none;">
-        <input type="checkbox" id="delinkAllCheckbox" style="width:16px; height:16px; accent-color:#028084; cursor:pointer;" />
-        Delink All
-      </label>
-      <button type="button" id="userScanBtn" style="padding:5px 14px; font-size:12px; font-weight:600; border-radius:20px; background: linear-gradient(135deg, #e0f7fa, #e8f5e9) !important;; color:#028084; border:1.5px solid #028084; cursor:pointer; transition:all 0.2s;" title="Switch to manual scan mode — clears auto-validated trays">
-        User Scan
-      </button>
+
+  </div>
+
+  <!-- 2-COLUMN SPLIT CONTENT -->
+  <div class="split-panel-container" id="splitPanelContainer" style="display:flex; gap:12px; margin-top:10px; padding-bottom:10px;">
+
+    <!-- LEFT COLUMN: DELINK -->
+    <div class="split-panel-left" id="splitPanelLeft" style="flex:1; min-width:0;">
+      <div class="split-panel-title" style="font-size:12px; font-weight:500; color:#028084; margin-bottom:6px; padding:4px 10px; background:rgba(2,128,132,0.06); border-radius:8px;">
+        <i class="fa fa-unlink" style="margin-right:5px;"></i> DELINK TRAYS
+        <span id="delinkPanelCount" style="float:right; font-weight:500; color:#1e293b;"></span>
+      </div>
+      <div class="table-responsive" style="max-height:340px; overflow-y:auto;">
+        <table class="table table-bordered table-sm" id="delinkPanelTable" style="margin-bottom:0; font-size:13px;">
+          <thead style="position:sticky; top:0; z-index:2;">
+            <tr style="background:linear-gradient(135deg, #e2fbff, #e8f5e9); color:#1e293b;">
+              <th style="width:36px; text-align:center;">S.No</th>
+              <th style="width:36px; text-align:center;"><input type="checkbox" id="delinkSelectAll" disabled style="width:14px;height:14px;accent-color:#028084;cursor:pointer;opacity:0.5;" title="Select All Delink" /></th>
+              <th style="min-width:90px;">Model</th>
+              <th style="min-width:80px;">Tray ID</th>
+              <th style="width:50px; text-align:center;">Orig Qty</th>
+              <th style="width:55px; text-align:center;">Delink Qty</th>
+              <th style="width:55px; text-align:center;">Excess Qty</th>
+              <th style="min-width:130px;">Scan Tray ID</th>
+              <th style="min-width:120px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="delinkPanelTableBody">
+            <!-- Rendered by JS from split_panel.delink_panel -->
+          </tbody>
+        </table>
+      </div>
+      <!-- Total Delink Qty Bar -->
+      <div class="delink-total-bar" id="delinkTotalBar" style="display:none;">
+        <span><i class="fa fa-check-circle" style="margin-right:5px;"></i> Total Delink Qty:</span>
+        <span id="delinkTotalQtyValue" style="font-size:14px;">0</span>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: EXCESS / PARTIAL -->
+    <div class="split-panel-right" id="splitPanelRight" style="flex:0 0 340px; min-width:280px; display:none;">
+      <div class="split-panel-title" style="font-size:12px; font-weight:500; color:#028084; margin-bottom:6px; padding:4px 10px; background:rgba(2,128,132,0.06); border-radius:8px;">
+        <i class="fa fa-exclamation-triangle" style="margin-right:5px;"></i> EXCESS / PARTIAL
+        <span id="excessPanelQtyBadge" style="float:right; font-weight:500; color:#028084;"></span>
+      </div>
+
+      <!-- Top Tray Scan (MANDATORY when partial exists) — supports scan/type/checkbox -->
+      <div id="excessTopTraySection" style="display:none; margin-bottom:10px; padding:10px; background:linear-gradient(135deg,#e6f7f8,#d0f0f2); border:1.5px solid #028084; border-radius:10px;">
+        <div style="font-size:11px; font-weight:500; color:#028084; margin-bottom:6px;">
+          <i class="fa fa-star" style="margin-right:4px;"></i> TOP TRAY (Scan / Type / Select)
+          <span id="excessTopTrayOriginal" style="float:right; font-size:10px; color:#64748b;"></span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="checkbox" id="excessTopTrayCheckbox" class="excess-row-checkbox" style="width:16px;height:16px;accent-color:#028084;cursor:pointer;" title="Select top tray" />
+          <input type="text" id="excessTopTrayScanInput" class="excess-scan-input" maxlength="9" placeholder="Scan Top Tray ID" style="flex:1; padding:7px 10px; border:1.5px solid #028084; border-radius:8px; font-size:13px; font-weight:500; background:#fff;" />
+          <span id="excessTopTrayQty" style="font-size:13px; font-weight:500; color:#028084; white-space:nowrap;"></span>
+        </div>
+        <div id="excessTopTrayStatus" style="font-size:11px; margin-top:4px; font-weight:500; color:#028084;"></div>
+      </div>
+
+      <!-- Excess Tray List — S.No, Model, Qty, Scan Tray ID -->
+      <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
+        <table class="table table-bordered table-sm" id="excessPanelTable" style="margin-bottom:0; font-size:13px;">
+          <thead style="position:sticky; top:0; z-index:2;">
+            <tr style="background:linear-gradient(135deg, #e6f7f8, #d0f0f2); color:#1e293b;">
+              <th style="width:36px; text-align:center;">S.No</th>
+              <th style="min-width:70px;">Model</th>
+              <th style="width:45px; text-align:center;">Qty</th>
+              <th style="min-width:120px;">Scan Tray ID</th>
+            </tr>
+          </thead>
+          <tbody id="excessPanelTableBody">
+            <!-- Rendered by JS from split_panel.excess_panel -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
-<div class="delink-content" id="delinkTableSection" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; padding-bottom:10px;"></div>
-
-<!-- Excess Lot Section -->
-<div id="excessLotSection" class="delink-section" style="display:none; margin-top:12px;">
-  <div class="delink-header" style="display:flex; align-items:center; justify-content:space-between;">
-    <span>Excess Lot Tray Scan <span id="excessLotCount" class="delink-count" style="margin-left:10px; background:rgba(2,128,132,0.08); padding:3px 10px; border-radius:20px;"></span></span>
-  </div>
-  <div class="delink-content">
-    <div id="excessTrayContainer" class="tray-scan-tabs"></div>
-  </div>
+<!-- Legacy unified table (hidden, kept for backward submit compat) -->
+<div id="delinkTableSection" style="display:none;">
+  <table id="unifiedTrayTable" style="display:none;">
+    <tbody id="unifiedTrayTableBody"></tbody>
+  </table>
 </div>
+
+
 
     </div> <!-- /.jig-modal-content -->
 
@@ -3310,6 +3556,20 @@ tr.row-inactive td:first-child {
         Cancel
       </button>
     </div>
+
+    <!-- ===== JIG COMPOSITION GALLERY OVERLAY ===== -->
+    <div id="jigCompositionOverlay" style="display:none; position:absolute; inset:0; background:#f5f9fa; z-index:9000; border-radius:16px; overflow-y:auto; animation:jcFadeIn 0.22s ease;">
+      <div id="jcHeader" style="background:linear-gradient(135deg,#028084,#014d4e); color:#fff; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; border-radius:16px 16px 0 0; position:sticky; top:0; z-index:2; box-shadow:0 2px 8px rgba(1,77,78,0.25);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <i class="fa fa-cogs" style="font-size:16px;"></i>
+          <span style="font-size:15px; font-weight:700; letter-spacing:0.3px;">Jig Composition</span>
+          <span id="jcJigIdBadge" style="font-size:11px; background:rgba(255,255,255,0.18); border-radius:20px; padding:2px 12px; font-family:monospace;"></span>
+        </div>
+        <button id="closeJigCompositionBtn" type="button" style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.35); color:#fff; border-radius:8px; padding:5px 16px; cursor:pointer; font-size:13px; font-weight:600;">&#8592; Back</button>
+      </div>
+      <div id="jcBody" style="padding:20px 22px 28px;"></div>
+    </div>
+    <!-- ===== END JIG COMPOSITION OVERLAY ===== -->
 
   </div>
 </div>
@@ -3591,7 +3851,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ==========================================================
   // 🔥 GLOBAL API STORM PREVENTION - CRITICAL FIX
   // ==========================================================
-  // Single lock to prevent init-jig-load being called multiple times
+  // Single lock to prevent duplicate init API calls.
   window.isInitLoading = false;
   
   // CSRF helper (available to all API calls in this scope)
@@ -3695,7 +3955,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function captureScannedTrays(container) {
     var saved = {};
     if (!container) return saved;
-    container.querySelectorAll('.tray-id-input').forEach(function(inp) {
+    container.querySelectorAll('.tray-id-input, .unified-scan-input').forEach(function(inp) {
       var lotId = inp.dataset.lotId || '';
       var modelIdx = inp.dataset.modelIndex || '1';
       var key = lotId + '|' + modelIdx;
@@ -3712,7 +3972,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!container || !saved || Object.keys(saved).length === 0) return;
     var counters = {};
     var restoredCount = 0;
-    container.querySelectorAll('.tray-id-input').forEach(function(inp) {
+    container.querySelectorAll('.tray-id-input, .unified-scan-input').forEach(function(inp) {
       var lotId = inp.dataset.lotId || '';
       var modelIdx = inp.dataset.modelIndex || '1';
       var key = lotId + '|' + modelIdx;
@@ -3736,7 +3996,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var keys = Object.keys(saved);
       keys.forEach(function(k) { flatValues = flatValues.concat(saved[k]); });
       if (flatValues.length > 0) {
-        var inputs = container.querySelectorAll('.tray-id-input');
+        var inputs = container.querySelectorAll('.tray-id-input, .unified-scan-input');
         for (var fi = 0; fi < Math.min(flatValues.length, inputs.length); fi++) {
           if (flatValues[fi].value) {
             inputs[fi].value = flatValues[fi].value;
@@ -3794,6 +4054,1109 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('[COLOR_MAP] Derived color for index', modelIdx, '→', derivedClass, '(backend color was:', backendColorClass, ')');
     return derivedClass;
   }
+
+  // ==========================================================
+  // 🔥 SPLIT PANEL RENDERER — 2-Column Delink + Excess
+  // Backend is the ONLY source of truth. Frontend ONLY renders.
+  // ==========================================================
+  function renderUnifiedTrayTable(data) {
+    // Redirect to split panel render — this wrapper kept for backward compat
+    renderSplitPanels(data);
+  }
+
+  function renderSplitPanels(data) {
+    var panel = data.split_panel;
+    // Fallback: if split_panel not present, try to render from unified_tray_table
+    if (!panel) {
+      console.warn('[SPLIT_PANEL] No split_panel in response, skipping render');
+      return;
+    }
+
+    // ===== Store split_panel globally for snapshot collection fallback =====
+    window._lastSplitPanelData = panel;
+
+    // ===== GLOBAL ALLOCATION TRACKER (survives re-renders) =====
+    // Tracks which trays have been allocated as top_tray / excess / delink
+    if (!window._trayAllocations) window._trayAllocations = {};
+
+    var delinkPanel = panel.delink_panel || {};
+    var excessPanel = panel.excess_panel || {};
+    var delinkTrays = delinkPanel.trays || [];
+    var excessExists = excessPanel.exists || false;
+    var excessTrays = excessPanel.trays || [];
+    var topTray = excessPanel.top_tray || null;
+
+    var lotQty = parseInt(data.lot_qty || data.total_qty || 0) || 0;
+    var effectiveCap = parseInt(data.effective_capacity || 0) || 0;
+    var panelMeta = panel.meta || {};
+    var selectionLimit = parseInt(delinkPanel.selection_limit || 0) || 0;
+    var delinkMode = delinkPanel.mode || 'inactive';
+
+    // ===== HEADER BADGES =====
+    var countBadge = document.getElementById('delinkTrayCount');
+    var capBadge = document.getElementById('unifiedJigCapBadge');
+    if (countBadge) countBadge.innerText = delinkTrays.length;
+    if (capBadge) capBadge.innerText = 'Lot Qty ' + lotQty + ' | Jig Cap ' + effectiveCap;
+    // Initialize delink stats badge (will update after re-render)
+    setTimeout(function() { _updateDelinkStatsBadge(); }, 50);
+
+    // ===== Preserve validated scans across re-renders =====
+    var previousValidated = {};
+    document.querySelectorAll('#delinkPanelTableBody .split-scan-input.validated, #excessPanelTableBody .split-scan-input.validated').forEach(function(inp) {
+      var k = (inp.dataset.autoTrayId || '') + '|' + (inp.dataset.panel || '');
+      if (inp.value) previousValidated[k] = inp.value;
+    });
+    var prevTopTrayVal = '';
+    var topTrayInp = document.getElementById('excessTopTrayScanInput');
+    if (topTrayInp && topTrayInp.value && topTrayInp.classList.contains('validated')) {
+      prevTopTrayVal = topTrayInp.value;
+    }
+
+    // ===== LEFT: DELINK PANEL =====
+    var dBody = document.getElementById('delinkPanelTableBody');
+    var dCountEl = document.getElementById('delinkPanelCount');
+    if (dCountEl) dCountEl.innerText = delinkTrays.length + ' trays / ' + (delinkPanel.total_delink_qty || 0) + ' qty';
+
+    if (dBody) {
+      dBody.innerHTML = '';
+      if (!delinkTrays.length) {
+        dBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:14px;">No delink trays</td></tr>';
+      } else {
+        delinkTrays.forEach(function(row, idx) {
+          var tr = document.createElement('tr');
+          if (row.state === 'scanned') tr.className = 'delink-row-scanned';
+          else if (row.state === 'disabled') tr.className = 'delink-row-disabled';
+          if (row.color_class) tr.classList.add(row.color_class);
+
+          // ===== DATA ATTRIBUTES for full snapshot collection =====
+          tr.dataset.trayId = row.tray_id || '';
+          tr.dataset.originalQty = row.original_qty != null ? row.original_qty : 0;
+          tr.dataset.delinkQty = row.delink_qty != null ? row.delink_qty : 0;
+          tr.dataset.excessQty = row.excess_qty != null ? row.excess_qty : 0;
+          tr.dataset.modelCode = row.model_code || '';
+          tr.dataset.lotId = row.lot_id || window.CURRENT_LOT_ID || '';
+          tr.dataset.topTray = row.is_top_tray ? 'true' : 'false';
+
+          // 1. S.No
+          var td1 = document.createElement('td');
+          td1.style.cssText = 'text-align:center;font-weight:500;';
+          td1.innerText = row.sno;
+          tr.appendChild(td1);
+
+          // 2. Checkbox
+          var td2 = document.createElement('td');
+          td2.style.textAlign = 'center';
+          if (row.is_checkbox_enabled) {
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'delink-row-checkbox';
+            cb.style.cssText = 'width:14px;height:14px;accent-color:#028084;cursor:pointer;';
+            cb.dataset.rowIndex = idx;
+            cb.dataset.trayId = row.tray_id || '';
+            if (row.checked) { cb.checked = true; }
+            if (row.locked) { cb.disabled = true; cb.classList.add('locked'); }
+            if (row.selectable === false) { cb.disabled = true; }
+            td2.appendChild(cb);
+          }
+          tr.appendChild(td2);
+
+          // 3. Model
+          var td3 = document.createElement('td');
+          td3.style.cssText = 'font-weight:500;font-size:12px;';
+          // Backend may include lot id in the model label (eg. "MODEL [LID...]").
+          // Hide lot id in the UI while preserving it in dataset.lotId for JS/backend use.
+          var modelLabel = row.model_code || '';
+          try { modelLabel = modelLabel.replace(/\s*\[.*\]$/, ''); } catch(e) {}
+          td3.innerText = modelLabel;
+          tr.appendChild(td3);
+
+          // 4. Tray ID
+          var td4 = document.createElement('td');
+          td4.style.cssText = 'font-weight:500;font-family:monospace;';
+          td4.innerText = row.tray_id || '';
+          tr.appendChild(td4);
+
+          // 5. Original Qty
+          var td5 = document.createElement('td');
+          td5.style.cssText = 'text-align:center;font-weight:500;';
+          td5.innerText = row.original_qty != null ? row.original_qty : 0;
+          tr.appendChild(td5);
+
+          // 6. Delink Qty
+          var td6 = document.createElement('td');
+          td6.style.cssText = 'text-align:center;font-weight:500;color:#028084;';
+          td6.innerText = row.delink_qty != null ? row.delink_qty : 0;
+          tr.appendChild(td6);
+
+          // 7. Excess Qty
+          var td7 = document.createElement('td');
+          td7.style.cssText = 'text-align:center;font-weight:500;color:#e67e22;';
+          td7.innerText = row.excess_qty != null ? row.excess_qty : 0;
+          tr.appendChild(td7);
+
+          // 8. Scan Tray ID
+          var td8 = document.createElement('td');
+          if (row.is_scannable) {
+            var inp = document.createElement('input');
+            inp.type = 'text';
+            inp.className = 'split-scan-input';
+            inp.maxLength = 9;
+            inp.dataset.expectedQty = row.delink_qty || 0;
+            inp.dataset.rowIndex = idx;
+            inp.dataset.panel = 'delink';
+            inp.dataset.autoTrayId = row.scan_tray_id || '';
+            inp.dataset.lotId = row.lot_id || window.CURRENT_LOT_ID || '';
+            inp.dataset.batchId = row.batch_id || window.CURRENT_BATCH_ID || '';
+            inp.placeholder = panelMeta.tray_placeholder || row.scan_tray_id || 'Scan Tray ID';
+            var restoreKey = (row.scan_tray_id || '') + '|delink';
+            if (previousValidated[restoreKey]) {
+              inp.value = previousValidated[restoreKey];
+              inp.classList.add('validated');
+              inp.readOnly = true;
+              inp.style.background = '#d4edda';
+              inp.style.borderColor = '#28a745';
+            }
+            td8.appendChild(inp);
+            var lbl = document.createElement('span');
+            lbl.className = 'split-scan-label';
+            td8.appendChild(lbl);
+          }
+          tr.appendChild(td8);
+
+          // 9. Status (empty by default — filled by user action)
+          var td9 = document.createElement('td');
+          tr.appendChild(td9);
+
+          dBody.appendChild(tr);
+
+          // Post-render: restore validated scans
+          var restoredInp = tr.querySelector('.split-scan-input.validated');
+          if (restoredInp) {
+            var resCb = tr.querySelector('.delink-row-checkbox');
+            if (resCb) { resCb.checked = true; resCb.disabled = true; resCb.classList.add('locked'); }
+            tr.classList.add('delink-row-scanned');
+            var lastTd = tr.cells[tr.cells.length - 1];
+            if (lastTd && !lastTd.querySelector('.unified-status-badge')) {
+              lastTd.innerHTML = '<span class="unified-status-badge status-delinked" style="background:#d4edda;color:#155724;border:1px solid #28a745;">Delinked</span>';
+            }
+          }
+
+          // Restore allocation state from global tracker
+          var allocKey = (row.tray_id || '').toUpperCase();
+          var alloc = (window._trayAllocations || {})[allocKey];
+          if (alloc && !restoredInp) {
+            var allocCb = tr.querySelector('.delink-row-checkbox');
+            var allocInp = tr.querySelector('.split-scan-input');
+            if (allocCb) { allocCb.checked = true; allocCb.disabled = true; allocCb.classList.add('locked'); }
+            if (alloc.type === 'top_tray') {
+              tr.classList.add('delink-row-disabled');
+              tr.title = 'Allocated as top tray';
+              if (allocInp && !allocInp.classList.contains('validated')) { allocInp.disabled = true; allocInp.style.opacity = '0.5'; allocInp.title = 'Allocated as top tray'; }
+              var stCell = tr.cells[tr.cells.length - 1];
+              if (stCell) stCell.innerHTML = '<span class="unified-status-badge status-top-tray" style="background:#d0f0f2;color:#014d4e;border:1px solid #028084;">Verified to Top Tray</span>';
+            } else if (alloc.type === 'excess') {
+              tr.classList.add('delink-row-disabled');
+              tr.title = 'Allocated as excess tray';
+              if (allocInp && !allocInp.classList.contains('validated')) { allocInp.disabled = true; allocInp.style.opacity = '0.5'; allocInp.title = 'Allocated as excess tray'; }
+              var stCell = tr.cells[tr.cells.length - 1];
+              if (stCell) stCell.innerHTML = '<span class="unified-status-badge status-excess-allocated" style="background:#fff4e6;color:#e67e22;border:1px solid #e67e22;">Allocated to Excess Lot</span>';
+            }
+          }
+        });
+      }
+      // ===== PHASE-AWARE CHECKBOX ROUTING with allocation persistence =====
+      // Phase: top_tray → excess → delink (based on excess panel state)
+      function _getJigPhase() {
+        var rightPanel = document.getElementById('splitPanelRight');
+        var excessVisible = rightPanel && rightPanel.style.display !== 'none';
+        if (!excessVisible) return 'delink';
+        // Check if top tray allocated
+        var topInp = document.getElementById('excessTopTrayScanInput');
+        var topDone = !!(topInp && (topInp.classList.contains('validated') || topInp.value.trim()));
+        if (!topDone) return 'top_tray';
+        // Check if excess remaining has empty slots
+        var eBodyF = document.getElementById('excessPanelTableBody');
+        var emptyExcess = eBodyF ? Array.from(eBodyF.querySelectorAll('.split-scan-input')).filter(function(i) { return !i.value.trim(); }).length : 0;
+        if (emptyExcess > 0) return 'excess';
+        return 'delink';
+      }
+
+      // Immediately apply visual status to a delink row (survives re-render via _trayAllocations)
+      function _applyRowAllocation(tr, cb, trayId, type) {
+        if (!window._trayAllocations) window._trayAllocations = {};
+        window._trayAllocations[trayId.toUpperCase()] = { type: type };
+        if (cb) { cb.checked = true; cb.disabled = true; cb.classList.add('locked'); }
+        var dInp = tr.querySelector('.split-scan-input');
+        var lastCell = tr.cells[tr.cells.length - 1];
+        if (type === 'top_tray') {
+          tr.classList.add('delink-row-disabled');
+          tr.title = 'Allocated as top tray';
+          if (dInp && !dInp.classList.contains('validated')) { dInp.disabled = true; dInp.style.opacity = '0.5'; dInp.title = 'Allocated as top tray'; }
+          if (lastCell) lastCell.innerHTML = '<span class="unified-status-badge status-top-tray" style="background:#d0f0f2;color:#014d4e;border:1px solid #028084;">Verified to Top Tray</span>';
+        } else if (type === 'excess') {
+          tr.classList.add('delink-row-disabled');
+          tr.title = 'Allocated as excess tray';
+          if (dInp && !dInp.classList.contains('validated')) { dInp.disabled = true; dInp.style.opacity = '0.5'; dInp.title = 'Allocated as excess tray'; }
+          if (lastCell) lastCell.innerHTML = '<span class="unified-status-badge status-excess-allocated" style="background:#fff4e6;color:#e67e22;border:1px solid #e67e22;">Allocated to Excess Lot</span>';
+        }
+        // For 'delink' type, the _validateSplitScan success handler does the status update
+        _updatePhaseMessage();
+      }
+
+      // Phase message display
+      function _updatePhaseMessage() {
+        var msgEl = document.getElementById('jigPhaseMessage');
+        if (!msgEl) {
+          msgEl = document.createElement('div');
+          msgEl.id = 'jigPhaseMessage';
+          msgEl.style.cssText = 'font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;margin-top:6px;text-align:center;';
+          var totalBar = document.getElementById('delinkTotalBar');
+          if (totalBar) totalBar.parentNode.insertBefore(msgEl, totalBar);
+        }
+        var phase = _getJigPhase();
+        if (phase === 'top_tray') {
+          msgEl.style.display = '';
+          msgEl.style.background = '#d0f0f2'; msgEl.style.color = '#014d4e'; msgEl.style.border = '1px solid #028084';
+          msgEl.innerHTML = '&#9733; Step 1: Scan or select a tray for <b>Top Tray</b>';
+        } else if (phase === 'excess') {
+          var eBodyP = document.getElementById('excessPanelTableBody');
+          var remaining = eBodyP ? Array.from(eBodyP.querySelectorAll('.split-scan-input')).filter(function(i) { return !i.value.trim(); }).length : 0;
+          msgEl.style.display = '';
+          msgEl.style.background = '#fff4e6'; msgEl.style.color = '#e67e22'; msgEl.style.border = '1px solid #e67e22';
+          msgEl.innerHTML = '&#9888; Step 2: Scan or select <b>' + remaining + '</b> more tray(s) for <b>Excess Lot</b>';
+        } else {
+          var anyUnscanned = document.querySelector('#delinkPanelTableBody .split-scan-input:not(.validated):not(:disabled)');
+          if (anyUnscanned) {
+            msgEl.style.display = '';
+            msgEl.style.background = '#d4edda'; msgEl.style.color = '#155724'; msgEl.style.border = '1px solid #28a745';
+            msgEl.innerHTML = '&#10003; Excess complete &mdash; scan or select remaining trays for <b>Delink</b>';
+          } else {
+            msgEl.style.display = 'none';
+          }
+        }
+      }
+      // Expose for _validateSplitScan (outer scope)
+      window._updatePhaseMessage = _updatePhaseMessage;
+
+      function _routeCheckboxTray(cb) {
+        if (!cb || !cb.checked) return;
+        var tr = cb.closest('tr');
+        if (!tr) return;
+        var trayId = cb.dataset.trayId || '';
+        if (!trayId) return;
+
+        var phase = _getJigPhase();
+
+        if (phase === 'top_tray') {
+          // Fill excess top tray input + validate
+          var topInp = document.getElementById('excessTopTrayScanInput');
+          if (topInp && !topInp.readOnly) {
+            topInp.value = trayId;
+            _validateSplitScan(trayId, topInp, true);
+          }
+          _applyRowAllocation(tr, cb, trayId, 'top_tray');
+          console.log('[CB_ROUTE] Tray', trayId, '→ TOP TRAY (phase)');
+          return;
+        }
+
+        if (phase === 'excess') {
+          var eBodyCB = document.getElementById('excessPanelTableBody');
+          var nextExcessInp = eBodyCB ? Array.from(eBodyCB.querySelectorAll('.split-scan-input')).find(function(i) { return !i.value.trim(); }) : null;
+          if (nextExcessInp) {
+            nextExcessInp.value = trayId;
+            _validateSplitScan(trayId, nextExcessInp, true);
+          }
+          _applyRowAllocation(tr, cb, trayId, 'excess');
+          console.log('[CB_ROUTE] Tray', trayId, '→ EXCESS (phase)');
+          return;
+        }
+
+        // Phase = delink
+        var inp = tr.querySelector('.split-scan-input');
+        if (inp && !inp.classList.contains('validated') && !inp.value.trim()) {
+          inp.value = trayId;
+          inp.style.background = '#f0fff4';
+          _validateSplitScan(trayId, inp, false);
+          // Delink allocation saved in _validateSplitScan success handler
+          console.log('[CB_ROUTE] Tray', trayId, '→ DELINK (phase)');
+        }
+      }
+
+      // Select-all: synchronous slot tracking with allocation persistence
+      var selectAllDelink = document.getElementById('delinkSelectAll');
+      if (selectAllDelink) {
+        selectAllDelink.onclick = function() {
+          var isChecked = this.checked;
+          var allCbs = Array.from(dBody.querySelectorAll('.delink-row-checkbox:not(.locked):not(:disabled)'));
+          if (!isChecked) {
+            allCbs.forEach(function(cb) { cb.checked = false; });
+            return;
+          }
+          var rightPanel = document.getElementById('splitPanelRight');
+          var excessVisible = rightPanel && rightPanel.style.display !== 'none';
+          var topInp = document.getElementById('excessTopTrayScanInput');
+          var _topTaken = !!(topInp && (topInp.value.trim() || topInp.classList.contains('validated')));
+          var eBodySA = document.getElementById('excessPanelTableBody');
+          var _excessAvail = eBodySA ? Array.from(eBodySA.querySelectorAll('.split-scan-input')).filter(function(i) { return !i.value.trim(); }) : [];
+          var _excessIdx = 0;
+
+          allCbs.forEach(function(cb) {
+            if (cb.checked) return;
+            cb.checked = true;
+            var tr = cb.closest('tr');
+            var trayId = cb.dataset.trayId || '';
+            if (!trayId || !tr) return;
+
+            // Route 1: Top tray
+            if (excessVisible && !_topTaken && topInp && !topInp.readOnly) {
+              _topTaken = true;
+              topInp.value = trayId;
+              _validateSplitScan(trayId, topInp, true);
+              _applyRowAllocation(tr, cb, trayId, 'top_tray');
+              return;
+            }
+
+            // Route 2: Excess remaining
+            if (excessVisible && _topTaken && _excessIdx < _excessAvail.length) {
+              var eInp = _excessAvail[_excessIdx++];
+              eInp.value = trayId;
+              _validateSplitScan(trayId, eInp, true);
+              _applyRowAllocation(tr, cb, trayId, 'excess');
+              return;
+            }
+
+            // Route 3: Delink
+            var inp = tr.querySelector('.split-scan-input');
+            if (inp && !inp.classList.contains('validated') && !inp.value.trim()) {
+              inp.value = trayId;
+              inp.style.background = '#f0fff4';
+              _validateSplitScan(trayId, inp, false);
+            }
+          });
+        };
+      }
+      // Attach change handler per checkbox → smart routing
+      dBody.querySelectorAll('.delink-row-checkbox:not(.locked)').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          if (this.checked) {
+            _routeCheckboxTray(this);
+          }
+        });
+      });
+      // Update delink total bar
+      _updateDelinkTotalBar();
+    }
+
+    // ===== RIGHT: EXCESS PANEL =====
+    var rightPanel = document.getElementById('splitPanelRight');
+    var eBody = document.getElementById('excessPanelTableBody');
+    var eQtyBadge = document.getElementById('excessPanelQtyBadge');
+    var topTraySection = document.getElementById('excessTopTraySection');
+    var topTrayInput = document.getElementById('excessTopTrayScanInput');
+    var topTrayQtyEl = document.getElementById('excessTopTrayQty');
+    var topTrayStatusEl = document.getElementById('excessTopTrayStatus');
+    var topTrayCheckbox = document.getElementById('excessTopTrayCheckbox');
+    var topTrayOrigEl = document.getElementById('excessTopTrayOriginal');
+
+    if (rightPanel) {
+      if (excessExists) {
+        rightPanel.style.display = '';
+        if (eQtyBadge) eQtyBadge.innerText = (excessPanel.total_excess_qty || 0) + ' qty excess';
+
+        // Top Tray (scan / type / checkbox)
+        if (topTray && topTraySection) {
+          topTraySection.style.display = '';
+          if (topTrayQtyEl) topTrayQtyEl.innerText = 'Qty: ' + (topTray.qty || 0);
+          if (topTrayOrigEl) topTrayOrigEl.innerText = 'Original: ' + (topTray.model_code || '');
+          if (topTrayStatusEl) topTrayStatusEl.innerText = '';
+          if (topTrayInput) {
+            topTrayInput.dataset.expectedQty = topTray.qty || 0;
+            topTrayInput.dataset.autoTrayId = topTray.scan_tray_id || '';
+            topTrayInput.dataset.panel = 'excess_top';
+            topTrayInput.dataset.modelCode = topTray.model_code || '';
+            topTrayInput.dataset.lotId = topTray.lot_id || '';
+            topTrayInput.placeholder = topTray.model_code || 'Scan / Type Top Tray ID';
+            // Restore validated state
+            if (prevTopTrayVal) {
+              topTrayInput.value = prevTopTrayVal;
+              topTrayInput.classList.add('validated');
+              topTrayInput.readOnly = true;
+              topTrayInput.style.background = '#d0f0f2';
+              topTrayInput.style.borderColor = '#028084';
+              if (topTrayCheckbox) { topTrayCheckbox.checked = true; topTrayCheckbox.disabled = true; topTrayCheckbox.classList.add('locked'); }
+              if (topTrayStatusEl) topTrayStatusEl.innerHTML = '<span class="unified-status-badge status-top-tray">Verified for Top Tray</span>';
+            }
+          }
+          // Checkbox: auto-fill tray ID on check
+          if (topTrayCheckbox && !topTrayCheckbox.classList.contains('locked')) {
+            topTrayCheckbox.onclick = function() {
+              if (this.checked && topTrayInput && !topTrayInput.classList.contains('validated')) {
+                var autoId = topTray.scan_tray_id || topTray.tray_id || '';
+                if (autoId) {
+                  topTrayInput.value = autoId;
+                  // Trigger validation
+                  _validateSplitScan(autoId, topTrayInput, true);
+                }
+              }
+            };
+          }
+        } else if (topTraySection) {
+          topTraySection.style.display = 'none';
+        }
+
+        // Excess tray rows — S.No, Model, Qty, Scan Tray ID (no checkbox, no status)
+        if (eBody) {
+          eBody.innerHTML = '';
+          excessTrays.forEach(function(row, idx) {
+            // Skip the top tray row — rendered separately above
+            if (row.is_top_tray) return;
+
+            var tr = document.createElement('tr');
+            if (row.is_auto) tr.className = 'excess-row-auto';
+
+            // S.No
+            var td1 = document.createElement('td');
+            td1.style.cssText = 'text-align:center;font-weight:500;';
+            td1.innerText = row.sno || '';
+            tr.appendChild(td1);
+
+            // Model
+            var tdModel = document.createElement('td');
+            tdModel.style.cssText = 'font-weight:500;font-size:12px;';
+            // Hide appended lot id if present (keep lot_id in dataset.lotId)
+            var excessModelLabel = row.model_code || '';
+            try { excessModelLabel = excessModelLabel.replace(/\s*\[.*\]$/, ''); } catch(e) {}
+            tdModel.innerText = excessModelLabel;
+            tr.appendChild(tdModel);
+
+            // Qty
+            var tdQty = document.createElement('td');
+            tdQty.style.cssText = 'text-align:center;font-weight:500;color:#e67e22;';
+            tdQty.innerText = row.qty || '';
+            tr.appendChild(tdQty);
+
+            // Scan Tray ID (always editable — user can type or scan)
+            var tdScan = document.createElement('td');
+            var inp = document.createElement('input');
+            inp.type = 'text';
+            inp.className = 'split-scan-input';
+            inp.maxLength = 9;
+            inp.dataset.expectedQty = row.qty || 0;
+            inp.dataset.panel = 'excess';
+            inp.dataset.autoTrayId = row.scan_tray_id || '';
+            inp.dataset.lotId = row.lot_id || window.CURRENT_LOT_ID || '';
+            inp.dataset.batchId = window.CURRENT_BATCH_ID || '';
+            inp.dataset.modelCode = row.model_code || '';
+            inp.placeholder = row.model_code || 'Scan / Type Tray ID';
+            // Dotted border removed for auto-allocated rows
+            // Restore validated state
+            var rk = (row.scan_tray_id || '') + '|excess';
+            if (previousValidated[rk]) {
+              inp.value = previousValidated[rk];
+              inp.classList.add('validated');
+              inp.style.background = '#fff4e6';
+              inp.style.borderColor = '#e67e22';
+              tr.classList.add('excess-row-scanned');
+            }
+            tdScan.appendChild(inp);
+            tr.appendChild(tdScan);
+
+            eBody.appendChild(tr);
+          });
+        }
+      } else {
+        rightPanel.style.display = 'none';
+        if (topTraySection) topTraySection.style.display = 'none';
+      }
+
+      // ===== NO DELINK GATE: checkboxes always enabled =====
+      // Checkboxes route intelligently: top tray → excess → delink
+      // Only locked/occupied rows have disabled checkboxes (set during row rendering)
+      // Clean up any stale gate messages from previous renders
+      var staleGate = document.getElementById('delinkGateMessage');
+      if (staleGate) staleGate.remove();
+    }
+
+    // Attach scan handlers to both panels
+    _attachSplitScanHandlers();
+
+    // Update phase message after render
+    if (typeof window._updatePhaseMessage === 'function') {
+      setTimeout(function() { window._updatePhaseMessage(); }, 60);
+    }
+
+    console.log('[SPLIT_PANEL] Rendered — delink:', delinkTrays.length, 'excess:', excessTrays.length, 'topTray:', !!topTray);
+  }
+
+  // ===== COLLECT ALL VALIDATED SCANS (from both panels) =====
+  function collectValidatedScans(excludeInputEl) {
+    var scans = [];
+    var seen = new Set();
+
+    function collect(selector) {
+      document.querySelectorAll(selector).forEach(function(inp) {
+        if (excludeInputEl && inp === excludeInputEl) return;
+        var trayId = (inp.value || '').trim();
+        if (!trayId) return;
+        var key = trayId.toUpperCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        scans.push({
+          tray_id: trayId,
+          qty: parseInt(inp.dataset.expectedQty || 0) || 0
+        });
+      });
+    }
+
+    collect('#delinkPanelTableBody .split-scan-input.validated');
+    collect('#excessPanelTableBody .split-scan-input.validated');
+    collect('#excessTopTrayScanInput.validated');
+    // Legacy compat
+    collect('#unifiedTrayTableBody .unified-scan-input.validated');
+    collect('#excessTrayContainer .tray-id-input.validated');
+    return scans;
+  }
+
+  // ===== SELECTION LIMIT ENFORCEMENT (backend-driven, zero frontend logic) =====
+  function _enforceSelectionLimit(dBody, limit) {
+    if (!dBody || !limit || limit <= 0) return;
+    var allCbs = Array.from(dBody.querySelectorAll('.delink-row-checkbox:not(.locked)'));
+    var checkedCount = allCbs.filter(function(cb) { return cb.checked; }).length;
+    allCbs.forEach(function(cb) {
+      if (!cb.checked && checkedCount >= limit) {
+        cb.disabled = true;
+      } else if (!cb.checked) {
+        cb.disabled = false;  // Re-enable if under limit
+      }
+    });
+    console.log('[SELECTION_LIMIT] checked:', checkedCount, '/ limit:', limit);
+  }
+
+  // ===== AUTO-LOCK DELINK CHECKBOX AFTER TOP TRAY SCAN =====
+  // When top tray is scanned, find matching delink row and auto-check + lock it
+  function _autoLockDelinkForTopTray(topTrayId) {
+    if (!topTrayId) return;
+    var normalized = topTrayId.trim().toUpperCase();
+    var dBody = document.getElementById('delinkPanelTableBody');
+    if (!dBody) return;
+    dBody.querySelectorAll('.delink-row-checkbox').forEach(function(cb) {
+      if ((cb.dataset.trayId || '').trim().toUpperCase() === normalized) {
+        cb.checked = true;
+        cb.disabled = true;
+        cb.classList.add('locked');
+        // Lock the scan input too
+        var tr = cb.closest('tr');
+        if (tr) {
+          tr.classList.remove('delink-row-scanned');
+          tr.classList.add('delink-row-disabled');
+          tr.title = 'Allocated as top tray — locked';
+          // Disable the scan input
+          var scanInp = tr.querySelector('.split-scan-input');
+          if (scanInp && !scanInp.classList.contains('validated')) {
+            scanInp.disabled = true;
+            scanInp.style.opacity = '0.6';
+            scanInp.title = 'Allocated as top tray';
+          }
+          // Add "Verified to Top Tray" status badge to last cell
+          var lastCell = tr.cells[tr.cells.length - 1];
+          if (lastCell) {
+            lastCell.innerHTML = '<span class="unified-status-badge status-top-tray" style="background:#d0f0f2;color:#014d4e;border:1px solid #028084;">Verified to Top Tray</span>';
+          }
+        }
+        if (!window._trayAllocations) window._trayAllocations = {};
+        window._trayAllocations[normalized] = { type: 'top_tray' };
+        console.log('[TOP_TRAY_LOCK] Locked delink checkbox for:', topTrayId);
+      }
+    });
+  }
+
+  // ===== LOCK DELINK ROW WHEN TRAY ALLOCATED TO EXCESS =====
+  function _lockDelinkRowForExcess(excessTrayId) {
+    if (!excessTrayId) return;
+    var normalized = excessTrayId.trim().toUpperCase();
+    var dBody = document.getElementById('delinkPanelTableBody');
+    if (!dBody) return;
+    dBody.querySelectorAll('.delink-row-checkbox').forEach(function(cb) {
+      if ((cb.dataset.trayId || '').trim().toUpperCase() === normalized) {
+        cb.checked = true;
+        cb.disabled = true;
+        cb.classList.add('locked');
+        var tr = cb.closest('tr');
+        if (tr) {
+          tr.classList.remove('delink-row-scanned');
+          tr.classList.add('delink-row-disabled');
+          tr.title = 'Allocated to Excess Lot';
+          var scanInp = tr.querySelector('.split-scan-input');
+          if (scanInp && !scanInp.classList.contains('validated')) {
+            scanInp.disabled = true;
+            scanInp.style.opacity = '0.6';
+            scanInp.title = 'Allocated to Excess Lot';
+          }
+          var lastCell = tr.cells[tr.cells.length - 1];
+          if (lastCell) {
+            lastCell.innerHTML = '<span class="unified-status-badge status-excess-allocated" style="background:#fff4e6;color:#e67e22;border:1px solid #e67e22;">Allocated to Excess Lot</span>';
+          }
+        }
+        if (!window._trayAllocations) window._trayAllocations = {};
+        window._trayAllocations[normalized] = { type: 'excess' };
+        console.log('[EXCESS_LOCK_DELINK] Locked delink row for excess tray:', excessTrayId);
+      }
+    });
+  }
+
+  // ===== ATTACH SCAN HANDLERS FOR SPLIT PANELS =====
+  function _attachSplitScanHandlers() {
+    // Delink panel inputs
+    document.querySelectorAll('#delinkPanelTableBody .split-scan-input').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
+        if (raw.length > 9) raw = raw.slice(0, 9);
+        this.value = raw;
+        if (raw.length === 9) {
+          _validateSplitScan(raw, this, false);
+        }
+      });
+    });
+    // Excess panel inputs
+    document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
+        if (raw.length > 9) raw = raw.slice(0, 9);
+        this.value = raw;
+        if (raw.length === 9) {
+          _validateSplitScan(raw, this, true);
+        }
+      });
+    });
+    // Top tray input
+    var topInp = document.getElementById('excessTopTrayScanInput');
+    if (topInp) {
+      topInp.addEventListener('input', function() {
+        var raw = (this.value || '').replace(/[^A-Za-z0-9-]/g, '');
+        if (raw.length > 9) raw = raw.slice(0, 9);
+        this.value = raw;
+        if (raw.length === 9) {
+          _validateSplitScan(raw, this, true);
+        }
+      });
+    }
+  }
+
+  // ===== VALIDATE SCAN FOR SPLIT PANELS =====
+  async function _validateSplitScan(trayId, inputEl, isExcess) {
+    // Determine panel type: 'delink' | 'excess_top' | 'excess'
+    var scanPanel = isExcess ? 'excess' : 'delink';
+    if (inputEl.id === 'excessTopTrayScanInput') scanPanel = 'excess_top';
+    console.log('[SPLIT_SCAN] Tray:', trayId, 'panel:', scanPanel);
+    try {
+      var lotId = inputEl.dataset.lotId || window.CURRENT_LOT_ID;
+      var batchId = inputEl.dataset.batchId || window.CURRENT_BATCH_ID;
+      // Collect ALL validated scans (for duplicate detection)
+      var scannedTrays = collectValidatedScans(inputEl);
+      // Collect DELINK-ONLY validated scans (for loaded_cases_qty — strict separation)
+      var delinkScannedTrays = [];
+      var seenDelink = new Set();
+      document.querySelectorAll('#delinkPanelTableBody .split-scan-input.validated').forEach(function(inp) {
+        if (inp === inputEl) return;
+        var tid = (inp.value || '').trim();
+        if (!tid || seenDelink.has(tid.toUpperCase())) return;
+        seenDelink.add(tid.toUpperCase());
+        delinkScannedTrays.push({ tray_id: tid, qty: parseInt(inp.dataset.expectedQty || 0) || 0 });
+      });
+
+      var resp = await fetch('/jig_loading/api/load/update/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify({
+          action: 'scan_tray',
+          tray_id: trayId,
+          scan_panel: scanPanel,
+          lot_id: lotId,
+          batch_id: batchId,
+          allow_reuse_delink: isExcess,
+          allow_new_half_filled: false,
+          broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
+          jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
+          scanned_trays: scannedTrays,
+          delink_scanned_trays: delinkScannedTrays,
+          multi_model: !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0),
+          secondary_lots: (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }),
+          primary_lot_id: window.CURRENT_LOT_ID || '',
+          primary_batch_id: window.CURRENT_BATCH_ID || ''
+        })
+      });
+      var data = await resp.json();
+      console.log('[SPLIT_SCAN_RESP]', data);
+
+      if (data && data.validation_status === 'success') {
+        inputEl.classList.add('validated');
+        inputEl.classList.remove('error-input');
+
+        var tr = inputEl.closest('tr');
+
+        // ===== SAVE ALLOCATION TO GLOBAL TRACKER =====
+        if (!window._trayAllocations) window._trayAllocations = {};
+
+        if (scanPanel === 'delink') {
+          // ===== DELINK SCAN: lock the row, green status =====
+          window._trayAllocations[trayId.toUpperCase()] = { type: 'delink' };
+          inputEl.readOnly = true;
+          inputEl.style.background = '#d4edda';
+          inputEl.style.borderColor = '#28a745';
+          _showSplitScanMsg(inputEl, 'Delinked ✓', true);
+          if (tr) {
+            tr.classList.remove('delink-row-disabled');
+            tr.classList.add('delink-row-scanned');
+            var cb = tr.querySelector('.delink-row-checkbox');
+            if (cb) { cb.checked = true; cb.disabled = true; cb.classList.add('locked'); }
+            // Status = "Delinked" (green)
+            var cells = tr.cells;
+            if (cells && cells.length > 0) {
+              var statusTd = cells[cells.length - 1];
+              statusTd.innerHTML = '<span class="unified-status-badge status-delinked" style="background:#d4edda;color:#155724;border:1px solid #28a745;">Delinked</span>';
+            }
+          }
+          console.log('[DELINK_LOCK] Row locked for tray:', trayId);
+          _updateDelinkTotalBar();
+          _updateDelinkStatsBadge();
+
+        } else if (scanPanel === 'excess_top') {
+          // ===== TOP TRAY: lock input + checkbox, blue status =====
+          window._trayAllocations[trayId.toUpperCase()] = { type: 'top_tray' };
+          _autoLockDelinkForTopTray(trayId);
+          inputEl.readOnly = true;
+          inputEl.style.background = '#d0f0f2';
+          inputEl.style.borderColor = '#028084';
+          _showSplitScanMsg(inputEl, 'Top Tray ✓', true);
+          var topCb = document.getElementById('excessTopTrayCheckbox');
+          if (topCb) { topCb.checked = true; topCb.disabled = true; topCb.classList.add('locked'); }
+          var topStatusEl = document.getElementById('excessTopTrayStatus');
+          if (topStatusEl) {
+            topStatusEl.innerHTML = '<span class="unified-status-badge status-top-tray" style="background:#d0f0f2;color:#014d4e;border:1px solid #028084;">Verified for Top Tray</span>';
+            topStatusEl.innerHTML += '<div style="margin-top:4px;font-size:10px;color:#028084;">Top tray verified. Select or scan remaining excess trays</div>';
+          }
+          console.log('[SCAN_TOP] Top tray locked:', trayId);
+          _checkExcessCompleteAndUnlockDelink();
+
+        } else {
+          // ===== EXCESS SCAN: save allocation + lock matching delink row =====
+          window._trayAllocations[trayId.toUpperCase()] = { type: 'excess' };
+          inputEl.style.background = '#fff4e6';
+          inputEl.style.borderColor = '#e67e22';
+          _showSplitScanMsg(inputEl, 'Allocated ✓', true);
+          if (tr) {
+            tr.classList.remove('delink-row-disabled', 'excess-row-auto');
+            tr.classList.add('excess-row-scanned');
+          }
+          // Also lock the matching delink row if tray exists there
+          _lockDelinkRowForExcess(trayId);
+          console.log('[EXCESS_LOCK] Row locked for tray:', trayId);
+          _checkExcessCompleteAndUnlockDelink();
+        }
+
+        // Update phase message after every successful scan
+        if (typeof window._updatePhaseMessage === 'function') window._updatePhaseMessage();
+
+        // Update global state (loaded_cases_qty from backend — delink-only by design)
+        window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+        window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+        window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || window.BACKEND_EFFECTIVE_CAPACITY || 0;
+        if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
+        var emptyEl = document.getElementById('emptyHooksInput');
+        if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
+
+        // DEBOUNCED re-render: prevent rapid successive applyResponseToUI calls from
+        // wiping checkbox/status states set by parallel API calls (e.g. select-all).
+        // The global _trayAllocations tracker ensures states survive re-renders.
+        clearTimeout(window._applyResponseDebounce);
+        window._applyResponseDebounce = setTimeout(function() {
+          if (typeof window.applyResponseToUI === 'function') {
+            window.applyResponseToUI(data);
+          }
+        }, 300);
+
+        // Move to next
+        _moveToNextSplitInput(inputEl);
+      } else {
+        inputEl.classList.add('error-input');
+        inputEl.classList.remove('validated');
+        _showSplitScanMsg(inputEl, data.message || 'Invalid', false);
+        // Rollback allocation on validation failure (e.g. cross-model tray rejected)
+        if (isExcess && trayId) {
+          inputEl.value = '';
+          _undoTrayAllocation(trayId);
+        }
+      }
+    } catch (err) {
+      console.error('[SPLIT_SCAN] Error:', err);
+      inputEl.classList.add('error-input');
+      _showSplitScanMsg(inputEl, 'Error', false);
+      // Rollback allocation on error
+      if (isExcess && trayId) {
+        inputEl.value = '';
+        _undoTrayAllocation(trayId);
+      }
+    }
+  }
+
+  // ===== UNDO TRAY ALLOCATION (rollback on validation failure) =====
+  function _undoTrayAllocation(trayId) {
+    if (!trayId) return;
+    var normalized = trayId.trim().toUpperCase();
+    if (window._trayAllocations) delete window._trayAllocations[normalized];
+    var dBody = document.getElementById('delinkPanelTableBody');
+    if (!dBody) return;
+    dBody.querySelectorAll('.delink-row-checkbox').forEach(function(cb) {
+      if ((cb.dataset.trayId || '').trim().toUpperCase() === normalized) {
+        cb.checked = false;
+        cb.disabled = false;
+        cb.classList.remove('locked');
+        var tr = cb.closest('tr');
+        if (tr) {
+          tr.classList.remove('delink-row-disabled');
+          tr.title = '';
+          var scanInp = tr.querySelector('.split-scan-input');
+          if (scanInp) { scanInp.disabled = false; scanInp.style.opacity = ''; scanInp.title = ''; }
+          var lastCell = tr.cells[tr.cells.length - 1];
+          if (lastCell) lastCell.innerHTML = '';
+        }
+      }
+    });
+    if (typeof window._updatePhaseMessage === 'function') window._updatePhaseMessage();
+    console.log('[UNDO_ALLOC] Rolled back allocation for:', trayId);
+  }
+
+  // ===== UNLOCK EXCESS PANEL (called when delink_completed = true) =====
+  function _unlockExcessPanel() {
+    // Remove gating message
+    var gateMsg = document.getElementById('excessGateMessage');
+    if (gateMsg) gateMsg.remove();
+    // Enable top tray input + checkbox
+    var topTrayInp = document.getElementById('excessTopTrayScanInput');
+    if (topTrayInp && !topTrayInp.classList.contains('validated')) {
+      topTrayInp.disabled = false;
+      topTrayInp.style.opacity = '';
+      topTrayInp.title = '';
+      setTimeout(function() { try { topTrayInp.focus(); } catch(e) {} }, 80);
+    }
+    // Enable all excess panel inputs + checkboxes
+    document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+      if (!inp.classList.contains('validated')) {
+        inp.disabled = false;
+        inp.style.opacity = '';
+        inp.title = '';
+      }
+    });
+    _unlockExcessCheckboxes();
+    // Show success message
+    var rightPanel = document.getElementById('splitPanelRight');
+    if (rightPanel) {
+      var existMsg = document.getElementById('excessReadyMessage');
+      if (!existMsg) {
+        existMsg = document.createElement('div');
+        existMsg.id = 'excessReadyMessage';
+        existMsg.style.cssText = 'font-size:11px;color:#028084;font-weight:600;padding:6px 10px;background:#e6f7f8;border-radius:6px;margin-bottom:8px;border:1px solid #028084;';
+        existMsg.innerHTML = '&#10003; Delink complete &mdash; scan top tray or select excess trays';
+        var splitTitle = rightPanel.querySelector('.split-panel-title');
+        if (splitTitle && splitTitle.nextSibling) rightPanel.insertBefore(existMsg, splitTitle.nextSibling);
+        else rightPanel.insertBefore(existMsg, rightPanel.firstChild);
+      }
+    }
+    console.log('[EXCESS_UNLOCKED] Excess panel unlocked after delink completion');
+  }
+
+  // ===== UNLOCK EXCESS CHECKBOXES TOO =====
+  function _unlockExcessCheckboxes() {
+    var topCb = document.getElementById('excessTopTrayCheckbox');
+    if (topCb && !topCb.classList.contains('locked')) {
+      topCb.disabled = false;
+      topCb.style.opacity = '';
+    }
+    document.querySelectorAll('#excessPanelTableBody .excess-row-checkbox').forEach(function(ecb) {
+      if (!ecb.classList.contains('locked')) {
+        ecb.disabled = false;
+        ecb.style.opacity = '';
+      }
+    });
+  }
+
+  // ===== UNLOCK DELINK PANEL (called when ALL excess is fully allocated) =====
+  function _unlockDelinkPanel() {
+    // Remove gate message
+    var gateMsg = document.getElementById('delinkGateMessage');
+    if (gateMsg) gateMsg.remove();
+    // Enable all delink inputs
+    var dBody = document.getElementById('delinkPanelTableBody');
+    if (dBody) {
+      dBody.querySelectorAll('.split-scan-input').forEach(function(inp) {
+        if (!inp.classList.contains('validated')) {
+          inp.disabled = false;
+          inp.style.opacity = '';
+          inp.title = '';
+        }
+      });
+      dBody.querySelectorAll('.delink-row-checkbox').forEach(function(cb) {
+        if (!cb.classList.contains('locked')) {
+          cb.disabled = false;
+          cb.style.opacity = '';
+        }
+      });
+    }
+    var delinkSelectAll = document.getElementById('delinkSelectAll');
+    if (delinkSelectAll) { delinkSelectAll.disabled = false; delinkSelectAll.style.opacity = ''; }
+    // Show ready message
+    var leftPanel = document.getElementById('splitPanelLeft');
+    if (leftPanel) {
+      var existMsg = document.getElementById('delinkReadyMessage');
+      if (!existMsg) {
+        existMsg = document.createElement('div');
+        existMsg.id = 'delinkReadyMessage';
+        existMsg.style.cssText = 'font-size:11px;color:#155724;font-weight:600;padding:6px 10px;background:#d4edda;border-radius:6px;margin-bottom:8px;border:1px solid #28a745;';
+        existMsg.innerHTML = '&#10003; Excess allocation complete &mdash; scan or select delink trays now';
+        var splitTitle = leftPanel.querySelector('.split-panel-title');
+        if (splitTitle && splitTitle.nextSibling) leftPanel.insertBefore(existMsg, splitTitle.nextSibling);
+        else leftPanel.insertBefore(existMsg, leftPanel.firstChild);
+      }
+    }
+    // Focus first delink input
+    if (dBody) {
+      var firstInp = dBody.querySelector('.split-scan-input:not(.validated)');
+      if (firstInp) setTimeout(function() { try { firstInp.focus(); } catch(e) {} }, 80);
+    }
+    console.log('[DELINK_UNLOCKED] Delink panel unlocked after excess completion');
+  }
+
+  // ===== CHECK IF ALL EXCESS IS COMPLETE → UNLOCK DELINK =====
+  function _checkExcessCompleteAndUnlockDelink() {
+    // Top tray verified?
+    var topInp = document.getElementById('excessTopTrayScanInput');
+    var topVerified = !!(topInp && topInp.classList.contains('validated'));
+    // All excess remaining trays verified?
+    var allExcessDone = true;
+    var eBody = document.getElementById('excessPanelTableBody');
+    if (eBody) {
+      var excessInps = eBody.querySelectorAll('.split-scan-input');
+      excessInps.forEach(function(inp) {
+        if (!inp.classList.contains('validated')) allExcessDone = false;
+      });
+      if (excessInps.length === 0) allExcessDone = true;
+    }
+    // If no top tray section exists, treat as verified
+    var topSection = document.getElementById('excessTopTraySection');
+    if (!topSection || topSection.style.display === 'none') topVerified = true;
+
+    if (topVerified && allExcessDone) {
+      _unlockDelinkPanel();
+    }
+  }
+
+  // ===== UPDATE DELINK STATS BADGE =====
+  function _updateDelinkStatsBadge() {
+    var badge = document.getElementById('delinkStatsBadge');
+    if (!badge) return;
+    var fullyDelinked = 0;
+    var partialDelinked = 0;
+    var totalDelinkQty = 0;
+    document.querySelectorAll('#delinkPanelTableBody tr').forEach(function(tr) {
+      var inp = tr.querySelector('.split-scan-input.validated');
+      var isAllocated = tr.classList.contains('delink-row-disabled');
+      // Count rows that are either validated (delinked) or allocated (excess/top)
+      if (!inp && !isAllocated) return;
+      var origQtyCell = tr.cells[4]; // Original Qty column (index 4)
+      var origQty = origQtyCell ? parseInt(origQtyCell.innerText || 0) || 0 : 0;
+      var delinkQtyCell = tr.cells[5]; // Delink Qty column (index 5)
+      var delinkQty = delinkQtyCell ? parseInt(delinkQtyCell.innerText || 0) || 0 : 0;
+      if (delinkQty <= 0) return; // Skip rows with 0 delink qty (pure excess)
+      totalDelinkQty += delinkQty;
+      if (delinkQty < origQty) {
+        partialDelinked++;
+      } else {
+        fullyDelinked++;
+      }
+    });
+    var totalScanned = fullyDelinked + partialDelinked;
+    if (totalScanned > 0) {
+      badge.style.display = '';
+      badge.innerHTML = 'Delinked: <b>' + fullyDelinked + '</b> full'
+        + (partialDelinked > 0 ? ' + <b>' + partialDelinked + '</b> partial' : '')
+        + ' | Total: <b>' + totalDelinkQty + '</b> qty';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  // ===== UPDATE DELINK TOTAL QTY BAR (live sum of validated + allocated delink rows) =====
+  function _updateDelinkTotalBar() {
+    var bar = document.getElementById('delinkTotalBar');
+    var valEl = document.getElementById('delinkTotalQtyValue');
+    if (!bar || !valEl) return;
+    var totalQty = 0;
+    // Sum delink_qty from validated (scanned) rows
+    document.querySelectorAll('#delinkPanelTableBody .split-scan-input.validated').forEach(function(inp) {
+      var tr = inp.closest('tr');
+      if (tr && tr.cells && tr.cells[5]) {
+        totalQty += parseInt(tr.cells[5].innerText || 0) || 0;
+      } else {
+        totalQty += parseInt(inp.dataset.expectedQty || 0) || 0;
+      }
+    });
+    // Also include delink_qty from allocated rows (excess/top tray) that have delink_qty > 0
+    document.querySelectorAll('#delinkPanelTableBody tr.delink-row-disabled').forEach(function(tr) {
+      // Skip if already has a validated input (already counted above)
+      if (tr.querySelector('.split-scan-input.validated')) return;
+      var delinkQtyCell = tr.cells && tr.cells[5];
+      var delinkQty = delinkQtyCell ? parseInt(delinkQtyCell.innerText || 0) || 0 : 0;
+      if (delinkQty > 0) totalQty += delinkQty;
+    });
+    valEl.innerText = totalQty;
+    bar.style.display = totalQty > 0 ? 'flex' : 'none';
+  }
+
+  function _showSplitScanMsg(inputEl, msg, isSuccess) {
+    var td = inputEl.closest('td') || inputEl.parentElement;
+    if (!td) return;
+    var existing = td.querySelector('.split-scan-msg');
+    if (existing) existing.remove();
+    var span = document.createElement('span');
+    span.className = 'split-scan-msg';
+    span.style.cssText = 'font-size:10px;margin-left:6px;font-weight:600;' + (isSuccess ? 'color:#28a745;' : 'color:#dc3545;');
+    span.innerText = msg;
+    td.appendChild(span);
+    setTimeout(function() { try { span.remove(); } catch(e) {} }, 3000);
+  }
+
+  function _moveToNextSplitInput(currentInput) {
+    // Move within same panel first, then cross to other panel
+    var panelType = currentInput.dataset.panel || 'delink';
+    var selector = panelType === 'delink'
+      ? '#delinkPanelTableBody .split-scan-input'
+      : '#excessPanelTableBody .split-scan-input';
+    var inputs = Array.from(document.querySelectorAll(selector));
+    var idx = inputs.indexOf(currentInput);
+    if (idx >= 0 && idx < inputs.length - 1) {
+      try { inputs[idx + 1].focus(); } catch(e) {}
+    } else if (panelType === 'delink') {
+      // Finished delink — try top tray or first excess input
+      var topInp = document.getElementById('excessTopTrayScanInput');
+      if (topInp && !topInp.classList.contains('validated') && topInp.offsetParent !== null) {
+        topInp.focus();
+      } else {
+        var firstExcess = document.querySelector('#excessPanelTableBody .split-scan-input:not(.validated)');
+        if (firstExcess) firstExcess.focus();
+      }
+    }
+  }
+
+  // CSRF token helper (global)
+  function getCsrfToken() {
+    var v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+
+  // Expose globally for other script blocks
+  window.renderUnifiedTrayTable = renderUnifiedTrayTable;
+  window.renderSplitPanels = renderSplitPanels;
 
   // ===== SHARED: Render model card strip (horizontal cards with delink) =====
   function renderModelCardStrip(data) {
@@ -3995,7 +5358,7 @@ document.addEventListener('DOMContentLoaded', function () {
   window.jigCapacity = parseInt(jigCapacity) || window.jigCapacity || 0;
 
   // 🚫 DO NOT call refreshTrayCalculation here - init hasn't run yet
-  // The initJigFromButton function will call init-jig-load below
+  // The initJigFromButton function calls the consolidated init API.
 
     const modal = document.getElementById('jigAddModal');
     if (!modal) return;
@@ -4109,6 +5472,10 @@ document.addEventListener('DOMContentLoaded', function () {
         window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
       } catch (e) { window.BACKEND_EMPTY_HOOKS = 0; }
 
+      try {
+        window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity || 12) || 12;
+      } catch (e) { window.BACKEND_TRAY_CAPACITY = 12; }
+
       // Backend now returns loaded_cases_qty=0 on fresh init and correct scanned-based value on merge.
       // No frontend override needed — backend is the single source of truth.
 
@@ -4119,7 +5486,20 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
           const el = idMap.loadedCasesInput;
           if (!el) return;
-          const loaded = parseInt(window.BACKEND_LOADED_CASES || 0);
+          // Compute loaded from DOM: sum delink_qty of all validated + allocated rows.
+          // This handles race conditions from parallel scan API calls (Select All).
+          // Backend decides each row's delink_qty; frontend sums the displayed values.
+          var domLoaded = 0;
+          document.querySelectorAll('#delinkPanelTableBody tr').forEach(function(tr) {
+            var inp = tr.querySelector('.split-scan-input.validated');
+            var isAllocated = tr.classList.contains('delink-row-disabled');
+            if (!inp && !isAllocated) return;
+            var delinkQtyCell = tr.cells && tr.cells[5]; // Delink Qty column (index 5)
+            var delinkQty = delinkQtyCell ? parseInt(delinkQtyCell.innerText || 0) || 0 : 0;
+            if (delinkQty > 0) domLoaded += delinkQty;
+          });
+          // Use max of DOM-computed and backend value (backend may be ahead during init)
+          const loaded = Math.max(domLoaded, parseInt(window.BACKEND_LOADED_CASES || 0));
           const cap = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0);
           const text = `${loaded}/${cap}`;
           if (el.tagName === 'SPAN' || el.tagName === 'DIV') el.innerText = text;
@@ -4209,6 +5589,18 @@ document.addEventListener('DOMContentLoaded', function () {
       // Initialize current delink qty from server draft (backend is authoritative)
       try { window.currentDelinkQty = parseInt(data.draft.delink_tray_qty || 0) || 0; } catch (e) { window.currentDelinkQty = 0; }
       // delink tray count will be set after we pick the authoritative source (draft.delink_tray_info or trays)
+
+      // Unified backend-driven render path.
+      if (typeof window.applyResponseToUI === 'function') {
+        window.applyResponseToUI(data);
+        // Check for saved draft and restore scanned tray states
+        setTimeout(function() {
+          if (typeof window.checkAndRestoreDraft === 'function') {
+            window.checkAndRestoreDraft(data.lot_id, data.batch_id);
+          }
+        }, 500);
+        return;
+      }
 
 
       // Render tray inputs into container using strict server-computed delink data ONLY
@@ -4366,25 +5758,12 @@ document.addEventListener('DOMContentLoaded', function () {
           });
         }
 
-        // Compute authoritative delink total from SCANNED (validated) inputs only
-        // NEVER use draft.delink_tray_qty here — that's the PLANNED total, not scanned total
+        // Compute authoritative delink total from authoritative source and trigger recalculation
         try {
-          // Count only validated (scanned) tray inputs in the DOM
-          let scannedDelinkTotal = 0;
-          if (container) {
-            container.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
-              try {
-                const parent = inp.parentNode;
-                const qtyEl = parent && parent.querySelector && parent.querySelector('.tray-qty');
-                if (qtyEl) {
-                  const match = (qtyEl.textContent || '').match(/\d+/);
-                  if (match) scannedDelinkTotal += parseInt(match[0]) || 0;
-                }
-              } catch (e) {}
-            });
-          }
-          window.currentDelinkQty = scannedDelinkTotal;
-          console.log('[DELINK_INIT] currentDelinkQty set to (scanned only):', window.currentDelinkQty);
+          // Prefer persisted draft delink_tray_qty (sum of actually scanned trays) over plan total
+          const persistedDelink = parseInt((data && data.draft && data.draft.delink_tray_qty) || 0) || 0;
+          window.currentDelinkQty = persistedDelink;
+          console.log('[DELINK_INIT] currentDelinkQty set to (persisted):', window.currentDelinkQty);
           if (typeof window.safeLCQRecalculation === 'function') window.safeLCQRecalculation('init_delink');
         } catch (e) { console.warn('[DELINK_INIT] failed to compute delink total', e); }
 
@@ -4991,169 +6370,43 @@ document.addEventListener('DOMContentLoaded', function () {
   // Patch: Only update delink UI, do not re-render full DOM
   function applyResponseToUI(data) {
     try {
-      // Keep secondary-lot state fresh before card rendering
+      if (!data) return;
+
       if (data.secondary_lots && Array.isArray(data.secondary_lots)) {
         window._currentSecondaryLots = data.secondary_lots;
       }
-      // Re-render model card strip on every response
-      renderModelCardStrip(data);
-
-      // ✅ FIX: ALWAYS clear container first — prevents ghost trays when transitioning
-      // from multi-model → single-model (e.g., after removing the last secondary model)
-      const containerForClear = idMap.trayInputsContainer;
-      // ✅ Capture scanned trays BEFORE clearing (preserve during recalc)
-      const _recalcSavedScans = captureScannedTrays(containerForClear);
-      if (containerForClear) {
-        containerForClear.innerHTML = '';
-        console.log('[APPLY_UI] Container cleared for fresh render');
+      if (Array.isArray(data.multi_model_allocation)) {
+        window._lastMultiModelAllocation = data.multi_model_allocation;
       }
 
-      // ===== MULTI-MODEL: full re-render of delink + half-filled sections =====
-      if (data.is_multi_model && Array.isArray(data.multi_model_allocation) && data.multi_model_allocation.length > 0) {
-        console.log('[RECALC_MM] Re-rendering multi-model trays:', data.multi_model_allocation.length, 'models');
-        const container = idMap.trayInputsContainer;
-        if (container) {
-          // Container already cleared above — no need to clear again
-          const trayCapacity = (data && data.draft && data.draft.tray_capacity) || data.tray_capacity || 12;
-          // ===== FLATTEN: collect all trays across all models into one array =====
-          const recalcFlatTrays = [];
-          data.multi_model_allocation.forEach(function(modelAlloc, mIdx) {
-            // ✅ FIX: Use backend model_index if provided, fallback to sequence order
-            const modelIdxValue = modelAlloc.model_index || (mIdx + 1);
-            const backendColorClass = modelAlloc.color_class || null;
-            const colorClass = getModelColorClass(modelIdxValue, backendColorClass);
-            
-            const modelCode = (modelAlloc.model_image_label || modelAlloc.model_name || modelAlloc.model || '').replace(/\s*\[.*?\]\s*/g, '').trim() || ('Model ' + modelIdxValue);
-            const allocLotId = modelAlloc.lot_id || '';
-            const allocBatchId = modelAlloc.batch_id || '';
+      if (idMap.lotQtyInput && data.lot_qty !== undefined && data.lot_qty !== null) {
+        idMap.lotQtyInput.value = data.lot_qty;
+      }
+      if (idMap.jigCapacityInput && data.jig_capacity !== undefined && data.jig_capacity !== null) {
+        idMap.jigCapacityInput.value = data.jig_capacity;
+      }
+      if (idMap.nickelBathTypeInput) idMap.nickelBathTypeInput.value = data.nickel_bath_type || '';
+      if (idMap.trayTypeInput) idMap.trayTypeInput.value = data.tray_type || '';
 
-            // ✅ DEBUG: Log model allocation details
-            console.log('[RECALC_ALLOC_DETAIL]', {
-              model_code: modelCode,
-              model_index: modelIdxValue,
-              backend_color: backendColorClass,
-              assigned_color: colorClass,
-              lot_id: allocLotId,
-              tray_count: (modelAlloc.tray_info || []).length
-            });
+      window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+      window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || 0;
+      window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || data.jig_capacity || 0) || 0;
+      window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks || 0) || 0;
+      window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+      window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity || 12) || 12;
+      window.currentBrokenHooks = window.BACKEND_BROKEN_HOOKS;
 
-            // Sort: TOP TRAYS FIRST, PARTIAL TRAYS LAST
-            let traysArr = (modelAlloc.tray_info || []).slice();
-            try {
-              const topTrays = traysArr.filter(t => t && t.top_tray);
-              const partialTrays = traysArr.filter(t => t && t.is_partial && !t.top_tray);
-              const regularTrays = traysArr.filter(t => t && !t.top_tray && !t.is_partial);
-              traysArr = [...topTrays, ...regularTrays, ...partialTrays];
-            } catch (e) { /* ignore */ }
+      if (typeof renderModelCardStrip === 'function') renderModelCardStrip(data);
+      if (typeof renderUnifiedTrayTable === 'function') renderUnifiedTrayTable(data);
 
-            let modelTopAssigned = false;
-            traysArr.forEach(function(tray) {
-              const isTop = Boolean(tray.top_tray && !modelTopAssigned);
-              if (isTop) modelTopAssigned = true;
-              const flatTray = {
-                qty: tray.qty || 0,
-                isTop,
-                isPartial: Boolean(tray.is_partial && !isTop),
-                colorClass, modelCode, allocLotId, allocBatchId, modelIdx: modelIdxValue,
-                autoTrayId: tray.tray_id || ''  // Backend-known tray ID for Delink All
-              };
-              recalcFlatTrays.push(flatTray);
-              console.log('[TRAY_COLOR_RECALC]', 'model=' + modelCode, 'idx=' + modelIdxValue, 'color=' + colorClass, 'qty=' + flatTray.qty, 'trayId=' + flatTray.autoTrayId);
-            });
-          });
-
-          // ===== SINGLE FLAT RENDER: one loop → left → right continuous flow =====
-          let totalTrayCount = 0;
-          recalcFlatTrays.forEach(function(item) {
-            const topLabel = item.isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (item.isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
-            const placeholder = 'Scan ' + item.modelCode + ' (Tray ID)';
-            const div = document.createElement('div');
-            div.className = 'tray-scan-tab';
-            div.innerHTML = '<input type="text" class="tray-id-input ' + item.colorClass + '" maxlength="9" data-expected-qty="' + item.qty + '" data-lot-id="' + item.allocLotId + '" data-batch-id="' + item.allocBatchId + '" data-model-index="' + item.modelIdx + '" data-auto-tray-id="' + (item.autoTrayId || '') + '" placeholder="' + placeholder + '"><div class="tray-qty">Qty: ' + item.qty + topLabel + '</div>';
-            container.appendChild(div);
-            totalTrayCount++;
-          });
-          try { if (idMap.noOfTrays) idMap.noOfTrays.innerText = totalTrayCount; } catch (e) {}
-          console.log('[RECALC_MM] Rendered', totalTrayCount, 'trays with color mapping');
-          // ✅ Restore scanned trays after recalc re-render
-          restoreScannedTrays(container, _recalcSavedScans);
-        }
-        // Re-render multi-model half-filled section
-        try {
-          renderHalfFilledAutoLink(data);
-        } catch (hfErr) { console.warn('[RECALC_MM] half-filled render error', hfErr); }
-        // Update secondary lots state from response
-        if (data.secondary_lots && data.secondary_lots.length > 0) {
-          window._currentSecondaryLots = data.secondary_lots;
-        }
-      } else {
-        // ===== SINGLE-MODEL: FULL RE-RENDER of delink section =====
-        // CRITICAL: Must rebuild entire DOM. In-place update leaves ghost trays
-        // when BH removes trays (backend returns fewer trays than DOM has).
-        const container = idMap.trayInputsContainer;
-        const delinkData = data.delink_tray_info || [];
-        if (container && delinkData.length > 0) {
-          container.innerHTML = '';
-          let topAssigned = false;
-          delinkData.forEach(function(tray, idx) {
-            const qty = tray.qty || tray.effective_qty || 0;
-            const isTop = Boolean(tray.top_tray && !topAssigned);
-            if (isTop) topAssigned = true;
-            const isPartial = Boolean(tray.is_partial && !isTop);
-            const topLabel = isTop ? ' <span style="font-weight:700;color:#e67e22;">(Top Tray)</span>' : (isPartial ? ' <span style="font-weight:600;color:#6c757d;">(Partial)</span>' : '');
-            const trayLabel = tray.tray_id || ('Tray ' + (idx + 1));
-            const div = document.createElement('div');
-            div.className = 'tray-scan-tab';
-            const modelDisplay = window.CURRENT_MODEL_NO || 'Model';
-            div.innerHTML = '<input type="text" class="tray-id-input" maxlength="9" data-expected-qty="' + qty + '" data-lot-id="' + (window.CURRENT_LOT_ID || '') + '" data-batch-id="' + (window.currentJigBatchId || window.CURRENT_BATCH_ID || '') + '" data-auto-tray-id="' + (tray.tray_id || '') + '" placeholder="Scan ' + modelDisplay + ' (Tray ID)">' +
-              '<div class="tray-qty">Qty: ' + qty + topLabel + '</div>';
-            container.appendChild(div);
-          });
-          // Re-attach input handlers for the new inputs
-          (function reattachHandlers() {
-            function getCookie(name) {
-              const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-              return v ? v.pop() : '';
-            }
-            container.querySelectorAll('.tray-id-input').forEach(function(inp) {
-              inp.addEventListener('input', function() {
-                const raw = (this.value || '').toString();
-                let value = raw.replace(/[^A-Za-z0-9-]/g, '');
-                if (value.length > 9) value = value.slice(0, 9);
-                this.value = value;
-                if (value.length === 9 && typeof window._scanTrayFn === 'function') {
-                  window._scanTrayFn(value, this);
-                }
-              });
-            });
-          })();
-          console.log('[RECALC_SM] Re-rendered', delinkData.length, 'delink trays');
-          // ✅ Restore scanned trays after single-model recalc re-render
-          restoreScannedTrays(container, _recalcSavedScans);
-        } else if (container && delinkData.length === 0) {
-          container.innerHTML = '<div style="color:#888;padding:8px;">No delink trays</div>';
-        }
-        // ✅ Always render half-filled from backend data (backend is single source of truth)
-        window._lastInitData = Object.assign({}, data, {
-          half_filled: data.half_filled || data.half_filled_tray_info,
-        });
-        window._trayCapacity = parseInt(data.tray_capacity || 12) || 12;
+      window._lastInitData = Object.assign({}, data, {
+        half_filled: data.half_filled || data.half_filled_tray_info,
+      });
+      window._trayCapacity = parseInt(data.tray_capacity || window._trayCapacity || 12) || 12;
+      if (typeof renderHalfFilledAutoLink === 'function') {
         renderHalfFilledAutoLink(window._lastInitData);
-        renderTrays('extra', data.extra_trays || []);
-        const halfWrap = document.getElementById('halfFilledTraySection');
-        if (halfWrap) {
-          const halfState = getHalfFilledState(data);
-          halfWrap.style.display = ((halfState.slots && halfState.slots.length) || (data.extra_trays && data.extra_trays.length)) ? 'block' : 'none';
-        }
-        // Update tray count from backend response (single source of truth)
-        if (idMap && idMap.noOfTrays) {
-          const trayCount = (data.tray_count !== undefined) ? data.tray_count : delinkData.length;
-          idMap.noOfTrays.innerText = trayCount;
-        }
       }
-      try { restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
 
-      // ✅ Error 2: BH gate from backend bh_editable flag
       try {
         if (data.bh_editable === true) {
           window.isModelSelectionComplete = true;
@@ -5162,7 +6415,6 @@ document.addEventListener('DOMContentLoaded', function () {
           window.isModelSelectionComplete = false;
           window.disableBH();
         } else {
-          // Fallback: old empty_hooks gate
           const emptyH = parseInt(data.empty_hooks || 0) || 0;
           if (emptyH > 0) {
             window.isModelSelectionComplete = false;
@@ -5174,22 +6426,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       } catch (e) { /* ignore */ }
 
-      // 🔥 FIX: Update ALL backend-authoritative values from response
-      try {
-        window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
-        window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || 0;
-        window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || 0) || 0;
-        window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks || 0) || 0;
-        window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
-        if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
-        console.log('[REFRESH] Updated BACKEND values from API:', {
-          effective: window.BACKEND_EFFECTIVE_CAPACITY,
-          original: window.BACKEND_ORIGINAL_CAPACITY,
-          broken: window.BACKEND_BROKEN_HOOKS,
-          empty: window.BACKEND_EMPTY_HOOKS
-        });
-      } catch (e) { console.warn('[REFRESH] Failed to update BACKEND values', e); }
-
+      if (idMap && idMap.emptyHooksInput) idMap.emptyHooksInput.value = window.BACKEND_EMPTY_HOOKS;
+      try { if (typeof restoreBrokenHooksInput === 'function') restoreBrokenHooksInput(); } catch (e) { /* ignore */ }
       if (typeof window.safeLCQRecalculation === 'function') {
         try { window.safeLCQRecalculation('refresh_tray_calculation'); } catch (e) { console.warn('[LCQ] Safe recalculation after API failed:', e); }
       }
@@ -5270,19 +6508,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ✅ BUG FIX #4/#5: For BH changes, send scanned_trays so backend preserves
     //    delink_completed status and loaded_cases_qty (prevents excess section reset)
     if (options.bhUpdate) {
-      var bhScannedTrays = [];
-      var bhContainer = document.getElementById('delinkTableSection');
-      if (bhContainer) {
-        bhContainer.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
-          if (inp.value) bhScannedTrays.push({ tray_id: inp.value, qty: parseInt(inp.dataset.expectedQty || 0) || 0 });
-        });
-      }
-      var bhExcessContainer = document.getElementById('excessTrayContainer');
-      if (bhExcessContainer) {
-        bhExcessContainer.querySelectorAll('.tray-id-input.validated').forEach(function(inp) {
-          if (inp.value) bhScannedTrays.push({ tray_id: inp.value, qty: parseInt(inp.dataset.expectedQty || 0) || 0 });
-        });
-      }
+      var bhScannedTrays = collectValidatedScans();
       recalcPayload.scanned_trays = bhScannedTrays;
       console.log('[BH_RECALC] Including', bhScannedTrays.length, 'scanned trays in recalc');
     }
@@ -5557,8 +6783,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Clear inputs
     $('#brokenBuildupHooksInput').val(0);
     $('#jigIdInput').val('');
-    // Clear delink UI
-    $('#delinkTableSection').html('');
+    // Clear unified table rows only (keep table structure)
+    $('#unifiedTrayTableBody').html('');
     $('#delinkTrayCount').text(0);
     // Clear half-filled section
     $('#halfFilledTraySection').html('').hide();
@@ -5600,12 +6826,19 @@ function clearJigUserInputs() {
   window._lastSentBH = null;
 
   // 3. Clear ALL scanned tray inputs
-  const trayInputs = document.querySelectorAll('.tray-id-input');
+  const trayInputs = document.querySelectorAll('.tray-id-input, .unified-scan-input, .split-scan-input, .excess-scan-input');
   trayInputs.forEach(function(inp) {
     inp.value = '';
     inp.classList.remove('validated', 'tray-duplicate-error');
     inp.style.background = '';
     inp.style.border = '';
+  });
+  // Clear excess checkboxes
+  const excessCheckboxes = document.querySelectorAll('.excess-row-checkbox');
+  excessCheckboxes.forEach(function(cb) {
+    cb.checked = false;
+    cb.classList.remove('locked');
+    cb.disabled = false;
   });
   // Clear tray error messages
   const trayErrors = document.querySelectorAll('.tray-error-message, .tray-duplicate-message');
@@ -5617,6 +6850,8 @@ function clearJigUserInputs() {
   window.BACKEND_BROKEN_HOOKS = 0;
   window.BACKEND_EFFECTIVE_CAPACITY = jigCap;
   window.BACKEND_EMPTY_HOOKS = jigCap;
+  // Reset tray allocation tracker (survives re-renders, must be cleared on full reset)
+  window._trayAllocations = {};
   if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
   const emptyHooksEl = document.getElementById('emptyHooksInput');
   if (emptyHooksEl) emptyHooksEl.value = jigCap;
@@ -5626,13 +6861,36 @@ function clearJigUserInputs() {
   if (halfFilledSection) { halfFilledSection.style.display = 'none'; halfFilledSection.innerHTML = ''; }
   const excessLotSection = document.getElementById('excessLotSection');
   if (excessLotSection) excessLotSection.style.display = 'none';
+  const splitPanelRight = document.getElementById('splitPanelRight');
+  if (splitPanelRight) splitPanelRight.style.display = 'none';
+  // Clear excess panel content
+  const excessPanelTableBody = document.getElementById('excessPanelTableBody');
+  if (excessPanelTableBody) excessPanelTableBody.innerHTML = '';
+  const excessTopTraySection = document.getElementById('excessTopTraySection');
+  if (excessTopTraySection) excessTopTraySection.style.display = 'none';
+  // Clear excess badges and messages
+  const excessPanelQtyBadge = document.getElementById('excessPanelQtyBadge');
+  if (excessPanelQtyBadge) excessPanelQtyBadge.innerText = '';
+  const jigPhaseMessage = document.getElementById('jigPhaseMessage');
+  if (jigPhaseMessage) jigPhaseMessage.style.display = 'none';
 
   // 6. Clear excess message
   const excessMsg = document.getElementById('excessMessage');
   if (excessMsg) excessMsg.innerText = '';
 
-  // 7. Call backend CLEAR action to delete stale draft and get fresh state
-  const lotId = window.CURRENT_LOT_ID || window.currentJigLotId;
+  // 7. Clear dynamic alerts (like "Excess allocation complete" and "Delink complete" messages)
+  const delinkReadyMessage = document.getElementById('delinkReadyMessage');
+  if (delinkReadyMessage) delinkReadyMessage.remove();
+  const excessReadyMessage = document.getElementById('excessReadyMessage');
+  if (excessReadyMessage) excessReadyMessage.remove();
+
+  // 8. Disable select all checkbox until delink scanning phase begins
+  const delinkSelectAll = document.getElementById('delinkSelectAll');
+  if (delinkSelectAll) {
+    delinkSelectAll.disabled = true;
+    delinkSelectAll.style.opacity = '0.5';
+    delinkSelectAll.checked = false;
+  }
   const batchId = window.CURRENT_BATCH_ID || window.currentJigBatchId;
   if (lotId && batchId) {
     const csrfToken = (function() { const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; })();
@@ -5684,6 +6942,10 @@ function clearJigUserInputs() {
     console.warn('[CLEAR] No lot/batch — local reset only');
   }
 
+  // 8. Scroll modal content back to top
+  var modalContent = document.querySelector('.jig-modal-content');
+  if (modalContent) modalContent.scrollTop = 0;
+
   console.log('[CLEAR] Full state reset triggered');
 }
 
@@ -5720,10 +6982,14 @@ function resetJigModalState() {
   if (excessMsg) excessMsg.innerText = '';
 
   // 3. Clear dynamic tray content (will be repopulated on next open)
-  const delinkTableSection = document.getElementById('delinkTableSection');
-  if (delinkTableSection) delinkTableSection.innerHTML = '';
+  const unifiedTableBody = document.getElementById('unifiedTrayTableBody');
+  if (unifiedTableBody) unifiedTableBody.innerHTML = '';
   const delinkTrayCount = document.getElementById('delinkTrayCount');
   if (delinkTrayCount) delinkTrayCount.textContent = '0';
+  const unifiedSelectAll = document.getElementById('unifiedSelectAll');
+  if (unifiedSelectAll) unifiedSelectAll.checked = false;
+  const delinkAllCheckbox = document.getElementById('delinkAllCheckbox');
+  if (delinkAllCheckbox) delinkAllCheckbox.checked = false;
   const halfFilledSection = document.getElementById('halfFilledTraySection');
   if (halfFilledSection) { halfFilledSection.style.display = 'none'; halfFilledSection.innerHTML = ''; }
   const excessLotSection = document.getElementById('excessLotSection');
@@ -5874,7 +7140,7 @@ document.addEventListener('click', function (e) {
   }
 });
 
-// --- Submit button handler: validate all trays, then call submit API ---
+// --- Submit button handler: validate all trays, then call NEW submit API with full snapshot ---
 document.addEventListener('click', function (e) {
   if (e.target.id !== 'submitJigBtn' && !e.target.closest('#submitJigBtn')) return;
   e.preventDefault();
@@ -5882,18 +7148,16 @@ document.addEventListener('click', function (e) {
     const jigId = (document.getElementById('jigIdInput') || {}).value || '';
     const lotId = window.CURRENT_LOT_ID || window.currentJigLotId || '';
     const batchId = window.CURRENT_BATCH_ID || window.currentJigBatchId || '';
-    const brokenHooks = parseInt(window.BACKEND_BROKEN_HOOKS || 0) || 0;
 
     // 1. Validate Jig ID
     if (!jigId || jigId.trim().length === 0) {
-      alert('Please scan or enter a Jig ID before submitting.');
+      Swal.fire({ icon: 'warning', title: 'Jig ID Required', text: 'Please scan or enter a Jig ID before submitting.', confirmButtonColor: '#028084' });
       return;
     }
-    // 1b. Validate Jig ID format (must match format: J###-#### where ### is capacity)
     if (typeof window.validateJigIdFormat === 'function') {
       var fmtResult = window.validateJigIdFormat(jigId.trim().toUpperCase());
       if (!fmtResult.valid) {
-        alert('Invalid Jig ID: ' + fmtResult.message);
+        Swal.fire({ icon: 'error', title: 'Invalid Jig ID', text: fmtResult.message, confirmButtonColor: '#028084' });
         var jigInput = document.getElementById('jigIdInput');
         if (jigInput) jigInput.focus();
         return;
@@ -5902,94 +7166,100 @@ document.addEventListener('click', function (e) {
 
     // 2. Validate lot/batch
     if (!lotId || !batchId) {
-      alert('Missing lot or batch information. Please re-open the modal.');
+      Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Missing lot or batch information. Please re-open the modal.', confirmButtonColor: '#028084' });
       return;
     }
 
-    // 3. Collect and validate all tray inputs
-    const trayInputs = document.querySelectorAll('#delinkTableSection .tray-id-input');
-    const scannedTrays = [];
-    const scannedIds = new Set();
+    // 3. Validate all tray scan inputs are filled
+    // CRITICAL: Skip disabled inputs — they belong to rows allocated as top_tray or excess
+    // (routed via checkbox). Only ACTIVE delink inputs need scanning.
     let hasEmpty = false;
     let hasDuplicate = false;
+    const scannedIds = new Set();
 
-    trayInputs.forEach(function(inp) {
+    document.querySelectorAll('#delinkPanelTableBody .split-scan-input').forEach(function(inp) {
+      // Skip disabled inputs (allocated to excess lot or top tray via checkbox routing)
+      if (inp.disabled) return;
       const val = (inp.value || '').trim();
-      const expectedQty = parseInt(inp.dataset.expectedQty || 0) || 0;
-      const trayLot = inp.dataset.lotId || lotId;
-      const trayBatch = inp.dataset.batchId || batchId;
-
-      if (!val || val.length < 3) {
-        hasEmpty = true;
-        return;
-      }
-      if (scannedIds.has(val.toUpperCase())) {
-        hasDuplicate = true;
-        return;
-      }
+      if (!val || val.length < 3) { hasEmpty = true; return; }
+      if (scannedIds.has(val.toUpperCase())) { hasDuplicate = true; return; }
       scannedIds.add(val.toUpperCase());
-      scannedTrays.push({
-        tray_id: val,
-        qty: expectedQty,
-        lot_id: trayLot,
-        batch_id: trayBatch
-      });
     });
 
+    // Top tray validation
+    const topTrayScanInp = document.getElementById('excessTopTrayScanInput');
+    if (topTrayScanInp && topTrayScanInp.offsetParent !== null) {
+      const topVal = (topTrayScanInp.value || '').trim();
+      if (topVal && topVal.length >= 3) {
+        if (scannedIds.has(topVal.toUpperCase())) { hasDuplicate = true; }
+        scannedIds.add(topVal.toUpperCase());
+      } else if (topTrayScanInp.closest('#excessTopTraySection') && topTrayScanInp.closest('#excessTopTraySection').style.display !== 'none') {
+        Swal.fire({ icon: 'warning', title: 'Top Tray Required', text: 'The partial/excess top tray must be scanned before submitting.', confirmButtonColor: '#028084' });
+        topTrayScanInp.focus();
+        return;
+      }
+    }
+
+    document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+      // Skip disabled excess inputs (already allocated)
+      if (inp.disabled) return;
+      const val = (inp.value || '').trim();
+      if (!val || val.length < 3) { hasEmpty = true; return; }
+      if (scannedIds.has(val.toUpperCase())) { hasDuplicate = true; return; }
+      scannedIds.add(val.toUpperCase());
+    });
+
+    // Fallback: legacy unified table
+    if (scannedIds.size === 0) {
+      document.querySelectorAll('#unifiedTrayTableBody .unified-scan-input').forEach(function(inp) {
+        const val = (inp.value || '').trim();
+        if (!val || val.length < 3) { hasEmpty = true; return; }
+        if (scannedIds.has(val.toUpperCase())) { hasDuplicate = true; return; }
+        scannedIds.add(val.toUpperCase());
+      });
+    }
+
     if (hasEmpty) {
-      alert('All tray slots must be scanned before submitting. Please scan all trays.');
+      Swal.fire({ icon: 'warning', title: 'Trays Not Scanned', text: 'All tray slots must be scanned before submitting. Please scan all trays.', confirmButtonColor: '#028084' });
       return;
     }
     if (hasDuplicate) {
-      alert('Duplicate tray IDs detected. Please fix duplicates before submitting.');
+      Swal.fire({ icon: 'error', title: 'Duplicate Trays', text: 'Duplicate tray IDs detected. Please fix duplicates before submitting.', confirmButtonColor: '#028084' });
       return;
     }
-    if (scannedTrays.length === 0) {
-      alert('No trays scanned. Please scan at least one tray before submitting.');
+    if (scannedIds.size === 0) {
+      Swal.fire({ icon: 'warning', title: 'No Trays', text: 'No trays scanned. Please scan at least one tray before submitting.', confirmButtonColor: '#028084' });
       return;
     }
 
-    // 4. Backend enforces capacity — no frontend capacity check needed
-
-    // 5. Collect half-filled tray data
-    const halfFilledTrays = [];
-    const hfContainer = document.getElementById('excessTrayContainer');
-    if (hfContainer) {
-      hfContainer.querySelectorAll('.tray-scan-tab').forEach(function(tab) {
-        const inp = tab.querySelector('.tray-id-input, .half-filled-input');
-        if (inp) {
-          const trayIdVal = (inp.value || '').trim();
-          halfFilledTrays.push({
-            tray_id: trayIdVal || null,
-            qty: parseInt(inp.dataset.expectedQty || 0) || 0,
-            auto_linked: inp.dataset.autoLinked === 'true',
-            linked_to: inp.dataset.linkedTo || null,
-            is_top_half_filled: inp.dataset.isTopHalfFilled === 'true',
-          });
-        }
-      });
-    }
-
-    // 5c. Collect multi-model allocation data
-    const isMultiModel = !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0);
-      // Use full backend-computed allocation (with tray-level detail) for complete DB storage
-      const multiModelAllocation = isMultiModel
-        ? (window._lastMultiModelAllocation && window._lastMultiModelAllocation.length > 0
-          ? window._lastMultiModelAllocation
-          : window._currentSecondaryLots || [])
-        : [];
-      // Validate: if excess/half-filled section is visible, top half-filled tray must have tray_id
-      const excessVisible = document.getElementById('excessLotSection');
-      if (excessVisible && excessVisible.style.display !== 'none') {
-        const topHfInput = excessVisible.querySelector('.half-filled-input[data-is-top-half-filled="true"]');
-        if (topHfInput && !topHfInput.value.trim()) {
-          alert('The half-filled top tray must have a tray ID. Please scan or enter the correct tray ID before submitting.');
-          if (topHfInput) topHfInput.focus();
+    // Validate excess panel right top tray if visible
+    const excessPanelRight = document.getElementById('splitPanelRight');
+    if (excessPanelRight && excessPanelRight.style.display !== 'none') {
+      const topTraySection = document.getElementById('excessTopTraySection');
+      if (topTraySection && topTraySection.style.display !== 'none') {
+        const topInp = document.getElementById('excessTopTrayScanInput');
+        if (topInp && !(topInp.value || '').trim()) {
+          Swal.fire({ icon: 'warning', title: 'Top Tray Required', text: 'The partial/excess top tray must be scanned before submitting.', confirmButtonColor: '#028084' });
+          topInp.focus();
           return;
         }
       }
+    }
 
-    // 6. Call submit API
+    // 4. Build FULL SNAPSHOT payload using the shared builder
+    // Wait for buildFullPayload to be defined (it's in a later script block)
+    if (typeof window._buildJigPayload !== 'function') {
+      Swal.fire({ icon: 'info', title: 'Not Ready', text: 'Submit system not ready. Please try again in a moment.', confirmButtonColor: '#028084' });
+      return;
+    }
+
+    const payload = window._buildJigPayload();
+    // Override jig_id from the validated input (user may have typed it)
+    payload.jig_id = jigId.trim();
+
+    console.log('[SUBMIT] Full snapshot payload:', payload.tray_data.length, 'trays, delink:', payload.total_delink_qty, 'excess:', payload.total_excess_qty);
+
+    // 5. Disable button
     const submitBtn = document.getElementById('submitJigBtn');
     if (submitBtn) { submitBtn.setAttribute('disabled', 'disabled'); submitBtn.innerText = 'Submitting...'; }
 
@@ -5998,44 +7268,21 @@ document.addEventListener('click', function (e) {
       return v ? v.pop() : '';
     }
 
-    fetch('/jig_loading/api/load/submit/', {
+    // 6. Call NEW submit API with full snapshot — single API, no parallel calls
+    fetch('/jig_loading/api/jig/submit/', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-      body: JSON.stringify({
-        lot_id: lotId,
-        batch_id: batchId,
-        jig_id: jigId.trim(),
-        broken_hooks: brokenHooks,
-        scanned_trays: scannedTrays,
-        jig_capacity: parseInt(window.BACKEND_EFFECTIVE_CAPACITY || window.jigCapacity || 0) || 0,
-        half_filled_trays: halfFilledTrays,
-        is_multi_model: isMultiModel,
-        multi_model_allocation: multiModelAllocation,
-        // Multi-model context for aggregated computation
-        multi_model: isMultiModel,
-        secondary_lots: isMultiModel ? (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }) : [],
-        primary_lot_id: window.CURRENT_LOT_ID || lotId,
-        primary_batch_id: window.CURRENT_BATCH_ID || batchId
-      })
+      body: JSON.stringify(payload)
     })
     .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
     .then(function(result) {
       if (result.ok && result.data.status === 'success') {
-        // ✅ Show success info with model/lot data — NO confirm dialog
         const d = result.data;
         const modelLabel = d.model_image_label || d.lot_id || '';
         const loadedQty = d.loaded_cases_qty || 0;
-        const lotQty = d.lot_qty || '';
-        const multiInfo = d.no_of_model_cases ? ('\nModels: ' + d.no_of_model_cases) : '';
-        const infoMsg = 'Jig submitted successfully!\n\n' +
-          'Jig: ' + (d.jig_id || '') + '\n' +
-          'Model: ' + modelLabel + '\n' +
-          'Lot: ' + (d.lot_id || '') + '\n' +
-          'Loaded: ' + loadedQty + ' / ' + (d.effective_capacity || '') + '\n' +
-          'Lot Qty: ' + lotQty + multiInfo;
+        const lotQty = d.lot_qty || payload.lot_qty || '';
 
-        // Use SweetAlert2 if available, else plain alert
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'success',
@@ -6046,7 +7293,8 @@ document.addEventListener('click', function (e) {
               '<b>Lot:</b> ' + (d.lot_id || '') + '<br>' +
               '<b>Loaded:</b> ' + loadedQty + ' / ' + (d.effective_capacity || '') + '<br>' +
               '<b>Lot Qty:</b> ' + lotQty +
-              (d.no_of_model_cases ? '<br><b>Models:</b> ' + d.no_of_model_cases : '') +
+              (d.delink_records_created ? '<br><b>Delink Records:</b> ' + d.delink_records_created : '') +
+              (d.excess_lot_id ? '<br><b>Excess Lot:</b> ' + d.excess_lot_id + ' (' + d.excess_trays_created + ' trays)' : '') +
               '</div>',
             confirmButtonText: 'OK',
             allowOutsideClick: false,
@@ -6060,7 +7308,8 @@ document.addEventListener('click', function (e) {
             window.location.reload();
           });
         } else {
-          alert(infoMsg);
+          alert('Jig submitted successfully!\nJig: ' + (d.jig_id || '') + '\nLoaded: ' + loadedQty +
+            (d.excess_lot_id ? '\nExcess Lot: ' + d.excess_lot_id : ''));
           try {
             if (typeof resetJigModalState === 'function') resetJigModalState();
             if (typeof closeJigModal === 'function') closeJigModal();
@@ -6070,19 +7319,24 @@ document.addEventListener('click', function (e) {
           window.location.reload();
         }
       } else {
-        alert('Submit failed: ' + (result.data.message || 'Unknown error'));
+        var errMsg = result.data.message || 'Unknown error';
+        var errDetail = '';
+        if (result.data.errors && result.data.errors.length) {
+          errDetail = '<br><br><b>Validation errors:</b><br>' + result.data.errors.join('<br>');
+        }
+        Swal.fire({ icon: 'error', title: 'Submit Failed', html: errMsg + errDetail, confirmButtonColor: '#028084' });
         if (submitBtn) { submitBtn.removeAttribute('disabled'); submitBtn.innerHTML = '<i class="fa fa-check" style="font-size:12px;"></i> Submit'; }
       }
     })
     .catch(function(err) {
       console.error('[SUBMIT] Error:', err);
-      alert('Submit failed: Network error. Please try again.');
+      Swal.fire({ icon: 'error', title: 'Network Error', text: 'Submit failed due to a network error. Please try again.', confirmButtonColor: '#028084' });
       if (submitBtn) { submitBtn.removeAttribute('disabled'); submitBtn.innerHTML = '<i class="fa fa-check" style="font-size:12px;"></i> Submit'; }
     });
 
   } catch (err) {
     console.error('[SUBMIT_BTN] handler failed', err);
-    alert('Submit error: ' + err.message);
+    Swal.fire({ icon: 'error', title: 'Submit Error', text: err.message, confirmButtonColor: '#028084' });
   }
 });
 </script>
@@ -6343,203 +7597,7 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
-<!-- Delink All Checkbox Handler -->
-<script nonce="{{ csp_nonce }}">
-document.addEventListener('DOMContentLoaded', function () {
-  var delinkAllCb = document.getElementById('delinkAllCheckbox');
-  if (!delinkAllCb) return;
 
-  delinkAllCb.addEventListener('change', async function () {
-    var container = document.getElementById('delinkTableSection');
-    if (!container) return;
-
-    var isChecked = this.checked;
-    console.log('[DELINK_ALL] Checkbox:', isChecked ? 'CHECKED' : 'UNCHECKED');
-
-    if (isChecked) {
-      // ✅ DELINK ALL: Auto-validate every unscanned tray input
-      var inputs = Array.from(container.querySelectorAll('.tray-id-input:not(.validated)'));
-      console.log('[DELINK_ALL] Auto-validating', inputs.length, 'unscanned trays');
-
-      for (var i = 0; i < inputs.length; i++) {
-        var inp = inputs[i];
-        var lotId = inp.dataset.lotId || window.CURRENT_LOT_ID || '';
-        var batchId = inp.dataset.batchId || window.CURRENT_BATCH_ID || '';
-        var expectedQty = parseInt(inp.dataset.expectedQty || 0) || 0;
-
-        // Fetch the expected tray for this slot from backend
-        // Use the backend's known tray list to auto-fill
-        try {
-          var allScanned = [];
-          container.querySelectorAll('.tray-id-input.validated').forEach(function(scannedInp) {
-            if (scannedInp.value) allScanned.push({ tray_id: scannedInp.value, qty: parseInt(scannedInp.dataset.expectedQty || 0) || 0 });
-          });
-
-          // Call update API with delink_all action to get auto-assigned tray
-          var csrfVal = (function() { var v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; })();
-          var resp = await fetch('/jig_loading/api/load/update/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfVal },
-            body: JSON.stringify({
-              action: 'scan_tray',
-              tray_id: inp.dataset.autoTrayId || '',
-              lot_id: lotId,
-              batch_id: batchId,
-              broken_hooks: parseInt(window.currentBrokenHooks || 0) || 0,
-              jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || window.jigCapacity || 0) || 0,
-              scanned_trays: allScanned,
-              allow_reuse_delink: false,
-              allow_new_half_filled: false,
-              multi_model: !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0),
-              secondary_lots: (window._currentSecondaryLots || []).map(function(s) { return { lot_id: s.lot_id, batch_id: s.batch_id || '', qty: parseInt(s.qty || 0) || 0 }; }),
-              primary_lot_id: window.CURRENT_LOT_ID || '',
-              primary_batch_id: window.CURRENT_BATCH_ID || ''
-            })
-          });
-
-          if (resp.ok) {
-            var data = await resp.json();
-            if (data.validation_status === 'success') {
-              inp.value = data.tray_id || inp.dataset.autoTrayId || ('AUTO-' + (i + 1));
-              inp.classList.add('validated');
-              inp.readOnly = true;
-              // Update backend state
-              window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
-              window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
-              window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || window.BACKEND_EFFECTIVE_CAPACITY;
-              if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
-              var emptyEl = document.getElementById('emptyHooksInput');
-              if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
-              // Refresh half-filled
-              if (data.half_filled_tray_info && typeof window.renderHalfFilledAutoLink === 'function') {
-                window._lastInitData = Object.assign({}, window._lastInitData || {}, data, {
-                  half_filled: data.half_filled || data.half_filled_tray_info,
-                  half_filled_tray_info: data.half_filled_tray_info,
-                });
-                window.renderHalfFilledAutoLink(window._lastInitData);
-              }
-              console.log('[DELINK_ALL] Tray', i + 1, 'auto-validated:', inp.value);
-            } else {
-              console.warn('[DELINK_ALL] Tray', i + 1, 'validation failed:', data.message);
-            }
-          }
-        } catch (err) {
-          console.error('[DELINK_ALL] Auto-validate error for tray', i + 1, err);
-        }
-      }
-      console.log('[DELINK_ALL] Auto-validation complete');
-    } else {
-      // ❌ UNCHECKED: Clear ONLY delink tray inputs — preserve models, excess, half-filled
-      console.log('[DELINK_ALL] Unchecking — clearing delink trays ONLY');
-      var allInputs = container.querySelectorAll('.tray-id-input');
-      allInputs.forEach(function(inp) {
-        inp.value = '';
-        inp.classList.remove('validated');
-        inp.readOnly = false;
-        inp.style.background = '';
-        inp.style.border = '';
-      });
-
-      // Reset loaded to 0 but preserve models and half-filled
-      window.BACKEND_LOADED_CASES = 0;
-      window.BACKEND_EMPTY_HOOKS = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0) || 0;
-      if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
-      var emptyEl = document.getElementById('emptyHooksInput');
-      if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
-
-      // ✅ BUG FIX #1: Also clear excess lot section tray inputs on uncheck
-      var excessContainer = document.getElementById('excessTrayContainer');
-      if (excessContainer) {
-        var excessInputs = excessContainer.querySelectorAll('.tray-id-input');
-        excessInputs.forEach(function(inp) {
-          inp.value = '';
-          inp.classList.remove('validated');
-          inp.readOnly = false;
-          inp.style.background = '';
-          inp.style.border = '';
-          inp.style.color = '';
-        });
-        console.log('[DELINK_ALL] Excess tray inputs also cleared.');
-      }
-
-      // 🚫 DO NOT clear models, lot qty, or section visibility
-      console.log('[DELINK_ALL] Delink + excess trays cleared. Models preserved.');
-
-      // ✅ Error 7: Re-render half-filled in "waiting for delink" state (no tray IDs)
-      if (typeof window.renderHalfFilledAutoLink === 'function' && window._lastInitData) {
-        var freshState = Object.assign({}, window._lastInitData, { delink_completed: false });
-        // Clear tray_ids so half-filled shows placeholder inputs
-        if (freshState.half_filled && typeof freshState.half_filled === 'object') {
-          freshState.half_filled = Object.assign({}, freshState.half_filled, { tray_ids: null });
-        }
-        if (freshState.half_filled_tray_info && typeof freshState.half_filled_tray_info === 'object') {
-          freshState.half_filled_tray_info = Object.assign({}, freshState.half_filled_tray_info, { tray_ids: null });
-        }
-        window.renderHalfFilledAutoLink(freshState);
-        console.log('[DELINK_ALL] Half-filled re-rendered in waiting state');
-      }
-    }
-  });
-
-  // ✅ Error 6: User Scan button handler — clears all auto-validated trays for manual scanning
-  var userScanBtn = document.getElementById('userScanBtn');
-  if (userScanBtn) {
-    userScanBtn.addEventListener('click', function() {
-      console.log('[USER_SCAN] Switching to manual scan mode');
-      // Uncheck Delink All
-      var delinkCb = document.getElementById('delinkAllCheckbox');
-      if (delinkCb && delinkCb.checked) delinkCb.checked = false;
-      // Clear all delink tray inputs
-      var container = document.getElementById('delinkTableSection');
-      if (container) {
-        container.querySelectorAll('.tray-id-input').forEach(function(inp) {
-          inp.value = '';
-          inp.classList.remove('validated');
-          inp.readOnly = false;
-          inp.style.background = '';
-          inp.style.border = '';
-        });
-      }
-      // Clear excess tray inputs
-      var excessContainer = document.getElementById('excessTrayContainer');
-      if (excessContainer) {
-        excessContainer.querySelectorAll('.tray-id-input').forEach(function(inp) {
-          inp.value = '';
-          inp.classList.remove('validated');
-          inp.readOnly = false;
-          inp.style.background = '';
-          inp.style.border = '';
-          inp.style.color = '';
-        });
-      }
-      // Reset loaded to 0
-      window.BACKEND_LOADED_CASES = 0;
-      window.BACKEND_EMPTY_HOOKS = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0) || 0;
-      if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
-      var emptyEl = document.getElementById('emptyHooksInput');
-      if (emptyEl) emptyEl.value = window.BACKEND_EMPTY_HOOKS;
-      // Re-render half-filled in waiting state
-      if (typeof window.renderHalfFilledAutoLink === 'function' && window._lastInitData) {
-        var freshState = Object.assign({}, window._lastInitData, { delink_completed: false });
-        if (freshState.half_filled && typeof freshState.half_filled === 'object') {
-          freshState.half_filled = Object.assign({}, freshState.half_filled, { tray_ids: null });
-        }
-        if (freshState.half_filled_tray_info && typeof freshState.half_filled_tray_info === 'object') {
-          freshState.half_filled_tray_info = Object.assign({}, freshState.half_filled_tray_info, { tray_ids: null });
-        }
-        window.renderHalfFilledAutoLink(freshState);
-      }
-      // Focus first tray input
-      if (container) {
-        var firstInput = container.querySelector('.tray-id-input');
-        if (firstInput) setTimeout(function() { firstInput.focus(); }, 100);
-      }
-      console.log('[USER_SCAN] Manual mode enabled, all inputs cleared');
-    });
-  }
-});
-</script>
 
 <!-- Multi-model selection handlers -->
 <script nonce="{{ csp_nonce }}">
@@ -6905,13 +7963,13 @@ document.addEventListener('DOMContentLoaded', function () {
     container.querySelectorAll('.tray-id-input').forEach(attachHandler);
   }
 
-  // Intercept fetch to block client-side duplicate calls to update endpoint
+  // Backend is source of truth for duplicate validation; do not block requests in frontend.
   const _fetch = window.fetch ? window.fetch.bind(window) : null;
   if(_fetch){
     window.fetch = function(resource, options){
       try{
         const url = (typeof resource === 'string') ? resource : (resource && resource.url) || '';
-        if(url && (url.indexOf('/jig_loading/api/load/update') !== -1 || url.indexOf('/jig_loading/scan-tray') !== -1)){
+        if(false && url && url.indexOf('/jig_loading/api/load/update') !== -1){
           try{
             const body = options && options.body ? JSON.parse(options.body) : null;
             const trayId = normalize(body && body.tray_id);
@@ -6936,7 +7994,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.jQuery.ajax = function(opts){
       try{
         const url = (opts && opts.url) || '';
-        if(url && (url.indexOf('/jig_loading/api/load/update') !== -1 || url.indexOf('/jig_loading/scan-tray') !== -1)){
+        if(false && url && url.indexOf('/jig_loading/api/load/update') !== -1){
           let data = opts.data;
           if(typeof data === 'string'){ try{ data = JSON.parse(data); }catch(e){} }
           const trayId = normalize(data && (data.tray_id || data.trayId));
@@ -7003,12 +8061,12 @@ document.addEventListener('click', function(e){
   }
 });
 
-// Extra safety: guard init-jig-load AJAX calls using global ajax handlers
+// Extra safety: guard consolidated init API AJAX calls using global ajax handlers
 if (window.jQuery) {
   (function($){
     $(document).ajaxSend(function(event, jqXHR, settings){
       try{
-        if(settings && settings.url && (settings.url.indexOf('/jig_loading/api/load/init/') !== -1 || settings.url.indexOf('/jig_loading/init-jig-load/') !== -1)){
+        if(settings && settings.url && settings.url.indexOf('/jig_loading/api/load/init/') !== -1){
           if(window.initApiInProgress){
             console.log('🚫 Init already in progress — aborting duplicate AJAX');
             try { jqXHR.abort(); } catch(e) {}
@@ -7020,13 +8078,582 @@ if (window.jQuery) {
     });
     $(document).ajaxComplete(function(event, jqXHR, settings){
       try{
-        if(settings && settings.url && (settings.url.indexOf('/jig_loading/api/load/init/') !== -1 || settings.url.indexOf('/jig_loading/init-jig-load/') !== -1)){
+        if(settings && settings.url && settings.url.indexOf('/jig_loading/api/load/init/') !== -1){
           window.initApiInProgress = false;
         }
       }catch(e){}
     });
   })(jQuery);
 }
+</script>
+
+<!-- ================================================================
+     NEW: Full Snapshot Draft/Submit APIs (zero recalculation)
+     ================================================================ -->
+<script nonce="{{ csp_nonce }}">
+(function() {
+  'use strict';
+
+  // ===== CSRF helper =====
+  function _getCsrf() {
+    var v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+
+  // ===== Collect FULL tray_data snapshot from the split panel tables =====
+  // Returns: [{tray_id, original_qty, delink_qty, excess_qty, top_tray, model_code, source_lot_id}, ...]
+  function collectTrayDataSnapshot() {
+    var trayData = [];
+    var seenTrayIds = {};
+
+    // Collect from delink panel (LEFT) — these have original_qty, delink_qty, excess_qty
+    document.querySelectorAll('#delinkPanelTableBody tr').forEach(function(row) {
+      var trayId = (row.dataset.trayId || '').trim();
+      if (!trayId) return;
+      var origQty = parseInt(row.dataset.originalQty || 0) || 0;
+      var delinkQty = parseInt(row.dataset.delinkQty || 0) || 0;
+      var excessQty = parseInt(row.dataset.excessQty || 0) || 0;
+      var modelCode = (row.dataset.modelCode || '').trim();
+      var sourceLot = (row.dataset.lotId || '').trim();
+      var isTop = row.dataset.topTray === 'true';
+
+      // Fallback: read from cells if data attrs not set
+      if (origQty === 0 && delinkQty === 0) {
+        var cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+          origQty = parseInt(cells[4] ? cells[4].textContent : 0) || 0;
+          delinkQty = parseInt(cells[5] ? cells[5].textContent : 0) || 0;
+          excessQty = parseInt(cells[6] ? cells[6].textContent : 0) || 0;
+        }
+        if (!modelCode && cells[2]) modelCode = (cells[2].textContent || '').trim();
+        if (!trayId && cells[3]) trayId = (cells[3].textContent || '').trim();
+      }
+
+      if (!trayId) return;
+      seenTrayIds[trayId] = true;
+
+      trayData.push({
+        tray_id: trayId,
+        original_qty: origQty,
+        delink_qty: delinkQty,
+        excess_qty: excessQty,
+        top_tray: isTop,
+        model_code: modelCode,
+        source_lot_id: sourceLot || window.CURRENT_LOT_ID || '',
+      });
+    });
+
+    // If delink panel had no data-attributes, fall back to backend split_panel data
+    if (trayData.length === 0 && window._lastSplitPanelData) {
+      var sp = window._lastSplitPanelData;
+      var dp = sp.delink_panel || {};
+      (dp.trays || []).forEach(function(t) {
+        trayData.push({
+          tray_id: t.tray_id || '',
+          original_qty: parseInt(t.original_qty || 0) || 0,
+          delink_qty: parseInt(t.delink_qty || 0) || 0,
+          excess_qty: parseInt(t.excess_qty || 0) || 0,
+          top_tray: !!t.is_top_tray,
+          model_code: t.model_code || '',
+          source_lot_id: t.lot_id || window.CURRENT_LOT_ID || '',
+        });
+      });
+    }
+
+    return trayData;
+  }
+
+  // ===== Collect scanned trays from all panels =====
+  function collectScannedTrays() {
+    var scanned = [];
+    var ids = {};
+    var lotId = window.CURRENT_LOT_ID || '';
+    var batchId = window.CURRENT_BATCH_ID || '';
+
+    // Delink panel scans
+    document.querySelectorAll('#delinkPanelTableBody .split-scan-input').forEach(function(inp) {
+      var val = (inp.value || '').trim();
+      if (!val || val.length < 3 || ids[val.toUpperCase()]) return;
+      ids[val.toUpperCase()] = true;
+      scanned.push({
+        tray_id: val,
+        qty: parseInt(inp.dataset.expectedQty || 0) || 0,
+        lot_id: inp.dataset.lotId || lotId,
+        batch_id: inp.dataset.batchId || batchId,
+        panel: 'delink'
+      });
+    });
+
+    // Top tray scan
+    var topInp = document.getElementById('excessTopTrayScanInput');
+    if (topInp && topInp.offsetParent !== null) {
+      var topVal = (topInp.value || '').trim();
+      if (topVal && topVal.length >= 3 && !ids[topVal.toUpperCase()]) {
+        ids[topVal.toUpperCase()] = true;
+        scanned.push({
+          tray_id: topVal,
+          qty: parseInt(topInp.dataset.expectedQty || 0) || 0,
+          lot_id: lotId,
+          batch_id: batchId,
+          panel: 'excess_top'
+        });
+      }
+    }
+
+    // Excess panel scans
+    document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+      var val = (inp.value || '').trim();
+      if (!val || val.length < 3 || ids[val.toUpperCase()]) return;
+      ids[val.toUpperCase()] = true;
+      scanned.push({
+        tray_id: val,
+        qty: parseInt(inp.dataset.expectedQty || 0) || 0,
+        lot_id: inp.dataset.lotId || lotId,
+        batch_id: inp.dataset.batchId || batchId,
+        panel: 'excess'
+      });
+    });
+
+    return scanned;
+  }
+
+  // ===== Build full payload from current UI state =====
+  function buildFullPayload() {
+    var trayData = collectTrayDataSnapshot();
+    var scannedTrays = collectScannedTrays();
+    var totalDelinkQty = 0;
+    var totalExcessQty = 0;
+
+    trayData.forEach(function(t) {
+      totalDelinkQty += parseInt(t.delink_qty || 0) || 0;
+      totalExcessQty += parseInt(t.excess_qty || 0) || 0;
+    });
+
+    var isMultiModel = !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0);
+    var multiModelAllocation = isMultiModel
+      ? (window._lastMultiModelAllocation || window._currentSecondaryLots || [])
+      : [];
+
+    // For multi-model, lot_qty must be the TOTAL across all models, not just primary
+    var lotQtyValue = parseInt((document.getElementById('reallotQty') || {}).value || 0) || 0;
+    if (isMultiModel && multiModelAllocation.length > 0) {
+      var totalMultiModelQty = 0;
+      multiModelAllocation.forEach(function(m) {
+        totalMultiModelQty += parseInt(m.allocated_qty || m.qty || m.model_lot_qty || 0) || 0;
+      });
+      if (totalMultiModelQty > lotQtyValue) {
+        lotQtyValue = totalMultiModelQty;
+      }
+    }
+
+    // Collect half-filled tray info
+    var halfFilledInfo = [];
+    var topInp = document.getElementById('excessTopTrayScanInput');
+    if (topInp && topInp.offsetParent !== null) {
+      var topVal = (topInp.value || '').trim();
+      if (topVal) {
+        halfFilledInfo.push({
+          tray_id: topVal,
+          qty: parseInt(topInp.dataset.expectedQty || 0) || 0,
+          is_top_half_filled: true,
+        });
+      }
+    }
+    document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+      halfFilledInfo.push({
+        tray_id: (inp.value || '').trim() || null,
+        qty: parseInt(inp.dataset.expectedQty || 0) || 0,
+        is_top_half_filled: false,
+      });
+    });
+
+    return {
+      lot_id: window.CURRENT_LOT_ID || '',
+      batch_id: window.CURRENT_BATCH_ID || '',
+      jig_id: (document.getElementById('jigIdInput') || {}).value || '',
+      lot_qty: lotQtyValue,
+      jig_capacity: parseInt(window.BACKEND_ORIGINAL_CAPACITY || (document.getElementById('jigCapacityInput') || {}).value || 0) || 0,
+      effective_capacity: parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0) || 0,
+      broken_hooks: parseInt(window.BACKEND_BROKEN_HOOKS || 0) || 0,
+      loaded_cases_qty: parseInt(window.BACKEND_LOADED_CASES || 0) || 0,
+      empty_hooks: parseInt((document.getElementById('emptyHooksInput') || {}).value || 0) || 0,
+      nickel_bath_type: (document.getElementById('nickelBathTypeInput') || {}).value || '',
+      tray_type: (document.getElementById('trayTypeInput') || {}).value || '',
+      tray_capacity: parseInt(window.BACKEND_TRAY_CAPACITY || 12) || 12,
+      plating_stock_num: window.CURRENT_MODEL_NO || '',
+      remarks: '',
+      is_multi_model: isMultiModel,
+      tray_data: trayData,
+      total_delink_qty: totalDelinkQty,
+      total_excess_qty: totalExcessQty,
+      scanned_trays: scannedTrays,
+      multi_model_allocation: multiModelAllocation,
+      half_filled_tray_info: halfFilledInfo,
+    };
+  }
+
+  // ===== DRAFT HANDLER =====
+  document.addEventListener('click', function(e) {
+    if (e.target.id !== 'draftJigBtn' && !e.target.closest('#draftJigBtn')) return;
+    e.preventDefault();
+
+    var payload = buildFullPayload();
+    if (!payload.lot_id || !payload.batch_id) {
+      Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Missing lot or batch information. Cannot save draft.', confirmButtonColor: '#028084' });
+      return;
+    }
+
+    var draftBtn = document.getElementById('draftJigBtn');
+    if (draftBtn) { draftBtn.setAttribute('disabled', 'disabled'); draftBtn.innerText = 'Saving...'; }
+
+    console.log('[DRAFT] Saving payload:', JSON.stringify(payload).substring(0, 500));
+
+    fetch('/jig_loading/api/jig/save/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _getCsrf() },
+      body: JSON.stringify(payload)
+    })
+    .then(function(res) { return res.json().then(function(d) { return { ok: res.ok, data: d }; }); })
+    .then(function(result) {
+      if (result.ok && result.data.status === 'success') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'success', title: 'Draft Saved',
+            text: 'Your jig loading draft has been saved. You can resume later.',
+            confirmButtonText: 'OK', timer: 3000, timerProgressBar: true,
+          });
+        } else {
+          alert('Draft saved successfully!');
+        }
+      } else {
+        Swal.fire({ icon: 'error', title: 'Draft Failed', text: 'Draft save failed: ' + (result.data.message || 'Unknown error'), confirmButtonColor: '#028084' });
+      }
+      if (draftBtn) { draftBtn.removeAttribute('disabled'); draftBtn.innerHTML = '<i class="fa fa-save" style="font-size:12px;"></i> Draft'; }
+    })
+    .catch(function(err) {
+      console.error('[DRAFT] Error:', err);
+      Swal.fire({ icon: 'error', title: 'Network Error', text: 'Draft save failed due to a network error.', confirmButtonColor: '#028084' });
+      if (draftBtn) { draftBtn.removeAttribute('disabled'); draftBtn.innerHTML = '<i class="fa fa-save" style="font-size:12px;"></i> Draft'; }
+    });
+  });
+
+  // ===== DRAFT REHYDRATION: Check for existing draft on modal open =====
+  // When init API populates the modal, also check for a saved draft and restore tray scan states
+  window.checkAndRestoreDraft = function(lotId, batchId) {
+    if (!lotId || !batchId) return;
+
+    fetch('/jig_loading/api/jig/save/?lot_id=' + encodeURIComponent(lotId) + '&batch_id=' + encodeURIComponent(batchId), {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _getCsrf() },
+    })
+    .then(function(res) {
+      if (res.status === 404) return null;
+      return res.json();
+    })
+    .then(function(data) {
+      if (!data || data.status !== 'success') return;
+      console.log('[DRAFT_RESTORE] Found draft, record_id:', data.record_id, 'updated:', data.updated_at);
+
+      // ===== Restore Jig ID =====
+      if (data.jig_id) {
+        var jigInput = document.getElementById('jigIdInput');
+        if (jigInput && !jigInput.value) {
+          jigInput.value = data.jig_id;
+          jigInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+
+      // ===== Restore form fields from draft snapshot =====
+      var fieldsToRestore = {
+        'nickelBathTypeInput': data.nickel_bath_type || '',
+        'trayTypeInput': data.tray_type || '',
+        'reallotQty': data.lot_qty || '',
+        'jigCapacityInput': data.jig_capacity || '',
+        'emptyHooksInput': data.empty_hooks || '',
+      };
+      for (var fieldId in fieldsToRestore) {
+        var el = document.getElementById(fieldId);
+        if (el && !el.value && fieldsToRestore[fieldId]) {
+          el.value = fieldsToRestore[fieldId];
+        }
+      }
+
+      // Restore global BACKEND_ variables from draft
+      if (data.loaded_cases_qty) window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty) || 0;
+      if (data.effective_capacity) window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity) || 0;
+      if (data.jig_capacity) window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.jig_capacity) || 0;
+      if (data.broken_hooks) window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks) || 0;
+      if (data.empty_hooks) window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks) || 0;
+      if (data.tray_capacity) window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity) || 12;
+      if (data.plating_stock_num) window.CURRENT_MODEL_NO = data.plating_stock_num;
+
+      // Restore loaded cases display
+      var lcDisplay = document.getElementById('loadedCasesQtyDisplay');
+      if (lcDisplay && data.loaded_cases_qty) {
+        lcDisplay.innerText = data.loaded_cases_qty;
+      }
+
+      // Restore broken hooks select
+      if (data.broken_hooks) {
+        var bhSelect = document.getElementById('brokenBuildupHooksInput');
+        if (bhSelect) {
+          bhSelect.value = String(data.broken_hooks);
+          window.currentBrokenHooks = parseInt(data.broken_hooks) || 0;
+        }
+      }
+
+      // Restore multi-model allocation
+      if (data.multi_model_allocation && data.multi_model_allocation.length > 0) {
+        window._lastMultiModelAllocation = data.multi_model_allocation;
+        window._currentSecondaryLots = data.multi_model_allocation;
+      }
+
+      // ===== Restore scanned tray values into split panel inputs =====
+      if (data.scanned_trays && data.scanned_trays.length > 0) {
+        console.log('[DRAFT_RESTORE] Restoring', data.scanned_trays.length, 'scanned trays');
+
+        // Restore delink panel scans (match by row order)
+        var delinkInputs = document.querySelectorAll('#delinkPanelTableBody .split-scan-input');
+        var delinkScans = data.scanned_trays.filter(function(s) { return s.panel === 'delink'; });
+        delinkScans.forEach(function(scan, i) {
+          if (delinkInputs[i] && !delinkInputs[i].value) {
+            delinkInputs[i].value = scan.tray_id;
+            delinkInputs[i].classList.add('validated');
+          }
+        });
+
+        // Restore top tray
+        var topScans = data.scanned_trays.filter(function(s) { return s.panel === 'excess_top'; });
+        if (topScans.length > 0) {
+          var topInp = document.getElementById('excessTopTrayScanInput');
+          if (topInp && !topInp.value) {
+            topInp.value = topScans[0].tray_id;
+            topInp.classList.add('validated');
+          }
+        }
+
+        // Restore excess panel scans
+        var excessInputs = document.querySelectorAll('#excessPanelTableBody .split-scan-input');
+        var excessScans = data.scanned_trays.filter(function(s) { return s.panel === 'excess'; });
+        excessScans.forEach(function(scan, i) {
+          if (excessInputs[i] && !excessInputs[i].value) {
+            excessInputs[i].value = scan.tray_id;
+            excessInputs[i].classList.add('validated');
+          }
+        });
+      }
+
+      console.log('[DRAFT_RESTORE] Complete — form fields, BACKEND vars, and scanned trays restored');
+    })
+    .catch(function(err) {
+      console.warn('[DRAFT_RESTORE] Failed:', err);
+    });
+  };
+
+  // Expose buildFullPayload for debugging
+  window._buildJigPayload = buildFullPayload;
+  window._collectTrayData = collectTrayDataSnapshot;
+
+})();
+</script>
+
+<!-- ================================================================
+     JIG COMPOSITION GALLERY — CSS + JS
+     ================================================================ -->
+<style>
+@keyframes jcFadeIn { from { opacity:0; transform:scale(0.985); } to { opacity:1; transform:scale(1); } }
+.jc-stat-card { flex:1; min-width:110px; border-radius:12px; padding:14px 16px; text-align:center; transition:transform 0.15s; }
+.jc-stat-card:hover { transform:translateY(-2px); }
+.jc-stat-num { font-size:28px; font-weight:800; line-height:1.1; }
+.jc-stat-lbl { font-size:10px; font-weight:700; text-transform:uppercase; margin-top:4px; opacity:0.75; }
+.jc-section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#028084; border-left:3px solid #028084; padding-left:10px; margin:20px 0 10px; }
+.jc-tray-chip { border-radius:9px; padding:9px 12px; font-size:11px; min-width:120px; display:flex; flex-direction:column; gap:3px; border:1.5px solid transparent; transition:transform 0.12s, box-shadow 0.12s; cursor:default; }
+.jc-tray-chip:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.09); }
+.jc-tid { font-weight:700; font-family:monospace; font-size:12px; }
+.jc-badge { display:inline-block; border-radius:10px; padding:1px 8px; font-size:9px; font-weight:700; color:#fff; margin-top:3px; align-self:flex-start; }
+.jc-progress-bar { width:100%; background:#e0e0e0; border-radius:20px; height:8px; overflow:hidden; margin-top:6px; }
+.jc-progress-fill { height:100%; border-radius:20px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1); }
+</style>
+
+<script nonce="{{ csp_nonce }}">
+(function(){
+  /* palette — indexed from 0 (M1) */
+  var MODEL_BG  = ['#e2fbff','#fff4e6','#fff9c4','#e1bee7','#c8e6c9','#fce4ec'];
+  var MODEL_FG  = ['#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#dc3545'];
+
+  function mcol(idx,arr){ return arr[idx % arr.length]; }
+
+  function renderGallery(){
+    /* ── header badge ── */
+    var jigId = (document.getElementById('jigIdInput')||{}).value||'—';
+    document.getElementById('jcJigIdBadge').textContent = jigId;
+
+    /* ── form scalars ── */
+    var jigCap  = parseInt((document.getElementById('jigCapacityInput')||{}).value||0)||0;
+    var bh      = parseInt((document.getElementById('brokenBuildupHooksInput')||{}).value||0)||0;
+
+    /* ── live tray data via existing helper ── */
+    var trays = (typeof collectTrayDataSnapshot === 'function') ? collectTrayDataSnapshot() : [];
+
+    /* ── aggregates ── */
+    var totalOrig=0, totalDelink=0, totalExcess=0;
+    trays.forEach(function(t){ totalOrig+=t.original_qty; totalDelink+=t.delink_qty; totalExcess+=t.excess_qty; });
+    var fillPct = jigCap > 0 ? Math.min(100, Math.round(totalDelink*100/jigCap)) : 0;
+
+    /* ── model cards ── */
+    var mcards = Array.from(document.querySelectorAll('#modelCardStrip .model-card'));
+    var modelMap = {};   // modelCode → {name, qty, colorIdx, role}
+    mcards.forEach(function(card, idx){
+      var name  = (card.querySelector('.model-card-name')||{}).textContent || '';
+      var code  = (card.querySelector('.model-card-code')||{}).textContent || name;
+      var qty   = parseInt(((card.querySelector('.model-card-qty')||{}).textContent||'0'))||0;
+      var role  = card.getAttribute('data-role')||'secondary';
+      modelMap[code] = { name:name, code:code, qty:qty, colorIdx:idx, role:role };
+    });
+    var isMulti = mcards.length > 1;
+
+    /* ── group trays by model ── */
+    var modelTrays = {}; // modelCode → [trays]
+    trays.forEach(function(t){
+      var key = (t.model_code||'').split(' [')[0] || 'Primary';
+      if(!modelTrays[key]) modelTrays[key] = [];
+      modelTrays[key].push(t);
+    });
+
+    /* ── BUILD HTML ── */
+    var html = '';
+
+    /* 1. Summary strip */
+    html += '<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">';
+    [
+      {n:totalOrig,   l:'Lot Qty',      bg:'#e2fbff', fg:'#007bff'},
+      {n:jigCap,      l:'Jig Capacity', bg:'#e8f5e9', fg:'#28a745'},
+      {n:totalDelink, l:'Delinked',     bg:'#d4edda', fg:'#28a745'},
+      {n:totalExcess, l:'Excess',       bg:'#fff4e6', fg:'#e67e22'},
+      {n:bh,          l:'Broken Hooks', bg:'#fce4ec', fg:'#dc3545'},
+    ].forEach(function(s){
+      html += '<div class="jc-stat-card" style="background:'+s.bg+'; border:2px solid '+s.fg+'20;">'
+        +'<div class="jc-stat-num" style="color:'+s.fg+';">'+s.n+'</div>'
+        +'<div class="jc-stat-lbl" style="color:'+s.fg+';">'+s.l+'</div></div>';
+    });
+    html += '</div>';
+
+    /* 2. Jig fill bar */
+    var barColor = fillPct>=100?'#28a745': fillPct>=80?'#e67e22':'#007bff';
+    html += '<div style="background:#fff; border-radius:12px; padding:14px 18px; margin-bottom:20px; box-shadow:0 1px 6px rgba(0,0,0,0.06);">';
+    html += '<div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#028084; margin-bottom:6px;">';
+    html += '<span>Jig Fill</span><span>'+totalDelink+' / '+jigCap+' &nbsp;('+fillPct+'%)</span></div>';
+    html += '<div class="jc-progress-bar"><div class="jc-progress-fill" style="width:'+fillPct+'%; background:'+barColor+';"></div></div>';
+    html += '</div>';
+
+    /* 3. Multi-model allocation */
+    if(isMulti && mcards.length > 0){
+      html += '<div class="jc-section-title">Model Allocation</div>';
+      html += '<div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:4px;">';
+      mcards.forEach(function(card, idx){
+        var name   = (card.querySelector('.model-card-name')||{}).textContent||'';
+        var code   = (card.querySelector('.model-card-code')||{}).textContent||name;
+        var qty    = parseInt(((card.querySelector('.model-card-qty')||{}).textContent||'0'))||0;
+        var role   = card.getAttribute('data-role')||'secondary';
+        var traysForModel = (modelTrays[code]||[]);
+        var mdDelink = traysForModel.reduce(function(s,t){return s+t.delink_qty;},0);
+        var mdExcess = traysForModel.reduce(function(s,t){return s+t.excess_qty;},0);
+        var mdPct = qty > 0 ? Math.min(100,Math.round(mdDelink*100/qty)) : 0;
+        html += '<div style="background:'+mcol(idx,MODEL_BG)+'; border:2px solid '+mcol(idx,MODEL_FG)+'40; border-radius:12px; padding:12px 16px; min-width:150px; flex:1;">';
+        html += '<div style="font-size:9px; font-weight:700; color:'+mcol(idx,MODEL_FG)+'; text-transform:uppercase; margin-bottom:4px;">M'+(idx+1)+(role==='primary'?' · Primary':'')+'</div>';
+        html += '<div style="font-size:13px; font-weight:800; color:'+mcol(idx,MODEL_FG)+'; font-family:monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="'+code+'">'+code+'</div>';
+        html += '<div style="font-size:18px; font-weight:700; color:'+mcol(idx,MODEL_FG)+'; margin-top:4px;">'+qty+' <span style="font-size:10px; opacity:0.65;">allocated</span></div>';
+        html += '<div style="font-size:10px; color:#555; margin-top:3px;">Delinked: <strong>'+mdDelink+'</strong>'+(mdExcess?' &nbsp;| Excess: <strong>'+mdExcess+'</strong>':'')+'</div>';
+        html += '<div class="jc-progress-bar" style="margin-top:8px;"><div class="jc-progress-fill" style="width:'+mdPct+'%; background:'+mcol(idx,MODEL_FG)+';"></div></div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    /* 4. Tray-by-tray breakdown */
+    if(trays.length > 0){
+      html += '<div class="jc-section-title">Tray Breakdown</div>';
+      html += '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:4px;">';
+      trays.forEach(function(t){
+        var key    = (t.model_code||'').split(' [')[0]||'';
+        var cidx   = 0;
+        mcards.forEach(function(card,i){ if((card.querySelector('.model-card-code')||{}).textContent===key) cidx=i; });
+        var isExcess = t.excess_qty>0 && t.delink_qty===0;
+        var isPartial = t.delink_qty>0 && t.excess_qty>0;
+        var isTop     = t.top_tray;
+        var chipBg, chipBorder, badgeTxt, badgeBg;
+        if(isTop){           chipBg='#d0f0f2'; chipBorder='#028084'; badgeTxt='Top Tray';   badgeBg='#028084'; }
+        else if(isPartial){  chipBg='#fff9c4'; chipBorder='#c0a000'; badgeTxt='Partial';    badgeBg='#c0a000'; }
+        else if(isExcess){   chipBg='#fff4e6'; chipBorder='#e67e22'; badgeTxt='Excess Lot'; badgeBg='#e67e22'; }
+        else {               chipBg=mcol(cidx,MODEL_BG); chipBorder=mcol(cidx,MODEL_FG); badgeTxt='Delinked'; badgeBg=mcol(cidx,MODEL_FG); }
+
+        html += '<div class="jc-tray-chip" style="background:'+chipBg+'; border-color:'+chipBorder+';">';
+        html += '<div class="jc-tid">'+t.tray_id+'</div>';
+        if(key){ html += '<div style="font-size:9px; color:'+mcol(cidx,MODEL_FG)+'; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;" title="'+key+'">&#9679; '+key+'</div>'; }
+        html += '<div style="display:flex; gap:8px; font-size:10px; color:#555; margin-top:1px;">';
+        html += '<span>Orig: <strong>'+t.original_qty+'</strong></span>';
+        if(t.delink_qty){ html += '<span style="color:#28a745;">&#8595;'+t.delink_qty+'</span>'; }
+        if(t.excess_qty){ html += '<span style="color:#e67e22;">+'+t.excess_qty+'</span>'; }
+        html += '</div>';
+        html += '<span class="jc-badge" style="background:'+badgeBg+';">'+badgeTxt+'</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div style="color:#888; font-size:12px; margin-top:12px; padding:14px; background:#f0f0f0; border-radius:8px;">No tray data yet — load a lot and scan trays first.</div>';
+    }
+
+    /* 5. Excess summary */
+    var excessTrays = trays.filter(function(t){ return t.excess_qty > 0; });
+    if(excessTrays.length > 0){
+      var exSum = excessTrays.reduce(function(s,t){ return s+t.excess_qty; }, 0);
+      html += '<div class="jc-section-title" style="color:#e67e22; border-color:#e67e22;">Excess / Half-Filled <span style="font-size:12px; font-weight:800; color:#e67e22;">'+exSum+' qty</span></div>';
+      html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+      excessTrays.forEach(function(t){
+        var key  = (t.model_code||'').split(' [')[0]||'';
+        var cidx = 0;
+        mcards.forEach(function(card,i){ if((card.querySelector('.model-card-code')||{}).textContent===key) cidx=i; });
+        html += '<div style="background:'+mcol(cidx,MODEL_BG)+'; border:2px solid '+mcol(cidx,MODEL_FG)+'60; border-radius:9px; padding:10px 14px; font-size:11px;">';
+        html += '<div style="font-weight:700; font-family:monospace; color:'+mcol(cidx,MODEL_FG)+';">'+t.tray_id+'</div>';
+        if(key){ html += '<div style="font-size:9px; color:'+mcol(cidx,MODEL_FG)+'; margin-top:2px;">'+key+'</div>'; }
+        html += '<div style="margin-top:4px;">Excess Qty: <strong>'+t.excess_qty+'</strong></div>';
+        html += '<span class="jc-badge" style="background:'+mcol(cidx,MODEL_FG)+'; margin-top:4px;">Excess Lot</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('jcBody').innerHTML = html;
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    var btn   = document.getElementById('jigCompositionBtn');
+    var panel = document.getElementById('jigCompositionOverlay');
+    var back  = document.getElementById('closeJigCompositionBtn');
+    if(btn && panel){
+      btn.addEventListener('click', function(){ renderGallery(); panel.style.display='block'; });
+    }
+    if(back && panel){
+      back.addEventListener('click', function(){ panel.style.display='none'; });
+    }
+    /* Also hide gallery whenever the jig modal is closed */
+    var jigModal = document.getElementById('jigAddModal');
+    if(jigModal && panel){
+      var observer = new MutationObserver(function(ml){
+        ml.forEach(function(m){
+          if(m.attributeName==='class' || m.attributeName==='style'){
+            if(!jigModal.classList.contains('open') && jigModal.style.display==='none'){
+              panel.style.display='none';
+            }
+          }
+        });
+      });
+      observer.observe(jigModal, {attributes:true});
+    }
+  });
+})();
 </script>
 
 {% endblock %}

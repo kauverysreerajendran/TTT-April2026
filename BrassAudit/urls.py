@@ -42,6 +42,7 @@ urlpatterns = [
     path('brass_get_all_drafts/', brass_get_all_drafts, name='brass_get_all_drafts'),
 
     path('brass_audit_get_top_tray_scan_draft/', brass_audit_get_top_tray_scan_draft, name='brass_audit_get_top_tray_scan_draft'),
+    path('brass_clear_top_tray_draft/', brass_clear_top_tray_draft, name='brass_clear_top_tray_draft'),
     
     #Pick table Vlaidation
     path('pick_complete_tray_validate/', PickTrayValidate_Complete_APIView.as_view(), name='pick_complete_tray_validate'),

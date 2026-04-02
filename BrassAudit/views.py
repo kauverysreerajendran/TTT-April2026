@@ -3262,7 +3262,13 @@ def brass_audit_save_single_top_tray_scan(request):
                     stock.last_process_module = "Brass Audit"
                     stock.brass_audit_onhold_picking = False
                     print(f"✅ Updated stock for NORMAL mode")
-                
+
+                # ✅ FIX: Partial accept (few_cases) — rejected portion must go to IQF
+                if stock.brass_audit_few_cases_accptance:
+                    stock.send_brass_audit_to_iqf = True
+                    extra_save_fields.append('send_brass_audit_to_iqf')
+                    print(f"✅ Set send_brass_audit_to_iqf=True for partial accept lot {lot_id}")
+
                 stock.save(update_fields=[
                     'brass_audit_accepted_tray_scan_status', 
                     'next_process_module', 
@@ -3377,6 +3383,22 @@ def brass_audit_save_single_top_tray_scan(request):
         import traceback
         traceback.print_exc()
         return Response({'success': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def brass_clear_top_tray_draft(request):
+    """Clear the top tray scan draft for a given lot after final submission."""
+    lot_id = (request.data or {}).get('lot_id')
+    if not lot_id:
+        return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
+    try:
+        deleted, _ = Brass_Audit_TopTray_Draft_Store.objects.filter(lot_id=lot_id).delete()
+        print(f"[brass_clear_top_tray_draft] Cleared {deleted} draft(s) for lot {lot_id}")
+        return Response({'success': True, 'deleted': deleted})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

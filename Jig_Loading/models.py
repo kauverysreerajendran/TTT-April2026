@@ -240,3 +240,146 @@ class JigCompleted(models.Model):
 
     def __str__(self):
         return f"Jig Completed: {self.batch_id} by {self.user.username}"
+
+
+# =============================================================================
+# NEW TABLES: Full snapshot storage (Draft + Submit), Delink, Excess Lot
+# =============================================================================
+
+class JigLoadingRecord(models.Model):
+    """
+    Single table for Draft AND Submit. status_flag differentiates.
+    Stores the FULL UI snapshot exactly as displayed — no recomputation on save.
+    """
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('SUBMITTED', 'Submitted'),
+    ]
+
+    jig_id = models.CharField(max_length=100, blank=True, null=True, db_index=True, help_text="Jig QR ID (e.g. J098-0001)")
+    lot_id = models.CharField(max_length=100, db_index=True, help_text="Primary lot ID")
+    batch_id = models.CharField(max_length=100, db_index=True, help_text="Primary batch ID")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    # Scalar snapshot fields (exactly as displayed on UI)
+    lot_qty = models.IntegerField(default=0, help_text="Lot Qty shown on UI")
+    jig_capacity = models.IntegerField(default=0, help_text="Jig Capacity shown on UI")
+    effective_capacity = models.IntegerField(default=0, help_text="Jig Capacity - Broken Hooks")
+    broken_hooks = models.IntegerField(default=0, help_text="Broken/Buildup hooks count")
+    loaded_cases_qty = models.IntegerField(default=0, help_text="Loaded Cases Qty shown on UI")
+    empty_hooks = models.IntegerField(default=0, help_text="Empty Hooks shown on UI")
+    nickel_bath_type = models.CharField(max_length=100, blank=True, null=True)
+    tray_type = models.CharField(max_length=100, blank=True, null=True)
+    tray_capacity = models.IntegerField(default=12, blank=True, null=True)
+    plating_stock_num = models.CharField(max_length=100, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+    is_multi_model = models.BooleanField(default=False)
+
+    # FULL SNAPSHOT — JSON of entire tray list as displayed
+    # Each entry: {tray_id, original_qty, delink_qty, excess_qty, top_tray, model_code, ...}
+    tray_data = models.JSONField(default=list, help_text="Full tray snapshot: [{tray_id, original_qty, delink_qty, excess_qty, ...}]")
+
+    # Aggregated totals (stored, NOT recomputed)
+    total_delink_qty = models.IntegerField(default=0, help_text="Sum of delink_qty across all trays")
+    total_excess_qty = models.IntegerField(default=0, help_text="Sum of excess_qty across all trays")
+
+    # Scanned trays (what user actually scanned — panel + tray_id + qty)
+    scanned_trays = models.JSONField(default=list, blank=True, null=True, help_text="[{tray_id, qty, panel, lot_id, batch_id}]")
+
+    # Multi-model allocation snapshot
+    multi_model_allocation = models.JSONField(default=list, blank=True, null=True, help_text="Full multi-model allocation data")
+
+    # Half-filled / excess tray info
+    half_filled_tray_info = models.JSONField(default=list, blank=True, null=True)
+
+    # Status
+    status_flag = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['lot_id', 'batch_id', 'user']
+        verbose_name = "Jig Loading Record"
+        verbose_name_plural = "Jig Loading Records"
+        indexes = [
+            models.Index(fields=['lot_id', 'batch_id', 'status_flag']),
+            models.Index(fields=['jig_id', 'status_flag']),
+        ]
+
+    def __str__(self):
+        return f"JigLoadingRecord({self.status_flag}): {self.jig_id or 'NO_JIG'} - {self.lot_id}"
+
+
+class JigDelinkRecord(models.Model):
+    """
+    Delink storage — one row per tray with delink_qty > 0.
+    Created ONLY on Submit, never on Draft.
+    """
+    jig_loading_record = models.ForeignKey(JigLoadingRecord, on_delete=models.CASCADE, related_name='delink_records')
+    jig_id = models.CharField(max_length=100, db_index=True, help_text="Jig QR ID")
+    lot_id = models.CharField(max_length=100, db_index=True, help_text="Parent lot ID")
+    batch_id = models.CharField(max_length=100, db_index=True)
+    tray_id = models.CharField(max_length=100, db_index=True, help_text="Physical tray ID")
+    delink_qty = models.IntegerField(help_text="Quantity delinked from this tray for the jig")
+    original_qty = models.IntegerField(default=0, help_text="Original tray quantity before split")
+    model_code = models.CharField(max_length=100, blank=True, null=True, help_text="Model plating stock no")
+    scanned_tray_id = models.CharField(max_length=100, blank=True, null=True, help_text="Actual scanned tray ID (may differ from tray_id)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Jig Delink Record"
+        verbose_name_plural = "Jig Delink Records"
+        indexes = [
+            models.Index(fields=['jig_id', 'lot_id']),
+            models.Index(fields=['tray_id']),
+        ]
+
+    def __str__(self):
+        return f"Delink: {self.tray_id} → {self.delink_qty} (Jig: {self.jig_id})"
+
+
+class ExcessLotRecord(models.Model):
+    """
+    Excess lot created on Submit — represents the overflow quantity
+    that did not fit into the jig's effective capacity.
+    """
+    jig_loading_record = models.ForeignKey(JigLoadingRecord, on_delete=models.CASCADE, related_name='excess_lot_records')
+    new_lot_id = models.CharField(max_length=100, unique=True, db_index=True, help_text="Generated lot ID for excess")
+    parent_lot_id = models.CharField(max_length=100, db_index=True, help_text="Original lot ID")
+    parent_batch_id = models.CharField(max_length=100, db_index=True)
+    lot_qty = models.IntegerField(help_text="Total excess qty = sum of excess_qty across all trays")
+    jig_id = models.CharField(max_length=100, help_text="Jig from which excess originated")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Excess Lot Record"
+        verbose_name_plural = "Excess Lot Records"
+        indexes = [
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['new_lot_id']),
+        ]
+
+    def __str__(self):
+        return f"ExcessLot: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.lot_qty})"
+
+
+class ExcessLotTray(models.Model):
+    """
+    Individual tray records for the excess lot.
+    One row per tray where excess_qty > 0.
+    """
+    excess_lot = models.ForeignKey(ExcessLotRecord, on_delete=models.CASCADE, related_name='excess_trays')
+    lot_id = models.CharField(max_length=100, db_index=True, help_text="New excess lot ID")
+    tray_id = models.CharField(max_length=100, help_text="Physical tray ID")
+    qty = models.IntegerField(help_text="Excess quantity in this tray")
+    original_qty = models.IntegerField(default=0, help_text="Original tray quantity before split")
+    model_code = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Excess Lot Tray"
+        verbose_name_plural = "Excess Lot Trays"
+
+    def __str__(self):
+        return f"ExcessTray: {self.tray_id} qty={self.qty} (lot={self.lot_id})"

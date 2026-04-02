@@ -3,6 +3,7 @@ from . import views
 from .views import *
 from .views import JigView, TrayInfoView, JigCompletedTable
 from .views import JigLoadInitAPI, JigLoadUpdateAPI, JigLoadSubmitAPI
+from .views import JigSaveDraftAPI, JigSubmitFinalAPI
 
 urlpatterns = [
 	path('JigView/', JigView.as_view(), name='JigView'),
@@ -13,8 +14,10 @@ urlpatterns = [
 	path('api/load/update/', JigLoadUpdateAPI.as_view(), name='jig-load-update'),
 	path('api/load/submit/', JigLoadSubmitAPI.as_view(), name='jig-load-submit'),
 
-	# ===== DEPRECATED — kept for backward compatibility =====
+	# ===== NEW CLEAN APIs — exact frontend snapshot storage =====
+	path('api/jig/save/', JigSaveDraftAPI.as_view(), name='jig-save-draft'),
+	path('api/jig/submit/', JigSubmitFinalAPI.as_view(), name='jig-submit-final'),
+
+	# ===== Read-only support endpoint (tray modal) =====
 	path('tray-info/', TrayInfoView.as_view(), name='tray-info'),
-	path('init-jig-load/', InitJigLoad.as_view(), name='init-jig-load'),
-	path('scan-tray/', ScanTray.as_view(), name='scan-tray'),
 ]

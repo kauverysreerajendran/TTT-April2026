@@ -1267,7 +1267,7 @@
                 </thead>
               <tbody>
                   {% for jig in jig_details %}
-                  <tr class="highlighted-tray-scan" data-lot-id="{{ jig.lot_id }}">
+                  <tr class="highlighted-tray-scan" data-lot-id="{{ jig.lot_id }}" data-batch-id="{{ jig.batch_id }}" data-jig-id="{{ jig.jig_id }}" data-delink-tray-info='{{ jig.delink_tray_info|safe }}' data-half-filled-tray-info='{{ jig.half_filled_tray_info|safe }}'>
                     <td>
                         {{forloop.counter}}
                     </td>
@@ -1287,17 +1287,20 @@
             <div class="multi-model-circle" 
                  data-model="{{ model_name|safe }}" 
                  data-model-qty="{{ model_qty }}"
+                 data-model-index="{{ forloop.counter }}"
                  data-lot-id="{{ jig.lot_id }}"
-                 style="display: inline-block; margin-right: 6px; position: relative; cursor: pointer;">
+                 style="display: inline-block; margin-right: 6px; position: relative; cursor: pointer; z-index: auto;">
               <div class="circle-indicator" 
-                   style="width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: all 0.2s ease;"
+                   style="width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.25); transition: all 0.2s ease;"
                    data-color-index="{{ forloop.counter0 }}">
                 {{ forloop.counter }}
               </div>
+              <!-- Tooltip: scoped strictly to THIS circle, shown only on THIS circle's hover via JS -->
               <div class="multi-model-tooltip" 
-                   style="position: absolute; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 11px; white-space: nowrap; z-index: 1000; display: none; opacity: 0; transition: opacity 0.2s; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-                <strong>{{ model_name|safe }}</strong><br>
-                <span style="font-size: 10px;">Qty: {{ model_qty }} | Tray: {{ jig.calculated_no_of_trays }}</span>
+                   style="position: absolute; background: linear-gradient(135deg,#1e293b,#334155); color: white; padding: 8px 14px; border-radius: 6px; font-size: 11px; white-space: nowrap; z-index: 99999; opacity: 0; pointer-events: none; transition: opacity 0.18s ease; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); box-shadow: 0 4px 12px rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08);">
+                <div style="font-size:9px; color:#94a3b8; margin-bottom:3px;">Model {{ forloop.counter }}</div>
+                <strong style="font-size:12px;">{{ model_name|safe }}</strong><br>
+                <span style="font-size:10px; color:#7dd3d8;">Qty: {{ model_qty }}</span>
               </div>
             </div>
             {% endwith %}
@@ -1461,10 +1464,15 @@
 
 
                     <!-- Delink Tray View Modal -->
-              <div id="delinkTrayViewModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.18); z-index:30000; align-items:center; justify-content:center;">
-                <div style="background:#fff; border-radius:10px; padding:28px 32px 18px 32px; min-width:500px; max-width:90vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); position:relative;">
-                  <span id="closeDelinkTrayViewModal" style="position:absolute; top:8px; right:16px; font-size:22px; font-weight:bold; color:#d9534f; cursor:pointer;">&times;</span>
-                  <div id="delinkTrayViewTable"></div>
+              <div id="delinkTrayViewModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:30000; align-items:center; justify-content:center;">
+                <div style="background:#fff; border-radius:12px; min-width:560px; max-width:92vw; box-shadow:0 8px 40px rgba(0,0,0,0.28); position:relative; display:flex; flex-direction:column; max-height:85vh; overflow:hidden;">
+                  <!-- Sticky header -->
+                  <div id="delinkTrayViewHeader" style="background:linear-gradient(135deg,#028084,#014d4e); color:#fff; padding:16px 24px 12px; border-radius:12px 12px 0 0; flex-shrink:0; display:flex; align-items:center; justify-content:space-between;">
+                    <div id="delinkTrayViewTitle" style="font-size:15px; font-weight:700; letter-spacing:0.3px;">Delink Tray Details</div>
+                    <span id="closeDelinkTrayViewModal" style="font-size:24px; font-weight:bold; color:rgba(255,255,255,0.85); cursor:pointer; line-height:1; padding:0 4px;">&times;</span>
+                  </div>
+                  <!-- Scrollable body -->
+                  <div id="delinkTrayViewTable" style="overflow-y:auto; padding:20px 24px 18px; flex:1;"></div>
                 </div>
               </div>
 
@@ -3093,109 +3101,134 @@ document.addEventListener("DOMContentLoaded", function() {
 <!-- Script for Delink Tray View Modal -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function () {
-  // Color palette for circles
-  const colorPalette = [
-    '#007bff', // Blue
-    '#28a745', // Green
-    '#ffc107', // Yellow
-    '#6f42c1', // Purple
-    '#dc3545', // Red
-    '#17a2b8', // Cyan
-    '#fd7e14', // Orange
-    '#e83e8c'  // Pink
-  ];
+  // Model color palette — semantic light bg for table rows, strong for circles
+  const modelBgPalette  = ['#e2fbff','#fff4e6','#fff9c4','#e1bee7','#c8e6c9','#ffe0b2','#fce4ec','#e8f5e9'];
+  const modelFgPalette  = ['#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#e65100','#c0226e','#388e3c'];
+  const modelHeaderBg   = ['#caf3fb','#fde8cc','#fff3a0','#d1aee8','#a5d6a7','#ffcc80','#f8bbd0','#b9f6ca'];
 
-  // View icon click handler
+  // View icon click handler — reads from DB-stored delink_tray_info embedded in row
   document.querySelectorAll('.view-details-btn').forEach(function(btn) {
-    btn.addEventListener('click', async function(e) {
+    btn.addEventListener('click', function(e) {
       e.preventDefault();
       const row = btn.closest('tr');
       if (!row) return;
-      // Try to get lot_id and batch_id from row attributes or data
       const lotId = row.getAttribute('data-lot-id') || '';
-      const batchId = row.getAttribute('data-batch-id') || '';
+      const jigId = row.getAttribute('data-jig-id') || '';
       if (!lotId) {
-        alert('Lot ID not found for this row.');
+        Swal.fire({ icon: 'warning', title: 'Lot ID not found', text: 'Cannot display tray details for this row.', confirmButtonColor: '#028084' });
         return;
       }
-      // Fetch delink tray data from backend API (adjust endpoint if needed)
-      let trays = [];
-      try {
-        const resp = await fetch(`/jig_loading/jig_tray_id_list/?stock_lot_id=${encodeURIComponent(lotId)}`);
-        const data = await resp.json();
-        if (data.success && Array.isArray(data.trays)) {
-          trays = data.trays;
-        }
-      } catch (err) {
-        alert('Failed to fetch tray data.');
-        return;
-      }
-      // Build table HTML - Filter to show only "Delinked" trays
-      const delinkTrays = trays.filter(tray => {
-        const status = tray.tray_status || 'Delinked';
-        return status === 'Delinked';
-      });
-      
-      // ✅ Extract models from row data for color-coded header
-      const modelCirclesHTML = (() => {
-        const modelContainer = row.querySelector('.multi-model-circles-container');
-        if (modelContainer) {
-          const models = Array.from(modelContainer.querySelectorAll('.multi-model-circle'));
-          if (models.length > 1) {
-            let circlesHTML = '<div style="display:flex; gap:6px; margin-left:12px; align-items:center;">';
-            models.forEach((modelEl, idx) => {
-              const indicator = modelEl.querySelector('.circle-indicator');
-              const modelName = modelEl.getAttribute('data-model') || `Model ${idx + 1}`;
-              const color = indicator ? indicator.style.backgroundColor : colorPalette[idx % colorPalette.length];
-              circlesHTML += `<div style="width:20px; height:20px; border-radius:50%; background-color:${color}; display:flex; align-items:center; justify-content:center; color:white; font-size:9px; font-weight:600; box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="${modelName}"><strong>${idx + 1}</strong></div>`;
-            });
-            circlesHTML += '</div>';
-            return circlesHTML;
-          }
-        }
-        return '';
-      })();
-      
-      let html = `<div style="display:flex; align-items:center; margin-bottom:16px;">
-        <h5 style="margin:0; color:#028084;">Delink Tray IDs - Status Information</h5>
-        ${modelCirclesHTML}
-      </div>`;
-      
-      html += '<table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;"><thead><tr><th>S.No</th><th>Tray ID</th><th>Tray Qty</th><th>Status</th><!-- <th>Accountability</th> --></tr></thead><tbody>';
-      if (delinkTrays.length === 0) {
-        html += '<tr><td colspan="4" style="text-align:center;">No delinked trays found.</td></tr>';
-      } else {
-        delinkTrays.forEach((tray, idx) => {
-          // Determine status color and text
-          const status = tray.tray_status || 'Delinked';
-          const statusColor = status === 'Delinked' ? '#028084' : '#f39c12';
-          const statusBgColor = status === 'Delinked' ? '#e0f7fa' : '#fef9e7';
-          
-          // Build accountability info
-          let accountability = '';
-          if (tray.excluded_quantity && tray.excluded_quantity > 0) {
-            accountability = `Original: ${tray.original_quantity || tray.tray_quantity}<br>Effective: ${tray.tray_quantity}<br>Excluded: ${tray.excluded_quantity}`;
-          } else {
-            accountability = `Full: ${tray.tray_quantity}`;
-          }
-          
-          html += `<tr>
-            <td>${idx + 1}</td>
-            <td>${tray.tray_id || ''}</td>
-            <td style="font-weight:600;">${tray.tray_quantity || ''}</td>
-            <td><span style="display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; color:${statusColor}; background:${statusBgColor}; border:1px solid ${statusColor};">${status}</span></td>
-            <!-- <td style="font-size:11px; line-height:1.2;">${accountability}</td> -->
-          </tr>`;
+
+      let delinkTrayInfo = [];
+      let halfFilledInfo = [];
+      try { delinkTrayInfo = JSON.parse(row.getAttribute('data-delink-tray-info') || '[]'); } catch(e) {}
+      try { halfFilledInfo = JSON.parse(row.getAttribute('data-half-filled-tray-info') || '[]'); } catch(e) {}
+
+      // Build a model → index map from circle indicators in this row
+      const modelIndexMap = {};
+      const modelContainer = row.querySelector('.multi-model-circles-container');
+      if (modelContainer) {
+        modelContainer.querySelectorAll('.multi-model-circle').forEach((el, idx) => {
+          const mName = (el.getAttribute('data-model') || '').trim();
+          if (mName) modelIndexMap[mName] = idx;
         });
       }
-      html += '</tbody></table>';
-      document.getElementById('delinkTrayViewTable').innerHTML = html;
-      // Show modal
+      const isMultiModel = Object.keys(modelIndexMap).length > 1;
+
+      // Helper: get model index from tray's model_code field
+      function getModelIdx(modelCode) {
+        const stripped = (modelCode || '').split(' [')[0].trim();
+        if (stripped in modelIndexMap) return modelIndexMap[stripped];
+        // fallback: try prefix match
+        for (const [k, v] of Object.entries(modelIndexMap)) {
+          if (stripped.startsWith(k) || k.startsWith(stripped)) return v;
+        }
+        return 0;
+      }
+
+      // Update sticky header title
+      const titleEl = document.getElementById('delinkTrayViewTitle');
+      if (titleEl) titleEl.textContent = `Delink Tray Details — ${jigId || lotId}`;
+
+      // Build model legend badges if multi-model
+      let legendHtml = '';
+      if (isMultiModel) {
+        legendHtml = '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">';
+        Object.entries(modelIndexMap).forEach(([name, idx]) => {
+          legendHtml += `<span style="display:inline-flex; align-items:center; gap:5px; background:${modelHeaderBg[idx % modelHeaderBg.length]}; border:1px solid ${modelFgPalette[idx % modelFgPalette.length]}40; border-radius:20px; padding:3px 10px; font-size:11px; font-weight:600; color:${modelFgPalette[idx % modelFgPalette.length]};">`;
+          legendHtml += `<span style="width:10px; height:10px; border-radius:50%; background:${modelFgPalette[idx % modelFgPalette.length]}; display:inline-block;"></span>`;
+          legendHtml += `M${idx+1}: ${name}</span>`;
+        });
+        legendHtml += '</div>';
+      }
+
+      // Build Delink Trays table with model-colored rows
+      let tableHtml = '<div style="overflow-x:auto;">';
+      tableHtml += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+      // Sticky thead inside scrollable container
+      tableHtml += '<thead><tr style="background:linear-gradient(135deg,#eaf9fa,#d0f4f5); position:sticky; top:0; z-index:2;">';
+      tableHtml += '<th style="padding:7px 10px; border-bottom:2px solid #028084; color:#014d4e; text-align:center; white-space:nowrap;">S.No</th>';
+      if (isMultiModel) tableHtml += '<th style="padding:7px 10px; border-bottom:2px solid #028084; color:#014d4e;">Model</th>';
+      tableHtml += '<th style="padding:7px 10px; border-bottom:2px solid #028084; color:#014d4e;">Tray ID</th>';
+      tableHtml += '<th style="padding:7px 10px; border-bottom:2px solid #028084; color:#014d4e; text-align:center;">Orig Qty</th>';
+      tableHtml += '<th style="padding:7px 10px; border-bottom:2px solid #028084; color:#028084; text-align:center;">Delink Qty</th>';
+      tableHtml += '<th style="padding:7px 10px; border-bottom:2px solid #028084; color:#e67e22; text-align:center;">Excess Qty</th>';
+      tableHtml += '</tr></thead><tbody>';
+
+      if (!delinkTrayInfo || delinkTrayInfo.length === 0) {
+        const span = isMultiModel ? 6 : 5;
+        tableHtml += `<tr><td colspan="${span}" style="text-align:center; padding:14px; color:#888;">No delink tray data found.</td></tr>`;
+      } else {
+        delinkTrayInfo.forEach((tray, idx) => {
+          const modelCode = (tray.model_code || '').split(' [')[0].trim();
+          const mIdx = isMultiModel ? getModelIdx(tray.model_code) : 0;
+          const rowBg = isMultiModel ? modelBgPalette[mIdx % modelBgPalette.length] : (idx % 2 === 0 ? '#fff' : '#f8fdfd');
+          const borderColor = isMultiModel ? modelFgPalette[mIdx % modelFgPalette.length] + '30' : '#e8edf2';
+          const isTopTray = tray.top_tray;
+          const trayIdLabel = isTopTray
+            ? `${tray.tray_id || ''} <span style="background:#f39c12; color:#fff; border-radius:10px; padding:1px 6px; font-size:9px; font-weight:700;">★ TOP</span>`
+            : (tray.tray_id || '');
+          tableHtml += `<tr style="background:${rowBg}; border-bottom:1px solid ${borderColor};">`;
+          tableHtml += `<td style="padding:6px 10px; text-align:center; color:#64748b;">${idx + 1}</td>`;
+          if (isMultiModel) {
+            tableHtml += `<td style="padding:6px 10px;"><span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:${modelFgPalette[mIdx % modelFgPalette.length]}; flex-shrink:0;"></span><span style="font-size:10px; font-weight:600; color:${modelFgPalette[mIdx % modelFgPalette.length]};">${modelCode}</span></span></td>`;
+          }
+          tableHtml += `<td style="padding:6px 10px; font-family:monospace;">${trayIdLabel}</td>`;
+          tableHtml += `<td style="padding:6px 10px; text-align:center; color:#475569;">${tray.original_qty || 0}</td>`;
+          tableHtml += `<td style="padding:6px 10px; text-align:center; font-weight:700; color:#028084;">${tray.delink_qty || 0}</td>`;
+          tableHtml += `<td style="padding:6px 10px; text-align:center; font-weight:600; color:${(tray.excess_qty || 0) > 0 ? '#e67e22' : '#bbb'};">${tray.excess_qty || 0}</td>`;
+          tableHtml += '</tr>';
+        });
+      }
+      tableHtml += '</tbody></table></div>';
+
+      // Half-filled section
+      let halfHtml = '';
+      if (halfFilledInfo && halfFilledInfo.length > 0) {
+        const totalHalf = halfFilledInfo.reduce((s, t) => s + (t.qty || 0), 0);
+        halfHtml += `<div style="margin-top:16px; padding:10px 14px; background:linear-gradient(135deg,#fff8e1,#fff3e0); border-radius:8px; border:1px solid #f39c12;">`;
+        halfHtml += `<div style="font-size:12px; font-weight:700; color:#e67e22; margin-bottom:8px;">Excess / Half-Filled Trays — ${totalHalf} qty</div>`;
+        halfHtml += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+        halfFilledInfo.forEach((tray) => {
+          const isTop = tray.is_top_half_filled;
+          const tagColor = isTop ? '#028084' : '#6f42c1';
+          const tagLabel = isTop ? '★ Top' : 'Excess';
+          halfHtml += `<div style="background:#fff; border:1px solid ${tagColor}40; border-radius:8px; padding:6px 12px; font-size:11px;">`;
+          halfHtml += `<div style="font-weight:700; font-family:monospace;">${tray.tray_id || '—'}</div>`;
+          halfHtml += `<div style="color:#555; margin-top:2px;">Qty: <strong>${tray.qty || 0}</strong></div>`;
+          halfHtml += `<div style="margin-top:3px;"><span style="background:${tagColor}; color:#fff; border-radius:10px; padding:1px 7px; font-size:9px; font-weight:700;">${tagLabel}</span></div>`;
+          halfHtml += '</div>';
+        });
+        halfHtml += '</div></div>';
+      }
+
+      document.getElementById('delinkTrayViewTable').innerHTML = legendHtml + tableHtml + halfHtml;
       const modal = document.getElementById('delinkTrayViewModal');
       if (modal) modal.style.display = 'flex';
     });
   });
-  // Close modal handler
+
+  // Close modal
   const closeBtn = document.getElementById('closeDelinkTrayViewModal');
   if (closeBtn) {
     closeBtn.addEventListener('click', function() {
@@ -3209,51 +3242,45 @@ document.addEventListener("DOMContentLoaded", function () {
 <!-- ✅ Multi-Model Circle Indicators Script (Completed Table) -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
-  // Color palette for circles
-  const colorPalette = [
-    '#007bff', // Blue
-    '#28a745', // Green
-    '#ffc107', // Yellow
-    '#6f42c1', // Purple
-    '#dc3545', // Red
-    '#17a2b8', // Cyan
-    '#fd7e14', // Orange
-    '#e83e8c'  // Pink
+  const circleColors = [
+    '#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#e65100','#c0226e','#388e3c'
   ];
 
-  // Initialize multi-model circles with colors
-  const multiModelContainers = document.querySelectorAll('.multi-model-circles-container');
-  
-  multiModelContainers.forEach(container => {
-    const circles = container.querySelectorAll('.multi-model-circle');
-    
-    circles.forEach((circle, index) => {
+  document.querySelectorAll('.multi-model-circles-container').forEach(container => {
+    container.querySelectorAll('.multi-model-circle').forEach((circle, index) => {
       const indicator = circle.querySelector('.circle-indicator');
-      const colorIndex = index % colorPalette.length;
-      
-      // Assign color to circle
+      const color = circleColors[index % circleColors.length];
+
+      // Set circle background
       if (indicator) {
-        indicator.style.backgroundColor = colorPalette[colorIndex];
-        indicator.setAttribute('data-color', colorPalette[colorIndex]);
+        indicator.style.backgroundColor = color;
+        indicator.setAttribute('data-color', color);
       }
-      
-      // Setup hover tooltip
+
+      // Tooltip: show ONLY for THIS circle — strictly scoped
       const tooltip = circle.querySelector('.multi-model-tooltip');
-      if (tooltip) {
-        circle.addEventListener('mouseenter', function() {
-          tooltip.style.opacity = '1';
-          tooltip.style.pointerEvents = 'auto';
+      if (!tooltip) return;
+
+      // Close all sibling tooltips first, then show only this one
+      circle.addEventListener('mouseenter', function(e) {
+        e.stopPropagation();
+        // Hide all tooltips in this container first
+        container.querySelectorAll('.multi-model-tooltip').forEach(t => {
+          t.style.opacity = '0';
+          t.style.pointerEvents = 'none';
         });
-        
-        circle.addEventListener('mouseleave', function() {
-          tooltip.style.opacity = '0';
-          tooltip.style.pointerEvents = 'none';
-        });
-      }
+        // Show only this tooltip
+        tooltip.style.opacity = '1';
+        tooltip.style.pointerEvents = 'auto';
+        tooltip.style.zIndex = '99999';
+      });
+
+      circle.addEventListener('mouseleave', function() {
+        tooltip.style.opacity = '0';
+        tooltip.style.pointerEvents = 'none';
+      });
     });
   });
-
-  console.log(`✅ Multi-model circles initialized for ${multiModelContainers.length} rows`);
 });
 </script>
 
