@@ -162,6 +162,26 @@ class InprocessInspectionView(TemplateView):
             print(f"🔧 Processing JigDetail #{idx+1} (ID: {jig_detail.id})")
             print(f"   lot_id: {jig_detail.lot_id}")
             
+            # ✅ FIX: Build multi-model allocation string exactly like JigCompletedTable
+            # Template expects: "model1:qty1,model2:qty2,model3:qty3" for split(",") and get_model_name/get_model_qty filters
+            if jig_detail.is_multi_model and jig_detail.multi_model_allocation:
+                try:
+                    models_list = []
+                    for m in jig_detail.multi_model_allocation:
+                        if isinstance(m, dict):
+                            model_name = m.get('model_name', m.get('model', ''))
+                            qty = m.get('allocated_qty', 0)
+                            if model_name:
+                                models_list.append(f"{model_name}:{qty}")
+                    no_of_model_cases_str = ','.join(models_list) if models_list else ''
+                    if no_of_model_cases_str:
+                        jig_detail.no_of_model_cases = no_of_model_cases_str
+                        # Also provide a string copy for templates that call split()
+                        jig_detail.no_of_model_cases_str = no_of_model_cases_str
+                        print(f"   ✅ Built no_of_model_cases from multi_model_allocation: {no_of_model_cases_str}")
+                except Exception as e:
+                    print(f"   ⚠️ Failed to process multi_model_allocation: {e}")
+            
             # Get multiple lot_ids exactly like JigCompletedTable
             multiple_lot_ids = self.get_multiple_lot_ids(jig_detail)
             print(f"   multiple_lot_ids found: {multiple_lot_ids}")
@@ -761,6 +781,22 @@ class InprocessInspectionView(TemplateView):
             jig_detail.plating_color = models_data[0].get('plating_color', 'No Plating Color') if models_data else 'No Plating Color'
             jig_detail.polish_finish = models_data[0].get('polish_finish', 'N/A') if models_data else 'N/A'
             jig_detail.no_of_model_cases = [m.get('model_name', '') for m in models_data]  # For circles display
+            # Provide a string copy in "model:qty" format for templates that call split() + get_model_name/get_model_qty
+            try:
+                mm = getattr(jig_detail, 'multi_model_allocation', None)
+                if mm and isinstance(mm, list):
+                    mm_parts = []
+                    for _m in mm:
+                        if isinstance(_m, dict):
+                            _name = _m.get('model_name', _m.get('model', ''))
+                            _qty = _m.get('allocated_qty', 0)
+                            if _name:
+                                mm_parts.append(f"{_name}:{_qty}")
+                    jig_detail.no_of_model_cases_str = ','.join(mm_parts) if mm_parts else ','.join([str(m.get('model_name', '')) for m in models_data if m.get('model_name')])
+                else:
+                    jig_detail.no_of_model_cases_str = ','.join([str(m.get('model_name', '')) for m in models_data if m.get('model_name')])
+            except Exception:
+                jig_detail.no_of_model_cases_str = ''
         else:
             # No models_data available — build best-effort from draft_data
             model_presents = draft_data.get('model_no', None)
@@ -776,6 +812,11 @@ class InprocessInspectionView(TemplateView):
             if original_no_of_model_cases:
                 parsed_models = self.parse_model_cases(original_no_of_model_cases)
                 jig_detail.no_of_model_cases = parsed_models
+                # Also provide a string copy for templates that call split()
+                try:
+                    jig_detail.no_of_model_cases_str = ','.join([str(x) for x in parsed_models])
+                except Exception:
+                    jig_detail.no_of_model_cases_str = ''
                 print(f"   ✅ Parsed no_of_model_cases from draft_data: {parsed_models}")
             else:
                 jig_detail.no_of_model_cases = []
@@ -1119,6 +1160,11 @@ class InprocessInspectionView(TemplateView):
                     
                     # Populate the required fields for frontend
                     jig_detail.no_of_model_cases = model_numbers
+                    # Also provide a string copy for templates that call split()
+                    try:
+                        jig_detail.no_of_model_cases_str = ','.join([str(x) for x in model_numbers])
+                    except Exception:
+                        jig_detail.no_of_model_cases_str = ''
                     jig_detail.model_colors = jig_model_colors
                     jig_detail.model_images = jig_model_images
                     

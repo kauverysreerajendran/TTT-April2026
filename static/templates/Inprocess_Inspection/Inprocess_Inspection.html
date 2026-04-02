@@ -106,6 +106,44 @@
       transform: scale(1.1);
       box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
+
+  /* Multi-Model Circle Indicators (Inprocess Inspection) */
+  .multi-model-circles-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .multi-model-circle {
+    position: relative;
+    display: inline-block;
+  }
+  .circle-indicator {
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .circle-indicator:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+  }
+  .multi-model-tooltip {
+    position: absolute;
+    background: linear-gradient(135deg,#1e293b,#334155);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 99999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
   /* Enhanced bath number dropdown styling */
   .bath-number-select {
       transition: all 0.3s ease;
@@ -1305,36 +1343,54 @@
                         {{ jig_detail.jig_loaded_date_time|date:"d-M-y" }}<br>
                         <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ jig_detail.jig_loaded_date_time|date:"h:i A" }}</span>
                         </td>
-                        <!-- Model Presents - Single color circle with expand arrow -->
-                        <td  {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %} class="model-stock-no-cell" 
+                        <!-- Model Presents - Multi-model circles or single circle -->
+                        <td  {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %} class="model-stock-no-cell"
+                        data-multi-model='{{ jig_detail.multi_model_allocation|json_encode }}'
                         data-images='{{ jig_detail.model_images|json_encode }}'
                         data-model-colors='{{ jig_detail.model_colors|json_encode }}'
                         data-model-list='{{ jig_detail.no_of_model_cases|json_encode }}'>
-                        <span class="model-stock-no-text" style="cursor:pointer;" {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        {% if jig_detail.no_of_model_cases %}
+                        {% if jig_detail.is_multi_model and jig_detail.no_of_model_cases_str %}
+                            <div class="multi-model-circles-container mm-gallery-trigger" data-lot-id="{{ jig_detail.lot_id }}" title="Click to view all models" style="cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:3px;max-width:120px;">
+                              {% with models=jig_detail.no_of_model_cases_str|default:""|split:"," %}
+                                {% for model in models %}
+                                  {% if model|length > 0 %}
+                                    {% with model_name=model|get_model_name model_qty=model|get_model_qty %}
+                                    <div class="multi-model-circle"
+                                         data-model="{{ model_name|safe }}"
+                                         data-model-qty="{{ model_qty }}"
+                                         data-model-index="{{ forloop.counter }}"
+                                         style="display:inline-block;position:relative;flex-shrink:0;">
+                                      <div class="circle-indicator"
+                                           style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:8px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.25);transition:all 0.2s ease;"
+                                           data-color-index="{{ forloop.counter0 }}">
+                                        {{ forloop.counter }}
+                                      </div>
+                                      <div class="multi-model-tooltip"
+                                           style="position:absolute;background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:6px 10px;border-radius:6px;font-size:10px;white-space:nowrap;z-index:99999;opacity:0;pointer-events:none;transition:opacity 0.18s ease;top:calc(100% + 6px);left:50%;transform:translateX(-50%);box-shadow:0 4px 12px rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.08);">
+                                        <div style="font-size:8px;color:#94a3b8;margin-bottom:2px;">M{{ forloop.counter }}</div>
+                                        <strong style="font-size:11px;">{{ model_name|safe }}</strong><br>
+                                        <span style="font-size:9px;color:#7dd3d8;">Qty: {{ model_qty }}</span>
+                                      </div>
+                                    </div>
+                                    {% endwith %}
+                                  {% endif %}
+                                {% endfor %}
+                              {% endwith %}
+                            </div>
+                        {% elif jig_detail.no_of_model_cases %}
                             {% with first_model=jig_detail.no_of_model_cases.0 %}
-                                <!-- Display only ONE circle for the first model -->
+                            <span class="mm-gallery-trigger" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;max-width:120px;" title="Click to view model">
                                 {% if jig_detail.model_colors %}
-                                    <span class="model-circle" style="background:{{ jig_detail.model_colors|get_item:first_model }};margin-right:6px;"></span>
+                                    <span class="model-circle" style="background:{{ jig_detail.model_colors|get_item:first_model }};width:16px;height:16px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
                                 {% else %}
-                                    <span class="model-circle" style="background:#ccc;margin-right:6px;"></span>
+                                    <span class="model-circle" style="background:#ccc;width:16px;height:16px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
                                 {% endif %}
-                                <!-- Display model number as reference if available -->
-                                <span style="font-size:11px;color:#666;vertical-align:middle;">{{ first_model }}</span>
+                                <span style="font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ first_model }}</span>
+                            </span>
                             {% endwith %}
                         {% else %}
-                            <!-- No model data: display placeholder -->
-                            <span class="model-circle" style="background:#ccc;margin-right:6px;"></span>
-                            <span style="font-size:11px;color:#999;vertical-align:middle;">N/A</span>
+                            <span style="font-size:10px;color:#999;">N/A</span>
                         {% endif %}
-                        <!-- Expand menu icon to open gallery -->
-                        <span class="expand-model-remark" style="display:inline-block;width:18px;height:18px;vertical-align:middle;cursor:pointer;margin-left:4px;" title="View model gallery">
-                           <svg width="18" height="18" viewBox="0 0 18 18">
-                              <circle cx="9" cy="9" r="8" fill="#bbb"/>
-                              <polygon points="6,7 12,7 9,12" fill="#fff"/>
-                           </svg>
-                        </span>
-                        </span>
                         </td>
                         <!-- Plating Stock No from ModelMasterCreation -->
                                            <!--<td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}> 
@@ -1480,7 +1536,7 @@
                         <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>
                         <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
                            <!-- Tray Scan (B) - Green when bath number is saved, disabled otherwise -->
-                           <div title="Tray Scan"
+                           <div title="Bright"
                               class="d-flex align-items-center justify-content-center rounded-circle ms-1 tray-scan-status"
                               data-jig-id="{{ jig_detail.id }}"
                               style="width: 20px; height: 20px; 
@@ -2536,122 +2592,126 @@
      const modal = document.getElementById('modelRemarkModal');
      const closeBtn = document.getElementById('closeModelRemarkModal');
      const modalContent = document.getElementById('modelRemarkModalContent');
-   
-     document.querySelectorAll('.expand-model-remark').forEach(function(expandBtn) {
-       expandBtn.addEventListener('click', function(e) {
-         e.stopPropagation();
-         const cell = expandBtn.closest('.model-stock-no-cell');
-         if (!cell) return;
-   
-         try {
-           // Get dynamic data from data attributes
-           const modelImages = JSON.parse(cell.getAttribute('data-images') || '{}');
-           const modelColors = JSON.parse(cell.getAttribute('data-model-colors') || '{}');
-           const modelList = JSON.parse(cell.getAttribute('data-model-list') || '[]');
-   
-           // Build grid of images (3 columns max, responsive)
-           let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:18px 12px;justify-items:center;">`;
-           
-           modelList.forEach(function(modelNo, index) {
-             const color = modelColors[modelNo] || '#ccc';
-             const modelImageData = modelImages[modelNo] || {};
-             const firstImage = modelImageData.first_image || '/static/assets/images/imagePlaceholder.png';
-             
-             html += `
-               <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
-                 <span class="model-circle" style="background:${color};width:22px;height:22px;display:inline-block;margin-bottom:2px;"></span>
-                 <img src="${firstImage}" alt="${modelNo}" style="max-width:80px;max-height:80px;border-radius:8px;border:1px solid #eee;background:#fafafa;cursor:pointer;" onclick="showModelImages('${modelNo}', '${JSON.stringify(modelImageData.images || []).replace(/'/g, "\\'")}')"/>
-                 <div style="font-weight:600;color:#023E4DCC;font-size:0.98rem;text-align:center;word-break:break-all;">${modelNo}</div>
-               </div>
-             `;
+
+     function openGallery(cell) {
+       try {
+         // Prefer multi_model_allocation (has image URLs + qty for ALL models)
+         var rawMM = cell.getAttribute('data-multi-model') || '[]';
+         var mmAlloc = [];
+         try { mmAlloc = JSON.parse(rawMM); } catch(e) { mmAlloc = []; }
+
+         if (Array.isArray(mmAlloc) && mmAlloc.length > 0) {
+           // --- Multi-model: iterate all models from allocation ---
+           var circleColors = ['#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#e65100','#c0226e','#388e3c','#d81b60','#00838f'];
+           var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:16px 12px;justify-items:center;padding:4px 0;">';
+           mmAlloc.forEach(function(m, idx) {
+             var modelName  = m.model_name || m.model || '';
+             var qty        = m.allocated_qty || 0;
+             var imgUrl     = m.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
+             var color      = circleColors[idx % circleColors.length];
+             var roleLabel  = m.model_role === 'primary' ? '<span style="font-size:8px;background:#28a745;color:#fff;border-radius:3px;padding:1px 4px;margin-top:2px;display:inline-block;">Primary</span>' : '';
+             html += '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;" onclick="showModelImagesFull(' + JSON.stringify(modelName) + ',' + JSON.stringify([imgUrl]) + ')">'
+                   + '<div style="width:18px;height:18px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;flex-shrink:0;">' + (idx+1) + '</div>'
+                   + '<img src="' + imgUrl + '" alt="' + modelName + '" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;" />'
+                   + '<div style="font-weight:600;color:#023E4DCC;font-size:11px;text-align:center;word-break:break-all;line-height:1.2;">' + modelName + '</div>'
+                   + '<div style="font-size:10px;color:#555;">Qty: ' + qty + '</div>'
+                   + roleLabel
+                   + '</div>';
            });
-           html += `</div>`;
-   
+           html += '</div>';
            modalContent.innerHTML = html;
            modal.style.display = 'block';
-         } catch (error) {
-           console.error('Error parsing model data:', error);
-           modalContent.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Error loading model data</div>';
+         } else {
+           // --- Single model fallback ---
+           var modelImages = {};
+           var modelColors = {};
+           var modelList = [];
+           try { modelImages = JSON.parse(cell.getAttribute('data-images') || '{}'); } catch(e) {}
+           try { modelColors = JSON.parse(cell.getAttribute('data-model-colors') || '{}'); } catch(e) {}
+           try { modelList   = JSON.parse(cell.getAttribute('data-model-list') || '[]'); } catch(e) {}
+           if (!Array.isArray(modelList)) modelList = [];
+
+           var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:16px 12px;justify-items:center;padding:4px 0;">';
+           modelList.forEach(function(modelNo) {
+             var color = modelColors[modelNo] || '#ccc';
+             var imgData = modelImages[modelNo] || {};
+             var firstImage = (Array.isArray(imgData) ? imgData[0] : imgData.first_image) || '/static/assets/images/imagePlaceholder.png';
+             var allImages  = (Array.isArray(imgData) ? imgData : imgData.images) || [firstImage];
+             html += '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;" onclick="showModelImagesFull(' + JSON.stringify(modelNo) + ',' + JSON.stringify(allImages) + ')">'
+                   + '<span class="model-circle" style="background:' + color + ';width:16px;height:16px;border-radius:50%;display:inline-block;"></span>'
+                   + '<img src="' + firstImage + '" alt="' + modelNo + '" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;" />'
+                   + '<div style="font-weight:600;color:#023E4DCC;font-size:11px;text-align:center;word-break:break-all;">' + modelNo + '</div>'
+                   + '</div>';
+           });
+           html += '</div>';
+           modalContent.innerHTML = html;
            modal.style.display = 'block';
          }
+       } catch (error) {
+         console.error('Error building gallery:', error);
+         modalContent.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Error loading model data</div>';
+         modal.style.display = 'block';
+       }
+     }
+
+     // Click on mm-gallery-trigger (circles container OR single-model span)
+     document.querySelectorAll('.mm-gallery-trigger').forEach(function(trigger) {
+       trigger.addEventListener('click', function(e) {
+         e.stopPropagation();
+         var cell = trigger.closest('.model-stock-no-cell');
+         if (cell) openGallery(cell);
        });
      });
-   
-    closeBtn.addEventListener('click', function() {
-      window.location.reload(); 
-      modal.style.display = 'none';
-    });
-     
+
+     closeBtn.addEventListener('click', function() {
+       modal.style.display = 'none';
+     });
+
      window.addEventListener('click', function(e) {
-       if (modal.style.display === 'block' && !modal.contains(e.target) && !e.target.classList.contains('expand-model-remark')) {
+       if (modal.style.display === 'block' && !modal.contains(e.target) && !e.target.closest('.mm-gallery-trigger')) {
          modal.style.display = 'none';
        }
      });
    });
-   
-   // Function to show model images in a larger view
-   function showModelImages(modelNo, imagesJson) {
+
+   // Full-screen image viewer
+   function showModelImagesFull(modelNo, images) {
      try {
-       const images = JSON.parse(imagesJson);
-       if (images.length === 0) {
-         alert('No images available for ' + modelNo);
-         return;
-       }
-       
-       // Create image viewer modal
-       let imageModal = document.getElementById('modelImageViewer');
+       if (!images || images.length === 0) return;
+
+       var imageModal = document.getElementById('modelImageViewer');
        if (!imageModal) {
          imageModal = document.createElement('div');
          imageModal.id = 'modelImageViewer';
-         imageModal.style.cssText = `
-           position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-           background: rgba(0,0,0,0.8); z-index: 100000; display: none;
-           justify-content: center; align-items: center;
-         `;
+         imageModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.82);z-index:200000;display:none;justify-content:center;align-items:center;';
          document.body.appendChild(imageModal);
        }
-       
-       let currentIndex = 0;
-       
-       function updateImage() {
-         imageModal.innerHTML = `
-           <div style="position: relative; max-width: 90%; max-height: 90%; background: white; border-radius: 8px; overflow: hidden;">
-             <div style="position: absolute; top: 10px; right: 10px; font-size: 24px; cursor: pointer; color: #000; z-index: 2;" onclick="document.getElementById('modelImageViewer').style.display='none'">&times;</div>
-             <div style="padding: 20px; text-align: center;">
-               <h3 style="margin: 0 0 15px 0; color: #023E4DCC;">${modelNo}</h3>
-               <img src="${images[currentIndex]}" style="max-width: 100%; max-height: 70vh; object-fit: contain;" />
-               <div style="margin-top: 15px;">
-                 <button onclick="prevImage()" ${currentIndex === 0 ? 'disabled' : ''} style="margin: 0 10px; padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">Previous</button>
-                 <span style="margin: 0 15px; color: #666;">${currentIndex + 1} / ${images.length}</span>
-                 <button onclick="nextImage()" ${currentIndex === images.length - 1 ? 'disabled' : ''} style="margin: 0 10px; padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">Next</button>
-               </div>
-             </div>
-           </div>
-         `;
+
+       var currentIndex = 0;
+       function renderViewer() {
+         imageModal.innerHTML = '<div style="position:relative;max-width:92%;max-height:92%;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.4);">'
+           + '<div style="position:absolute;top:10px;right:14px;font-size:22px;cursor:pointer;color:#333;z-index:2;line-height:1;" onclick="document.getElementById(\'modelImageViewer\').style.display=\'none\'">&times;</div>'
+           + '<div style="padding:24px;text-align:center;">'
+           + '<h4 style="margin:0 0 12px 0;color:#023E4DCC;">' + modelNo + '</h4>'
+           + '<img src="' + images[currentIndex] + '" style="max-width:100%;max-height:65vh;object-fit:contain;" />'
+           + (images.length > 1 ? '<div style="margin-top:12px;">'
+               + '<button onclick="event.stopPropagation();window.__mmViewerIdx=Math.max(0,window.__mmViewerIdx-1);window.__mmRender();" ' + (currentIndex===0?'disabled':'') + ' style="margin:0 8px;padding:6px 14px;border:none;background:#007bff;color:#fff;border-radius:4px;cursor:pointer;">&#8592;</button>'
+               + '<span style="color:#555;font-size:13px;">' + (currentIndex+1) + ' / ' + images.length + '</span>'
+               + '<button onclick="event.stopPropagation();window.__mmViewerIdx=Math.min(' + (images.length-1) + ',window.__mmViewerIdx+1);window.__mmRender();" ' + (currentIndex===images.length-1?'disabled':'') + ' style="margin:0 8px;padding:6px 14px;border:none;background:#007bff;color:#fff;border-radius:4px;cursor:pointer;">&#8594;</button>'
+               + '</div>' : '')
+           + '</div></div>';
        }
-       
-       window.prevImage = function() {
-         if (currentIndex > 0) {
-           currentIndex--;
-           updateImage();
-         }
+       window.__mmViewerIdx = 0;
+       window.__mmRender = function() {
+         currentIndex = window.__mmViewerIdx;
+         renderViewer();
        };
-       
-       window.nextImage = function() {
-         if (currentIndex < images.length - 1) {
-           currentIndex++;
-           updateImage();
-         }
-       };
-       
-       updateImage();
+       renderViewer();
        imageModal.style.display = 'flex';
-       
-     } catch (error) {
-       console.error('Error showing images:', error);
-       alert('Error loading images');
-     }
+     } catch(e) { console.error('Image viewer error:', e); }
    }
+   // Keep old name as alias for backward compat
+   window.showModelImages = showModelImagesFull;
 </script>
 <!-- Rest of your existing scripts -->
 <script nonce="{{ csp_nonce }}">
@@ -3602,7 +3662,7 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Initialize all bath number dropdowns
     document.querySelectorAll('.bath-number-select').forEach(function(select) {
-        const bathType = select.getAttribute('data-bath-type') || 'Bright'; // Default to Bright
+        const bathType = select.getAttribute('data-bath-type') || 'B'; // Default to Bright
         
         console.log(`🔧 Initializing dropdown for bath type: ${bathType}`);
         
@@ -4007,6 +4067,41 @@ document.addEventListener("DOMContentLoaded", function () {
       circle.style.border = "1px solid " + style.border;
       cell.insertBefore(circle, cell.firstChild);
     }
+  });
+});
+</script>
+
+<!-- Multi-Model Circle Indicators Script (Inprocess Inspection) -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  var circleColors = [
+    '#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#e65100','#c0226e','#388e3c','#d81b60','#00838f'
+  ];
+  document.querySelectorAll('.multi-model-circles-container').forEach(function(container) {
+    container.querySelectorAll('.multi-model-circle').forEach(function(circle, index) {
+      var indicator = circle.querySelector('.circle-indicator');
+      var color = circleColors[index % circleColors.length];
+      if (indicator) {
+        indicator.style.backgroundColor = color;
+        indicator.setAttribute('data-color', color);
+      }
+      var tooltip = circle.querySelector('.multi-model-tooltip');
+      if (!tooltip) return;
+      // Tooltip hover: show/hide on the individual circle; do NOT stop clicks reaching the container
+      circle.addEventListener('mouseenter', function(e) {
+        container.querySelectorAll('.multi-model-tooltip').forEach(function(t) {
+          t.style.opacity = '0';
+          t.style.pointerEvents = 'none';
+        });
+        tooltip.style.opacity = '1';
+        tooltip.style.pointerEvents = 'auto';
+        tooltip.style.zIndex = '99999';
+      });
+      circle.addEventListener('mouseleave', function() {
+        tooltip.style.opacity = '0';
+        tooltip.style.pointerEvents = 'none';
+      });
+    });
   });
 });
 </script>
