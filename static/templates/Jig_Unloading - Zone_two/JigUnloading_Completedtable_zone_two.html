@@ -3,6 +3,7 @@
 {% load stock_filters %}
 {% load custom_tags %}
 {% block content %}
+
 <style>
   /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
@@ -1196,8 +1197,8 @@ body.add-model-mode #selectAllCheckbox {
     <div class="col-12 grid-margin stretch-card">
       <div class="card">
           <div class="card-body">
-            <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Jig Unloading Completed Table Zone II</h5>
-                      <!-- 🔥 NEW: Date Filter Section -->
+            <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Jig Unloading Completed Table</h5>
+                            <!-- 🔥 NEW: Date Filter Section -->
           <div class="calendar-bar">
             <div class="date-input-group">
               <label for="from-date-simple" style="font-weight: 600; color: #028084; margin-right: 8px;">From Date:</label>
@@ -1261,10 +1262,11 @@ body.add-model-mode #selectAllCheckbox {
                 <tbody>
                   {% for jig_detail in completed_unloads %}
                     <tr class="highlighted-tray-scan" data-lot-id="{{ jig_detail.lot_id }}" data-lot-id-quantities='{{ jig_detail.lot_id_quantities|json_encode }}' data-lot-id-model-map='{{ jig_detail.lot_id_model_map|json_encode }}'>
-                      <!-- S.No with checkbox -->
-                      <td><span class="sno-value">{{ forloop.counter }}</span>
-                      </td>
-                      
+                      <!-- S.No-->
+
+                     <td>{{forloop.counter }}
+
+                    </td>                       
                       <!-- JIG ID -->
                       <td>{{ jig_detail.jig_qr_id }}</td>
                       
@@ -1278,10 +1280,10 @@ body.add-model-mode #selectAllCheckbox {
                       <td>{{ jig_detail.all_polishing_stk_nos|join:", " }}</td>
 
                                             
-                      <!-- Plating Color -->
-                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur"  {% endif %}>
-                        {{ jig_detail.plating_color|highlight_plating_color|safe|default:"N/A" }}
-                      </td>                      
+                    <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      {{ jig_detail.plating_color|highlight_plating_color|safe|default:"N/A" }}
+                    </td>
+                      
                       <!-- Polish Finish -->
                       <td>{{ jig_detail.polish_finish|default:"N/A" }}</td>
 
@@ -1297,14 +1299,15 @@ body.add-model-mode #selectAllCheckbox {
                         {% endfor %}
                       </td>
                       
-                     <!-- Tray Cate - Capacity (now uses tray_type and tray_capacity) -->
-                      <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <!-- Tray Cate - Capacity -->
+                        <td {% if jig_detail.unload_hold_lot %} class="row-inactive-blur" {% endif %}>
                         {% if jig_detail.tray_type and jig_detail.tray_capacity %}
                           {% if jig_detail.tray_capacity == 20 %}
                             <div class="tray-capacity-badge normal-tray"
                                  style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
-                                 title="Normal Tray - 20 Capacity (Custom for Jig Unloading Zone 2)">
-                              Normal - 20                             </div>
+                                 title="Normal Tray - 20 Capacity (Custom for Jig Unloading)">
+                              Normal - 20
+                            </div>
                           {% elif jig_detail.tray_capacity == 12 %}
                             <div class="tray-capacity-badge jumbo-tray"
                                  style="background: #28a745; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
@@ -1394,15 +1397,15 @@ body.add-model-mode #selectAllCheckbox {
                       <!-- Batch Status -->
                       <td>
                         {% if jig_detail.last_process_module == "Jig Unloading" %}
-                          <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                             style="border: 1px solid #0d5d17; background-color: #F0F5B7; color: #727c08; font-size: 13px; white-space: nowrap; padding: 5px;">
-                            Yet to Release
-                          </div>
+                          Yet to release
+                      </div>
                         {% else %}
                           <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                            style="border: 2px solid #007bff; background-color: #e3f2fd; color: #0d47a1; font-size: 12px; white-space: nowrap; padding: 6px;">
-                            Released
-                          </div>
+                            style="border: 1px solid #0d5d17; background-color: #c5f9c2; color: #2f801b; font-size: 13px; white-space: nowrap; padding: 5px;">
+                          Released
+                        </div>
                         {% endif %}
                       </td>
                       
@@ -1766,7 +1769,7 @@ document.addEventListener("DOMContentLoaded", function () {
       let images = [];
       if (lotId && lotId !== 'N/A') {
         try {
-          const resp = await fetch(`/JigUnloading_Zone2/JU_Zone_get_model_images/?lot_id=${encodeURIComponent(lotId)}`);
+          const resp = await fetch(`/jig_unloading/get_model_images/?lot_id=${encodeURIComponent(lotId)}`);
           const result = await resp.json();
           if (result.success && result.image) {
             images = [result.image]; // Use the single image from backend
@@ -1802,7 +1805,7 @@ document.addEventListener("DOMContentLoaded", function () {
       let traysData = [];
       try {
         const params = new URLSearchParams({ lot_id: lotId });
-        const resp = await fetch(`/JigUnloading_Zone2/JU_Zone_view_tray_list/?${params}`);
+        const resp = await fetch(`/jig_unloading/jig_unload_view_tray_list/?${params}`);
         const result = await resp.json();
         
         console.log("📡 Tray data API response:", result);
@@ -1818,46 +1821,48 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       // ✅ CREATE buildTableHTML FUNCTION AND STORE IN MODAL
-      function buildTableHTML(showValidationColumn = false) {
-        let html = `
-          <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
-            <thead>
-              <tr>
-                <th style="width:50px;">S.no</th>
-                <th>Tray ID</th>
-                <th>Tray Qty</th>
-                ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
-              </tr>
-            </thead>
-            <tbody>
-        `;
-        
-        if (traysData.length > 0) {
-          traysData.forEach((tray, idx) => {
-            html += `
-              <tr>
-                <td>${idx + 1}</td>
-                <td>
-                  <input type="text" class="form-control" value="${tray.tray_id || 'N/A'}" readonly style="width: 100%;" />
-                </td>
-                <td>
-                  <input type="number" class="form-control" value="${tray.tray_quantity || '0'}" readonly style="width: 100%;" />
-                </td>
-                ${showValidationColumn ? `
-                  <td>
-                    <div class="validation-status">
-                      <div class="status-icon fail">
-                        <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                      </div>
-                      <div class="status-icon pass">
-                        <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                      </div>
-                    </div>
-                  </td>
-                ` : ''}
-              </tr>
-            `;
-          });
+function buildTableHTML(showValidationColumn = false) {
+  let html = `
+    <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
+      <thead>
+        <tr>
+          <th style="width:50px;">S.no</th>
+          <th>Tray ID</th>
+          <th>Tray Qty</th>
+          ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  if (traysData.length > 0) {
+    traysData.forEach((tray, idx) => {
+      // Check if tray.top_tray is true
+      let sno = tray.top_tray ? `${idx + 1} (Top Tray)` : `${idx + 1}`;
+      html += `
+        <tr>
+          <td>${sno}</td>
+          <td>
+            <input type="text" class="form-control" value="${tray.tray_id || 'N/A'}" readonly style="width: 100%;" />
+          </td>
+          <td>
+            <input type="number" class="form-control" value="${tray.tray_quantity || '0'}" readonly style="width: 100%;" />
+          </td>
+          ${showValidationColumn ? `
+            <td>
+              <div class="validation-status">
+                <div class="status-icon fail">
+                  <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                </div>
+                <div class="status-icon pass">
+                  <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                </div>
+              </div>
+            </td>
+          ` : ''}
+        </tr>
+      `;
+    });
           console.log("✅ Table built with", traysData.length, "rows");
         } else {
           html += `
@@ -1874,6 +1879,8 @@ document.addEventListener("DOMContentLoaded", function () {
         return html;
       }
 
+
+      
       // ✅ STORE THE FUNCTION AND DATA IN MODAL OBJECT
       modal.buildTableHTML = buildTableHTML;
       modal.traysData = traysData;
@@ -1994,7 +2001,7 @@ document.addEventListener("DOMContentLoaded", function () {
         hideError();
         console.log("🔄 Making API call to validate tray...");
 
-        fetch("/JigUnloading_Zone2/JU_Zone_after_tray_validate/", {
+        fetch("/jig_unloading/jig_after_tray_validate/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2627,351 +2634,11 @@ document.addEventListener("DOMContentLoaded", function() {
   console.log('✅ Enhanced date filtering initialization complete');
 });
 </script>
-
-<!-- 🔥 ENHANCED: Date Filter JavaScript with Future Date Validation -->
-<script nonce="{{ csp_nonce }}">
-document.addEventListener("DOMContentLoaded", function() {
-  console.log('🔄 Initializing enhanced date filtering with future date validation...');
-  
-  // ✅ Use specific IDs
-  const fromInput = document.getElementById('from-date-simple');
-  const toInput = document.getElementById('to-date-simple');
-  const searchBtn = document.getElementById('search-date-range-simple');
-  const clearBtn = document.getElementById('clear-date-filter-simple');
-  const filterIndicatorSimple = document.getElementById('filterActiveIndicator');
-  
-  console.log('📋 Elements found:');
-  console.log('- From input:', fromInput);
-  console.log('- To input:', toInput);
-  console.log('- Search button:', searchBtn);
-  console.log('- Clear button:', clearBtn);
-  console.log('- Filter indicator:', filterIndicatorSimple);
-  
-  // Get today's date in YYYY-MM-DD format
-  const today = new Date();
-  const todayString = today.getFullYear() + '-' + 
-                      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
-                      String(today.getDate()).padStart(2, '0');
-  
-  console.log('📅 Today:', todayString);
-  
-  // ✅ Set max attribute to today's date for both inputs
-  if (fromInput) {
-    fromInput.max = todayString;
-    console.log('📅 Set max date for from input:', fromInput.max);
-  }
-  if (toInput) {
-    toInput.max = todayString;
-    console.log('📅 Set max date for to input:', toInput.max);
-  }
-  
-  // ✅ Enhanced validation function
-  function validateDateInput(input, inputName) {
-    const selectedDate = input.value;
-    const selectedDateObj = new Date(selectedDate);
-    const todayObj = new Date(todayString);
-    
-    console.log(`🔍 Validating ${inputName}:`, selectedDate);
-    console.log(`🔍 Selected date object:`, selectedDateObj);
-    console.log(`🔍 Today object:`, todayObj);
-    
-    // Reset styles first
-    input.style.backgroundColor = '';
-    input.style.borderColor = '';
-    input.style.color = '';
-    
-    if (selectedDate && selectedDateObj > todayObj) {
-      console.log(`❌ ${inputName} is in the future!`);
-      
-      // Apply red styling
-      input.style.backgroundColor = '#ffebee';
-      input.style.borderColor = '#f44336';
-      input.style.color = '#d32f2f';
-      
-      // Show notification
-      if (typeof Swal !== 'undefined') {
-        Swal.fire({
-          icon: 'error',
-          title: 'Invalid Date Selection',
-          text: `${inputName} cannot be a future date. Please select today or an earlier date.`,
-          timer: 3000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        });
-      } else {
-        // Fallback notification
-        showNotification(`${inputName} cannot be a future date!`, 'error');
-      }
-      
-      // Reset to today's date
-      input.value = todayString;
-      
-      // Remove red styling after reset
-      setTimeout(() => {
-        input.style.backgroundColor = '';
-        input.style.borderColor = '#028084';
-        input.style.color = '#028084';
-      }, 100);
-      
-      return false;
-    }
-    
-    // Valid date - apply success styling
-    if (selectedDate) {
-      input.style.backgroundColor = '#e8f5e8';
-      input.style.borderColor = '#28a745';
-      input.style.color = '#155724';
-      
-      // Remove success styling after 2 seconds
-      setTimeout(() => {
-        input.style.backgroundColor = '';
-        input.style.borderColor = '#028084';
-        input.style.color = '#028084';
-      }, 2000);
-    }
-    
-    return true;
-  }
-  
-  // ✅ Fallback notification function
-  function showNotification(message, type) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: ${type === 'error' ? '#f44336' : '#4caf50'};
-      color: white;
-      padding: 12px 20px;
-      border-radius: 6px;
-      z-index: 10000;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      animation: slideIn 0.3s ease;
-    `;
-    notification.textContent = message;
-    
-    // Add animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-    `;
-    document.head.appendChild(style);
-    
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      notification.remove();
-      style.remove();
-    }, 3000);
-  }
-  
-  // Check if we're in filter mode by looking at URL parameters
-  const urlParams = new URLSearchParams(window.location.search);
-  const hasFromDateParam = urlParams.has('from_date') && urlParams.get('from_date');
-  const hasToDateParam = urlParams.has('to_date') && urlParams.get('to_date');
-  const isFilterMode = hasFromDateParam && hasToDateParam;
-  
-  // Show "Filter Active" text ONLY if actual URL filter parameters exist
-  if (isFilterMode && filterIndicatorSimple) {
-    filterIndicatorSimple.style.display = 'block';
-    console.log('Filter mode detected - showing indicator');
-  } else {
-    if (filterIndicatorSimple) {
-      filterIndicatorSimple.style.display = 'none';
-    }
-    console.log('No filter mode - hiding indicator');
-  }
-  
-  // ✅ Set dates based on URL parameters or defaults
-  function setDatesFromUrlOrDefaults() {
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(today.getDate() - 1);
-    
-    const formatDate = (date) => {
-      return date.getFullYear() + '-' + 
-             String(date.getMonth() + 1).padStart(2, '0') + '-' + 
-             String(date.getDate()).padStart(2, '0');
-    };
-    
-    // If in filter mode, populate inputs with URL parameter values
-    if (isFilterMode) {
-      const fromDateParam = urlParams.get('from_date');
-      const toDateParam = urlParams.get('to_date');
-      
-      if (fromInput && fromDateParam) {
-        fromInput.value = fromDateParam;
-        validateDateInput(fromInput, 'From Date');
-        console.log('📅 Set from date from URL:', fromInput.value);
-      }
-      
-      if (toInput && toDateParam) {
-        toInput.value = toDateParam;
-        validateDateInput(toInput, 'To Date');
-        console.log('📅 Set to date from URL:', toInput.value);
-      }
-    } else {
-      // Only set defaults if inputs are completely empty and we're not in filter mode
-      if (fromInput && !fromInput.value) {
-        fromInput.value = formatDate(twoDaysAgo);
-        console.log('📅 Set default from date:', fromInput.value);
-      }
-      
-      if (toInput && !toInput.value) {
-        toInput.value = formatDate(today);
-        console.log('📅 Set default to date:', toInput.value);
-      }
-    }
-  }
-  
-  // Call the function to set dates
-  setDatesFromUrlOrDefaults();
-  
-  // ✅ Enhanced date validation with future date checking
-  if (fromInput && toInput) {
-    fromInput.addEventListener('change', function() {
-      console.log('📅 From date changed:', fromInput.value);
-      
-      if (validateDateInput(fromInput, 'From Date')) {
-        if (toInput.value && fromInput.value > toInput.value) {
-          toInput.value = fromInput.value;
-        }
-        toInput.min = fromInput.value;
-      }
-    });
-    
-    // Add blur event for additional validation
-    fromInput.addEventListener('blur', function() {
-      validateDateInput(fromInput, 'From Date');
-    });
-    
-    toInput.addEventListener('change', function() {
-      console.log('📅 To date changed:', toInput.value);
-      
-      if (validateDateInput(toInput, 'To Date')) {
-        if (fromInput.value && toInput.value < fromInput.value) {
-          fromInput.value = toInput.value;
-        }
-        fromInput.max = toInput.value;
-      }
-    });
-    
-    // Add blur event for additional validation
-    toInput.addEventListener('blur', function() {
-      validateDateInput(toInput, 'To Date');
-    });
-  }
-  
-  // ✅ Enhanced search functionality with validation
-  if (searchBtn) {
-    searchBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      
-      const fromDate = fromInput ? fromInput.value : '';
-      const toDate = toInput ? toInput.value : '';
-      
-      console.log('🔍 Search clicked - From:', fromDate, 'To:', toDate);
-      
-      if (!fromDate || !toDate) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Date Selection Required',
-            text: 'Please select both start and end dates.',
-            timer: 2000,
-            showConfirmButton: false
-          });
-        } else {
-          showNotification('Please select both start and end dates.', 'error');
-        }
-        return;
-      }
-      
-      // Validate dates are not in the future
-      const fromDateObj = new Date(fromDate);
-      const toDateObj = new Date(toDate);
-      const todayObj = new Date(todayString);
-      
-      if (fromDateObj > todayObj || toDateObj > todayObj) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'error',
-            title: 'Invalid Date Range',
-            text: 'Selected dates cannot be in the future. Please select today or earlier dates.',
-            timer: 3000,
-            showConfirmButton: false
-          });
-        } else {
-          showNotification('Selected dates cannot be in the future!', 'error');
-        }
-        return;
-      }
-      
-      if (new Date(fromDate) > new Date(toDate)) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'error',
-            title: 'Invalid Date Range',
-            text: 'Start date must be before or equal to end date.',
-            timer: 2000,
-            showConfirmButton: false
-          });
-        } else {
-          showNotification('Start date must be before or equal to end date.', 'error');
-        }
-        return;
-      }
-      
-      // Construct URL
-      const currentUrl = window.location.href.split('?')[0];
-      const newUrl = `${currentUrl}?from_date=${fromDate}&to_date=${toDate}`;
-      console.log('🔄 Redirecting to:', newUrl);
-      window.location.href = newUrl;
-    });
-  } else {
-    console.error('❌ Search button not found with ID: search-date-range-simple');
-  }
-  
-  // ✅ Clear functionality (prevents cache/flickering issues)
-  if (clearBtn) {
-    clearBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      
-      // Reset input styles
-      if (fromInput) {
-        fromInput.style.backgroundColor = '';
-        fromInput.style.borderColor = '';
-        fromInput.style.color = '';
-      }
-      if (toInput) {
-        toInput.style.backgroundColor = '';
-        toInput.style.borderColor = '';
-        toInput.style.color = '';
-      }
-      
-      // Immediately redirect to clean URL without date parameters
-      const currentUrl = window.location.href.split('?')[0];
-      console.log('🔄 Redirecting to:', currentUrl);
-      window.location.href = currentUrl;
-    });
-  } else {
-    console.error('❌ Clear button not found with ID: clear-date-filter-simple');
-  }
-  
-  console.log('✅ Enhanced date filtering initialization complete');
-});
-</script>
 <script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function () {
   // Get all table rows
   document.querySelectorAll("#order-listing tbody tr").forEach(function (row) {
-    // For Jig Unloading Zone 2, plating color is in the 6th column (index 5)
+    // For Jig Unloading, plating color is in the 6th column (index 5)
     // Column structure: S.No(0), JIG ID(1), Last Updated(2), Model Presents(3), Polishing Stk No(4), Plating Color(5)
     var cell = row.children[5]; // Plating Color column
     
@@ -3127,6 +2794,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 </script>
+
 <!-- Professional Color Verification and Auto-Focus Script -->
 <script nonce="{{ csp_nonce }}">
 // 🎨 Professional Color Verification UI Update Function
@@ -3140,13 +2808,16 @@ function updateColorVerificationUI(platingColor, trayIdColor, trayIdPrefix, mode
     console.log('⚠️ Color verification UI elements not found');
     return;
   }
-  
-  // Create status text with plating stock number and model type
+
+  // Always use platingStkNo for status badge, mention Single/Multiple model
   const modelType = multipleModels ? 'Multiple Models' : 'Single Model';
-  const displayText = platingStkNo && platingStkNo !== 'No Plating Stock No' ? 
-    `${platingStkNo} - ${modelType}` : 
-    modelNumber ? `${modelNumber} - ${modelType}` : modelType;
-  
+  let displayText = '';
+  if (platingStkNo && platingStkNo !== 'No Plating Stock No') {
+    displayText = `${platingStkNo} - ${modelType}`;
+  } else {
+    displayText = modelNumber ? `${modelNumber} - ${modelType}` : modelType;
+  }
+
   // Default values if no plating color provided
   if (!platingColor || platingColor === 'Unknown') {
     colorIndicator.style.background = '#6c757d';
@@ -3157,10 +2828,10 @@ function updateColorVerificationUI(platingColor, trayIdColor, trayIdPrefix, mode
     trayRouting.textContent = 'Zone Detection...';
     return;
   }
-  
+
   // Set indicator color and text based on plating color
   colorText.textContent = platingColor;
-  
+
   if (platingColor === 'IPS') {
     colorIndicator.style.background = '#dc3545'; // Red
     statusBadge.textContent = displayText;
@@ -3183,7 +2854,7 @@ function updateColorVerificationUI(platingColor, trayIdColor, trayIdPrefix, mode
     trayRouting.textContent = 'Zone 2 (Dark Green Tray)';
     trayRouting.style.color = '#28a745';
   }
-  
+
   console.log('🎨 Color verification UI updated:', {
     platingColor,
     trayIdColor,
@@ -3195,7 +2866,7 @@ function updateColorVerificationUI(platingColor, trayIdColor, trayIdPrefix, mode
   });
 }
 
-// Enhanced auto-focus function for tray ID inputs (Zone 2)
+// Enhanced auto-focus function for tray ID inputs
 function enableTrayIdAutoFocus() {
   const uploadModal = document.getElementById('uploadChildModal');
   if (!uploadModal) {
@@ -3218,7 +2889,7 @@ function enableTrayIdAutoFocus() {
       firstTrayIdInput.style.boxShadow = '0 0 8px rgba(0, 123, 255, 0.5)';
       firstTrayIdInput.style.borderColor = '#007bff';
       
-      console.log('🎯 Zone 2 - Auto-focused on first tray input:', firstTrayIdInput);
+      console.log('🎯 Zone 1 - Auto-focused on first tray input:', firstTrayIdInput);
       
       // Remove visual indicator after 2 seconds
       setTimeout(() => {
@@ -3228,7 +2899,7 @@ function enableTrayIdAutoFocus() {
         }
       }, 2000);
     } else {
-      console.log('⚠️ Zone 2 - No tray ID input found for auto-focus');
+      console.log('⚠️ Zone 1 - No tray ID input found for auto-focus');
     }
   }, 400); // Increased delay to ensure modal is fully rendered
 }
@@ -3245,69 +2916,18 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
-  
   // Start observing when DOM is ready
   setTimeout(() => {
     const uploadModal = document.getElementById('uploadChildModal');
     if (uploadModal) {
       observer.observe(uploadModal, { attributes: true });
     }
-  }, 1000);
-
-  // --- CLIENT HELPERS: tray prefix validation and modal-scoped scanned set (Zone 2) ---
-  (function(){
-    try {
-      const uploadModal = document.getElementById('uploadChildModal');
-      if (uploadModal && !uploadModal._scannedTrays) uploadModal._scannedTrays = new Set();
-
-      function allowedPrefixesFor(platingColor, trayType) {
-        const color = String(platingColor || '').toUpperCase();
-        const type = String(trayType || '').toLowerCase();
-        if (color === 'IPS') return type === 'jumbo' ? ['JR'] : ['NR'];
-        if (color.includes('BI') || color.includes('BIC') || color.includes('BI-')) return type === 'jumbo' ? ['JL'] : ['NL'];
-        return type === 'jumbo' ? ['JD'] : ['ND'];
-      }
-
-      window.validateTrayPrefixLocalZone2 = function(trayId, platingColor, trayType) {
-        if (!trayId) return { valid: false, reason: 'Empty tray id' };
-        const prefix = String(trayId || '').split('-')[0] || '';
-        const allowed = allowedPrefixesFor(platingColor, trayType);
-        const candidate = prefix.toUpperCase().slice(0,2);
-        if (allowed.includes(candidate)) return { valid: true };
-        return { valid: false, reason: `Invalid prefix '${candidate}'. Expected: ${allowed.join(', ')}` };
-      };
-
-      window.maybeValidateTrayIdZone2 = function(trayInputEl) {
-        try {
-          const trayId = trayInputEl && trayInputEl.value && trayInputEl.value.trim();
-          const uploadModal = document.getElementById('uploadChildModal');
-          const platingColor = uploadModal ? uploadModal.getAttribute('data-plating-color') : '';
-          const trayType = uploadModal ? uploadModal.getAttribute('data-tray-type') : '';
-          const prefRes = window.validateTrayPrefixLocalZone2(trayId, platingColor, trayType);
-          if (!prefRes.valid) {
-            if (typeof showTrayValidationMessage === 'function') showTrayValidationMessage(trayInputEl, 'error', prefRes.reason);
-            return Promise.resolve({ success: false, error: prefRes.reason });
-          }
-          if (uploadModal && uploadModal._scannedTrays && uploadModal._scannedTrays.has(trayId.toLowerCase())) {
-            if (typeof showTrayValidationMessage === 'function') showTrayValidationMessage(trayInputEl, 'info', `${trayId} already validated`);
-            return Promise.resolve({ success: true, duplicate: true });
-          }
-          if (typeof validateTrayIdZone2 === 'function') {
-            return validateTrayIdZone2(trayInputEl).then(resp => {
-              if (resp && resp.success && uploadModal && uploadModal._scannedTrays) uploadModal._scannedTrays.add(trayId.toLowerCase());
-              return resp;
-            });
-          }
-          return Promise.resolve({ success: true });
-        } catch (e) {
-          console.error('maybeValidateTrayIdZone2 error', e);
-          return Promise.resolve({ success: false, error: String(e) });
-        }
-      };
-    } catch (e) {
-      console.warn('Zone2 Tray helper init failed', e);
+    // Change modal heading to 'Unloading Tray Scan for Zone 1 and Zone 2'
+    const modalHeading = document.querySelector('#uploadChildModal .modal-title, #uploadChildModal .modal-header h5');
+    if (modalHeading) {
+      modalHeading.textContent = 'Unloading Tray Scan for Zone 1 and Zone 2';
     }
-  })();
+  }, 1000);
 });
 </script>
 {% endblock content %}

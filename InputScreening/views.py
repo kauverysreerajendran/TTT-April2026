@@ -1569,9 +1569,13 @@ def validate_tray_type_compatibility(tray_id_obj, lot_id):
                 'expected_tray_type': expected_tray_type or 'Unknown'
             }
         
-        # Compare tray types (case-insensitive)
-        is_compatible = scanned_tray_type.upper() == expected_tray_type.upper()
-        
+        # Normalize both to pre-jig category (normal/jumbo) before comparing
+        def _norm_cat(tt):
+            t = (tt or '').upper()
+            return 'jumbo' if ('JUMBO' in t or t in ('JR', 'JD', 'JB', 'JL')) else 'normal'
+
+        is_compatible = _norm_cat(scanned_tray_type) == _norm_cat(expected_tray_type)
+
         if is_compatible:
             print(f"✅ [Tray Type Validation - TrayId] Compatible: {scanned_tray_type} matches {expected_tray_type}")
             return {

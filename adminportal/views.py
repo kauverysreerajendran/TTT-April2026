@@ -84,7 +84,6 @@ class IndexView(APIView):
         from Brass_QC.models import BrassTrayId as BQ_TrayId, Brass_Qc_Accepted_TrayScan, Brass_Qc_Accepted_TrayID_Store
         from Jig_Loading.models import JigCompleted, JigLoadingManualDraft
         from Jig_Unloading.models import JigUnloadAfterTable, JigUnloadDraft
-        from Spider_Spindle.models import SpiderJigDetails
 
         stats = []
 
@@ -275,24 +274,6 @@ class IndexView(APIView):
                 {'label': 'Accepted',   'value': na_acc,   'icon': 'mdi-check-circle'},
                 {'label': 'Rejected',   'value': na_rej,   'icon': 'mdi-close-circle'},
                 {'label': 'Completed',  'value': na_comp,  'icon': 'mdi-check-all'},
-            ],
-        })
-
-        # ── Spider Spindle ────────────────────────────────────────────────────
-        sp_total    = JigUnloadAfterTable.objects.filter(
-                          Q(na_qc_accptance=True) | Q(na_qc_few_cases_accptance=True)
-                      ).count()
-        sp_released = JigUnloadAfterTable.objects.filter(spider_release_lot=True).count()
-        sp_hold     = JigUnloadAfterTable.objects.filter(spider_hold_lot=True).count()
-        sp_comp     = SpiderJigDetails.objects.filter(unload_over=True).count()
-        stats.append({
-            'label': 'Spider Spindle', 'color': '#004d40', 'icon': 'mdi-spider-thread',
-            'total_qty': sp_total, 'released_qty': sp_released, 'hold_qty': sp_hold, 'completed_qty': sp_comp,
-            'display_stats': [
-                {'label': 'Total Lots', 'value': sp_total,    'icon': 'mdi-table'},
-                {'label': 'Released',   'value': sp_released, 'icon': 'mdi-check-circle'},
-                {'label': 'On Hold',    'value': sp_hold,     'icon': 'mdi-pause-circle'},
-                {'label': 'Completed',  'value': sp_comp,     'icon': 'mdi-check-all'},
             ],
         })
 

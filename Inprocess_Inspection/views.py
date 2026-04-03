@@ -2529,11 +2529,40 @@ class InprocessInspectionCompleteView(TemplateView):
                     if not hasattr(jig_detail, key) or getattr(jig_detail, key) is None:
                         setattr(jig_detail, key, value)
                 
+                # ---------------------------------------------------------------
+                # FIX: Parse no_of_model_cases into a proper list.
+                # Raw format: 'MODEL1 [lot_id]:qty | MODEL2 [lot_id]:qty'
+                # Iterating a raw string gives characters — we need model names.
+                # ---------------------------------------------------------------
+                raw_nmc = jig_detail.no_of_model_cases
+                if raw_nmc and isinstance(raw_nmc, str):
+                    # Pipe-separated: 'MODEL [lot]:qty | MODEL2 [lot]:qty'
+                    parsed_model_list = [
+                        part.split(' [')[0].strip()
+                        for part in raw_nmc.split(' | ')
+                        if part.strip() and part.split(' [')[0].strip()
+                    ]
+                elif raw_nmc and isinstance(raw_nmc, list):
+                    parsed_model_list = raw_nmc
+                else:
+                    parsed_model_list = []
+
+                # Fallback: use already-resolved lot plating_stk_nos when no_of_model_cases is empty
+                if not parsed_model_list:
+                    parsed_model_list = (
+                        getattr(jig_detail, 'lot_plating_stk_nos_list', None) or
+                        getattr(jig_detail, 'model_plating_stk_nos_list', None) or
+                        []
+                    )
+
+                # Replace raw string with clean parsed list so template iterates models
+                jig_detail.no_of_model_cases = parsed_model_list
+
                 # Keep existing model display logic for frontend (multiple model circles)
-                if jig_detail.no_of_model_cases:
-                    # Create color mapping for display (keeping existing functionality)
+                if parsed_model_list:
+                    # Create color mapping for display
                     jig_model_colors = {}
-                    for idx, model_no in enumerate(jig_detail.no_of_model_cases):
+                    for idx, model_no in enumerate(parsed_model_list):
                         color_index = idx % len(color_palette)
                         jig_model_colors[model_no] = color_palette[color_index]
                     jig_detail.model_colors = jig_model_colors
@@ -2541,7 +2570,7 @@ class InprocessInspectionCompleteView(TemplateView):
                     # Keep model images for existing functionality
                     jig_model_images = {}
                     model_images = batch_data.get('model_images', [static('assets/images/imagePlaceholder.jpg')])
-                    for model_no in jig_detail.no_of_model_cases:
+                    for model_no in parsed_model_list:
                         jig_model_images[model_no] = {
                             'images': model_images,
                             'first_image': model_images[0] if model_images else None

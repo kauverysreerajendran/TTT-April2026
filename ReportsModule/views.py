@@ -1398,16 +1398,6 @@ def download_report(request):
             completed = convert_datetimes(list(Nickle_Audit_Accepted_TrayID_Store.objects.all().values()))
             pd.DataFrame(completed).to_excel(writer, sheet_name='Completed Table', index=False)
 
-        elif module == 'spider-spindle':
-            # Pick Table
-            from Spider_Spindle.models import Spider_TrayId
-            spider_trays = convert_datetimes(list(Spider_TrayId.objects.all().values()))
-            pd.DataFrame(spider_trays).to_excel(writer, sheet_name='Pick Table', index=False)
-            
-            # Completed Table
-            completed_trays = convert_datetimes(list(Spider_TrayId.objects.all().values()))
-            pd.DataFrame(completed_trays).to_excel(writer, sheet_name='Completed Table', index=False)
-
     output.seek(0)
     response = HttpResponse(
         output.getvalue(),

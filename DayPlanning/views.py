@@ -1493,10 +1493,21 @@ class DayPlanningPickTableAPIView(APIView):
             'tray_scan_status',
         ))
  
+        # Helper: normalize tray type string to pre-jig category and capacity
+        def _get_prejig_tray(tray_type_str):
+            tt = (tray_type_str or '').upper()
+            if 'JUMBO' in tt or tt in ('JR', 'JD', 'JB', 'JL'):
+                return 'JB', 12
+            return 'NB', 16
+
         # Calculate no_of_trays dynamically and determine needs_top_tray_scan
         for data in master_data:
             total_batch_quantity = data.get('total_batch_quantity', 0)
-            tray_capacity = data.get('tray_capacity', 0)
+            # Map tray type and capacity to pre-jig values (NB=16, JB=12)
+            prejig_type, prejig_cap = _get_prejig_tray(data.get('tray_type'))
+            data['tray_type'] = prejig_type
+            data['tray_capacity'] = prejig_cap
+            tray_capacity = prejig_cap
             data['vendor_location'] = f"{data.get('vendor_internal', '')}_{data.get('location__location_name', '')}"
  
             # ✅ ENHANCED: Determine if this lot needs top tray scan
@@ -2614,30 +2625,36 @@ class TrayIdUniqueCheckAPIView(APIView):
                     'scanned_tray_type': scanned_tray_type
                 }
             
-            # Compare tray types (case-insensitive)
-            if batch_tray_type.lower() != scanned_tray_type.lower():
-                error_msg = f"❌ Tray Type Mismatch: Current batch requires '{batch_tray_type}' tray type, but scanned tray '{tray.tray_id}' is of type '{scanned_tray_type}'"
+            # Normalize both to pre-jig category (normal/jumbo) for comparison
+            def _norm_cat(tt_str):
+                tt = (tt_str or '').upper()
+                return 'jumbo' if ('JUMBO' in tt or tt in ('JR', 'JD', 'JB', 'JL')) else 'normal'
+
+            batch_category = _norm_cat(batch_tray_type)
+            scanned_category = _norm_cat(scanned_tray_type)
+
+            if batch_category != scanned_category:
+                error_msg = f"❌ Tray Type Mismatch: Batch requires '{batch_category}' type but scanned tray '{tray.tray_id}' is '{scanned_category}' type"
                 return {
                     'compatible': False,
                     'error': error_msg,
                     'batch_tray_type': batch_tray_type,
                     'scanned_tray_type': scanned_tray_type
                 }
-            
-            # Validate tray capacity compatibility (optional but recommended)
-            batch_tray_capacity = batch_instance.tray_capacity
+
+            # Validate pre-jig capacity: Jumbo=12, Normal=16
+            expected_prejig_cap = 12 if batch_category == 'jumbo' else 16
             scanned_tray_capacity = tray.tray_capacity
-            
-            if batch_tray_capacity and scanned_tray_capacity:
-                if abs(batch_tray_capacity - scanned_tray_capacity) > 0:
-                    error_msg = f"⚠️ Tray Capacity Mismatch: Batch capacity is {batch_tray_capacity}, but scanned tray capacity is {scanned_tray_capacity}"
-                    return {
-                        'compatible': False,
-                        'error': error_msg,
-                        'batch_tray_type': batch_tray_type,
-                        'scanned_tray_type': scanned_tray_type
-                    }
-            
+
+            if scanned_tray_capacity and scanned_tray_capacity != expected_prejig_cap:
+                error_msg = f"⚠️ Tray Capacity Mismatch: Expected {expected_prejig_cap} for {batch_category} type, but scanned tray has capacity {scanned_tray_capacity}"
+                return {
+                    'compatible': False,
+                    'error': error_msg,
+                    'batch_tray_type': batch_tray_type,
+                    'scanned_tray_type': scanned_tray_type
+                }
+
             # All validations passed
             return {
                 'compatible': True,

@@ -1,8 +1,6 @@
 {% extends "base.html" %} {% load static %} {% block content %}
 {% load stock_filters %} 
 
-
-
 <style>
 /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
@@ -581,6 +579,201 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     grid-template-columns: 30px 1fr 70px 90px !important;
   }
 }
+
+/* ====================================================
+   BRASS QC — MODAL UI REFRESH  (look only, no logic)
+   ==================================================== */
+
+/* Side panel shell: rejection window & accepted tray scan */
+.tray-scan-modal,
+.new-popup-modal {
+  background: #f9fafb !important;
+  border-left: 1px solid #dde6ed !important;
+  box-shadow: -3px 0 20px rgba(2,128,132,0.07) !important;
+}
+
+/* Inner white card */
+.tray-scan-modal-content {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+  border: 1px solid #e4ecf0 !important;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.05) !important;
+  padding: 18px 16px 16px 16px !important;
+}
+
+/* Rejection window title */
+.tray-scan-modal-content > h3 {
+  font-size: 0.92rem !important;
+  font-weight: 600 !important;
+  color: #1e3a48 !important;
+  border-bottom: 2px solid #028084 !important;
+  padding-bottom: 8px !important;
+  margin-bottom: 10px !important;
+  line-height: 1.4 !important;
+}
+
+/* Qty info strip */
+.tray-scan-modal-content > p {
+  background: #f0fafa !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  color: #3d5a6b !important;
+  margin-bottom: 10px !important;
+  border: 1px solid #cde8e9 !important;
+}
+
+/* ── Close button: both modal types ── */
+.tray-scan-close {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  width: 26px !important;
+  height: 26px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+  border: 1px solid #dde6ed !important;
+  cursor: pointer !important;
+  transition: background 0.15s, color 0.15s !important;
+}
+.tray-scan-close:hover {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+}
+
+/* ── Grid cells — clean alternating rows ── */
+#trayScanDetails.table-grid > div {
+  background: #ffffff !important;
+  border: 1px solid #e8edf2 !important;
+  padding: 7px 10px !important;
+  font-size: 12px !important;
+  color: #374151 !important;
+}
+/* Column header row */
+#trayScanDetails.table-grid > div:nth-child(-n+3) {
+  background: #e6f4f4 !important;
+  color: #028084 !important;
+  font-weight: 600 !important;
+  border-bottom: 2px solid #a8d8d9 !important;
+}
+/* Alternate data rows (every second set of 3) */
+#trayScanDetails.table-grid > div:nth-child(6n+4),
+#trayScanDetails.table-grid > div:nth-child(6n+5),
+#trayScanDetails.table-grid > div:nth-child(6n+6) {
+  background: #f5feff !important;
+}
+
+/* ── Scan Top Tray / DayPlanning panel ── */
+.tray-scan-modal-DayPlanning {
+  background: #ffffff !important;
+  border: 1px solid #cde8e9 !important;
+  box-shadow: 0 6px 28px rgba(2,128,132,0.10) !important;
+  border-radius: 12px !important;
+}
+.tray-scan-modal-DayPlanning-content {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+  padding: 14px 16px 12px 16px !important;
+}
+
+/* Header info card inside DayPlanning modal */
+.tray-scan-modal-DayPlanning .modal-top-header {
+  background: linear-gradient(135deg, #f0fbfb 0%, #e8f4f4 100%) !important;
+  border-radius: 8px !important;
+  border: 1px solid #cde8e9 !important;
+  padding: 10px 14px !important;
+  margin-bottom: 10px !important;
+  align-items: center !important;
+}
+
+/* Close button for read-only (DayPlanning) modal */
+.tray-scan-close-readonly {
+  width: 26px !important;
+  height: 26px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+  border: 1px solid #dde6ed !important;
+  cursor: pointer !important;
+  transition: background 0.15s, color 0.15s, transform 0.15s !important;
+}
+.tray-scan-close-readonly:hover {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+  transform: scale(1.08) !important;
+}
+
+/* Validate button */
+#trayValidateBtn {
+  background: #f0fafa !important;
+  border: 1px solid #028084 !important;
+  color: #028084 !important;
+  border-radius: 20px !important;
+  padding: 5px 16px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transition: background 0.15s, color 0.15s !important;
+}
+#trayValidateBtn:hover {
+  background: #028084 !important;
+  color: #ffffff !important;
+}
+
+/* Modal sub-heading h5 */
+.tray-scan-modal h5,
+.tray-scan-modal-DayPlanning h5 {
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  color: #028084 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+}
+
+/* Error strip in DayPlanning */
+#trayErrorMessage {
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  padding: 7px 12px !important;
+  border: 1px solid #fca5a5 !important;
+  background: #fff5f5 !important;
+  color: #b91c1c !important;
+}
+
+/* DayPlanning grid cells */
+#trayScanDetails_DayPlanning.table-grid > div {
+  background: #ffffff !important;
+  border: 1px solid #e8edf2 !important;
+  padding: 6px 8px !important;
+  font-size: 12px !important;
+  color: #374151 !important;
+}
+
+/* Remove content-wrapper dim when DayPlanning modal is open */
+.tray-scan-modal-DayPlanning.open ~ .content-wrapper {
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+
+/* ====================================================
+   END BRASS QC MODAL UI REFRESH
+   ==================================================== */
 </style>
 
 <div class="content-wrapper">
@@ -1595,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return cookieValue;
     }
   });
-  </script>
+</script>
 
 <script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function () {
@@ -2248,8 +2441,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 </script>
 
-    <!-- Script for opening Day Planning - Tray Scan modal with read-only view while hitting view.png -->
-
+<!-- Script for opening Day Planning - Tray Scan modal with read-only view while hitting view.png -->
 <!-- ✅ UPDATED: JavaScript with enhanced logging for BrassTrayId logic -->
 <script nonce="{{ csp_nonce }}">
 // ✅ UPDATED: Enhanced JavaScript with BrassTrayId awareness
@@ -8596,9 +8788,7 @@ function getCookie(name) {
         });
       });
     });
-    </script>
-
-
+</script>
 
 <!--Accept functionality - Updated with confirmation dialog like IS_PickTable-->
 <script nonce="{{csp_nonce}}">
@@ -9850,7 +10040,7 @@ console.log('📝 Compact script loaded, waiting for DOM...');
 </script>
     
 <!-- Script for clearing "Tray ID" while hitting "Redo" icon -->
-  <script nonce="{{ csp_nonce }}">
+<script nonce="{{ csp_nonce }}">
       document.addEventListener("DOMContentLoaded", function () {
         const redoBtn = document.getElementById("trayScanRedoBtn");
         if (redoBtn) {
@@ -9923,7 +10113,7 @@ console.log('📝 Compact script loaded, waiting for DOM...');
           });
         }
       });
-   </script>
+</script>
    
    <!-- Script for Tray Validate Status column -- enable/disable of table column -->
 <script nonce="{{ csp_nonce }}">
@@ -9982,8 +10172,6 @@ console.log('📝 Compact script loaded, waiting for DOM...');
       });
     });
   </script>
-
-
 
   <!-- Script for Text Remarks (unchanged) -->
   <script nonce="{{ csp_nonce }}">
@@ -10732,8 +10920,6 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
-
-
 <!-- Barcode Scanner Script for Brass QC -->
 <script nonce="{{ csp_nonce }}">
 // ==========================================
@@ -11154,8 +11340,6 @@ window.brassRestorePreviousRowPosition = brassRestorePreviousRowPosition;
 window.brassCheckPendingCheckboxAfterPageLoad = brassCheckPendingCheckboxAfterPageLoad;
 </script>
 
-
-
 <!-- Script for only numbers, alphabets (upper/lower), and hyphen (-) are allowed (no special characters) -->
 
 <script nonce="{{ csp_nonce }}">
@@ -11231,12 +11415,5 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 </script>
-
-
-
-
-
-
-
 
 {% endblock %} {% endblock content %}

@@ -1825,48 +1825,42 @@
       </li>
       {% endif %}
       <!-- Spider Spindle Menu -->
-      {% if is_admin or 'Spider Pick Table' in allowed_modules %}
+      {% if is_admin or 'Spider Spindle Z1 Pick Table' in allowed_modules or 'Spider Spindle Z2 Pick Table' in allowed_modules %}
       <li class="nav-item">
-         <a class="nav-link" data-bs-toggle="collapse" href="#spiderSpindleMenu" aria-expanded="false" aria-controls="spiderSpindleMenu">
-         <i class="ti-control-shuffle menu-icon"></i>
-         <span class="menu-title">Spider Spindle</span>
+         <a class="nav-link" data-bs-toggle="collapse" href="#spiderSpindleZ1Menu" aria-expanded="false" aria-controls="spiderSpindleZ1Menu">
+         <i class="ti-hummer menu-icon"></i>
+         <span class="menu-title">Spider Spindle Z1</span>
          <i class="menu-arrow"></i>
          </a>
-         <div class="collapse" id="spiderSpindleMenu">
+         <div class="collapse" id="spiderSpindleZ1Menu">
             <ul class="nav flex-column sub-menu">
-               {% if is_admin or 'Spider Pick Table' in allowed_modules %}
                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'spider_pick_table' %}">Spider Pick Table</a>
+                  <a class="nav-link" href="{% url 'ss_z1_pick_table' %}">Pick Table</a>
                </li>
-               {% endif %}
                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'SpiderCompletedTableView' %}">Spider Completed Table</a>
+                  <a class="nav-link" href="{% url 'ss_z1_completed' %}">Completed Table</a>
+               </li>
+            </ul>
+         </div>
+      </li>
+      <li class="nav-item">
+         <a class="nav-link" data-bs-toggle="collapse" href="#spiderSpindleZ2Menu" aria-expanded="false" aria-controls="spiderSpindleZ2Menu">
+         <i class="ti-hummer menu-icon"></i>
+         <span class="menu-title">Spider Spindle Z2</span>
+         <i class="menu-arrow"></i>
+         </a>
+         <div class="collapse" id="spiderSpindleZ2Menu">
+            <ul class="nav flex-column sub-menu">
+               <li class="nav-item">
+                  <a class="nav-link" href="{% url 'ss_z2_pick_table' %}">Pick Table</a>
+               </li>
+               <li class="nav-item">
+                  <a class="nav-link" href="{% url 'ss_z2_completed' %}">Completed Table</a>
                </li>
             </ul>
          </div>
       </li>
       {% endif %}
-      <!-- Spider Spindle Zone 2 Menu -->
-      {% if is_admin or 'Spider Pick Table Zone 2' in allowed_modules %}
-         <li class="nav-item">
-            <a class="nav-link" data-bs-toggle="collapse" href="#spiderSpindleMenu" aria-expanded="false" aria-controls="spiderSpindleMenuZone2">
-            <i class="ti-control-shuffle menu-icon"></i>
-            <span class="menu-title">Spider Spindle Zone 2</span>
-            <i class="menu-arrow"></i>
-            </a>
-            <div class="collapse" id="spiderSpindleMenu">
-            <ul class="nav flex-column sub-menu">
-            <li class="nav-item">
-            <a class="nav-link" href="{% url 'zone_spider_pick_table' %}">Spider Pick Table</a>
-            </li>
-            </li>
-            <li class="nav-item">
-            <a class="nav-link" href="{% url 'Zone_SpiderCompletedTableView' %}">Spider Completed Table</a>
-            </li>
-            </ul>
-            </div>
-         </li>
-       {% endif %}
    </ul>
 </nav>
   

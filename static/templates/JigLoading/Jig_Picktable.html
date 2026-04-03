@@ -2912,6 +2912,7 @@ tr.row-inactive td:first-child {
                       data-missing-qty="{{ data.missing_qty|default:0 }}"
                       data-physical-qty="{{ data.physical_qty|default:0 }}"
                       data-model-image="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.jpg' }}"
+                      {% if data.is_excess_lot %}data-is-excess-lot="true" data-half-filled-tray-info="{{ data.half_filled_tray_info_json|escape }}"{% endif %}
                       style="margin-left: 8px; vertical-align: middle; cursor: pointer; z-index:12000; pointer-events: auto;"
                     >
                       <img
@@ -3497,17 +3498,17 @@ tr.row-inactive td:first-child {
       </div>
 
       <!-- Top Tray Scan (MANDATORY when partial exists) — supports scan/type/checkbox -->
-      <div id="excessTopTraySection" style="display:none; margin-bottom:10px; padding:10px; background:linear-gradient(135deg,#e6f7f8,#d0f0f2); border:1.5px solid #028084; border-radius:10px;">
+      <div id="excessTopTraySection" style="display:none; margin-bottom:10px; padding:10px; background:linear-gradient(135deg,#e6f7f8,#d0f0f2); border-radius:10px;">
         <div style="font-size:11px; font-weight:500; color:#028084; margin-bottom:6px;">
           <i class="fa fa-star" style="margin-right:4px;"></i> TOP TRAY (Scan / Type / Select)
           <span id="excessTopTrayOriginal" style="float:right; font-size:10px; color:#64748b;"></span>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
           <input type="checkbox" id="excessTopTrayCheckbox" class="excess-row-checkbox" style="width:16px;height:16px;accent-color:#028084;cursor:pointer;" title="Select top tray" />
-          <input type="text" id="excessTopTrayScanInput" class="excess-scan-input" maxlength="9" placeholder="Scan Top Tray ID" style="flex:1; padding:7px 10px; border:1.5px solid #028084; border-radius:8px; font-size:13px; font-weight:500; background:#fff;" />
+          <input type="text" id="excessTopTrayScanInput" class="excess-scan-input" maxlength="9" placeholder="Scan Top Tray ID" style="flex:1; padding:7px 10px; border:1.5px solid #fff; border-radius:8px; font-size:13px; font-weight:500; background:#fff;" />
           <span id="excessTopTrayQty" style="font-size:13px; font-weight:500; color:#028084; white-space:nowrap;"></span>
         </div>
-        <div id="excessTopTrayStatus" style="font-size:11px; margin-top:4px; font-weight:500; color:#028084;"></div>
+        <div id="excessTopTrayStatus" style="font-size:11px; margin-top:4px; margin-left: 90px;font-weight:500; color:#028084;"></div>
       </div>
 
       <!-- Excess Tray List — S.No, Model, Qty, Scan Tray ID -->
@@ -3610,6 +3611,35 @@ document.addEventListener('DOMContentLoaded', function () {
         lot_id: actionEl.getAttribute('data-lotid') || actionEl.dataset.lotid,
         stock_lot_id: actionEl.getAttribute('data-stocklotid') || actionEl.dataset.stocklotid,
       };
+      // For excess lots, render half_filled_tray_info directly without calling any API
+      if (actionEl.getAttribute('data-is-excess-lot') === 'true') {
+        var hfRaw = actionEl.getAttribute('data-half-filled-tray-info') || '[]';
+        try {
+          var hfTrays = JSON.parse(hfRaw);
+          var totalHfQty = hfTrays.reduce(function(s, t) { return s + (parseInt(t.qty || 0) || 0); }, 0);
+          var modal = document.getElementById('newPopupModal_Jig');
+          if (modal) {
+            var content = modal.querySelector('.tray-scan-modal-content') || modal;
+            var hfHtml = '<div class="new-popup-inner" style="width:100%">';
+            hfHtml += '<span id="closeNewPopupModal_Jig" class="tray-scan-close">&times;</span>';
+            hfHtml += '<div class="modal-top-header" style="display:flex;align-items:center;gap:16px;">';
+            hfHtml += '<div class="user-profile"><img src="/static/assets/images/imagePlaceholder.jpg" style="width:50px;height:50px;border-radius:50%;" alt="Model image"></div>';
+            hfHtml += '<div style="flex:1"><h5 style="margin:0;font-weight:600;color:#595959">Jig Loading - Excess Lot Trays</h5>';
+            hfHtml += '<p style="margin:4px 0 0 0;font-size:13px;color:#666">Remaining Qty: <span style="font-weight:700;color:#e67e22;">' + totalHfQty + '</span></p></div></div>';
+            hfHtml += '<div id="trayScanDetails_Jig_top" class="table-grid" style="margin-top:12px;">';
+            hfHtml += '<table class="table table-bordered" style="font-size:13px;"><thead><tr>';
+            hfHtml += '<th>S.No</th><th>Tray ID</th><th>Qty</th><th>Type</th></tr></thead><tbody>';
+            hfTrays.forEach(function(t, idx) {
+              var typeLabel = t.is_top_half_filled ? '&#9733; Top Tray' : 'Excess';
+              hfHtml += '<tr><td>' + (idx + 1) + '</td><td style="font-weight:600;font-family:monospace;">' + (t.tray_id || '') + '</td><td>' + (t.qty || 0) + '</td><td>' + typeLabel + '</td></tr>';
+            });
+            hfHtml += '</tbody></table></div></div>';
+            content.innerHTML = hfHtml;
+            modal.classList.add('open');
+          }
+        } catch (e) { console.warn('[EXCESS_VIEW] Failed to render half_filled modal', e); }
+        return;
+      }
       if (typeof window.showAcceptedTrayModal === 'function') {
         window.showAcceptedTrayModal(params, params.stock_lot_id, false);
       } else {
@@ -4467,7 +4497,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (topTray && topTraySection) {
           topTraySection.style.display = '';
           if (topTrayQtyEl) topTrayQtyEl.innerText = 'Qty: ' + (topTray.qty || 0);
-          if (topTrayOrigEl) topTrayOrigEl.innerText = 'Original: ' + (topTray.model_code || '');
+         /*  if (topTrayOrigEl) topTrayOrigEl.innerText = 'Original: ' + (topTray.model_code || ''); */
           if (topTrayStatusEl) topTrayStatusEl.innerText = '';
           if (topTrayInput) {
             topTrayInput.dataset.expectedQty = topTray.qty || 0;
@@ -4475,7 +4505,7 @@ document.addEventListener('DOMContentLoaded', function () {
             topTrayInput.dataset.panel = 'excess_top';
             topTrayInput.dataset.modelCode = topTray.model_code || '';
             topTrayInput.dataset.lotId = topTray.lot_id || '';
-            topTrayInput.placeholder = topTray.model_code || 'Scan / Type Top Tray ID';
+            topTrayInput.placeholder = (topTray.model_code || '').replace(/\s*\[.*\]$/, '') || 'Scan / Type Top Tray ID';
             // Restore validated state
             if (prevTopTrayVal) {
               topTrayInput.value = prevTopTrayVal;
@@ -4547,7 +4577,7 @@ document.addEventListener('DOMContentLoaded', function () {
             inp.dataset.lotId = row.lot_id || window.CURRENT_LOT_ID || '';
             inp.dataset.batchId = window.CURRENT_BATCH_ID || '';
             inp.dataset.modelCode = row.model_code || '';
-            inp.placeholder = row.model_code || 'Scan / Type Tray ID';
+            inp.placeholder = (row.model_code || '').replace(/\s*\[.*\]$/, '') || 'Scan / Type Tray ID';
             // Dotted border removed for auto-allocated rows
             // Restore validated state
             var rk = (row.scan_tray_id || '') + '|excess';
@@ -4716,6 +4746,7 @@ document.addEventListener('DOMContentLoaded', function () {
           _validateSplitScan(raw, this, false);
         }
       });
+      _attachSplitUnscanKeydown(inp);
     });
     // Excess panel inputs
     document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
@@ -4727,6 +4758,7 @@ document.addEventListener('DOMContentLoaded', function () {
           _validateSplitScan(raw, this, true);
         }
       });
+      _attachSplitUnscanKeydown(inp);
     });
     // Top tray input
     var topInp = document.getElementById('excessTopTrayScanInput');
@@ -4739,7 +4771,44 @@ document.addEventListener('DOMContentLoaded', function () {
           _validateSplitScan(raw, this, true);
         }
       });
+      _attachSplitUnscanKeydown(topInp);
     }
+  }
+
+  // ===== UNSCAN KEYDOWN: Backspace/Delete on validated readOnly split-scan-input revertes scan =====
+  function _attachSplitUnscanKeydown(inp) {
+    inp.addEventListener('keydown', function(e) {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+      if (!this.readOnly || !this.classList.contains('validated')) return;
+      e.preventDefault();
+      var removedId = this.value;
+      this.value = '';
+      this.readOnly = false;
+      this.classList.remove('validated', 'error-input');
+      this.style.background = '';
+      this.style.borderColor = '';
+      // Uncheck/unlock the row checkbox
+      var tr = this.closest('tr');
+      if (tr) {
+        var cb = tr.querySelector('.delink-row-checkbox');
+        if (cb) { cb.checked = false; cb.disabled = false; cb.classList.remove('locked'); }
+        tr.classList.remove('delink-row-scanned', 'delink-row-disabled');
+        var lastCell = tr.cells[tr.cells.length - 1];
+        if (lastCell) lastCell.innerHTML = '';
+      }
+      // Top tray checkbox and status
+      if (this.id === 'excessTopTrayScanInput') {
+        var topCb = document.getElementById('excessTopTrayCheckbox');
+        if (topCb) { topCb.checked = false; topCb.disabled = false; topCb.classList.remove('locked'); }
+        var topStatus = document.getElementById('excessTopTrayStatus');
+        if (topStatus) topStatus.innerHTML = '';
+      }
+      // Remove from _trayAllocations
+      if (removedId && window._trayAllocations) {
+        delete window._trayAllocations[removedId.trim().toUpperCase()];
+      }
+      console.log('[UNSCAN_SPLIT] Cleared validated scan:', removedId);
+    });
   }
 
   // ===== VALIDATE SCAN FOR SPLIT PANELS =====
@@ -6832,6 +6901,7 @@ function clearJigUserInputs() {
     inp.classList.remove('validated', 'tray-duplicate-error');
     inp.style.background = '';
     inp.style.border = '';
+    inp.readOnly = false;
   });
   // Clear excess checkboxes
   const excessCheckboxes = document.querySelectorAll('.excess-row-checkbox');
@@ -6840,6 +6910,22 @@ function clearJigUserInputs() {
     cb.classList.remove('locked');
     cb.disabled = false;
   });
+  // Clear delink row checkboxes, status cells, and row state
+  document.querySelectorAll('#delinkPanelTableBody .delink-row-checkbox').forEach(function(cb) {
+    cb.checked = false;
+    cb.disabled = false;
+    cb.classList.remove('locked');
+  });
+  document.querySelectorAll('#delinkPanelTableBody tr').forEach(function(tr) {
+    tr.classList.remove('delink-row-scanned', 'delink-row-disabled');
+    var lastCell = tr.cells[tr.cells.length - 1];
+    if (lastCell) lastCell.innerHTML = '';
+  });
+  // Clear top tray checkbox and status
+  var topTrayCb = document.getElementById('excessTopTrayCheckbox');
+  if (topTrayCb) { topTrayCb.checked = false; topTrayCb.disabled = false; topTrayCb.classList.remove('locked'); }
+  var topTrayStatus = document.getElementById('excessTopTrayStatus');
+  if (topTrayStatus) topTrayStatus.innerHTML = '';
   // Clear tray error messages
   const trayErrors = document.querySelectorAll('.tray-error-message, .tray-duplicate-message');
   trayErrors.forEach(function(el) { el.textContent = ''; });
@@ -6856,19 +6942,7 @@ function clearJigUserInputs() {
   const emptyHooksEl = document.getElementById('emptyHooksInput');
   if (emptyHooksEl) emptyHooksEl.value = jigCap;
 
-  // 5. Hide half-filled and excess sections (no trays = no half-filled)
-  const halfFilledSection = document.getElementById('halfFilledTraySection');
-  if (halfFilledSection) { halfFilledSection.style.display = 'none'; halfFilledSection.innerHTML = ''; }
-  const excessLotSection = document.getElementById('excessLotSection');
-  if (excessLotSection) excessLotSection.style.display = 'none';
-  const splitPanelRight = document.getElementById('splitPanelRight');
-  if (splitPanelRight) splitPanelRight.style.display = 'none';
-  // Clear excess panel content
-  const excessPanelTableBody = document.getElementById('excessPanelTableBody');
-  if (excessPanelTableBody) excessPanelTableBody.innerHTML = '';
-  const excessTopTraySection = document.getElementById('excessTopTraySection');
-  if (excessTopTraySection) excessTopTraySection.style.display = 'none';
-  // Clear excess badges and messages
+  // 5. Clear excess badges and messages (keep tray list panels visible — inputs cleared above)
   const excessPanelQtyBadge = document.getElementById('excessPanelQtyBadge');
   if (excessPanelQtyBadge) excessPanelQtyBadge.innerText = '';
   const jigPhaseMessage = document.getElementById('jigPhaseMessage');
@@ -7305,7 +7379,7 @@ document.addEventListener('click', function (e) {
               const modal = document.getElementById('jigAddModal');
               if (modal) modal.classList.remove('open');
             } catch (e) {}
-            window.location.reload();
+            window.location.href = '/jig_loading/JigView/';
           });
         } else {
           alert('Jig submitted successfully!\nJig: ' + (d.jig_id || '') + '\nLoaded: ' + loadedQty +
@@ -7316,7 +7390,7 @@ document.addEventListener('click', function (e) {
             const modal = document.getElementById('jigAddModal');
             if (modal) modal.classList.remove('open');
           } catch (e) {}
-          window.location.reload();
+          window.location.href = '/jig_loading/JigView/';
         }
       } else {
         var errMsg = result.data.message || 'Unknown error';
@@ -7568,6 +7642,7 @@ document.addEventListener('DOMContentLoaded', function() {
       inputEl.classList.add('jig-id-error');
       inputEl.classList.remove('jig-id-valid');
       if (errorDiv) { errorDiv.textContent = result.message; errorDiv.style.display = 'block'; }
+      if (val.length === 9) inputEl.select();
     } else if (val.length === 9) {
       inputEl.classList.remove('jig-id-error');
       inputEl.classList.add('jig-id-valid');

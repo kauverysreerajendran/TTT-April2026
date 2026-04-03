@@ -4,47 +4,59 @@ from DayPlanning import views
 from .views import *
 
 urlpatterns = [
-    path('NA_Zone_Inspection/', NA_Zone_PickTableView.as_view(), name='NA_Zone_Inspection'),
-    path('NA_Zone_Completed/', NA_Zone_CompletedView.as_view(), name='NA_Zone_Completed'),
-    path('na_zone_save_hold_unhold_reason/', NA_Zone_SaveHoldUnholdReasonAPIView.as_view(), name='na_zone_save_hold_unhold_reason'),
-    path('na_zone_get_tray_capacity_for_lot/', na_zone_get_tray_capacity_for_lot, name='na_zone_get_tray_capacity_for_lot'),
-    path('na_zone_save_ip_checkbox/', NA_Zone_SaveIPCheckboxView.as_view(), name='na_zone_save_ip_checkbox'),
-    path('na_zone_save_ip_pick_remark/', NA_Zone_SaveIPPickRemarkAPIView.as_view(), name='na_zone_save_ip_pick_remark'),
-    path('na_zone_delete_batch/', NA_Zone_DeleteBatchAPIView.as_view(), name='na_zone_delete_batch'),
-    path('na_zone_accepted_form/', NA_Zone_Accepted_form.as_view(), name='na_zone_accepted_form'),
-    
-    path('na_zone_batch_rejection/', NA_Zone_BatchRejectionAPIView.as_view(), name='na_zone_batch_rejection'),
-    path('na_zone_tray_rejection/', NA_Zone_TrayRejectionAPIView.as_view(), name='na_zone_tray_rejection'),
-    path('na_zone_reject_check_tray_id/', na_zone_reject_check_tray_id, name='na_zone_reject_check_tray_id'),
-    path('na_zone_get_accepted_tray_scan_data/', na_zone_get_accepted_tray_scan_data, name='na_zone_get_accepted_tray_scan_data'),
-    path('na_zone_view_tray_list/', na_zone_view_tray_list, name='na_zone_view_tray_list'),
-    path('na_zone_save_accepted_tray_scan/', na_zone_save_accepted_tray_scan, name='na_zone_save_accepted_tray_scan'),
-    path('na_zone_check_tray_id/', na_zone_check_tray_id, name='na_zone_check_tray_id'),
-    path('na_zone_get_rejected_tray_scan_data/', na_zone_get_rejected_tray_scan_data, name='na_zone_get_rejected_tray_scan_data'),
-    path('na_zone_qc_tray_validate/', NA_Zone_TrayValidateAPIView.as_view(), name='na_zone_qc_tray_validate'),
-    path('na_zone_save_single_top_tray_scan/', na_zone_save_single_top_tray_scan, name='na_zone_save_single_top_tray_scan'),
-    path('na_zone_reject_check_tray_id_simple/', na_zone_reject_check_tray_id_simple, name='na_zone_reject_check_tray_id_simple'),
+    path('NA_Zone_Inspection/', NQ_PickTableView.as_view(), name='NA_Zone_Inspection'),
+    path('NA_Zone_Completed/', NQCompletedView.as_view(), name='NA_Zone_Completed'),
+    path('Nickel_Inspection/', NQ_PickTableView.as_view(), name='Nickel_Inspection'),
+    path('NI_Completed/', NQCompletedView.as_view(), name='NI_Completed'),
+    path('nq_save_hold_unhold_reason/', NQSaveHoldUnholdReasonAPIView.as_view(), name='nq_save_hold_unhold_reason'),
+    path('brass_get_tray_capacity_for_lot/', brass_get_tray_capacity_for_lot, name='brass_get_tray_capacity_for_lot'),
+    path('nq_save_ip_checkbox/', NQSaveIPCheckboxView.as_view(), name='nq_save_ip_checkbox'),
+    path('nq_save_ip_pick_remark/', NQSaveIPPickRemarkAPIView.as_view(), name='nq_save_ip_pick_remark'),
+    path('nq_delete_batch/', NQDeleteBatchAPIView.as_view(), name='nq_delete_batch'),
+    path('nq_accepted_form/', NQ_Accepted_form.as_view(), name='nq_accepted_form'),
 
-    path('na_zone_get_delink_tray_data/', na_zone_get_delink_tray_data, name='na_zone_get_delink_tray_data'),
-    path('na_zone_delink_check_tray_id/', na_zone_delink_check_tray_id, name='na_zone_delink_check_tray_id'),
-    
-    path('na_zone_CompleteTable_tray_id_list/', NA_Zone_TrayIdList_Complete_APIView.as_view(), name='na_zone_CompleteTable_tray_id_list'),
-    path('na_zone_complete_tray_validate/', NA_Zone_TrayValidate_Complete_APIView.as_view(), name='na_zone_complete_tray_validate'),
+    path('nq_batch_rejection/', NQBatchRejectionAPIView.as_view(), name='nq_batch_rejection'),
+    path('nq_tray_rejection/', NQTrayRejectionAPIView.as_view(), name='nq_tray_rejection'),
+    path('nickel_qc_reject_check_tray_id/', nickel_qc_reject_check_tray_id, name='nickel_qc_reject_check_tray_id'),
+    path('nickel_get_accepted_tray_scan_data/', nickel_get_accepted_tray_scan_data, name='nickel_get_accepted_tray_scan_data'),
+    path('nickel_view_tray_list/', nickel_view_tray_list, name='nickel_view_tray_list'),
+    path('nickel_save_accepted_tray_scan/', nickel_save_accepted_tray_scan, name='nickel_save_accepted_tray_scan'),
+    path('nickel_check_tray_id/', nickel_check_tray_id, name='nickel_check_tray_id'),
+    path('nickel_get_rejected_tray_scan_data/', nickel_get_rejected_tray_scan_data, name='nickel_get_rejected_tray_scan_data'),
+    path('nickel_qc_tray_validate/', NickelTrayValidateAPIView.as_view(), name='nickel_qc_tray_validate'),
+    path('nickel_save_single_top_tray_scan/', nickel_save_single_top_tray_scan, name='nickel_save_single_top_tray_scan'),
+    path('nickel_qc_reject_check_tray_id_simple/', nickel_qc_reject_check_tray_id_simple, name='nickel_qc_reject_check_tray_id_simple'),
+
+    path('nickel_qc_get_delink_tray_data/', nickel_qc_get_delink_tray_data, name='nickel_qc_get_delink_tray_data'),
+    path('nickel_delink_check_tray_id/', nickel_delink_check_tray_id, name='nickel_delink_check_tray_id'),
+
+    path('nickel_CompleteTable_tray_id_list/', NickelQcTrayIdList_Complete_APIView.as_view(), name='nickel_CompleteTable_tray_id_list'),
+    path('nickel_complete_tray_validate/', NickelQcTrayValidate_Complete_APIView.as_view(), name='nickel_complete_tray_validate'),
 
     # Draft functionality endpoints
-    path('na_zone_batch_rejection_draft/', NA_Zone_BatchRejectionDraftAPIView.as_view(), name='na_zone_batch_rejection_draft'),
-    path('na_zone_tray_rejection_draft/', NA_Zone_TrayRejectionDraftAPIView.as_view(), name='na_zone_tray_rejection_draft'),
-    path('na_zone_get_draft_data/', na_zone_get_draft_data, name='na_zone_get_draft_data'),
-    path('na_zone_clear_draft/', NA_Zone_ClearDraftAPIView.as_view(), name='na_zone_clear_draft'),
-    path('na_zone_get_all_drafts/', NA_Zone_get_all_drafts, name='na_zone_get_all_drafts'),
-    path('na_zone_get_top_tray_scan_draft/', na_zone_get_top_tray_scan_draft, name='na_zone_get_top_tray_scan_draft'),
+    path('nq_batch_rejection_draft/', NQBatchRejectionDraftAPIView.as_view(), name='nq_batch_rejection_draft'),
+    path('nq_tray_rejection_draft/', NQTrayRejectionDraftAPIView.as_view(), name='nq_tray_rejection_draft'),
+    path('nickel_get_draft_data/', nickel_get_draft_data, name='nickel_get_draft_data'),
+    path('nickel_clear_draft/', NickelClearDraftAPIView.as_view(), name='nickel_clear_draft'),
+    path('nickel_get_all_drafts/', nickel_get_all_drafts, name='nickel_get_all_drafts'),
+    path('nickel_get_top_tray_scan_draft/', nickel_get_top_tray_scan_draft, name='nickel_get_top_tray_scan_draft'),
 
     #Pick table Vlaidation
-    path('na_zone_pick_complete_tray_validate/', NA_Zone_PickTrayValidate_Complete_APIView.as_view(), name='na_zone_pick_complete_tray_validate'),
-    path('na_zone_pick_CompleteTable_tray_id_list/', NA_Zone_PickTrayIdList_Complete_APIView.as_view(), name='na_zone_pick_CompleteTable_tray_id_list'),
+    path('pick_complete_tray_validate/', PickTrayValidate_Complete_APIView.as_view(), name='pick_complete_tray_validate'),
+    path('pick_CompleteTable_tray_id_list/', PickTrayIdList_Complete_APIView.as_view(), name='pick_CompleteTable_tray_id_list'),
 
-    path('na_zone_tray_delink_top_tray_calc/', NA_Zone_TrayDelinkTopTrayCalcAPIView.as_view(), name='na_zone_tray_delink_top_tray_calc'),
-    path('na_zone_validate_tray_id/',NA_Zone_ValidateTrayIdAPIView.as_view(), name='na_zone_validate_tray_id'),
-    path('na_zone_tray_delink_and_top_tray_update/', NA_Zone_TrayDelinkAndTopTrayUpdateAPIView.as_view(), name='na_zone_tray_delink_and_top_tray_update'),
+
+    path('nq_tray_delink_top_tray_calc/', NQTrayDelinkTopTrayCalcAPIView.as_view(), name='nq_tray_delink_top_tray_calc'),
+    path('nq_validate_tray_id/',NQValidateTrayIdAPIView.as_view(), name='nq_validate_tray_id'),
+    path('nq_tray_delink_and_top_tray_update/', NQTrayDelinkAndTopTrayUpdateAPIView.as_view(), name='nq_tray_delink_and_top_tray_update'),
+
+    path('nq_rejection_table/', NickelQcRejectTableView.as_view(), name='nq_rejection_table'),
+    path('nickel_qc_delink_selected_trays/', nickel_qc_delink_selected_trays, name='nickel_qc_delink_selected_trays'),
+    path('nickel_qc_get_rejection_details/', nickel_qc_get_rejection_details, name='nickel_qc_get_rejection_details'),
+
+    # Auto-save endpoints
+    path('nq_autosave/', autosave_nickel_qc, name='autosave_nickel_qc'),
+    path('nq_autosave/<str:lot_id>/', load_autosave_nickel_qc, name='load_autosave_nickel_qc'),
+    path('nq_autosave/<str:lot_id>/clear/', clear_autosave_nickel_qc, name='clear_autosave_nickel_qc'),
 
 ]

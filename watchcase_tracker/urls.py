@@ -63,9 +63,9 @@ urlpatterns = [
     path('nickel_audit/',include('Nickel_Audit.urls')),
     path('nickel_audit_zone_two/',include('nickel_audit_zone_two.urls')),
 
-    path('spider_spindle/', include('Spider_Spindle.urls')),  # Add this line for DRF authentication
-    path('spider_spindle_zone_two/', include('Spider_Spindle_zone_two.urls')),  # Add this line for DRF authentication
     path('reports_module/', include('ReportsModule.urls', namespace='reports_module')),
+    path('spider_spindle/', include('SpiderSpindle_Z1.urls')),
+    path('spider_spindle_zone_two/', include('SpiderSpindle_Z2.urls')),
     
     
     

@@ -367,7 +367,18 @@ class JigUnloadAfterTable(models.Model):
     spider_release_lot = models.BooleanField(default=False)
     spider_pick_remarks= models.CharField(max_length=100, null=True, blank=True, help_text="Spider Pick Remarks")  # New field
 
-    
+    # Spider Spindle Z1 fields
+    ss_z1_completed = models.BooleanField(default=False, help_text="Spider Spindle Z1 completed")
+    ss_z1_tray_id = models.CharField(max_length=100, null=True, blank=True, help_text="Spider Spindle Z1 Tray ID")
+    ss_z1_completed_at = models.DateTimeField(null=True, blank=True, help_text="Spider Spindle Z1 completion time")
+    ss_z1_completed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ss_z1_completed_lots')
+
+    # Spider Spindle Z2 fields
+    ss_z2_completed = models.BooleanField(default=False, help_text="Spider Spindle Z2 completed")
+    ss_z2_tray_id = models.CharField(max_length=100, null=True, blank=True, help_text="Spider Spindle Z2 Tray ID")
+    ss_z2_completed_at = models.DateTimeField(null=True, blank=True, help_text="Spider Spindle Z2 completion time")
+    ss_z2_completed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ss_z2_completed_lots')
+
     send_to_nickel_brass = models.BooleanField(default=False, help_text="Send to Nickel Brass")
     missing_qty = models.IntegerField(default=0)  # ✅ NEW: Add missing_qty field
     Un_loaded_date_time = models.DateTimeField(null=True, blank=True, help_text="Un Loaded Date Time")
@@ -472,5 +483,40 @@ class JigUnloadAutoSave(models.Model):
             self.combined_lot_ids or
             self.model_number.strip()
         )
+
+
+class JUSubmittedZ1(models.Model):
+    """
+    Snapshot storage for submitted Jig Unloading Zone 1 data.
+    Stores per-model tray scan results after unloading is complete.
+    """
+    jig_completed_id = models.IntegerField(db_index=True, help_text="ID of JigCompleted record")
+    jig_qr_id = models.CharField(max_length=100, help_text="Jig QR ID")
+    model_no = models.CharField(max_length=100, db_index=True, help_text="Plating Stock Number / Model Number")
+    lot_id = models.CharField(max_length=100, db_index=True, help_text="Lot ID for this model")
+    total_qty = models.IntegerField(help_text="Total quantity for this model")
+    tray_type = models.CharField(max_length=50, null=True, blank=True)
+    tray_capacity = models.IntegerField(null=True, blank=True)
+    tray_code = models.CharField(max_length=10, null=True, blank=True, help_text="Tray code e.g. NR, JB")
+    tray_color = models.CharField(max_length=50, null=True, blank=True, help_text="Tray color e.g. Red, Blue")
+    num_trays = models.IntegerField(default=0)
+    tray_data = models.JSONField(default=list, help_text="List of {tray_id, tray_qty, is_top_tray, top_tray_remark}")
+    missing_qty = models.IntegerField(default=0)
+    top_tray_remark = models.TextField(null=True, blank=True)
+    is_draft = models.BooleanField(default=False, help_text="True if this is a draft save, False if final save")
+    submitted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ju_submitted_z1'
+        ordering = ['-submitted_at']
+        indexes = [
+            models.Index(fields=['jig_completed_id', 'model_no']),
+            models.Index(fields=['lot_id']),
+        ]
+
+    def __str__(self):
+        return f"JU-Z1: {self.jig_qr_id} | {self.model_no} ({self.total_qty})"
 
 

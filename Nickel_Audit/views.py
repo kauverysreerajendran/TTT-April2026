@@ -27,7 +27,6 @@ from IQF.models import *
 from BrassAudit.models import *
 from Nickel_Audit.models import *
 from Nickel_Inspection.models import *
-from Spider_Spindle.models import *
 
 from Jig_Unloading.models import *
 
@@ -672,36 +671,6 @@ class NA_Accepted_form(APIView):
             total_stock_data.na_last_process_date_time = timezone.now()
 
             total_stock_data.save()
-
-            # ✅ Create Spider_TrayId records from Nickel_AuditTrayId for this lot_id
-            nickel_trays = Nickel_AuditTrayId.objects.filter(lot_id=lot_id)
-            created_count = 0
-            for tray in nickel_trays:
-                spider_tray, created = Spider_TrayId.objects.get_or_create(
-                    tray_id=tray.tray_id,
-                    lot_id=tray.lot_id,
-                    defaults={
-                        'tray_quantity': tray.tray_quantity,
-                        'batch_id': tray.batch_id,
-                        'date': tray.date,
-                        'user': tray.user,
-                        'top_tray': tray.top_tray,
-                        'delink_tray': tray.delink_tray,
-                        'delink_tray_qty': tray.delink_tray_qty,
-                        'IP_tray_verified': tray.IP_tray_verified,
-                        'rejected_tray': tray.rejected_tray,
-                        'new_tray': tray.new_tray,
-                        'tray_type': tray.tray_type,
-                        'tray_capacity': tray.tray_capacity,
-                    }
-                )
-                if created:
-                    created_count += 1
-                    print(f"✅ Created Spider_TrayId for tray_id: {tray.tray_id}")
-                else:
-                    print(f"ℹ️ Spider_TrayId already exists for tray_id: {tray.tray_id}")
-
-            print(f"STEP 11: Created {created_count} Spider_TrayId records from Nickel_AuditTrayId for lot_id: {lot_id}")
 
             return Response({"success": True})
 
@@ -2702,58 +2671,6 @@ def nickel_save_single_top_tray_scan(request):
                 'last_process_module', 
                 'na_onhold_picking'
             ])
-
-            # 🔥 NEW: Handle Spider_TrayId creation from Nickel_AuditTrayId
-            try:
-                # Get all Nickel_AuditTrayId records for this lot where rejected_tray=False and delink_tray=False
-                eligible_nickel_trays = Nickel_AuditTrayId.objects.filter(
-                    lot_id=unload_lot_id,
-                    rejected_tray=False,
-                    delink_tray=False
-                )
-                
-                created_spider_trays = 0
-                updated_spider_trays = 0
-                
-                # Get the batch_id (ModelMasterCreation instance) if needed
-                try:
-                    batch_instance = ModelMasterCreation.objects.filter(lot_id=unload_lot_id).first()
-                except:
-                    batch_instance = None
-                
-                for nickel_tray in eligible_nickel_trays:
-                    # Check if Spider_TrayId record already exists
-                    spider_tray, created = Spider_TrayId.objects.update_or_create(
-                        tray_id=nickel_tray.tray_id,
-                        lot_id=unload_lot_id,
-                        defaults={
-                            'tray_quantity': nickel_tray.tray_quantity,
-                            'batch_id': batch_instance,
-                            'user': user,
-                            'top_tray': nickel_tray.top_tray,
-                            'delink_tray': nickel_tray.delink_tray,
-                            'rejected_tray': nickel_tray.rejected_tray,
-                            'IP_tray_verified': getattr(nickel_tray, 'IP_tray_verified', False),
-                            'new_tray': True,  # Default as per Spider_TrayId model
-                            'tray_type': getattr(nickel_tray, 'tray_type', None),
-                            'tray_capacity': getattr(nickel_tray, 'tray_capacity', None),
-                        }
-                    )
-                    
-                    if created:
-                        created_spider_trays += 1
-                        print(f"✅ Created Spider_TrayId record: {nickel_tray.tray_id}")
-                    else:
-                        updated_spider_trays += 1
-                        print(f"🔄 Updated Spider_TrayId record: {nickel_tray.tray_id}")
-                
-                print(f"📊 Spider_TrayId Summary: {created_spider_trays} created, {updated_spider_trays} updated")
-                
-            except Exception as e:
-                print(f"❌ Error creating Spider_TrayId records: {str(e)}")
-                # Log error but continue with success (don't fail the main operation)
-                # Uncomment below line if you want Spider_TrayId creation errors to fail the entire operation:
-                # return Response({'success': False, 'error': f'Error creating Spider records: {str(e)}'}, status=500)
 
         # Handle draft save
         if draft_save:

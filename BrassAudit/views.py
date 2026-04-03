@@ -2031,12 +2031,18 @@ def get_expected_tray_capacity_for_brass_lot(lot_id):
         # Method 1: Get from TotalStockModel via lot_id
         total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
         if total_stock:
-            # Check if batch_id has tray capacity info
+            # Check if batch_id has tray type info
             if hasattr(total_stock, 'batch_id') and total_stock.batch_id:
                 batch_obj = total_stock.batch_id
-                if hasattr(batch_obj, 'tray_capacity') and batch_obj.tray_capacity:
-                    print(f"[Expected Brass Tray Capacity] Found from batch: {batch_obj.tray_capacity}")
-                    return batch_obj.tray_capacity
+                if hasattr(batch_obj, 'tray_type') and batch_obj.tray_type:
+                    # Return pre-jig capacity based on tray type category (NB=16, JB=12)
+                    tt = (batch_obj.tray_type or '').upper()
+                    if 'JUMBO' in tt or tt in ('JR', 'JD', 'JB', 'JL'):
+                        print(f"[Expected Brass Tray Capacity] Jumbo type → pre-jig capacity 12")
+                        return 12
+                    else:
+                        print(f"[Expected Brass Tray Capacity] Normal type → pre-jig capacity 16")
+                        return 16
         
         # Method 2: Get from existing BrassTrayId records for this lot
         existing_tray = BrassAuditTrayId.objects.filter(

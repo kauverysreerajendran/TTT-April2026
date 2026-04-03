@@ -31,7 +31,6 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -59,8 +58,6 @@ INSTALLED_APPS = [
     'Nickel_Inspection',
     'nickel_inspection_zone_two',
     'Nickel_Audit',
-    'Spider_Spindle',
-    'Spider_Spindle_zone_two',
     'nickel_audit_zone_two',
     'Recovery_DP',
     'Recovery_IS',
@@ -68,6 +65,8 @@ INSTALLED_APPS = [
     'Recovery_BrassAudit',
     'Recovery_IQF',
     'ReportsModule',
+    'SpiderSpindle_Z1',
+    'SpiderSpindle_Z2',
      'social_django',
 
            

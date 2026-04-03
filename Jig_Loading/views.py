@@ -341,7 +341,7 @@ class JigView(TemplateView):
 					excess_data = {
 						'batch_id': jc.batch_id,
 						'stock_lot_id': excess_source_lot,
-						'plating_stk_no': f"[Excess] {excess_model_name}" if excess_model_name else (jc.plating_stock_num or ''),
+						'plating_stk_no': excess_model_name if excess_model_name else (jc.plating_stock_num or ''),
 						'polishing_stk_no': getattr(batch, 'polishing_stk_no', '') if batch else '',
 						'plating_color': getattr(batch, 'plating_color', '') if batch else '',
 						'polish_finish': getattr(batch, 'polish_finish', '') if batch else '',
@@ -355,6 +355,7 @@ class JigView(TemplateView):
 						'jig_holding_reason': '',
 						'is_excess_lot': True,
 						'source_jig_id': jc.jig_id,
+						'half_filled_tray_info_json': json.dumps(jc.half_filled_tray_info or []),
 					}
 					# Populate jig_capacity from JigLoadingMaster
 					try:
@@ -369,6 +370,26 @@ class JigView(TemplateView):
 				logging.info(f"[JIG PICK] Added {submitted_with_excess.count()} excess lot entries to pick table")
 			except Exception:
 				logging.exception("[JIG PICK] Failed to add excess lot records to pick table")
+
+			# ===== MARK LOTS WITH ACTIVE DRAFT STATUS =====
+			try:
+				all_lot_ids = [d.get('stock_lot_id', '') for d in master_data if d.get('stock_lot_id')]
+				if all_lot_ids:
+					draft_lot_ids = set(
+						JigLoadingRecord.objects.filter(
+							lot_id__in=all_lot_ids,
+							status_flag='DRAFT'
+						).values_list('lot_id', flat=True)
+					)
+					for d in master_data:
+						if d.get('stock_lot_id') in draft_lot_ids:
+							d['lot_status'] = 'Draft'
+							d['lot_status_class'] = 'lot-status-draft'
+						else:
+							d.setdefault('lot_status', 'Yet to Start')
+							d.setdefault('lot_status_class', 'lot-status-yet')
+			except Exception:
+				logging.exception('[JIG PICK] Failed to compute lot draft statuses')
 
 		except Exception:
 			logging.exception('Failed to populate master_data for Jig pick')
@@ -653,6 +674,19 @@ class InitJigLoad(APIView):
 						tray_type_name = getattr(tt, 'tray_type', '') if not isinstance(tt, str) else tt
 				except Exception:
 					pass
+				# Resolve abbreviation to full parent name (e.g. JB→Jumbo, ND→Normal)
+				if tray_type_name:
+					try:
+						from modelmasterapp.models import TrayType as _TrayType
+						_tt_obj = _TrayType.objects.filter(tray_type=tray_type_name).first()
+						if _tt_obj and _tt_obj.tray_color:
+							_parent = _TrayType.objects.filter(
+								tray_capacity=_tt_obj.tray_capacity, tray_color__isnull=True
+							).first()
+							if _parent:
+								tray_type_name = _parent.tray_type
+					except Exception:
+						pass
 		except Exception:
 			pass
 
@@ -2035,6 +2069,19 @@ def fetch_lot_data(lot_id, batch_id, jig_capacity_override=None):
 					tray_type_name = getattr(tt, 'tray_type', '') if not isinstance(tt, str) else tt
 			except Exception:
 				pass
+			# Resolve abbreviation to full parent name (e.g. JB→Jumbo, ND→Normal)
+			if tray_type_name:
+				try:
+					from modelmasterapp.models import TrayType as _TrayType
+					_tt_obj = _TrayType.objects.filter(tray_type=tray_type_name).first()
+					if _tt_obj and _tt_obj.tray_color:
+						_parent = _TrayType.objects.filter(
+							tray_capacity=_tt_obj.tray_capacity, tray_color__isnull=True
+						).first()
+						if _parent:
+							tray_type_name = _parent.tray_type
+				except Exception:
+					pass
 	except Exception:
 		pass
 
@@ -2154,6 +2201,32 @@ class JigLoadInitAPI(APIView):
 			trays = aggregate_multi_model_trays(lot_id, secondary_lots)
 		else:
 			trays = fetch_trays_for_lot(lot_id)
+
+		# ===== EXCESS LOT DETECTION: If batch already submitted with half_filled_tray_qty > 0,
+		# use half_filled_tray_info as the tray list and half_filled_tray_qty as lot_qty.
+		# This handles excess lots appearing in the pick table after a jig is submitted.
+		if not (multi_model_flag and secondary_lots):
+			try:
+				submitted_jig = JigCompleted.objects.filter(
+					batch_id=batch_id,
+					draft_status='submitted',
+					half_filled_tray_qty__gt=0
+				).first()
+				if submitted_jig:
+					hf_info = submitted_jig.half_filled_tray_info or []
+					if hf_info:
+						trays = [
+							{
+								'tray_id': t['tray_id'],
+								'qty': int(t.get('qty') or 0),
+								'top_tray': bool(t.get('is_top_half_filled', False)),
+							}
+							for t in hf_info if isinstance(t, dict) and t.get('tray_id')
+						]
+						lot_qty = submitted_jig.half_filled_tray_qty or submitted_jig.excess_qty or 0
+						logging.info(f'[INIT_EXCESS_LOT] Batch {batch_id} already submitted — using half_filled tray info: {len(trays)} tray(s), qty={lot_qty}')
+			except Exception:
+				logging.exception('[INIT_EXCESS_LOT] Failed to check submitted JigCompleted — continuing with normal flow')
 
 		# 2. Fetch draft (read-only — never created here)
 		draft = JigLoadingManualDraft.objects.filter(

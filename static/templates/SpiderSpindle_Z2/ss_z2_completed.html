@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<style>
+#order-listing thead th {
+  position: sticky; top: 0; z-index: 10;
+  background: #028084 !important; color: #e5fcff !important;
+  vertical-align: middle !important; border-bottom: 2.5px solid #bdbdbd !important;
+  padding: 8px 12px !important; white-space: normal !important;
+  line-height: 1.3 !important; font-weight: 600;
+}
+#order-listing th, #order-listing td {
+  border-right: 1.5px solid #bababa !important;
+  border-bottom: 1.5px solid #121413 !important;
+}
+#order-listing tr, #order-listing td, #order-listing th {
+  height: 20px !important; padding: 4px 8px !important;
+}
+#order-listing th:nth-child(1), #order-listing td:nth-child(1) {
+  position: sticky; left: 0 !important; z-index: 12;
+  background: #f7fafd; min-width: 60px; max-width: 60px;
+}
+#order-listing th:nth-child(2), #order-listing td:nth-child(2) {
+  position: sticky; left: 60px !important; z-index: 12;
+  background: #f7fafd; min-width: 120px; max-width: 130px;
+}
+.calendar-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.calendar-bar label { font-weight: 600; font-size: 13px; }
+.calendar-bar input[type="date"] { padding: 4px 8px; border: 1px solid #ccc; border-radius: 6px; }
+.ss-btn-primary {
+  background: #028084; color: #fff; border: none; padding: 6px 16px;
+  border-radius: 6px; font-weight: 600; cursor: pointer;
+}
+.ss-btn-primary:hover { background: #016668; }
+.ss-btn-secondary {
+  background: #6c757d; color: #fff; border: none; padding: 6px 16px;
+  border-radius: 6px; font-weight: 600; cursor: pointer;
+}
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+  * { font-size: 20px !important; }
+}
+</style>
+
+<div class="content-wrapper">
+  <div class="row">
+    <div class="col-12 grid-margin stretch-card">
+      <div class="card">
+        <div class="card-body" style="padding-bottom:12px;">
+          <h5 class="text-left mt-0 mb-3" style="font-weight:700;">
+            Spider Spindle Z2 - Completed Table (Other Colors)
+          </h5>
+
+          <form method="get" class="calendar-bar">
+            <div class="date-input-group">
+              <label>From:</label>
+              <input type="date" name="from_date" value="{{ from_date }}" />
+            </div>
+            <div class="date-input-group">
+              <label>To:</label>
+              <input type="date" name="to_date" value="{{ to_date }}" />
+            </div>
+            <button type="submit" class="ss-btn-primary">Search</button>
+            <a href="{% url 'ss_z2_completed' %}" class="ss-btn-secondary" style="text-decoration:none;">Clear</a>
+          </form>
+
+          <div class="table-responsive">
+            <table id="order-listing" class="table table-bordered">
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Lot ID</th>
+                  <th>Completed At</th>
+                  <th>Plating Stk No</th>
+                  <th>Polishing Stk No</th>
+                  <th>Plating Color</th>
+                  <th>Category</th>
+                  <th>Polish Finish</th>
+                  <th>Version</th>
+                  <th>Tray Type</th>
+                  <th>Source</th>
+                  <th>Input Qty</th>
+                  <th>Tray ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in master_data %}
+                <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td>
+                    {{ item.lot_id }}
+                    {% if item.images %}
+                    <span style="cursor:pointer;color:#028084;">
+                      <i class="fa fa-image"></i>
+                    </span>
+                    {% endif %}
+                  </td>
+                  <td>{{ item.completed_at|date:"d M Y H:i" }}</td>
+                  <td>{{ item.plating_stk_no }}</td>
+                  <td>{{ item.polishing_stk_no }}</td>
+                  <td>{{ item.plating_color }}</td>
+                  <td>{{ item.category }}</td>
+                  <td>{{ item.polish_finish }}</td>
+                  <td>{{ item.version }}</td>
+                  <td>{{ item.tray_type }}</td>
+                  <td>{{ item.location }}</td>
+                  <td>{{ item.total_case_qty }}</td>
+                  <td>
+                    {% if item.linked_tray_id %}
+                      <span class="badge bg-success text-white">{{ item.linked_tray_id }}</span>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="13" class="text-center text-muted py-4">
+                    No completed Spider Spindle Z2 records found for selected date range.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if page_obj.has_other_pages %}
+          <div class="pagination-wrapper mt-3 d-flex justify-content-center">
+            <nav>
+              <ul class="pagination pagination-sm">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ page_obj.previous_page_number }}&from_date={{ from_date }}&to_date={{ to_date }}">&laquo;</a>
+                </li>
+                {% endif %}
+                {% for num in page_obj.paginator.page_range %}
+                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                  <a class="page-link" href="?page={{ num }}&from_date={{ from_date }}&to_date={{ to_date }}">{{ num }}</a>
+                </li>
+                {% endfor %}
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ page_obj.next_page_number }}&from_date={{ from_date }}&to_date={{ to_date }}">&raquo;</a>
+                </li>
+                {% endif %}
+              </ul>
+            </nav>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
