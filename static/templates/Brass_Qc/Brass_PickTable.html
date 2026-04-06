@@ -1010,7 +1010,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type}}-{{data.tray_capacity}}</td>
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type|tray_full_name}}-{{data.tray_capacity}}</td>
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
                     
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>

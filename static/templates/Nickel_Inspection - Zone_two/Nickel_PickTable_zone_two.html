@@ -1875,7 +1875,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (isVerified) {
         // AFTER CHECK: Use BrassTrayId data with Brass QC parameters
-        trayListEndpoint = '/nickle_inspection/pick_CompleteTable_tray_id_list/';
+        trayListEndpoint = '/nickle_inspection_zone_two/nq_zone_pick_CompleteTable_tray_id_list/';
         dataSource = 'BrassTrayId';
         
         // Get Brass QC status from row data attributes
@@ -1889,7 +1889,7 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log(`   Parameters:`, apiParams);
       } else {
         // PICK MODE: Use TrayId data with IP stock parameters  
-        trayListEndpoint = '/nickle_inspection/pick_CompleteTable_tray_id_list/';
+        trayListEndpoint = '/nickle_inspection_zone_two/nq_zone_pick_CompleteTable_tray_id_list/';
         dataSource = 'TrayId (IPTrayId)';
 
         apiParams = {

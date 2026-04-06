@@ -706,7 +706,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
         {{ data.version__version_internal|default:"N/A" }}
       </td>
       <td class="{% if not is_admin and not visible_headings|get_item:'Tray Cate-Capacity' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.tray_type|default:"N/A" }}-{{ data.tray_capacity|default:"0" }}
+        {{ data.tray_type|tray_full_name|default:"N/A" }}-{{ data.tray_capacity|default:"0" }}
       </td>
       <td class="{% if not is_admin and not visible_headings|get_item:'Source' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
         {{ data.location__location_name|default:"N/A" }}

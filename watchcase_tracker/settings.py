@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     'adminportal',
     'DayPlanning',
     'InputScreening',
-
     'Brass_QC',
     'BrassAudit',
     'IQF',

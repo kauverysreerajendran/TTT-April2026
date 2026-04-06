@@ -131,3 +131,20 @@ def strip(value):
     if isinstance(value, str):
         return value.strip()
     return value
+
+
+@register.filter
+def tray_full_name(tray_type):
+    """
+    Converts abbreviated tray type codes to full display names.
+    J* codes (JB, JR, JD, JL, Jumbo) -> 'Jumbo'
+    N* codes (NB, NR, ND, NL, Normal) -> 'Normal'
+    """
+    if not tray_type:
+        return tray_type
+    code = str(tray_type).upper().strip()
+    if code.startswith('J'):
+        return 'Jumbo'
+    if code.startswith('N'):
+        return 'Normal'
+    return tray_type

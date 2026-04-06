@@ -1,0 +1,2447 @@
+{% extends "base.html" %} {% load static %} {% block content %}
+{% load stock_filters %} 
+
+  <style>
+        /* Glassmorphism effect for rejection details table modal */
+
+
+        /* Reduce rejection modal table width and header padding */
+    .new-popup-modal,
+    #rejectionPopupModal {
+      max-width: 340px !important;
+      min-width: 180px !important;
+      width: 98vw !important;
+    }
+    
+    .rejection-modal-header {
+      padding: 10px 16px 6px 16px !important;
+      font-size: 16px !important;
+      min-height: 32px !important;
+    }
+    
+    .rejection-content {
+      padding: 10px 16px 16px 16px !important;
+    }
+    
+    .rejection-table,
+    .rejection-remarks-table {
+      width: 100% !important;
+      max-width: 320px !important;
+      margin: 0 auto !important;
+    }
+
+.remark-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  margin-right: 2px;
+}
+.remark-circle:active { transform: scale(0.98); }
+.remark-circle:hover { transform: scale(1.08); }
+.rejection-remarks-modal {
+  display: none;
+  position: fixed;
+  z-index: 10000;
+  left: 0; top: 0; width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.4);
+}
+.rejection-remarks-modal-content {
+  background-color: #fefefe;
+  margin: 5% auto;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 340px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.rejection-remarks-close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.rejection-remarks-close:hover { color: #000; }
+.rejection-remarks-table { width:100%; border-collapse:collapse; }
+.rejection-remarks-table th, .rejection-remarks-table td { padding:8px 10px; border-bottom:1px solid #eee; text-align:left; font-size:13px; vertical-align:middle; }
+.rejection-remarks-table th { background:#f6f9f9; font-weight:600; color:#20343b; }
+.rejection-remarks-no-data { text-align:center; padding:18px; color:#7f8c8d; font-style:italic; }
+
+
+    
+
+/* ========== Tablet override — paste at file end (after other table styles) ========== */
+/* --- Tablet: freeze first 3 columns consistently with desktop --- */
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+
+*{
+  font-size: 20px !important; /* Increase font size for better readability */
+}
+
+:root { --app-font-size: 20px; }
+.rounded-circle{
+  padding: 17px !important;
+}
+.model-image-tooltip{
+  transform: translateX(-25%) !important;
+  top: 45% !important;
+  z-index: 500000 !important; /* high so it sits above table & scrollbar */
+
+}
+
+
+  /* Core layout blocks */
+  .content-wrapper,
+  .card, .card-body,
+  .table-responsive,
+  #order-listing,
+  #trayScanModal_DayPlanning,
+  .tray-scan-modal-DayPlanning,
+  .pagination-wrapper {
+    font-size: var(--app-font-size) !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Table headings / cells / icons */
+  #order-listing th,
+  #order-listing td,
+  #order-listing thead th {
+    font-size: var(--app-font-size) !important;
+    vertical-align: middle !important;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  /* Ensure heading/title and date controls match */
+  h4.text-left.mt-0.mb-3,
+  .calendar-bar .date-input-group label,
+  .calendar-bar .date-input-group input,
+  #search-date-range-simple,
+  #clear-date-filter-simple,
+  .calendar-btn,
+  #trayScanModal_DayPlanning input.form-control,#trayValidateBtn,
+  #trayScanModal_DayPlanning table th, #trayScanModal_DayPlanning table td,
+  #modalModelNo_DayPlanning
+ {
+    font-size: var(--app-font-size) !important;
+  }  
+
+  /* Reserve space for filter icons in header cells */
+#order-listing th {
+  position: relative;
+  overflow: visible !important;
+  white-space: normal !important; /* allow wrapping */
+}
+
+/* Ensure filter icons always stay to the right */
+#order-listing th .fa-filter {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px !important;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+  /* Column 1 */
+  #order-listing th:nth-child(1),
+  #order-listing td:nth-child(1) {
+    position: sticky;
+    left: 0 !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+    background: #f7fafd;
+    z-index: 30;
+  }
+
+  /* Column 2 */
+  #order-listing th:nth-child(2),
+  #order-listing td:nth-child(2) {
+    position: sticky;
+    left: 110px !important;   /* = width of col1 */
+    min-width: 125px !important;
+    max-width: 125px !important;
+    background: #f7fafd;
+    z-index: 25;
+  }
+
+  /* Column 3 */
+  #order-listing th:nth-child(3),
+  #order-listing td:nth-child(3) {
+    position: sticky;
+    left: 235px !important;  /* 90 (col1) + 125 (col2 min) */
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background: #f7fafd;
+    z-index: 20;
+  }
+
+  /* Sticky header */
+  #order-listing thead th {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: #028084 !important;
+    color: #e5fcff !important;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+  .table-container {
+    overflow-x: auto;
+  }
+
+  /* Other columns (fit remaining space) */
+  #order-listing th:nth-child(4)  { min-width: 135px !important; max-width: 135px !important; }
+  #order-listing th:nth-child(5)  { min-width: 115px !important; max-width: 115px !important; }
+  #order-listing th:nth-child(6)  { min-width: 135px !important; max-width: 135px !important; }
+  #order-listing th:nth-child(7)  { min-width: 105px !important; max-width: 105px !important; }
+  #order-listing th:nth-child(8)  { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(9)  { min-width: 140px !important; max-width: 145px !important; }
+  #order-listing th:nth-child(10) { min-width: 120px !important; max-width: 120px !important; }
+  #order-listing th:nth-child(11) { min-width: 120px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(12) { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(13) { min-width: 140px !important; max-width: 150px !important; }
+  #order-listing th:nth-child(14) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(15) { min-width: 110px !important; max-width: 100px !important; }
+  #order-listing th:nth-child(16) { min-width: 120px !important; max-width: 150px !important; }
+  #order-listing th:nth-child(17) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(18) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(19) { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(20) { min-width: 130px !important; max-width: 130px !important; }
+
+
+  /* Prevent overlap */
+  #order-listing th:nth-child(-n+3),
+  #order-listing td:nth-child(-n+3) {
+    z-index: 45 !important;
+  }
+
+  /* Hide hidden columns */
+  #order-listing th[hidden],
+  #order-listing td[hidden] {
+    display: none !important;
+  }
+}
+    /* Force SweetAlert to always be on top of all modals/tooltips */
+.swal2-container {
+  z-index: 2147483647 !important;
+  position: fixed !important;
+} 
+      /* Add to your CSS file for Excel-like grid lines */
+.table-bordered th, .table-bordered td {
+  border: 1px solid #d9dedf !important;
+}
+  /* Make the table header sticky */
+thead th {
+  position: sticky;
+  top: 0;
+  background-color: white; /* or your table header bg color */
+  z-index: 5; /* ensure it stays above the table rows */
+  
+}
+
+#order-listing thead th {
+  height: 38px !important; /* Increase as needed */
+  background: #028084 !important;
+  color: #e5fcff !important;
+  vertical-align: middle !important;
+  border-bottom: 2.5px solid #bdbdbd !important; /* Thicker grey line below heading */
+}
+/* style for hol/unhold row - blurred bg */
+#order-listing tr:last-child td {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  /* background: #f4f3f3 !important; */
+}
+/* Gird line color combination */
+#order-listing th,
+#order-listing td {
+  border-right: 1.5px solid #bababa !important; /* Vertical lines: blue */
+  border-bottom: 1.5px solid #121413 !important; /* Horizontal lines: green */
+}
+
+  
+/* Default: Desktop/Laptop (wider columns for larger font) - server */
+/* #order-listing th:nth-child(1) {
+  min-width: 90px;
+  max-width: 90px;
+} */ /* S.No */
+/* #order-listing th:nth-child(2) {
+  min-width: 90px;
+  max-width: 100px;
+} */ /* Last Updated */
+/* #order-listing th:nth-child(3) {
+  min-width: 90px;
+  max-width: 120px;
+} */ /* Plating */
+#order-listing th:nth-child(4) {
+  min-width: 110px;
+  max-width: 120px;
+} /* Polishing Stk No */
+#order-listing th:nth-child(5) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Plating Color */
+#order-listing th:nth-child(6) {
+  min-width: 100px;
+  max-width: 110px;
+} /* Category */
+#order-listing th:nth-child(7) {
+  min-width: 85px;
+  max-width: 95px;
+} /* Polish Finish */
+#order-listing th:nth-child(8) {
+  min-width: 110px;
+  max-width: 110px;
+} /* Version */
+#order-listing th:nth-child(9) {
+  min-width: 90px;
+  max-width: 95px;
+} /* Tray Cate-Capacity */
+#order-listing th:nth-child(10) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Source */
+#order-listing th:nth-child(11) {
+  min-width: 80px;
+  max-width: 80px;
+} /* No of Trays */
+#order-listing th:nth-child(12) {
+  min-width: 100px;
+  max-width: 105px;
+} /* Input Qty */
+#order-listing th:nth-child(13) {
+  min-width: 95px;
+  max-width: 100px;
+} /* Process Status */
+#order-listing th:nth-child(14) {
+  min-width: 90px;
+  max-width: 100px;
+} /*  Action */
+#order-listing th:nth-child(15) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Lot Status */
+#order-listing th:nth-child(16) {
+  min-width: 160px;
+  max-width: 170px;
+} /* Current Stage */
+#order-listing th:nth-child(17) {
+  min-width: 110px;
+  max-width: 100px;
+} /* Remarks */
+#order-listing th:nth-child(18) {
+  min-width: 100px;
+  max-width: 110px;
+}
+
+@media (min-width: 600px) and (max-width: 900px) {
+  #order-listing {
+    table-layout: auto !important; /* Let columns auto-fit content */
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100vw !important;
+  }
+  /* Adjust width for all headings (th) and cells (td) */
+  #order-listing th,
+  #order-listing td {
+    min-width: 160px !important;
+    max-width: 260px !important;
+    width: 180px !important;
+  }
+  #order-listing th {
+    position: relative;
+    padding-right: 48px !important; /* More space for filter icon */
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: ellipsis;
+  }
+  #order-listing th .fa-filter {
+    position: absolute;
+    right: 18px !important;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    background: transparent;
+    pointer-events: auto;
+  }
+}
+/* Right-align filter icons */
+#order-listing th .fa-filter {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+#order-listing th .fa-filter:hover {
+  opacity: 1;
+}
+
+
+  
+#order-listing th:last-child,
+#order-listing td:last-child {
+  border-right: none;
+  max-width: 95px;
+  min-width: 100px;
+}
+/* Overall Table Shrink */
+#order-listing tr,
+#order-listing td,
+#order-listing th {
+  height: 20px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+/* Table heading font size */
+/* Add this at the end of your <style> block in DP_PickTable.html */
+
+/* Professional table header styling with proper text wrapping */
+#order-listing th {
+  position: relative;
+  padding: 8px 12px 8px 16px !important;
+  text-align: left !important;
+  vertical-align: middle !important;
+  white-space: normal !important;
+  line-height: 1.3 !important;
+  word-break: keep-all !important;
+  hyphens: none !important;
+  /* font-size: 13px; */
+  /* font-weight: 600 !important; */
+  background: #028084 !important;
+  color: #e5fcff !important;
+  border-bottom: 2.5px solid #bdbdbd !important;
+  /* min-width: 80px;
+  max-width: 140px; */
+   overflow-wrap: break-word;
+  word-wrap: break-word;
+   z-index: 20 !important;
+}
+
+/* Make sure header cells for sticky columns are always above body cells */
+/* Fix: Prevent shadow/rows from showing behind sticky columns while scrolling */
+#order-listing th:nth-child(-n+3),
+#order-listing td:nth-child(-n+3) {
+  z-index: 30 !important; 
+box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+
+/* Prevent sticky columns from overlapping sticky header */
+#order-listing td:nth-child(-n+3) {
+  z-index: 11 !important;
+}
+  /* Make the first column sticky and opaque */
+#order-listing td:first-child,
+#order-listing th:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;      /* Or match your table background */
+  z-index: 2;            /* Above blurred rows */
+  box-shadow: 2px 0 4px rgba(0,0,0,0.03); /* Optional: subtle shadow */
+}
+/* Force specific table headers to wrap onto two lines */
+#order-listing th:nth-child(4),   /* Polishing Stk No */
+#order-listing th:nth-child(5),   /* Plating Color */
+#order-listing th:nth-child(7),   /* Polish Finish */
+#order-listing th:nth-child(9),   /* Tray Cate-Capacity */
+#order-listing th:nth-child(11),  /* No of Tray */
+#order-listing th:nth-child(12),  /* Input Qty */
+#order-listing th:nth-child(13)   /* Process Status */ {
+  white-space: normal !important;
+  line-height: 1.2 !important;
+  word-break: break-word !important;
+
+  text-align: center;
+  vertical-align: middle;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+/* Freeze style for 1st - 3 columns */
+/* --- Freeze first 3 columns and table header for #order-listing --- */
+#order-listing {
+  position: relative;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  background: #fff;
+  /* Ensure enough left padding for sticky columns */
+}
+
+#order-listing th,
+#order-listing td {
+  background-clip: padding-box;
+  /* Prevent overlap artifacts */
+  z-index: 1;
+}
+
+/* Sticky header */
+#order-listing thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #028084 !important;
+  color: #e5fcff !important;
+}
+
+/* Freeze 1st column */
+#order-listing th:nth-child(1),
+#order-listing td:nth-child(1) {
+  position: sticky;
+  left: 0 !important;
+  z-index: 12; /* Above header */
+  background: #f7fafd;
+  min-width: 75px;
+  max-width: 75px;
+}
+
+/* Freeze 2nd column - Last Updated*/
+#order-listing th:nth-child(2),
+#order-listing td:nth-child(2) {
+  position: sticky;
+  left: 75px; /* Match min-width of 1st col */
+  z-index: 12;
+  background: #f7fafd;
+  min-width: 75px; /* Increased width */
+  max-width: 75px; /* Increased width */
+}
+
+/* Freeze 3rd column */
+#order-listing th:nth-child(3),
+#order-listing td:nth-child(3) {
+  position: sticky;
+  left: 150px; /* 100px (1st) + 90px (2nd) */
+  z-index: 12;
+  background: #f7fafd;
+  min-width: 100px; /* Increased width 100 - old value*/
+  max-width: 100px; /* Increased width  110 - old value*/
+}
+
+
+
+/* Prevent sticky columns from overlapping sticky header */
+#order-listing th:nth-child(-n + 3) {
+  z-index: 12;
+}
+#order-listing td:nth-child(-n + 3) {
+  z-index: 11;
+}
+
+/* Ensure sticky columns and header work together */
+#order-listing th,
+#order-listing td {
+  box-sizing: border-box;
+  /* Prevent content shake */
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+
+    .blurred-heading, .blurred-cell {
+    filter: blur(2px) grayscale(0.7) opacity(0.6);
+    pointer-events: none !important;
+    user-select: none;
+    cursor: not-allowed;
+    background: #f5f5f5 !important;
+  }
+    /* Show remark tooltip above the trigger instead of below */
+  .remark-tooltip {
+    top: auto !important;
+    bottom: 110% !important;
+  }
+#trayScanDetails.table-grid {
+  display: grid !important;
+  grid-template-columns: 94px 175px 150px !important;
+  gap: 0px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-right: 10px;
+  margin-top: 10px;
+  border: 1px solid #ddd;
+}
+
+#trayScanDetails.table-grid::-webkit-scrollbar {
+  width: 8px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+ 
+ 
+.tray-scan-modal.open {
+  width:500px !important;
+}
+/* For the 4-column layout (with validation status) */
+#trayScanDetails.table-grid.four-column {
+  grid-template-columns: 50px 1fr 100px 140px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+ 
+/* Styling individual grid cells, only inside trayScanDetails */
+#trayScanDetails.table-grid > div {
+  background: #f7f7f7;
+  padding: 8px 12px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  margin: 0; /* reset any margin from <p> or others */
+}
+ 
+/* S.no column specific styling */
+#trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+  text-align: center;
+  font-weight: 600;
+  padding: 8px 4px; /* Reduced horizontal padding for S.no */
+}
+ 
+/* For mobile responsiveness */
+@media (max-width: 768px) {
+  #trayScanDetails.table-grid {
+    grid-template-columns: 45px 1fr 1fr !important; /* Even smaller S.no column on mobile */
+  }
+  #trayScanDetails.table-grid.four-column {
+    grid-template-columns: 40px 1fr 80px 100px !important;
+  }
+  #trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+    padding: 6px 2px; /* Further reduced padding on mobile */
+    font-size: 11px;
+  }
+}
+ 
+/* For very small screens */
+@media (max-width: 480px) {
+  #trayScanDetails.table-grid {
+    grid-template-columns: 35px 1fr 80px !important; /* Minimal S.no column */
+  }
+  #trayScanDetails.table-grid.four-column {
+    grid-template-columns: 30px 1fr 70px 90px !important;
+  }
+}
+</style>
+ 
+
+<div class="content-wrapper">
+  <div class="row">
+    <div class="col-12 grid-margin stretch-card">
+      <div class="card">
+         <div class="card-body" style="padding-bottom:12px;">
+              <div style="margin-bottom: 12px;display: flex;flex-wrap: wrap;align-items: baseline;gap: 28px !important;">
+              <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Input Screening Rejected Table</h5>
+              <span id="selected-count" style="color: #2e7d32; font-weight: 600;">0 items selected</span>
+              <button id="delink-selected-btn" class="btn btn-secondary" style="margin-left: 0px;padding: 8px;border-radius: 30px !important;" disabled>Delink Selected</button>
+            </div>
+                    
+            <!-- Table Section -->
+            <div class="table-responsive">
+            <!-- Place this block above your table -->
+        
+
+              <table id="order-listing" class="table">
+                <thead>
+                  <tr>
+                    <th style="background: #008080; color: #fff; text-align: center; vertical-align: middle;">
+                      <div style="display: flex;align-items: center;justify-content: center;flex-direction: row;">
+                        <input type="checkbox" id="select-all-checkbox" style="transform: scale(1.2); margin: 5px;" />
+                        <label for="select-all-checkbox" style="font-weight: 600; color: #fff; font-size: 11px; margin: 0; cursor:pointer;text-align: center;">Select All</label>
+                      </div>
+                    </th>
+                    <th>
+                      
+                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Last<br>Updated
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating <br>Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating Color
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                     <th>
+                      Category
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polish <br>Finish
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                     <th>
+                      Tray Cate-<br>Capacity
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Input Source
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                   
+                    <th>
+                      No of <br>Tray <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Reject Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Rejection Reasons
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                   
+                  </tr>
+                </thead>
+                <tbody>
+                {% for data in master_data %}
+
+                  <tr class="highlighted-tray-scan"
+                    data-lot-id="{{ data.stock_lot_id }}"
+                    data-batch-id="{{ data.batch_id }}">
+                    <td>
+                      {% if data.tray_id_in_trayid %}
+                        <input type="checkbox" class="row-checkbox" />
+                      {% else %}
+                        <input type="checkbox" class="row-checkbox" disabled title="Tray not found, cannot delink" />
+                      {% endif %}
+                    </td>
+                     <td>{{ page_obj.start_index|add:forloop.counter0 }}
+
+                    </td>                 
+<td>{{ data.last_process_date_time|date:"Y-m-d" }}<br>
+                        <span style="display:inline-block; margin-top:4px;">{{ data.last_process_date_time|date:"h:i A" }}</span>
+                    <!-- Plating Stk No - Mouse Hover Image -->
+                      <td>
+                        <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
+                          {{ data.plating_stk_no|highlight_plating_color|safe_html }}
+                          <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 90%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s;">
+                            <button class="info-btn">Info</button>
+                            <button class="close-btn">Close</button>
+                            <button class="img-scroll-left" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8592;</button>
+                            <!-- Image gallery section -->
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                              <!-- Hide scroll buttons since only one image is shown -->
+                              <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
+                                <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                              </div>
+                            </div>
+                            <button class="img-scroll-right" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8594;</button>
+                          </div>
+                        </span>
+                      </td>
+                     
+
+                    <td>{{ data.plating_color }}</td>
+                    <td>{{ data.category }}</td>
+                    <td>{{data.polish_finish}}</td>
+                    <td>{{data.tray_type}}-{{data.tray_capacity}}</td>
+                    <td>{{data.location__location_name}}</td>
+                    <td>{{data.no_of_trays}}</td>
+                    <td>
+                      {{data.ip_rejection_total_qty}}
+                          <a href="#"
+      title="View"
+      class="text-primary tray-scan-btn-Jig"
+      style="text-decoration: underline; margin-left: 8px;"
+      data-stock-lot-id="{{ data.stock_lot_id }}"
+      data-batch-id="{{ data.batch_id }}"
+      data-model-no="{{ data.plating_stk_no }}"
+      data-no-of-trays="{{ data.no_of_trays }}"
+      data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+      data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
+      data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+      data-accepted-ip-stock="{{ data.accepted_Ip_stock|yesno:'true,false' }}"
+      data-rejected-ip-stock="{{ data.rejected_ip_stock|yesno:'true,false' }}"
+      data-model-image="{{ data.model_images.0|default:'' }}"
+      data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'true,false' }}"
+        data-total-batch-quantity="{{ data.ip_rejection_total_qty }}">
+
+      <img src="{% static 'assets/icons/view.png' %}"
+          alt="View"
+          style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+    </a>
+                    </td>
+
+                    <!-- Rejection Remark -->
+                    <!-- Only reduce circle size and force single-line display, keep everything else intact -->
+<td>
+  <div class="avatar-group rejection-popup-trigger"
+      style="cursor:pointer; max-width:120px; white-space:nowrap; word-break:break-word; overflow:hidden; text-overflow:ellipsis; display:flex; flex-direction:column; align-items:flex-start; gap:2px;"
+      onmouseover="this.style.overflow='visible'; this.style.whiteSpace='nowrap'; this.style.background='#f9f9f9'; this.style.zIndex='10';"
+      onmouseout="this.style.overflow='hidden'; this.style.whiteSpace='nowrap'; this.style.background=''; this.style.zIndex='';"
+      title="">
+    <!-- Top: Rejection Reason Circles or Placeholder -->
+    <div style="display:flex; align-items:center; gap:4px;">
+      {% if data.rejection_reason_letters %}
+        {% for letter in data.rejection_reason_letters %}
+          <a href="#" class="avatar blue"
+            style="color: #fff; cursor: pointer; background: #01802a; padding: 4px 0; width:18px; height:18px; border-radius: 50%; font-size: 11px; display:inline-flex; align-items:center; justify-content:center;">
+            {{ letter }}
+          </a>
+        {% endfor %}
+      {% elif data.dp_missing_qty and data.dp_missing_qty > 0 %}
+        <div class="avatar orange" title="Shortage" style="width:20px; height:20px; padding:6px !important; font-size:11px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">S</div>
+      {% else %}
+        <span style="color:#888; font-size:12px; font-style:italic;">
+          No rejection reason
+        </span>
+      {% endif %}
+    </div>
+    <!-- Bottom: Direct Lot Remark or Placeholder -->
+    <div style="margin-top:2px;">
+      {% if data.lot_rejected_comment %}
+        <span 
+          style="color:#d32f2f; font-size:12px; font-weight:400; cursor:help; text-overflow:ellipsis; max-width:110px; overflow:hidden; white-space:nowrap;"
+          title="{{ data.lot_rejected_comment }}">
+          {{ data.lot_rejected_comment|truncatechars:18 }}
+        </span>
+      {% else %}
+        <span style="color:#888; font-size:12px; font-style:italic;">
+          No lot remarks
+        </span>
+      {% endif %}
+    </div>
+  </div>
+</td>
+
+                  </tr>
+                {% endfor %}
+
+                </tbody>
+              </table>
+
+              <div
+  id="trayScanModal_DayPlanning"
+  class="tray-scan-modal-DayPlanning"
+  style="display:none"
+>
+  <div class="tray-scan-modal-DayPlanning-content">
+    <span id="closeTrayScanModal_DayPlanning" class="tray-scan-close-readonly">&times;</span>
+    
+    <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
+      <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
+        <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+        <!-- Model No and Lot Qty in same line -->
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: bold; color: #666;">Model No:</span>
+              <h6 id="modalModelNo_DayPlanning" style="margin: 0; color: #028084; font-weight: bold;">(Fetch Dynamically)</h6>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: bold; color: #666;">Rejected Qty:</span>
+              <h6 id="modalLotQty_DayPlanning" style="margin: 0; color: #e67e22; font-weight: bold;">(Fetch Dynamically)</h6>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+      <h5 style="text-align: center; margin: 0; flex: 1; font-weight: 600; color:#595959">
+        Input Screening - Tray Scan 
+      </h5>
+      <button id="trayValidateBtn" type="button" style="display: flex; align-items: center; gap: 6px; background: #f5faff; border: 1px solid #023E4DCC; color: #023E4DCC; border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500; cursor: pointer;">
+        
+        Tray Validate
+      </button>
+      <input id="trayValidateInput" type="text" placeholder="Enter validation info..." style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;" />
+      <img src="{% static 'assets/icons/redo2.png' %}" alt="Redo" id="trayScanRedoBtn" style="width: 24px; height: 24px; cursor: pointer; margin-left: 8px;" title="Clear Tray IDs" />
+    </div>
+    <div id="trayErrorMessage" style="display: none; background-color: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; text-align: center;">
+      <span id="trayErrorText"></span>
+    </div>
+    <div id="trayScanDetails_DayPlanning" class="table-grid">
+      <!-- Headers and dynamic content will be injected here -->
+    </div>
+  </div>
+</div>
+              <!-- Rejection Popup Modal -->
+  <div id="rejectionPopupModal"
+     class="new-popup-modal"
+     tabindex="-1"
+     aria-modal="true"
+     role="dialog"
+     style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);max-height:240px !important;min-width:70px !important;width:auto;overflow-y:auto;background:#fff;border-radius:16px;box-shadow: 0 8px 32px rgb(0 0 0 / 76%);z-index:10001;">
+  <div class="rejection-modal-header">
+    <h3 class="modal-title"> <i class="fa fa-exclamation-triangle" style="color:#e74c3c; margin-right:6px;"></i>Rejection Details</h3>
+
+    <span class="tray-scan-close" id="closeRejectionPopup" title="Close">&times;</span>
+  </div>
+  <div class="rejection-content">
+    <div id="rejection-details-loader" class="rejection-loader" style="display:none;">Loading...</div>
+    <div class="table-responsive rejection-table-responsive">
+      <table class="rejection-table">
+        <thead>
+          <tr>
+            <th>Rejected Reason</th>
+            <th>Rejection Qty</th>
+          </tr>
+        </thead>
+        <tbody id="rejection-details-body">
+          <!-- Dynamic rows go here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- Add modal for rejection remarks (place before scripts, at end of file) -->
+<div id="rejectionRemarksModal" class="rejection-remarks-modal" style="display:none;">
+  <div class="rejection-remarks-modal-content">
+    <span class="rejection-remarks-close" style="cursor:pointer;">&times;</span>
+    <h4 style="margin-bottom:12px; color:#2c3e50;">
+      <i class="fa fa-exclamation-triangle" style="color:#e74c3c; margin-right:6px;"></i>
+      Rejection Remarks
+    </h4>
+    <div id="rejectionRemarksContent">
+      <!-- Filled by showRejectionRemarksModal() -->
+    </div>
+  </div>
+</div>
+
+
+
+          <!-- Pagination Section -->
+                      <div class="pagination-wrapper">
+              <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-end mb-0">
+                  {# Previous button #}
+                  {% if page_obj.has_previous %}
+                    <li>
+                      <a href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                        <span aria-hidden="true"><i class="fa fa-chevron-left"></i></span>
+                      </a>
+                    </li>
+                  {% else %}
+                    <li class="disabled">
+                      <span aria-hidden="true"><i class="fa fa-chevron-left"></i></span>
+                    </li>
+                  {% endif %}
+                
+                  {# Always show first page #}
+                  {% if page_obj.number > 3 %}
+                    <li><a href="?page=1">1</a></li>
+                    {% if page_obj.number > 4 %}
+                      <li class="disabled"><span>…</span></li>
+                    {% endif %}
+                  {% endif %}
+                
+                  {# Show pages around current page #}
+                  {% for num in page_obj.paginator.page_range %}
+                    {% if num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                      {% if num == page_obj.number %}
+                        <li class="active"><span>{{ num }}</span></li>
+                      {% else %}
+                        <li><a href="?page={{ num }}">{{ num }}</a></li>
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                
+                  {# Show ellipsis and last page if needed #}
+                  {% if page_obj.number < page_obj.paginator.num_pages|add:'-2' %}
+                    {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %}
+                      <li class="disabled"><span>…</span></li>
+                    {% endif %}
+                    <li><a href="?page={{ page_obj.paginator.num_pages }}">{{ page_obj.paginator.num_pages }}</a></li>
+                  {% endif %}
+                
+                  {# Next button #}
+                  {% if page_obj.has_next %}
+                    <li>
+                      <a href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                        <span aria-hidden="true"><i class="fa fa-chevron-right"></i></span>
+                      </a>
+                    </li>
+                  {% else %}
+                    <li class="disabled">
+                      <span aria-hidden="true"><i class="fa fa-chevron-right"></i></span>
+                    </li>
+                  {% endif %}
+                </ul>
+              </nav>
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  </div>
+  <!-- Image Slider Modal (popup) -->
+  <div id="imageSliderModal" class="image-slider-modal">
+    <span id="closeImageSliderModal" class="modal-close">&times;</span>
+    <h3>Visual Aid</h3>
+    <div class="slider" id="slider">
+      <div class="slides" id="slidesContainer">
+        <div class="slide active">
+          <img src="{% static 'assets/images/carousel/banner_1.jpg' %}" alt="Slide 1">
+        </div>
+        <div class="slide">
+          <img src="{% static 'assets/images/carousel/banner_2.jpg' %}" alt="Slide 2">
+        </div>
+        <div class="slide">
+          <img src="{% static 'assets/images/carousel/banner_3.jpg' %}" alt="Slide 3">
+        </div>
+      </div>
+      <button class="prev" id="prevBtn">&#10094;</button>
+      <button class="next" id="nextBtn">&#10095;</button>
+    </div>
+  </div>
+  <!-- Image Slider Modal -->
+  <div id="imageSliderModal" class="image-slider-modal">
+    <span id="closeImageSliderModal" class="modal-close">&times;</span>
+    <div class="slider" id="slider">
+      <button class="prev" id="prevBtn">&#8592;</button>
+      <div class="slides"></div>
+      <button class="next" id="nextBtn">&#8594;</button>
+    </div>
+  </div>
+  </div>
+</div>
+  {% block script %}
+
+
+<!-- Add script for expand/circle click and modal rendering -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function() {
+  // Handle expand rejection remarks click
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.expand-rejection-remarks')) {
+      const lotId = e.target.closest('.expand-rejection-remarks').getAttribute('data-lot-id');
+      showRejectionRemarksModal(lotId);
+    }
+    // Circle click also opens modal
+    if (e.target.classList.contains('remark-circle')) {
+      const lotId = e.target.getAttribute('data-lot-id');
+      showRejectionRemarksModal(lotId);
+    }
+  });
+
+  // Close rejection remarks modal
+  document.querySelector('.rejection-remarks-close').addEventListener('click', function() {
+    document.getElementById('rejectionRemarksModal').style.display = 'none';
+  });
+
+  // Close modals when clicking outside
+  window.addEventListener('click', function(e) {
+    const rejectionModal = document.getElementById('rejectionRemarksModal');
+    if (e.target === rejectionModal) {
+      rejectionModal.style.display = 'none';
+    }
+  });
+});
+
+// Modal rendering function (fetches and displays remarks)
+function showRejectionRemarksModal(lotId) {
+  fetch(`/inputscreening/get_rejection_remarks/?lot_id=${encodeURIComponent(lotId)}`)
+    .then(response => response.json())
+    .then(data => {
+      let content = '';
+      const remarks = data.rejection_remarks || [];
+      if (remarks.length > 0) {
+        content += `<table class="rejection-remarks-table" role="table" aria-label="Rejection remarks">
+          <thead>
+            <tr>
+              <th style="width:56px;">Mark</th>
+              <th>Reason</th>
+              <th style="width:90px;">Quantity</th>
+            </tr>
+          </thead>
+          <tbody>`;
+        remarks.forEach((remark, index) => {
+          const letter = (remark.reason || '?').toString().trim().slice(0,1).toUpperCase();
+          const safeReason = remark.reason ? String(remark.reason) : '';
+          const safeQty = remark.qty != null ? remark.qty : '';
+          content += `
+            <tr>
+              <td><span class="rejection-remark-circle remark-circle" data-letter="${letter}">${letter}</span></td>
+              <td>${safeReason}</td>
+              <td>${safeQty}</td>
+            </tr>
+          `;
+        });
+        content += `</tbody></table>`;
+      } else {
+        content = '<div class="rejection-remarks-no-data">No rejection remarks found.</div>';
+      }
+      document.getElementById('rejectionRemarksContent').innerHTML = content;
+      document.getElementById('rejectionRemarksModal').style.display = 'block';
+    })
+    .catch(error => {
+      alert('Error loading rejection remarks');
+    });
+}
+</script>
+
+
+
+
+
+    
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  const redoBtn = document.getElementById("trayScanRedoBtn");
+  const validateInput = document.getElementById("trayValidateInput");
+  const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+  const errorMessage = document.getElementById("trayErrorMessage");
+
+  if (redoBtn && validateInput && detailsDiv) {
+    redoBtn.addEventListener("click", function () {
+      // Hide and clear the input
+      validateInput.value = "";
+      validateInput.blur();
+      
+      // Hide error message
+      if (errorMessage) {
+        errorMessage.style.display = "none";
+      }
+      
+      // Reset Tray Validate button to normal state
+      const validateBtn = document.getElementById("trayValidateBtn");
+      if (validateBtn) {
+        validateBtn.style.background = "#f5faff";
+        validateBtn.style.borderColor = "#023E4DCC";
+        validateBtn.style.color = "#023E4DCC";
+      }
+
+      // Reset all icons in the validation status column (read-only modal)
+      // For table layout:
+      const rows = detailsDiv.querySelectorAll("tbody tr");
+      if (rows.length > 0) {
+        rows.forEach(row => {
+          const statusCell = row.querySelector("td:last-child");
+          if (statusCell) {
+            statusCell.innerHTML = `
+              <div class="validation-status">
+                <div class="status-icon fail">
+                  <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                </div>
+                <div class="status-icon pass">
+                  <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                </div>
+              </div>
+            `;
+          }
+        });
+      } else {
+        // For grid layout (if used)
+        detailsDiv.querySelectorAll('.tray-validation-status-header, .tray-validation-status-cell').forEach(cell => {
+          cell.innerHTML = `
+            Tray Validation Status
+            <span style="margin-left: 10px;">
+              <img src="{% static 'assets/icons/fail.png' %}" alt="Cross" title="Fail" style="width:18px; height:18px; margin-right:6px; vertical-align:middle;" />
+              <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px; vertical-align:middle;" />
+            </span>
+          `;
+        });
+      }
+    });
+  }
+});
+</script>
+
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  const validateBtn = document.getElementById("trayValidateBtn");
+  const validateInput = document.getElementById("trayValidateInput");
+  const redoBtn = document.getElementById("trayScanRedoBtn");
+  const errorMessage = document.getElementById("trayErrorMessage");
+
+  if (validateBtn && validateInput) {
+    validateBtn.addEventListener("click", function () {
+      validateInput.value = "";
+      
+      // Hide error message when starting new validation
+      if (errorMessage) {
+        errorMessage.style.display = "none";
+      }
+      
+      // Change button to active state (green color)
+      validateBtn.style.background = "#e8f5e8";
+      validateBtn.style.borderColor = "#4caf50";
+      validateBtn.style.color = "#2e7d32";
+      
+      // Add the 4th column to the table
+      const modal = document.getElementById("trayScanModal_DayPlanning");
+      const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+      
+      if (modal && detailsDiv && modal.buildTableHTML) {
+        // Rebuild table with validation column
+        detailsDiv.innerHTML = modal.buildTableHTML(true);
+      }
+      
+      // Focus the hidden input so it can receive keystrokes
+      validateInput.focus();
+    });
+  }
+  
+  if (redoBtn && validateInput) {
+    redoBtn.addEventListener("click", function () {
+      validateInput.value = "";
+      validateInput.blur();
+      
+      // Hide error message
+      if (errorMessage) {
+        errorMessage.style.display = "none";
+      }
+      
+      // Reset button to normal state (original blue color)
+      if (validateBtn) {
+        validateBtn.style.background = "#f5faff";
+        validateBtn.style.borderColor = "#023E4DCC";
+        validateBtn.style.color = "#023E4DCC";
+      }
+      
+      // Remove the 4th column from the table
+      const modal = document.getElementById("trayScanModal_DayPlanning");
+      const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+      
+      if (modal && detailsDiv && modal.buildTableHTML) {
+        // Rebuild table without validation column
+        detailsDiv.innerHTML = modal.buildTableHTML(false);
+      }
+      
+      redoBtn.focus();
+    });
+  }
+});
+</script>
+
+
+<!-- Script for Tray Validate Status column -- enable/disable of table column -->
+<script nonce="{{ csp_nonce }}">
+// Enhanced Input Screening Tray Validation Script with Better Error Handling
+document.addEventListener("DOMContentLoaded", function () {
+  const validateInput = document.getElementById("trayValidateInput");
+  const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+  const errorMessage = document.getElementById("trayErrorMessage");
+  const errorText = document.getElementById("trayErrorText");
+
+  console.log("🔍 Input Screening tray validation script loaded");
+  console.log("📋 Elements found:", {
+    validateInput: !!validateInput,
+    detailsDiv: !!detailsDiv,
+    errorMessage: !!errorMessage,
+    errorText: !!errorText
+  });
+
+  function getCurrentBatchId() {
+    const modal = document.getElementById("trayScanModal_DayPlanning");
+    if (modal && modal.dataset.batchId) return modal.dataset.batchId;
+    const lastBtn = document.querySelector('.tray-scan-btn-Jig[data-batch-id]');
+    return lastBtn ? lastBtn.getAttribute('data-batch-id') : '';
+  }
+
+  function getCurrentStockStatus() {
+    // Get stock status from the last clicked button
+    const lastBtn = document.querySelector('.tray-scan-btn-Jig[data-batch-id]');
+    if (lastBtn) {
+      return {
+        accepted_ip_stock: lastBtn.getAttribute('data-accepted-ip-stock') === 'true',
+        rejected_ip_stock: lastBtn.getAttribute('data-rejected-ip-stock') === 'true',
+        few_cases_accepted_ip_stock: lastBtn.getAttribute('data-few-cases-accepted-ip-stock') === 'true'
+      };
+    }
+    return {
+      accepted_ip_stock: false,
+      rejected_ip_stock: false,
+      few_cases_accepted_ip_stock: false
+    };
+  }
+
+  function showError(message) {
+    console.log("🚨 Showing Input Screening error:", message);
+    if (errorMessage && errorText) {
+      errorText.textContent = message;
+      
+      // Force display with important styles
+      errorMessage.style.setProperty('display', 'block', 'important');
+      errorMessage.style.setProperty('visibility', 'visible', 'important');
+      errorMessage.style.setProperty('opacity', '1', 'important');
+      errorMessage.style.setProperty('z-index', '99999', 'important');
+      errorMessage.style.setProperty('position', 'relative', 'important');
+      errorMessage.style.setProperty('background-color', '#ffebee', 'important');
+      errorMessage.style.setProperty('border', '1px solid #f44336', 'important');
+      errorMessage.style.setProperty('color', '#c62828', 'important');
+      errorMessage.style.setProperty('padding', '8px 12px', 'important');
+      errorMessage.style.setProperty('border-radius', '4px', 'important');
+      errorMessage.style.setProperty('margin-bottom', '10px', 'important');
+      errorMessage.style.setProperty('font-size', '12px', 'important');
+      errorMessage.style.setProperty('text-align', 'center', 'important');
+      errorMessage.style.setProperty('width', '100%', 'important');
+      
+      console.log("✅ Input Screening error message styled");
+      
+      // Scroll to error message if it exists
+      errorMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      
+      // Flash the background to make it more noticeable
+      let flashCount = 0;
+      const flashInterval = setInterval(() => {
+        if (flashCount < 6) {
+          errorMessage.style.backgroundColor = flashCount % 2 === 0 ? '#ffcdd2' : '#ffebee';
+          flashCount++;
+        } else {
+          clearInterval(flashInterval);
+          errorMessage.style.backgroundColor = '#ffebee';
+        }
+      }, 200);
+      
+      console.log("✅ Input Screening error message displayed");
+      
+      // Auto-hide after 8 seconds
+      setTimeout(() => {
+        errorMessage.style.display = "none";
+        console.log("⏰ Auto-hiding Input Screening error message after 8 seconds");
+      }, 8000);
+    } else {
+      console.log("❌ Input Screening error message elements not found!");
+      // Fallback: show alert if error div not found
+      alert(message);
+    }
+  }
+
+  function hideError() {
+    console.log("🫥 Hiding Input Screening error message");
+    if (errorMessage) {
+      errorMessage.style.display = "none";
+    }
+  }
+
+  if (validateInput && detailsDiv) {
+    console.log("🎯 Setting up Input Screening tray validation event listener");
+    
+    // Add input event listener for real-time feedback
+    validateInput.addEventListener("input", function(e) {
+      console.log("⌨️ Input Screening - User typing:", e.target.value);
+    });
+    
+    validateInput.addEventListener("keydown", function (e) {
+      console.log("🔑 Input Screening - Key pressed:", e.key, "Value:", validateInput.value.trim());
+      
+      if (e.key === "Enter") {
+        const trayId = validateInput.value.trim();
+        console.log("🎯 Input Screening - Enter pressed with tray ID:", trayId);
+        
+        if (!trayId) {
+          console.log("⚠️ Empty tray ID, returning");
+          return;
+        }
+        
+        const batchId = getCurrentBatchId();
+        console.log("📦 Input Screening - Current batch ID:", batchId);
+        
+        if (!batchId) {
+          console.log("❌ No batch ID found");
+          showError("Batch ID not found. Please refresh and try again.");
+          return;
+        }
+
+        const stockStatus = getCurrentStockStatus();
+        console.log("📊 Input Screening - Stock status:", stockStatus);
+
+        // Hide any existing error message
+        hideError();
+        console.log("🔄 Making Input Screening API call to validate tray...");
+
+        // Include stock status in the validation request
+        const requestData = {
+          batch_id: batchId,
+          tray_id: trayId,
+          ...stockStatus
+        };
+
+        fetch("/inputscreening/complete_tray_validate/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie('csrftoken')
+          },
+          body: JSON.stringify(requestData)
+        })
+        .then(res => {
+          console.log("📡 Input Screening API Response status:", res.status);
+          return res.json();
+        })
+        .then(data => {
+          console.log("📊 Input Screening API Response data:", data);
+          
+          // Find the row in the table with this Tray ID
+          const rows = detailsDiv.querySelectorAll("tbody tr");
+          console.log("📋 Found", rows.length, "rows in Input Screening modal table");
+          
+          let found = false;
+          
+          rows.forEach((row, index) => {
+            const trayIdInput = row.querySelector('input[type="text"]');
+            if (trayIdInput) {
+              const rowTrayId = trayIdInput.value.trim();
+              console.log(`🔎 Input Screening Row ${index + 1}: checking "${rowTrayId}" vs "${trayId}"`);
+              
+              if (rowTrayId === trayId) {
+                found = true;
+                console.log(`✅ Found matching tray in Input Screening row ${index + 1}`);
+                
+                const statusCell = row.querySelector("td:last-child");
+                if (statusCell) {
+                  if (data.success && data.exists) {
+                    // Pass validation - show tick as active, cross as inactive
+                    statusCell.innerHTML = `
+                      <div class="validation-status">
+                        <div class="status-icon fail inactive">
+                          <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                        </div>
+                        <div class="status-icon pass active">
+                          <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                        </div>
+                      </div>
+                    `;
+                    
+                    // Add visual feedback for successful validation
+                    row.style.backgroundColor = '#e8f5e8';
+                    setTimeout(() => {
+                      row.style.backgroundColor = '';
+                    }, 2000);
+                    
+                    console.log("✅ Updated Input Screening status cell to PASS");
+                    
+                  } else {
+                    // Fail validation - show cross as active, tick as inactive
+                    statusCell.innerHTML = `
+                      <div class="validation-status">
+                        <div class="status-icon fail active">
+                          <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                        </div>
+                        <div class="status-icon pass inactive">
+                          <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                        </div>
+                      </div>
+                    `;
+                    
+                    // Add visual feedback for failed validation
+                    row.style.backgroundColor = '#ffebee';
+                    setTimeout(() => {
+                      row.style.backgroundColor = '';
+                    }, 2000);
+                    
+                    console.log("❌ Updated Input Screening status cell to FAIL");
+                  }
+                }
+              }
+            }
+          });
+          
+          if (!found) {
+            console.log("❌ Input Screening tray not found in table");
+            
+            // Enhanced error message with stock status context
+            let filterContext = '';
+            if (stockStatus.accepted_ip_stock && !stockStatus.few_cases_accepted_ip_stock) {
+              filterContext = ' (searching in accepted trays only)';
+            } else if (stockStatus.rejected_ip_stock && !stockStatus.few_cases_accepted_ip_stock) {
+              filterContext = ' (searching in rejected trays only)';
+            } else if (stockStatus.few_cases_accepted_ip_stock) {
+              filterContext = ' (searching in both accepted and rejected trays)';
+            }
+            
+            showError(`Tray ID "${trayId}" not found in table${filterContext}.`);
+          } else {
+            console.log("🎉 Input Screening validation successful!");
+          }
+          
+          // Always clear and focus input for next scan
+          validateInput.value = "";
+          validateInput.focus();
+        })
+        .catch(error => {
+          console.error('❌ Input Screening Network error:', error);
+          showError('Network error occurred while validating the tray ID.');
+          validateInput.value = "";
+          validateInput.focus();
+        });
+      }
+    });
+    
+    // Also add focus event to ensure input is ready
+    validateInput.addEventListener("focus", function() {
+      console.log("🎯 Input Screening validate input focused and ready");
+    });
+    
+  } else {
+    console.log("❌ Input Screening required elements not found:", {
+      validateInput: !!validateInput,
+      detailsDiv: !!detailsDiv
+    });
+  }
+  
+  // Helper for CSRF
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  
+  console.log("🎯 Input Screening tray validation script setup complete");
+});
+</script>
+
+    <!-- Script for opening Day Planning - Tray Scan modal with read-only view while hitting view.png -->
+
+<script nonce="{{ csp_nonce }}">
+// Updated script - Keep existing structure, only add SHORTAGE entries
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll('.tray-scan-btn-Jig').forEach(function(link) {
+    link.addEventListener('click', async function (e) {
+      e.preventDefault();
+
+      // Get modal elements
+      const modal = document.getElementById("trayScanModal_DayPlanning");
+      const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+      const modalModelNo = document.getElementById("modalModelNo_DayPlanning");
+      const modalLotQty = document.getElementById("modalLotQty_DayPlanning"); // ✅ NEW
+
+      modal.dataset.batchId = link.getAttribute('data-batch-id');
+
+      // Get data attributes
+      const batchId = link.getAttribute('data-batch-id');
+      const modelNo = link.getAttribute('data-model-no');
+      const stockLotId = link.getAttribute('data-stock-lot-id');
+      const noOfTrays = parseInt(link.getAttribute('data-no-of-trays')) || 0;
+      const trayCapacity = link.getAttribute('data-tray-capacity') || "";
+      const totalBatchQuantity = link.getAttribute('data-total-batch-quantity') || "0";
+
+      // Get stock status data
+      const acceptedIpStock = link.getAttribute('data-accepted-ip-stock') === 'true';
+      const rejectedIpStock = link.getAttribute('data-rejected-ip-stock') === 'true';
+      const fewCasesAcceptedIpStock = link.getAttribute('data-few-cases-accepted-ip-stock') === 'true';
+
+      // Set model number in modal
+      if (modalModelNo && modelNo) {
+        modalModelNo.textContent = modelNo;
+      }
+
+      if (modalLotQty) {
+        modalLotQty.textContent = totalBatchQuantity;
+        console.log("✅ Set Lot Qty to:", totalBatchQuantity);
+      }
+
+      // Set model image
+      const modalUserImg = modal.querySelector('.user-profile img');
+      const modelImage = link.getAttribute('data-model-image');
+      if (modalUserImg) {
+        modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
+      }
+
+      // ✅ Fetch tray data with rejection information
+      let traysData = [];
+      let rejectionSummary = {};
+      try {
+        const params = new URLSearchParams({
+          batch_id: batchId,
+          stock_lot_id: stockLotId,
+          lot_id: stockLotId,
+          accepted_ip_stock: acceptedIpStock,
+          rejected_ip_stock: rejectedIpStock,
+          few_cases_accepted_ip_stock: fewCasesAcceptedIpStock
+        });
+        
+        const resp = await fetch(`/inputscreening/CompleteTable_tray_id_list/?${params}`);
+        const result = await resp.json();
+        if (result.success) {
+          traysData = result.trays || [];
+          rejectionSummary = result.rejection_summary || {};
+          console.log('✅ Fetched trays with rejection data:', traysData);
+          console.log('📊 Rejection summary:', rejectionSummary);
+        }
+      } catch (e) {
+        console.error('❌ Error fetching tray data:', e);
+      }
+
+// ✅ UPDATED: Build modal content - Sort rejected trays by quantity (low to high)
+function buildTableHTML(showValidationColumn = false) {
+  let html = `
+    <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
+      <thead>
+        <tr>
+          <th style="width:50px;">S.no</th>
+          <th>Tray ID</th>
+          <th>Tray Qty</th>
+          ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  let rowCounter; // Will be set after rejected trays are processed
+  
+  // ✅ First, add all regular trays (with tray_id) - SORTED BY QUANTITY LOW TO HIGH
+  if (traysData && traysData.length > 0) {
+    // Filter rejected trays and sort by quantity (low to high)
+    const rejectedTrays = traysData
+      .filter(tray => tray.rejected_tray) // Only show rejected trays
+      .sort((a, b) => {
+        // ✅ NEW: Sort by quantity (low to high)
+        // Use same logic as display quantity to determine sort value
+        let qtyA, qtyB;
+        
+        // Calculate quantity for tray A
+        if (acceptedIpStock && a.top_tray) {
+          qtyA = a.tray_quantity;
+        } else if (a.ip_top_tray && a.ip_top_tray_qty !== null) {
+          qtyA = a.ip_top_tray_qty;
+        } else {
+          qtyA = a.tray_quantity;
+        }
+        
+        // Calculate quantity for tray B
+        if (acceptedIpStock && b.top_tray) {
+          qtyB = b.tray_quantity;
+        } else if (b.ip_top_tray && b.ip_top_tray_qty !== null) {
+          qtyB = b.ip_top_tray_qty;
+        } else {
+          qtyB = b.tray_quantity;
+        }
+        
+        // Convert to numbers and sort low to high
+        const numA = parseInt(qtyA) || 0;
+        const numB = parseInt(qtyB) || 0;
+        
+        return numA - numB; // Low to high sorting
+      });
+
+    rejectedTrays.forEach((tray, index) => {
+      // ✅ FIXED: Assign S.no in proper order after sorting
+      const displaySNo = index + 1; // Sequential numbering: 1, 2, 3, etc.
+      
+      // Use ip_top_tray_qty for top tray, regular tray_quantity for others
+      let displayQuantity;
+      if (acceptedIpStock && tray.top_tray) {
+        // For fully accepted, use tray_quantity from TrayId where top_tray=True
+        displayQuantity = tray.tray_quantity;
+      } else if (tray.ip_top_tray && tray.ip_top_tray_qty !== null) {
+        // For partial/rejected, use ip_top_tray_qty if present
+        displayQuantity = tray.ip_top_tray_qty;
+      } else {
+        displayQuantity = tray.tray_quantity;
+      }
+      
+      // ✅ Check delink_tray first, then rejected_tray
+      let statusTag = '';
+      if (tray.delink_tray) {
+        // If tray is delinked, show DELINKED status (highest priority)
+        statusTag = '<span style="background: #9e9e9e; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>';
+      } else if (fewCasesAcceptedIpStock) {
+        if (tray.rejected_tray) {
+          statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
+        } else {
+          statusTag = '<span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>';
+        }
+      } else if (acceptedIpStock && !tray.rejected_tray) {
+        statusTag = '<span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>';
+      } else if (rejectedIpStock && tray.rejected_tray) {
+        statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
+      }
+      
+      const rowClass = (tray.ip_top_tray || tray.top_tray) ? 'top-tray-row' : '';
+      
+      html += `
+        <tr class="${rowClass}">
+          <td>${displaySNo}</td>
+          <td>
+            <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+            ${statusTag}
+          </td>
+          <td>
+            <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+          </td>
+          ${showValidationColumn ? `
+            <td>
+              <div class="validation-status">
+                <div class="status-icon fail">
+                  <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                </div>
+                <div class="status-icon pass">
+                  <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                </div>
+              </div>
+            </td>
+          ` : ''}
+        </tr>
+      `;
+    });
+    
+    // Set rowCounter for SHORTAGE entries (after all rejected trays)
+    rowCounter = rejectedTrays.length + 1;
+  } else {
+    // No rejected trays, start SHORTAGE from 1
+    rowCounter = 1;
+  }
+  
+  // ✅ SHORTAGE entries remain in their position (added after sorted rejected trays)
+  if (rejectionSummary.shortage_rejections > 0) {
+    // Fetch SHORTAGE rejection details
+    fetch(`/inputscreening/get_shortage_rejections/?lot_id=${encodeURIComponent(stockLotId)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.shortage_rejections.length > 0) {
+          data.shortage_rejections.forEach(shortage => {
+            html += `
+              <tr class="shortage-row">
+                <td>${rowCounter}</td>
+                <td>
+                  <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
+                  <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
+                </td>
+                <td>
+                  <input type="number" class="form-control" value="${shortage.quantity}" readonly style="width: 100%;" />
+                </td>
+                ${showValidationColumn ? `
+                  <td>
+                    <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
+                  </td>
+                ` : ''}
+              </tr>
+            `;
+            rowCounter++; // ✅ FIXED: Increment for each shortage entry
+          });
+          
+          // Update the table content
+          detailsDiv.innerHTML = html + '</tbody></table>';
+        }
+      })
+      .catch(e => {
+        console.error('Error fetching SHORTAGE details:', e);
+        // Fallback: Add basic SHORTAGE row
+        html += `
+          <tr class="shortage-row">
+            <td>${rowCounter}</td>
+            <td>
+              <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
+              <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
+            </td>
+            <td>
+              <input type="number" class="form-control" value="?" readonly style="width: 100%;" />
+            </td>
+            ${showValidationColumn ? `
+              <td>
+                <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
+              </td>
+            ` : ''}
+          </tr>
+        `;
+        html += '</tbody></table>';
+        detailsDiv.innerHTML = html;
+      });
+  } else {
+    // No SHORTAGE entries, just close the table
+    html += '</tbody></table>';
+  }
+  
+  return html;
+}
+// Show table 
+      detailsDiv.innerHTML = buildTableHTML(false);
+
+      // Store data for later use
+      modal.buildTableHTML = buildTableHTML;
+      modal.traysData = traysData;
+      modal.rejectionSummary = rejectionSummary;
+
+      // Show the modal
+      modal.style.display = "block";
+      modal.classList.add("open");
+    });
+  });
+
+  // Close handler remains the same
+  const closeBtn = document.getElementById("closeTrayScanModal_DayPlanning");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", function () {
+      const modal = document.getElementById("trayScanModal_DayPlanning");
+      if (modal) {
+        modal.classList.remove("open");
+        modal.style.display = "none";
+      }
+    });
+  }
+});
+</script>
+  <!-- Table Sorting Script -->
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function () {
+      const table = document.getElementById("order-listing");
+      if (!table) return;
+      const headers = table.querySelectorAll("thead th");
+      const tbody = table.querySelector("tbody");
+      let sortDirection = {};
+      headers.forEach((header, index) => {
+        header.style.cursor = "pointer";
+        header.addEventListener("click", function () {
+          const rows = Array.from(tbody.querySelectorAll("tr"));
+          const dir = sortDirection[index] === "asc" ? "desc" : "asc";
+          sortDirection[index] = dir;
+          rows.sort((a, b) => {
+            const cellA = a.children[index].textContent.trim();
+            const cellB = b.children[index].textContent.trim();
+            const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
+            const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
+            if (valA < valB) return dir === "asc" ? -1 : 1;
+            if (valA > valB) return dir === "asc" ? 1 : -1;
+            return 0;
+          });
+          tbody.innerHTML = "";
+          rows.forEach((row) => tbody.appendChild(row));
+        });
+      });
+    });
+  </script>
+
+
+
+
+  <script nonce="{{ csp_nonce }}">
+  document.addEventListener("DOMContentLoaded", function() {
+    // Attach event to all .rejection-popup-trigger elements
+    document.querySelectorAll('.rejection-popup-trigger').forEach(function(trigger, idx) {
+      trigger.addEventListener('click', function(e) {
+        // Find the closest row and get the lot_id from data attribute or hidden cell
+        const row = trigger.closest('tr');
+        let lot_id = null;
+        if (row) {
+          // Try to get from a hidden cell or data attribute
+          lot_id = row.querySelector('[data-lot-id]')?.getAttribute('data-lot-id');
+          if (!lot_id) {
+            // Try to get from a hidden cell if you render it in the template
+            lot_id = row.querySelector('.lot-id-cell')?.textContent?.trim();
+          }
+          // Or, if you render lot_id as a data attribute on the row:
+          if (!lot_id && row.dataset.lotId) lot_id = row.dataset.lotId;
+        }
+        // Fallback: try to get from Django context if you render it in the table
+        if (!lot_id) {
+          lot_id = "{{ data.stock_lot_id|default:'' }}";
+        }
+        if (!lot_id) {
+          alert("Lot ID not found for this row.");
+          return;
+        }
+  
+        // Show loader
+        document.getElementById('rejection-details-loader').style.display = 'block';
+        document.getElementById('rejection-details-body').innerHTML = '';
+  
+        // Open modal
+        document.getElementById('rejectionPopupModal').classList.add("open");
+  
+        // Fetch rejection details
+        fetch(`/inputscreening/get_rejection_details/?lot_id=${encodeURIComponent(lot_id)}`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(resp => resp.json())
+        .then(data => {
+          document.getElementById('rejection-details-loader').style.display = 'none';
+          const tbody = document.getElementById('rejection-details-body');
+          tbody.innerHTML = '';
+          if (data.success && data.reasons.length > 0) {
+            
+            data.reasons.forEach(item => {
+              if (item.reason === "Lot Rejection" && item.lot_rejected_comment) {
+                // Show only the remark and qty, no "Lot Rejection" label
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="color:#fb8c00; font-weight:500;">${item.lot_rejected_comment}</td><td>${item.qty}</td>`;
+                tbody.appendChild(tr);
+              
+              } else {
+                // For other reasons, show as usual
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.reason}</td><td>${item.qty}</td>`;
+                tbody.appendChild(tr);
+              }
+            });
+          } else {
+            tbody.innerHTML = `<tr><td colspan="2">No rejection details found.</td></tr>`;
+          }
+        })
+        .catch(err => {
+          document.getElementById('rejection-details-loader').style.display = 'none';
+          document.getElementById('rejection-details-body').innerHTML = `<tr><td colspan="2">Error loading data.</td></tr>`;
+        });
+      });
+    });
+  
+    // Close modal
+    document.getElementById('closeRejectionPopup').addEventListener('click', function() {
+      document.getElementById('rejectionPopupModal').classList.remove("open");
+    });
+  });
+  </script>
+
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  const selectAll = document.getElementById("select-all-checkbox");
+  const delinkBtn = document.getElementById("delink-selected-btn");
+  const selectedCount = document.getElementById("selected-count");
+
+  function updateCheckboxes() {
+    const allCheckboxes = document.querySelectorAll(".row-checkbox");
+    const enabledCheckboxes = document.querySelectorAll(".row-checkbox:not(:disabled)");
+    const checkedEnabledCheckboxes = document.querySelectorAll(".row-checkbox:not(:disabled):checked");
+    
+    const checkedCount = checkedEnabledCheckboxes.length;
+    const enabledCount = enabledCheckboxes.length;
+    
+    // Update selected count display
+    selectedCount.textContent = `${checkedCount} item${checkedCount === 1 ? '' : 's'} selected`;
+    
+    // Disable delink button if no items selected
+    delinkBtn.disabled = checkedCount === 0;
+    
+    // ✅ FIXED: Disable "Select All" if no enabled checkboxes
+    if (enabledCount === 0) {
+      selectAll.disabled = true;
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else {
+      selectAll.disabled = false;
+      // Update select-all checkbox state based on enabled checkboxes only
+      if (checkedCount === enabledCount) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+      } else if (checkedCount > 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+      } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+    }
+  }
+
+  // Select All logic - only affects enabled checkboxes
+  if (selectAll) {
+    selectAll.addEventListener("change", function () {
+      // ✅ FIXED: Only check/uncheck enabled checkboxes
+      const enabledCheckboxes = document.querySelectorAll(".row-checkbox:not(:disabled)");
+      enabledCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+      updateCheckboxes();
+    });
+  }
+
+  // Row checkbox logic
+  document.addEventListener("change", function (e) {
+    if (e.target.classList.contains("row-checkbox")) {
+      updateCheckboxes();
+    }
+  });
+
+  // Initial update
+  updateCheckboxes();
+
+  // Delink button click with SweetAlert
+  delinkBtn.addEventListener("click", function () {
+    const selectedRows = Array.from(document.querySelectorAll(".row-checkbox:checked"))
+      .map(cb => cb.closest("tr"));
+    
+    // Get stock_lot_id from data attribute instead of trying to extract tray_id
+    const stockLotIds = selectedRows.map(row => {
+      return row.getAttribute('data-lot-id'); // This comes from data-lot-id="{{ data.stock_lot_id }}"
+    }).filter(Boolean);
+
+    if (stockLotIds.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Selection',
+        text: 'No lots selected.',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#3085d6'
+      });
+      return;
+    }
+
+    // SweetAlert confirmation dialog
+    Swal.fire({
+      title: 'Confirm Delink',
+      text: `Delink only REJECTED trays for ${stockLotIds.length} selected lot(s)?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, Delink!',
+      cancelButtonText: 'Cancel'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        
+
+        // Send stock_lot_ids instead of tray_ids
+        fetch("/inputscreening/delink_selected_trays/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || ""
+          },
+          body: JSON.stringify({ 
+            stock_lot_ids: stockLotIds  // Send lot IDs instead of tray IDs
+          })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            Swal.fire({
+              icon: 'success',
+              title: 'Delink Successful!',
+              text: `Delinked ${data.updated} REJECTED tray(s) from ${data.lots_processed} lot(s) successfully.`,
+              confirmButtonText: 'OK',
+              confirmButtonColor: '#28a745'
+            }).then(() => {
+              location.reload();
+            });
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: 'Delink Failed',
+              text: data.error || "Unknown error occurred",
+              confirmButtonText: 'OK',
+              confirmButtonColor: '#dc3545'
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Network Error',
+            text: 'Failed to connect to server. Please try again.',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#dc3545'
+          });
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- Active table row highlight -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function() {
+  // Add highlight style if not present
+  if (!document.getElementById('dp-row-action-highlight-style')) {
+    var style = document.createElement('style');
+    style.id = 'dp-row-action-highlight-style';
+    style.innerHTML = `
+      .dp-row-action-highlight {
+        transition: box-shadow 1.3s;
+        background-color: #fff5bd !important;
+        animation: highlightAnimation 2s ease-in-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  let originalRowIndex = null;
+  let movedRow = null;
+  let placeholderRow = null;
+
+  document.querySelectorAll('.tray-scan-btn-Jig').forEach(function(link) {
+    link.addEventListener('click', function(event) {
+      // Remove highlight from all rows
+      document.querySelectorAll('tbody tr').forEach(function(row) {
+        row.classList.remove('dp-row-action-highlight');
+      });
+      // Move the clicked row to the top and highlight
+      var row = event.target.closest('tr');
+      if (row && row.parentNode) {
+        const tbody = row.parentNode;
+        // Only move if not already at top
+        if (tbody.firstElementChild !== row) {
+          // If a previous move exists, restore it first
+          if (movedRow && placeholderRow && placeholderRow.parentNode) {
+            placeholderRow.parentNode.insertBefore(movedRow, placeholderRow);
+            placeholderRow.parentNode.removeChild(placeholderRow);
+            movedRow.classList.remove('dp-row-action-highlight');
+            movedRow = null;
+            placeholderRow = null;
+            originalRowIndex = null;
+          }
+          // Store original index and row
+          originalRowIndex = Array.from(tbody.children).indexOf(row);
+          movedRow = row;
+          // Insert a placeholder at the original position
+          placeholderRow = document.createElement('tr');
+          placeholderRow.style.display = 'none';
+          tbody.insertBefore(placeholderRow, tbody.children[originalRowIndex]);
+          // Move row to top
+          tbody.insertBefore(row, tbody.firstElementChild);
+        }
+        row.classList.add('dp-row-action-highlight');
+      }
+    });
+  });
+
+  // On modal close, restore row to original position and remove highlight
+  var closeBtn = document.getElementById('closeTrayScanModal_DayPlanning');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      if (movedRow && placeholderRow && placeholderRow.parentNode) {
+        placeholderRow.parentNode.insertBefore(movedRow, placeholderRow);
+        placeholderRow.parentNode.removeChild(placeholderRow);
+        movedRow.classList.remove('dp-row-action-highlight');
+        movedRow = null;
+        placeholderRow = null;
+        originalRowIndex = null;
+      }
+      // Also remove highlight from any row just in case
+      document.querySelectorAll('tbody tr').forEach(function(row) {
+        row.classList.remove('dp-row-action-highlight');
+        row.classList.remove('highlighted-tray-scan');
+      });
+    });
+  }
+});
+</script>
+
+<!-- Plating Stk - Image hover - fixed position while hitting the Plating Stk No -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  let openTooltip = null;
+
+  // Helper function to completely close a tooltip
+  function closeTooltip(tooltip, trigger) {
+    if (tooltip) {
+      console.log('🔴 Closing tooltip completely');
+      
+      // Remove pinned class
+      tooltip.classList.remove("pinned");
+      
+      // Hide the entire tooltip completely
+      tooltip.style.opacity = "0";
+      tooltip.style.pointerEvents = "none";
+      tooltip.style.visibility = "hidden";
+      tooltip.style.display = "none"; // ✅ ADDED: Force display none
+      
+      // Hide buttons
+      const infoBtn = tooltip.querySelector('.info-btn');
+      const closeBtn = tooltip.querySelector('.close-btn');
+      if (infoBtn) infoBtn.style.display = 'none';
+      if (closeBtn) closeBtn.style.display = 'none';
+      
+      // Remove visual indicator from trigger
+      if (trigger) {
+        trigger.style.backgroundColor = '';
+        trigger.style.borderRadius = '';
+      }
+      
+      // Clear global reference
+      openTooltip = null;
+      
+      console.log('✅ Tooltip completely closed');
+    }
+  }
+
+  document.querySelectorAll(".model-image-tooltip .info-btn").forEach(function(btn) {
+  btn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    // Find the closest row
+    const row = btn.closest('tr');
+    let lotId = null; 
+    let batchId = null;
+    if (row) {
+      batchId = row.getAttribute('data-batch-id');
+    }
+    // Build the URL with lot_id and batch_id if found
+    let url = "/adminportal/dp_visualaid/";
+    if (lotId) {
+      url += encodeURIComponent(lotId) + "/";
+    }
+    if (batchId) {
+      url += "?batch_id=" + encodeURIComponent(batchId);
+    }
+    window.location.href = url;
+  });
+});
+  
+
+
+  // Tooltip show/hide logic
+  document.querySelectorAll(".model-hover-trigger").forEach(function (trigger) {
+    const tooltip = trigger.querySelector(".model-image-tooltip");
+
+    trigger.addEventListener("mouseenter", function () {
+      if (tooltip && !tooltip.classList.contains("pinned")) {
+        tooltip.style.display = "flex"; // ✅ ADDED: Reset display
+        tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
+        tooltip.style.opacity = "1";
+        tooltip.style.pointerEvents = "auto";
+        
+        // Show Info and Close buttons on hover
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'block';
+        if (closeBtn) closeBtn.style.display = 'block';
+      }
+    });
+
+    trigger.addEventListener("mouseleave", function () {
+      if (tooltip && !tooltip.classList.contains("pinned")) {
+        tooltip.style.opacity = "0";
+        tooltip.style.pointerEvents = "none";
+        
+        // Hide Info and Close buttons when not hovering and not pinned
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'none';
+        if (closeBtn) closeBtn.style.display = 'none';
+      }
+    });
+
+    // Keep tooltip visible when hovering over it
+    if (tooltip) {
+      tooltip.addEventListener("mouseenter", function () {
+        if (!tooltip.classList.contains("pinned")) {
+          tooltip.style.display = "flex"; // ✅ ADDED: Reset display
+          tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
+        }
+        tooltip.style.opacity = "1";
+        tooltip.style.pointerEvents = "auto";
+        
+        // Keep buttons visible when hovering over tooltip
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'block';
+        if (closeBtn) closeBtn.style.display = 'block';
+      });
+
+      tooltip.addEventListener("mouseleave", function () {
+        if (!tooltip.classList.contains("pinned")) {
+          tooltip.style.opacity = "0";
+          tooltip.style.pointerEvents = "none";
+          
+          // Hide buttons when leaving tooltip and not pinned
+          const infoBtn = tooltip.querySelector('.info-btn');
+          const closeBtn = tooltip.querySelector('.close-btn');
+          if (infoBtn) infoBtn.style.display = 'none';
+          if (closeBtn) closeBtn.style.display = 'none';
+        }
+      });
+    }
+
+    trigger.addEventListener("click", function (e) {
+      e.stopPropagation();
+
+      if (tooltip) {
+        // Close any previously opened tooltip
+        if (openTooltip && openTooltip !== tooltip) {
+          const prevTrigger = openTooltip.closest('.model-hover-trigger');
+          closeTooltip(openTooltip, prevTrigger);
+        }
+
+        tooltip.classList.add("pinned");
+        tooltip.style.display = "flex"; // ✅ ADDED: Ensure display
+        tooltip.style.visibility = "visible"; // ✅ ADDED: Ensure visibility
+        tooltip.style.opacity = "1";
+        tooltip.style.pointerEvents = "auto";
+        openTooltip = tooltip;
+        
+        // Keep buttons visible when pinned
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'block';
+        if (closeBtn) closeBtn.style.display = 'block';
+
+        // Add visual indicator that tooltip is pinned
+        trigger.style.backgroundColor = '#e3f2fd';
+        trigger.style.borderRadius = '4px';
+      }
+    });
+
+
+    // ✅ FIXED: Handle Close button click - Complete tooltip closure
+    const closeBtn = tooltip?.querySelector('.close-btn');
+    if (closeBtn) {
+      // Initially hide the button
+      closeBtn.style.display = 'none';
+      
+      closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        console.log('🔴 Close button clicked');
+        
+        // Use the helper function to completely close tooltip
+        closeTooltip(tooltip, trigger);
+        
+        // Feedback animation for close button
+        closeBtn.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          if (closeBtn.style) {
+            closeBtn.style.transform = 'scale(1)';
+          }
+        }, 150);
+      });
+      
+      // ✅ Add hover effect for close button
+      closeBtn.addEventListener('mouseenter', function() {
+        closeBtn.style.backgroundColor = '#c82333';
+        closeBtn.style.transform = 'scale(1.05)';
+      });
+      
+      closeBtn.addEventListener('mouseleave', function() {
+        closeBtn.style.backgroundColor = '#dc3545';
+        closeBtn.style.transform = 'scale(1)';
+      });
+    }
+  });
+
+  // ✅ ENHANCED: Close tooltip when clicking outside
+  document.addEventListener("click", function (e) {
+    if (openTooltip && !e.target.closest('.model-image-tooltip') && !e.target.closest('.model-hover-trigger')) {
+      const openTrigger = openTooltip.closest('.model-hover-trigger');
+      closeTooltip(openTooltip, openTrigger);
+    }
+  });
+
+  // ✅ Close tooltip with ESC key
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && openTooltip) {
+      const openTrigger = openTooltip.closest('.model-hover-trigger');
+      closeTooltip(openTooltip, openTrigger);
+      console.log('✅ Tooltip closed with ESC key');
+    }
+  });
+
+  // Prevent tooltip from closing when clicking inside it
+  document.querySelectorAll(".model-image-tooltip").forEach(function (tooltip) {
+    tooltip.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+  });
+});
+</script>
+
+
+<!-- // --- Child Screen Lock Feature ---
+// When child screen (tray scan modal) is open, only allow scroll and Eye icon (view) access on parent.
+// All other actions (edit, delete, filter, etc.) are blocked visually and functionally.
+ -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  // Only disables actions, not table scroll!
+  function lockParentActions() {
+    // Disable all actions except view (eye) icon
+    document.querySelectorAll(
+      'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button:not(#closeTrayScanModal_DayPlanning):not(#trayValidateBtn):not(#trayScanRedoBtn)'
+    ).forEach(function (el) {
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.4';
+      el.style.filter = 'grayscale(1)';
+      el.style.cursor = 'not-allowed';
+    });
+
+    // Also block all <a> except .tray-scan-btn-Jig
+    document.querySelectorAll('a:not(.tray-scan-btn-Jig)').forEach(function (el) {
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.4';
+      el.style.cursor = 'not-allowed';
+    });
+
+    // ✅ Ensure table scroll is always allowed
+    var tableResponsive = document.querySelector('.table-responsive');
+    if (tableResponsive) {
+      tableResponsive.style.pointerEvents = '';
+      tableResponsive.style.overflow = 'auto';
+    }
+    var table = document.getElementById('order-listing');
+    if (table) {
+      table.style.pointerEvents = '';
+    }
+  }
+
+  function unlockParentActions() {
+    document.querySelectorAll(
+      'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button'
+    ).forEach(function (el) {
+      el.style.pointerEvents = '';
+      el.style.opacity = '';
+      el.style.filter = '';
+      el.style.cursor = '';
+    });
+    document.querySelectorAll('a').forEach(function (el) {
+      el.style.pointerEvents = '';
+      el.style.opacity = '';
+      el.style.cursor = '';
+    });
+
+    // Restore table scroll (just in case)
+    var tableResponsive = document.querySelector('.table-responsive');
+    if (tableResponsive) {
+      tableResponsive.style.pointerEvents = '';
+      tableResponsive.style.overflow = '';
+    }
+    var table = document.getElementById('order-listing');
+    if (table) {
+      table.style.pointerEvents = '';
+    }
+  }
+
+  // Listen for modal open/close
+  var modal = document.getElementById("trayScanModal_DayPlanning");
+  var closeBtn = document.getElementById("closeTrayScanModal_DayPlanning");
+
+  // When any view icon is clicked and modal opens, lock parent
+  document.querySelectorAll('.tray-scan-btn-Jig').forEach(function(link) {
+    link.addEventListener('click', function() {
+      setTimeout(lockParentActions, 100);
+    });
+  });
+
+  // When modal closes, unlock parent
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      setTimeout(unlockParentActions, 200);
+    });
+  }
+});
+</script>
+
+
+
+{% endblock %} {% endblock content %}

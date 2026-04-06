@@ -1873,9 +1873,13 @@ document.addEventListener("DOMContentLoaded", function () {
       let apiParams;
       let dataSource;
 
+      // Dynamically determine the correct API prefix based on current page URL
+      const currentPathPrefix = '/' + window.location.pathname.split('/')[1];
+      const trayIdListPath = currentPathPrefix + '/pick_CompleteTable_tray_id_list/';
+
       if (isVerified) {
         // AFTER CHECK: Use BrassTrayId data with Brass QC parameters
-        trayListEndpoint = '/nickle_inspection/pick_CompleteTable_tray_id_list/';
+        trayListEndpoint = trayIdListPath;
         dataSource = 'BrassTrayId';
         
         // Get Brass QC status from row data attributes
@@ -1889,7 +1893,7 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log(`   Parameters:`, apiParams);
       } else {
         // PICK MODE: Use TrayId data with IP stock parameters  
-        trayListEndpoint = '/nickle_inspection/pick_CompleteTable_tray_id_list/';
+        trayListEndpoint = trayIdListPath;
         dataSource = 'TrayId (IPTrayId)';
 
         apiParams = {

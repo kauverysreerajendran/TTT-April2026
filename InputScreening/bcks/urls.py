@@ -43,5 +43,5 @@ urlpatterns = [
     path('delink_selected_trays/', delink_selected_trays, name='delink_selected_trays'),
     path('get_rejection_details/', get_rejection_details, name='get_rejection_details'),
 
-    path('get_lot_id_for_tray/', get_lot_id_for_tray, name='get_lot_id_for_tray'),
+    path('get_lot_id_for_tray/', get_lot_id_for_tray, name='get_lot_id_for_tray'),  # ✅ RE-ENABLED: Added stub function
 ]

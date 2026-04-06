@@ -53,6 +53,7 @@ from IQF.models import *
 from BrassAudit.models import *
 from Nickel_Inspection.models import *
 from Jig_Unloading.models import *
+from Jig_Unloading.tray_utils import get_upstream_tray_distribution
 from Inprocess_Inspection.models import InprocessInspectionTrayCapacity
 from django.contrib.auth.decorators import login_required
 
@@ -9380,31 +9381,40 @@ class PickTrayIdList_Complete_APIView(APIView):
         trays = NickelQcTrayId.objects.filter(lot_id=lot_id).order_by('id')
         tray_source = "NickelQcTrayId"
 
-        # If not found, fallback to JigUnload_TrayId
+        # If not found, fallback to JigUnload_TrayId (direct lot_id)
         if trays.count() == 0:
             print(f"⚠️ No NickelQcTrayId records found for lot_id: {lot_id}, checking JigUnload_TrayId...")
             trays = JigUnload_TrayId.objects.filter(lot_id=lot_id).order_by('id')
             tray_source = "JigUnload_TrayId"
 
-        if trays.count() == 0:
-            return JsonResponse({
-                'success': False,
-                'error': f'No tray records found for lot_id: {lot_id}'
-            }, status=404)
-
-        # Build response data: include delink_tray and rejected_tray status for each tray
+        # Build response data from ORM trays if found
         data = []
-        for index, tray in enumerate(trays, 1):
-            tray_data = {
-                's_no': index,
-                'tray_id': tray.tray_id,
-                'tray_quantity': getattr(tray, 'tray_quantity', getattr(tray, 'tray_qty', 0)),
-                'top_tray': getattr(tray, 'top_tray', False),
-                'delink_tray': getattr(tray, 'delink_tray', False),
-                'rejected_tray': getattr(tray, 'rejected_tray', False),
-            }
-            data.append(tray_data)
-            print(f"    - Tray {index}: {tray.tray_id} (qty: {tray_data['tray_quantity']}) top={tray_data['top_tray']} delink={tray_data['delink_tray']} rejected={tray_data['rejected_tray']}")
+        if trays.count() > 0:
+            for index, tray in enumerate(trays, 1):
+                tray_data = {
+                    's_no': index,
+                    'tray_id': tray.tray_id,
+                    'tray_quantity': getattr(tray, 'tray_quantity', getattr(tray, 'tray_qty', 0)),
+                    'top_tray': getattr(tray, 'top_tray', False),
+                    'delink_tray': getattr(tray, 'delink_tray', False),
+                    'rejected_tray': getattr(tray, 'rejected_tray', False),
+                }
+                data.append(tray_data)
+                print(f"    - Tray {index}: {tray.tray_id} (qty: {tray_data['tray_quantity']}) top={tray_data['top_tray']} delink={tray_data['delink_tray']} rejected={tray_data['rejected_tray']}")
+        else:
+            # Fallback: fetch real tray IDs from upstream tables via combine_lot_ids
+            print(f"⚠️ No JigUnload_TrayId for lot_id: {lot_id}, trying upstream tray tables...")
+            upstream_data, upstream_source = get_upstream_tray_distribution(lot_id)
+            if upstream_data:
+                data = upstream_data
+                tray_source = upstream_source
+                print(f"✅ Found {len(data)} trays from {tray_source}")
+            else:
+                print(f"❌ [PickTrayIdList_Complete_APIView] No tray records found for lot_id: {lot_id}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'No tray records found for lot_id: {lot_id}'
+                }, status=404)
 
         # Merge draft rejection into tray_data
         if include_drafts:

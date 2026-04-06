@@ -852,6 +852,579 @@ input:checked + .hold-slider:before {
 .row-inactive * {
   cursor: pointer !important;
 }
+
+/* ================================================================
+   REJECTION MODAL — Premium Centered Dialog
+   Refined · Modern · Elegant
+   ================================================================ */
+
+/* ── Ambient background variables ──────────────────────────────── */
+:root {
+  --tsm-accent:       #2a6f74;
+  --tsm-accent-light: #3d9096;
+  --tsm-accent-pale:  #e8f4f5;
+  --tsm-header-from:  #1f4e52;
+  --tsm-header-to:    #2a6f74;
+  --tsm-border:       #cdd7e2;
+  --tsm-bg:           #f9fafb;
+  --tsm-card:         #ffffff;
+  --tsm-text:         #1e2d3d;
+  --tsm-text-muted:   #6b7e96;
+  --tsm-scroll-thumb: rgba(42,111,116,0.35);
+  --tsm-scroll-hover: rgba(42,111,116,0.6);
+}
+
+/* ── Full-screen backdrop ────────────────────────────────────────  */
+#trayScanModal {
+  position: fixed !important;
+  inset: 0 !important;
+  right: auto !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 22, 38, 0.62) 0%,
+    rgba(28, 46, 64, 0.55) 100%
+  ) !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  z-index: 900100 !important;
+  transition: none !important;
+  backdrop-filter: blur(5px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(1.4) !important;
+  box-shadow: none !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+/* ── Open state ──────────────────────────────────────────────────  */
+#trayScanModal.open {
+  display: flex !important;
+  animation: tsmDialogEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes tsmDialogEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Dialog card ────────────────────────────────────────────────── */
+#trayScanModal > .tray-scan-modal-content {
+  background: var(--tsm-card) !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow:
+    0 2px 0  rgba(42,111,116,0.30),
+    0 20px 60px rgba(10, 20, 40, 0.30),
+    0 6px  18px rgba(10, 20, 40, 0.14) !important;
+  width: 760px !important;
+  max-width: 96vw !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 !important;
+  position: relative !important;
+  right: auto !important;
+  height: auto !important;
+  top: auto !important;
+  transition: none !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--tsm-scroll-thumb) transparent !important;
+}
+
+/* ── Custom scrollbar (Webkit) ───────────────────────────────────  */
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar {
+  width: 5px !important;
+}
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar-track {
+  background: transparent !important;
+  margin: 14px 0 !important;
+}
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar-thumb {
+  background: var(--tsm-scroll-thumb) !important;
+  border-radius: 10px !important;
+  border: none !important;
+  transition: background 0.2s !important;
+}
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--tsm-scroll-hover) !important;
+}
+
+/* ── Header ──────────────────────────────────────────────────────  */
+#trayScanModal #trayScanModalHeader {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 0 !important; /* Reset — will size inner spans */
+  border-bottom: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  display: block !important;
+  line-height: 1 !important;
+}
+
+/* Inject header aesthetics via pseudo — avoids touching the h4 tag */
+#trayScanModal #trayScanModalHeader::before {
+  content: '' !important;
+  display: block !important;
+  height: 4px !important;
+  background: linear-gradient(
+    90deg,
+    var(--tsm-header-from) 0%,
+    var(--tsm-accent-light) 55%,
+    rgba(42,111,116,0.18) 100%
+  ) !important;
+  border-radius: 14px 14px 0 0 !important;
+}
+
+/* Header text row */
+#trayScanModal #trayScanModalHeader {
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  color: var(--tsm-text) !important;
+  background: linear-gradient(
+    135deg,
+    #f0f5f6 0%,
+    #e8f0f2 100%
+  ) !important;
+  padding: 0 58px 16px 26px !important;
+  border-bottom: 1.5px solid var(--tsm-border) !important;
+  border-radius: 14px 14px 0 0 !important;
+  display: block !important;
+  line-height: 1.5 !important;
+}
+
+#trayScanModal #trayScanModalHeader::before {
+  margin: 0 -58px 14px -26px !important; /* Stretch edge-to-edge above text */
+}
+
+/* ── "Rejection Window" breadcrumb text coloring ─────────────────  */
+#trayScanModal #trayScanModalHeader .modal-model-no {
+  color: var(--tsm-accent) !important;
+  font-weight: 700 !important;
+}
+
+/* ── Close button — circle with X ───────────────────────────────  */
+#trayScanModal #closeTrayScanModal {
+  position: absolute !important;
+  top: 12px !important;
+  right: 14px !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 29px !important;
+  text-align: center !important;
+  font-size: 22px !important;
+  font-weight: 300 !important;
+  color: var(--tsm-text-muted) !important;
+  background: rgba(255,255,255,0.72) !important;
+  border: 1px solid #dce4ee !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.15s !important;
+  backdrop-filter: blur(2px) !important;
+}
+#trayScanModal #closeTrayScanModal:hover {
+  background: #fdecea !important;
+  border-color: #e8b4b4 !important;
+  color: #c0392b !important;
+  transform: scale(1.08) !important;
+}
+
+/* ── Inner content area ──────────────────────────────────────────  */
+#trayScanModal #trayScanDetails {
+  padding: 22px 26px 28px !important;
+  background: var(--tsm-bg) !important;
+  min-height: 80px !important;
+}
+
+/* ── Micro-polish: table header inside the rejection reasons ─────  */
+#trayScanModal #trayScanDetails table thead th {
+  background: var(--tsm-accent) !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.4px !important;
+  padding: 10px 8px !important;
+  border-color: rgba(255,255,255,0.15) !important;
+}
+
+/* Stripe rows */
+#trayScanModal #trayScanDetails table tbody tr:nth-child(even) td {
+  background-color: #f4f8f9 !important;
+}
+#trayScanModal #trayScanDetails table tbody tr:hover td {
+  background-color: #eaf4f5 !important;
+  transition: background-color 0.15s !important;
+}
+
+/* ── Action buttons inside rejection form ────────────────────────  */
+#trayScanModal #draftButton,
+#trayScanModal #proceedButton,
+#trayScanModal #cancelButton {
+  font-family: 'Segoe UI', system-ui, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  padding: 9px 22px !important;
+  border-radius: 50px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: transform 0.14s, box-shadow 0.18s, filter 0.18s !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12) !important;
+}
+#trayScanModal #draftButton {
+  background: linear-gradient(135deg, #e67e22, #d35400) !important;
+  color: #fff !important;
+}
+#trayScanModal #proceedButton {
+  background: linear-gradient(135deg, var(--tsm-accent-light), var(--tsm-header-from)) !important;
+  color: #fff !important;
+}
+#trayScanModal #cancelButton {
+  background: linear-gradient(135deg, #95a5b5, #6b7e96) !important;
+  color: #fff !important;
+}
+#trayScanModal #draftButton:hover,
+#trayScanModal #proceedButton:hover,
+#trayScanModal #cancelButton:hover {
+  filter: brightness(1.09) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+}
+
+/* ── Qty input refinement ────────────────────────────────────────  */
+#trayScanModal .rejection-qty-input {
+  border: 1.5px solid #c8d6de !important;
+  border-radius: 6px !important;
+  background: #f7fcfc !important;
+  font-weight: 600 !important;
+  color: var(--tsm-accent) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+#trayScanModal .rejection-qty-input:focus {
+  border-color: var(--tsm-accent) !important;
+  box-shadow: 0 0 0 3px rgba(42,111,116,0.12) !important;
+  outline: none !important;
+}
+
+/* ── Total row ───────────────────────────────────────────────────  */
+#trayScanModal #rejection-total-qty {
+  background: linear-gradient(135deg, var(--tsm-accent-pale), #d6eef0) !important;
+  color: var(--tsm-accent) !important;
+  font-weight: 800 !important;
+  font-size: 16px !important;
+}
+
+/* ── Lot rejection remarks textarea ─────────────────────────────  */
+#trayScanModal #lotRejectionRemarksInput {
+  border: 1.5px solid #26c6a0 !important;
+  border-radius: 8px !important;
+  background: #f7fffd !important;
+  font-size: 13px !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+#trayScanModal #lotRejectionRemarksInput:focus {
+  border-color: #1aa37f !important;
+  box-shadow: 0 0 0 3px rgba(26,163,127,0.12) !important;
+  outline: none !important;
+}
+
+/* ── Responsive — tablet ─────────────────────────────────────────  */
+@media (max-width: 768px) {
+  #trayScanModal > .tray-scan-modal-content {
+    width: 98vw !important;
+    max-height: 93vh !important;
+    border-radius: 11px !important;
+  }
+  #trayScanModal #trayScanModalHeader {
+    font-size: 13px !important;
+    padding: 0 50px 14px 16px !important;
+  }
+  #trayScanModal #trayScanDetails {
+    padding: 14px 16px 18px !important;
+  }
+}
+
+/* ── Responsive — mobile ─────────────────────────────────────────  */
+@media (max-width: 480px) {
+  #trayScanModal {
+    padding: 6px !important;
+  }
+  #trayScanModal > .tray-scan-modal-content {
+    max-height: 97vh !important;
+    border-radius: 8px !important;
+  }
+  #trayScanModal #draftButton,
+  #trayScanModal #proceedButton,
+  #trayScanModal #cancelButton {
+    padding: 8px 16px !important;
+    font-size: 12.5px !important;
+  }
+}
+
+/* ================================================================
+   ACCEPTED TRAY / DELINK MODAL  (#newPopupModal)
+   Centered overlay — matches rejection modal palette
+   ================================================================ */
+
+/* ── Full-screen backdrop ────────────────────────────────────────  */
+#newPopupModal {
+  position: fixed !important;
+  inset: 0 !important;
+  right: auto !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 22, 38, 0.58) 0%,
+    rgba(28, 46, 64, 0.50) 100%
+  ) !important;
+  display: none !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  z-index: 900200 !important;
+  transition: none !important;
+  backdrop-filter: blur(5px) saturate(1.35) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(1.35) !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  animation: none !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+
+/* ── Open state ──────────────────────────────────────────────────  */
+#newPopupModal.open {
+  display: flex !important;
+  left: 0 !important;
+  top: 0 !important;
+  animation: npmEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes npmEnter {
+  from { opacity: 0; transform: translateY(-16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+/* ── Dialog card ─────────────────────────────────────────────────  */
+#newPopupModal > .tray-scan-modal-content {
+  background: #ffffff !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+  box-shadow:
+    0 2px 0  rgba(42, 111, 116, 0.28),
+    0 22px 64px rgba(10, 20, 40, 0.30),
+    0 6px  20px rgba(10, 20, 40, 0.12) !important;
+  width: 680px !important;
+  max-width: 96vw !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 !important;
+  position: relative !important;
+  right: auto !important;
+  left: auto !important;
+  top: auto !important;
+  height: auto !important;
+  transition: none !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(42,111,116,0.32) transparent !important;
+}
+
+/* ── Scrollbar (Webkit) ──────────────────────────────────────────  */
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar { width: 5px !important; }
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar-track {
+  background: transparent !important; margin: 14px 0 !important;
+}
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar-thumb {
+  background: rgba(42,111,116,0.30) !important;
+  border-radius: 10px !important;
+}
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(42,111,116,0.55) !important;
+}
+
+/* ── Accent top bar injected via wrapper pseudo ──────────────────  */
+#newPopupModal > .tray-scan-modal-content::before {
+  content: '' !important;
+  display: block !important;
+  height: 4px !important;
+  background: linear-gradient(
+    90deg,
+    #1f4e52 0%,
+    #3d9096 55%,
+    rgba(42,111,116,0.15) 100%
+  ) !important;
+  border-radius: 14px 14px 0 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* ── Close button (rendered dynamically by JS) ───────────────────  */
+#newPopupModal #closeAcceptedTrayModal,
+#newPopupModal #closeNewPopupModal {
+  position: absolute !important;
+  top: 12px !important;
+  right: 14px !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 28px !important;
+  text-align: center !important;
+  font-size: 18px !important;
+  font-weight: 300 !important;
+  color: #6b7e96 !important;
+  background: rgba(255,255,255,0.78) !important;
+  border: 1px solid #dce4ee !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+  padding: 0 !important;
+  transition: background 0.18s, color 0.18s, transform 0.14s !important;
+  backdrop-filter: blur(2px) !important;
+}
+#newPopupModal #closeAcceptedTrayModal:hover,
+#newPopupModal #closeNewPopupModal:hover {
+  background: #fdecea !important;
+  border-color: #e8b4b4 !important;
+  color: #c0392b !important;
+  transform: scale(1.08) !important;
+}
+
+/* ── Inner content padding ───────────────────────────────────────  */
+#newPopupModal > .tray-scan-modal-content > * {
+  padding-left: 22px !important;
+  padding-right: 22px !important;
+}
+#newPopupModal > .tray-scan-modal-content > *:first-child {
+  padding-top: 18px !important;
+}
+#newPopupModal > .tray-scan-modal-content > *:last-child {
+  padding-bottom: 22px !important;
+}
+/* Don't double-pad the accent bar pseudo-element */
+#newPopupModal > .tray-scan-modal-content > div:first-of-type {
+  padding-top: 18px !important;
+}
+
+/* ── Section sub-headers inside dynamic HTML ─────────────────────  */
+#newPopupModal .d-flex.justify-content-between h4,
+#newPopupModal .d-flex.justify-content-between h5 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  color: #1e2d3d !important;
+}
+
+/* ── Delink table — red accent ───────────────────────────────────  */
+#delinkSection table thead th {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%) !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  border-color: rgba(255,255,255,0.18) !important;
+}
+#delinkSection table tbody tr:nth-child(even) td {
+  background-color: #fdf4f4 !important;
+}
+#delinkSection table tbody tr:hover td {
+  background-color: #fce8e8 !important;
+  transition: background-color 0.14s !important;
+}
+
+/* ── Top tray scan input ─────────────────────────────────────────  */
+#topTrayIdInput {
+  border: 1.5px solid #c8d6de !important;
+  border-radius: 7px !important;
+  background: #f7fbfc !important;
+  font-weight: 600 !important;
+  color: #1f4e52 !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+#topTrayIdInput:focus {
+  border-color: #2a6f74 !important;
+  box-shadow: 0 0 0 3px rgba(42,111,116,0.13) !important;
+  outline: none !important;
+}
+#topTrayIdInput[readonly] {
+  background: #e8f5e4 !important;
+  border-color: #4caf50 !important;
+  color: #2e7d32 !important;
+}
+
+/* ── Action buttons ──────────────────────────────────────────────  */
+#newPopupModal #acceptedTrayDraftBtn,
+#newPopupModal #acceptedTrayFinalSubmitBtn,
+#newPopupModal #acceptedTraySubmitBtn,
+#newPopupModal #acceptedTrayCancelBtn {
+  font-family: 'Segoe UI', system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  padding: 9px 22px !important;
+  border-radius: 50px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: transform 0.13s, box-shadow 0.18s, filter 0.16s !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.11) !important;
+}
+#newPopupModal #acceptedTrayDraftBtn {
+  background: linear-gradient(135deg, #e67e22, #d35400) !important;
+  color: #fff !important;
+}
+#newPopupModal #acceptedTrayFinalSubmitBtn,
+#newPopupModal #acceptedTraySubmitBtn {
+  background: linear-gradient(135deg, #3d9096, #1f4e52) !important;
+  color: #fff !important;
+}
+#newPopupModal #acceptedTrayCancelBtn {
+  background: linear-gradient(135deg, #8e9db0, #6b7e96) !important;
+  color: #fff !important;
+}
+#newPopupModal #acceptedTrayDraftBtn:hover,
+#newPopupModal #acceptedTrayFinalSubmitBtn:hover,
+#newPopupModal #acceptedTraySubmitBtn:hover,
+#newPopupModal #acceptedTrayCancelBtn:hover {
+  filter: brightness(1.09) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+}
+
+/* ── Tablet ──────────────────────────────────────────────────────  */
+@media (max-width: 768px) {
+  #newPopupModal > .tray-scan-modal-content {
+    width: 98vw !important;
+    max-height: 93vh !important;
+    border-radius: 10px !important;
+  }
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────  */
+@media (max-width: 480px) {
+  #newPopupModal { padding: 6px !important; }
+  #newPopupModal > .tray-scan-modal-content {
+    max-height: 96vh !important;
+    border-radius: 8px !important;
+  }
+}
 </style>
  
 
@@ -1042,7 +1615,7 @@ input:checked + .hold-slider:before {
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
-                        <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type}}-{{data.tray_capacity}}</td>
+                        <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type|tray_full_name}}-{{data.tray_capacity}}</td>
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>
                         {% if data.wiping_required %}
@@ -5068,7 +5641,7 @@ setTimeout(() => {
               
                 <!-- ✅ REDESIGNED: Perfectly matched table with enhanced headers -->
                 <div id="rejection-reasons-section" class="table-responsive"
-style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); background: #fff; scrollbar-width: none; -ms-overflow-style: none; display: grid; grid-template-columns: 1fr; overflow: auto !important; ">
+style="width: 100% !important; max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); background: #fff; scrollbar-width: none; -ms-overflow-style: none; display: grid; grid-template-columns: 1fr; overflow: auto !important; ">
 <table class="table table-bordered text-center mb-0" style="font-size: 13px; border-collapse: initial !important; border-color: black !important; border-spacing: 0; grid-column: 1 / -1;">
                     <thead style="background: linear-gradient(135deg, ${headerColor} 0%, ${isDraftMode ? '#e67e22' : '#0056b3'} 100%); position: relative;">
                       <tr style="border: 1px solid #282f3a;">
@@ -5155,7 +5728,7 @@ style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 1
                   </div>
                 </div>
                 
-                <div id="batchRejectionMsg" style="margin: 5px 0; color: #d32f2f; font-weight: 600; font-size: 13px; text-align: center; min-height: 20px;"></div>
+                <div id="batchRejectionMsg" style="margin: 5px 0; color: #d32f2f; font-weight: 600; font-size: 13px; text-align: center;"></div>
               <!-- ✅ OLD SIMPLE BUTTON DESIGN -->
               <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
                 <button id="draftButton" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 30px;">
@@ -5907,14 +6480,14 @@ function generateDynamicTrayIdInputs(row, quantity, trayIdCell) {
   trayIdContainer.className = 'tray-id-container';
   trayIdContainer.style.cssText = `
     display: flex; flex-direction: column; gap: 6px; padding: 8px;
-    background-color: #f8f9fa; border: 2px solid #007bff; border-radius: 8px;z-index: 9 !important;
+    background-color: #f8f9fa; border: 2px solid rgb(190 202 215); border-radius: 8px;z-index: 9 !important;
   `;
   
   // Add header for tray container
   const headerDiv = document.createElement('div');
   headerDiv.style.cssText = `
     font-weight: bold; font-size: 12px; color: #007bff; margin-bottom: 4px;
-    text-align: center; border-bottom: 1px solid #007bff; padding-bottom: 4px;z-index: 9 !important;
+    text-align: center; padding-bottom: 4px;z-index: 9 !important;
   `;
   headerDiv.textContent = `${traysNeeded} Tray${traysNeeded > 1 ? 's' : ''} Required`;
   trayIdContainer.appendChild(headerDiv);
