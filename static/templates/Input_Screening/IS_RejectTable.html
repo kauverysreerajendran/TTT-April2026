@@ -795,55 +795,54 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     </a>
                     </td>
 
-                    <!-- Rejection Remark -->
-                    <!-- Only reduce circle size and force single-line display, keep everything else intact -->
-<td>
-  <div class="avatar-group rejection-popup-trigger"
-      style="cursor:pointer; max-width:120px; white-space:nowrap; word-break:break-word; overflow:hidden; text-overflow:ellipsis; display:flex; flex-direction:column; align-items:flex-start; gap:2px;"
-      onmouseover="this.style.overflow='visible'; this.style.whiteSpace='nowrap'; this.style.background='#f9f9f9'; this.style.zIndex='10';"
-      onmouseout="this.style.overflow='hidden'; this.style.whiteSpace='nowrap'; this.style.background=''; this.style.zIndex='';"
-      title="">
-    <!-- Top: Rejection Reason Circles or Placeholder -->
-    <div style="display:flex; align-items:center; gap:4px;">
-      {% if data.rejection_reason_letters %}
-        {% for letter in data.rejection_reason_letters %}
-          <a href="#" class="avatar blue"
-            style="color: #fff; cursor: pointer; background: #01802a; padding: 4px 0; width:18px; height:18px; border-radius: 50%; font-size: 11px; display:inline-flex; align-items:center; justify-content:center;">
-            {{ letter }}
-          </a>
-        {% endfor %}
-      {% elif data.dp_missing_qty and data.dp_missing_qty > 0 %}
-        <div class="avatar orange" title="Shortage" style="width:20px; height:20px; padding:6px !important; font-size:11px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">S</div>
-      {% else %}
-        <span style="color:#888; font-size:12px; font-style:italic;">
-          No rejection reason
-        </span>
-      {% endif %}
-    </div>
-    <!-- Bottom: Direct Lot Remark or Placeholder -->
-    <div style="margin-top:2px;">
-      {% if data.lot_rejected_comment %}
-        <span 
-          style="color:#d32f2f; font-size:12px; font-weight:400; cursor:help; text-overflow:ellipsis; max-width:110px; overflow:hidden; white-space:nowrap;"
-          title="{{ data.lot_rejected_comment }}">
-          {{ data.lot_rejected_comment|truncatechars:18 }}
-        </span>
-      {% else %}
-        <span style="color:#888; font-size:12px; font-style:italic;">
-          No lot remarks
-        </span>
-      {% endif %}
-    </div>
-  </div>
-</td>
+    <!-- Rejection Remark -->
+    <!-- Only reduce circle size and force single-line display, keep everything else intact -->
+        <td>
+          <div class="avatar-group rejection-popup-trigger"
+              style="cursor:pointer; max-width:120px; white-space:nowrap; word-break:break-word; overflow:hidden; text-overflow:ellipsis; display:flex; flex-direction:column; align-items:flex-start; gap:2px;"
+              onmouseover="this.style.overflow='visible'; this.style.whiteSpace='nowrap'; this.style.background='#f9f9f9'; this.style.zIndex='10';"
+              onmouseout="this.style.overflow='hidden'; this.style.whiteSpace='nowrap'; this.style.background=''; this.style.zIndex='';"
+              title="">
+            <!-- Top: Rejection Reason Circles or Placeholder -->
+            <div style="display:flex; align-items:center; gap:4px;">
+              {% if data.rejection_reason_letters %}
+                {% for letter in data.rejection_reason_letters %}
+                  <a href="#" class="avatar blue"
+                    style="color: #fff; cursor: pointer; background: #01802a; padding: 4px 0; width:18px; height:18px; border-radius: 50%; font-size: 11px; display:inline-flex; align-items:center; justify-content:center;">
+                    {{ letter }}
+                  </a>
+                {% endfor %}
+              {% elif data.dp_missing_qty and data.dp_missing_qty > 0 %}
+                <div class="avatar orange" title="Shortage" style="width:20px; height:20px; padding:6px !important; font-size:11px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">S</div>
+              {% else %}
+                <span style="color:#888; font-size:12px; font-style:italic;">
+                  No rejection reason
+                </span>
+              {% endif %}
+            </div>
+            <!-- Bottom: Lot Rejection Remark Info Icon -->
+            <div style="margin-top:2px;">
+              {% if data.lot_rejected_comment %}
+                <i class="fa fa-info-circle lot-rej-info"
+                  style="color:#d32f2f; font-size:15px; cursor:pointer;"
+                  tabindex="0"
+                  data-lot-comment="{{ data.lot_rejected_comment|default:''|escape }}"
+                  data-lot-id="{{ data.stock_lot_id }}"
+                  onclick="showRejectionRemarksModal('{{ data.stock_lot_id }}')"
+                  onkeypress="if(event.key==='Enter') showRejectionRemarksModal('{{ data.stock_lot_id }}')"></i>
+              {% else %}
+                <i class="fa fa-info-circle" style="color:#bdbdbd; font-size:15px; cursor:not-allowed; opacity:0.5;" title="No lot remarks"></i>
+              {% endif %}
+            </div>
+          </div>
+        </td>
 
-                  </tr>
+       </tr>
                 {% endfor %}
 
-                </tbody>
-              </table>
-
-              <div
+        </tbody>
+        </table>
+<div
   id="trayScanModal_DayPlanning"
   class="tray-scan-modal-DayPlanning"
   style="display:none"
@@ -1103,6 +1102,48 @@ function showRejectionRemarksModal(lotId) {
       alert('Error loading rejection remarks');
     });
 }
+
+// Hover tooltip for lot rejection info icons (show full remark on hover)
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.lot-rej-info').forEach(function(icon) {
+    let tooltipEl = null;
+    function createTooltip(text) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'lot-rej-tooltip';
+      tooltipEl.style.position = 'absolute';
+      tooltipEl.style.background = '#fff';
+      tooltipEl.style.border = '1px solid #ddd';
+      tooltipEl.style.padding = '8px 10px';
+      tooltipEl.style.borderRadius = '6px';
+      tooltipEl.style.boxShadow = '0 6px 18px rgba(0,0,0,0.12)';
+      tooltipEl.style.zIndex = 20000;
+      tooltipEl.style.maxWidth = '360px';
+      tooltipEl.style.fontSize = '13px';
+      tooltipEl.textContent = text;
+      document.body.appendChild(tooltipEl);
+      return tooltipEl;
+    }
+    function showTooltip() {
+      const text = icon.getAttribute('data-lot-comment') || icon.getAttribute('title') || 'No remarks';
+      createTooltip(text);
+      const rect = icon.getBoundingClientRect();
+      const top = window.scrollY + rect.top - (tooltipEl.offsetHeight || 44) - 8;
+      const left = window.scrollX + rect.left + (rect.width / 2) - (tooltipEl.offsetWidth / 2);
+      tooltipEl.style.top = (top > 8 ? top : window.scrollY + rect.bottom + 8) + 'px';
+      tooltipEl.style.left = (Math.max(8, left)) + 'px';
+    }
+    function hideTooltip() {
+      if (tooltipEl && tooltipEl.parentNode) {
+        tooltipEl.parentNode.removeChild(tooltipEl);
+        tooltipEl = null;
+      }
+    }
+    icon.addEventListener('mouseenter', showTooltip);
+    icon.addEventListener('mouseleave', hideTooltip);
+    icon.addEventListener('focus', showTooltip);
+    icon.addEventListener('blur', hideTooltip);
+  });
+});
 </script>
 
 

@@ -3771,9 +3771,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
 
     // ✅ NEW: Special alert for delink-only mode
     let delinkOnlyAlert = isDelinkOnly ? `
-      <div class="alert alert-warning" style="margin: 10px 0; padding: 8px 12px; font-size: 14px; background: linear-gradient(135deg, #fff3cd, #ffeaa7); border: 2px solid #ffc107; color: #856404;">
-        <i class="fa fa-exclamation-triangle"></i> <strong>Delink Only Mode!</strong> Only empty trays need to be scanned for this lot.
-      </div>
+  
     ` : '';
 
     let html = `

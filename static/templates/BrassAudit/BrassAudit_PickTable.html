@@ -926,7 +926,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     </td>
                     <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
                       
-                      {% if not data.brass_audit_accptance and not data.brass_audit_rejection and not data.brass_accepted_tray_scan_status and not data.brass_audit_few_cases_accptance and data.brass_audit_accepted_qty_verified %}                       
+                      {% if not data.brass_audit_accptance and not data.brass_audit_rejection and not data.brass_accepted_tray_scan_status and data.brass_audit_accepted_qty_verified %}                       
 
                       <a href="#" class="delete-batch-btn" title="Delete" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.stock_lot_id }}">
                         <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />

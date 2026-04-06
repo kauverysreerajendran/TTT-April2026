@@ -768,8 +768,9 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     </td>
                     <td>
                       {% if data.lot_rejected_comment %}
-                        <span style="color:#fb8c00;font-weight:500;">
-                          {{ data.lot_rejected_comment }}
+                        <span title="{{ data.lot_rejected_comment }}" style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer; position: relative;">
+                          <i class="fa fa-info-circle" style="color: #e53935; font-size: 18px;"></i>
+                          <span style="font-size: 12px; color: #c62828; font-weight: 600; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ data.lot_rejected_comment }}</span>
                         </span>
                       {% else %}
                         <span style="color:#aaa;">-</span>

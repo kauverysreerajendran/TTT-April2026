@@ -1279,16 +1279,9 @@ class BAuditBatchRejectionAPIView(APIView):
 
             updated_trays_count = BrassAuditTrayId.objects.filter(lot_id=lot_id).update(rejected_tray=True)
 
-            # ✅ UPDATED: Create Brass_Audit_Rejection_ReasonStore entry with lot rejection remarks
-            Brass_Audit_Rejection_ReasonStore.objects.create(
-                lot_id=lot_id,
-                user=request.user,
-                total_rejection_quantity=qty,
-                batch_rejection=True,
-                lot_rejected_comment=lot_rejected_comment  # <-- NEW: Save lot rejection remarks
-            )
-
             # Transfer batch-level audit rejection to Brass QC for pick/tray-scan visibility
+            # NOTE: Brass_Audit_Rejection_ReasonStore is created AFTER reverse transfer because
+            # send_brass_audit_back_to_brass_qc deletes all BA records including rejection store.
             try:
                 # ✅ IMPROVED: Use the new reverse transfer function that reuses existing trays
                 # Call the new reverse transfer function that prevents duplication
@@ -1309,6 +1302,18 @@ class BAuditBatchRejectionAPIView(APIView):
                 traceback.print_exc()
                 # Fallback to original method
                 transfer_brass_audit_rejections_to_brass_qc(lot_id, request.user, batch_rejection=True, lot_comment=lot_rejected_comment)
+
+            # ✅ Create Brass_Audit_Rejection_ReasonStore AFTER reverse transfer so it is NOT
+            # deleted by send_brass_audit_back_to_brass_qc (which clears all BA data first).
+            Brass_Audit_Rejection_ReasonStore.objects.update_or_create(
+                lot_id=lot_id,
+                defaults={
+                    'user': request.user,
+                    'total_rejection_quantity': qty,
+                    'batch_rejection': True,
+                    'lot_rejected_comment': lot_rejected_comment,
+                }
+            )
             
             # ✅ FIX: Don't set send_brass_qc=True - rejected lot goes to Jig Loading, not back to Brass QC
             total_stock.last_process_date_time = timezone.now()
@@ -4128,6 +4133,25 @@ class BrassAuditCompletedView(APIView):
                 data['no_of_trays'] = math.ceil(display_qty / tray_capacity)
             else:
                 data['no_of_trays'] = 0
+
+            # Compute display_lot_qty (total input qty to Brass Audit) for Lot Qty column
+            audit_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id)
+            if audit_trays.exists():
+                data['display_lot_qty'] = audit_trays.aggregate(total=Sum('tray_quantity'))['total'] or 0
+                data['no_of_trays'] = audit_trays.count()
+            else:
+                iqf_accepted_trays = IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_save=True)
+                if iqf_accepted_trays.exists():
+                    iqf_lot_qty = iqf_accepted_trays.aggregate(total=Sum('tray_qty'))['total'] or 0
+                    data['display_lot_qty'] = iqf_lot_qty
+                    data['no_of_trays'] = iqf_accepted_trays.count() if iqf_lot_qty > 0 else 0
+                elif brass_qc_accepted_qty > 0:
+                    data['display_lot_qty'] = brass_qc_accepted_qty
+                    data['no_of_trays'] = math.ceil(brass_qc_accepted_qty / tray_capacity) if tray_capacity > 0 else 0
+                else:
+                    physical_qty = data.get('brass_audit_physical_qty') or 0
+                    data['display_lot_qty'] = physical_qty
+                    data['no_of_trays'] = math.ceil(physical_qty / tray_capacity) if tray_capacity > 0 and physical_qty > 0 else 0
                 
             # Get model images
             batch_obj = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
@@ -4139,6 +4163,16 @@ class BrassAuditCompletedView(APIView):
             if not images:
                 images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
+
+            # Fetch lot rejection comment for Remarks column display
+            lot_rejected_comment = ""
+            if data.get('brass_audit_rejection') or data.get('brass_audit_few_cases_accptance'):
+                rejection_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                if rejection_store and rejection_store.lot_rejected_comment:
+                    lot_rejected_comment = rejection_store.lot_rejected_comment
+                elif data.get('BA_pick_remarks'):
+                    lot_rejected_comment = data.get('BA_pick_remarks')
+            data['lot_rejected_comment'] = lot_rejected_comment
 
         print("Processed lot_ids:", [data['stock_lot_id'] for data in master_data])
             
@@ -6015,6 +6049,7 @@ class BrassAuditRejectTableView(APIView):
                 'brass_audit_last_process_date_time': stock_obj.brass_audit_last_process_date_time,
                 'brass_audit_missing_qty': stock_obj.brass_audit_missing_qty,
                 'brass_audit_physical_qty': stock_obj.brass_audit_physical_qty,
+                'BA_pick_remarks': stock_obj.BA_pick_remarks,
             }
             master_data.append(data)
 
@@ -6033,6 +6068,8 @@ class BrassAuditRejectTableView(APIView):
                 reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=stock_lot_id).first()
                 if reason_store:
                     lot_rejected_comment = reason_store.lot_rejected_comment or ""
+                elif data.get('BA_pick_remarks'):
+                    lot_rejected_comment = data.get('BA_pick_remarks')
             data['lot_rejected_comment'] = lot_rejected_comment
             
             # Get batch rejection and reason letters
@@ -6214,6 +6251,13 @@ class RejectTableTrayIdListAPIView(APIView):
                 if batch_rejection_store:
                     is_lot_rejection = True
                     lot_rejection_comment = batch_rejection_store.lot_rejected_comment or ''
+                else:
+                    # Check BA_pick_remarks from TotalStockModel
+                    from modelmasterapp.models import TotalStockModel
+                    stock_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                    if stock_obj and stock_obj.BA_pick_remarks:
+                        is_lot_rejection = True
+                        lot_rejection_comment = stock_obj.BA_pick_remarks
 
                 # 🚨 FINAL FIX: If still no trays, fallback to TrayId (completed table)
                 if not all_trays:
@@ -6227,8 +6271,8 @@ class RejectTableTrayIdListAPIView(APIView):
                             "tray_quantity": qty_val,
                             "qty": qty_val,
                             "is_top": getattr(tray, 'top_tray', False),
-                            "rejected": True,
-                            "delink": False,
+                            "rejected_tray": True,
+                            "delink_tray": False,
                             "source": "TrayId_fallback"
                         })
                     print(f"✅ REJECT VIEW FIXED: {len(all_trays)} trays loaded")

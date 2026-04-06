@@ -1985,7 +1985,13 @@ input:checked + .hold-slider:before {
                   <span id="closeTrayScanModal" class="tray-scan-close"
                      >&times;</span
                      >
-                  <h4 id="trayScanModalHeader">Input Screening / <span class="modal-model-no"></span> / Rejection Window</h4>
+                  <h4 id="trayScanModalHeader" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                    <span>Input Screening / <span class="modal-model-no"></span> / Rejection Window</span>
+                    <span style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-size:13px; color:#666; font-weight:500;">Lot Qty:</span>
+                      <span id="rejectionWindowLotQty" style="font-size:15px; font-weight:700; color:#e67e22;">0</span>
+                    </span>
+                  </h4>
                   <div id="trayScanDetails">
                      <!-- Dynamic content will be loaded here -->
                   </div>
@@ -5181,7 +5187,8 @@ if (redoBtn && validateInput) {
          const modelNo = row.getAttribute('data-model-no') || '';
          const modalHeader = document.getElementById("trayScanModalHeader");
          if (modalHeader) {
-           modalHeader.innerHTML = `Input Screening / <span class="modal-model-no">${modelNo}</span> / Rejection Window`;
+           const modelNoEl = modalHeader.querySelector('.modal-model-no');
+           if (modelNoEl) modelNoEl.textContent = modelNo;
          }
    
          // ✅ IMPROVED: Better logic to distinguish between acceptance and rejection drafts
@@ -5255,15 +5262,23 @@ if (redoBtn && validateInput) {
    
    
    const dateTime = row.cells[1].textContent.trim();
-   const totalQuantity = row.cells[10].textContent.trim();
+   // ✅ FIX: Read Lot Qty from cells[11] (.lot-qty span) instead of cells[10] (No of Trays)
+   const lotQtySpan = row.cells[11] ? row.cells[11].querySelector('.lot-qty') : null;
+   const totalQuantity = lotQtySpan ? lotQtySpan.textContent.trim() : (row.cells[11] ? row.cells[11].textContent.trim() : '0');
    const modelNo = row.getAttribute('data-model-no') || '';
    const modalHeader = document.getElementById("trayScanModalHeader");
    if (modalHeader) {
-   modalHeader.innerHTML = `Input Screening / <span class="modal-model-no">${modelNo}</span> / Rejection Window`;
+     const modelNoEl = modalHeader.querySelector('.modal-model-no');
+     if (modelNoEl) modelNoEl.textContent = modelNo;
    }
    
-   // Set current lot qty for auto-checking lot rejection checkbox
+   // ✅ FIX: Set current lot qty correctly and display it in the modal
    window.currentLotQty = parseInt(totalQuantity) || 0;
+   console.log('✅ [Rejection Modal] Lot Qty from row:', window.currentLotQty);
+   const lotQtyDisplay = document.getElementById('rejectionWindowLotQty');
+   if (lotQtyDisplay) {
+     lotQtyDisplay.textContent = (window.currentLotQty > 0 ? window.currentLotQty : '0');
+   }
    
    // If ip_onhold_picking is True, show read-only saved data
    if (isOnProceed) {
@@ -10007,7 +10022,9 @@ function interceptFormSubmission() {
      function handleBatchRejection(batchId, stockLotId) {
        const msgDiv = document.getElementById("batchRejectionMsg");
        const proceedButton = document.getElementById("proceedButton");
-       const totalQty = document.getElementById('rejection-total-qty').textContent || "0";
+       // ✅ FIX: Use window.currentLotQty (full lot qty) for batch rejection, not rejection-total-qty (which shows 0)
+       const totalQty = (window.currentLotQty || 0).toString();
+       console.log('✅ [handleBatchRejection] lot_id:', stockLotId, '| total_qty (lot qty):', totalQty);
 
        if (!batchId || !stockLotId) {
          if (msgDiv) msgDiv.textContent = "Batch ID or Lot ID not found.";
@@ -11583,7 +11600,8 @@ function addAcceptedTrayFormInterceptor() {
          // Set modal header
          const modelNo = row.getAttribute('data-model-no') || '';
          if (modalHeader) {
-           modalHeader.innerHTML = `Input Screening / <span class="modal-model-no">${modelNo}</span> / Rejection Window`;
+           const modelNoEl = modalHeader.querySelector('.modal-model-no');
+           if (modelNoEl) modelNoEl.textContent = modelNo;
          }
          
          // ✅ CONDITIONAL: Use appropriate logic for data display

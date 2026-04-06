@@ -928,6 +928,22 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     </span>
   {% endif %}
 
+  <!-- Lot Rejection Remark Info Icon -->
+  {% if data.lot_rejected_comment %}
+    <i class="fa fa-info-circle lot-rej-info"
+      style="color:#d32f2f; font-size:15px; cursor:pointer; margin-left:5px; vertical-align:middle;"
+      
+      tabindex="0"
+      data-lot-comment="{{ data.lot_rejected_comment|default:''|escape }}"
+      data-lot-id="{{ data.stock_lot_id }}"
+      onclick="showRejectionRemarksModalCompleted('{{ data.stock_lot_id }}')"
+      onkeypress="if(event.key==='Enter') showRejectionRemarksModalCompleted('{{ data.stock_lot_id }}')"></i>
+  {% else %}
+    <i class="fa fa-info-circle"
+      style="color:#bdbdbd; font-size:15px; cursor:not-allowed; opacity:0.5; margin-left:5px; vertical-align:middle;"
+      title="No lot rejection remarks"></i>
+  {% endif %}
+
 </td>
                    
                   </tr>
@@ -1852,7 +1868,21 @@ document.addEventListener("DOMContentLoaded", function () {
   </div>
   {% block script %}
 
-  <!-- 🔥 NEW: Date Filter JavaScript -->
+  <!-- Lot Rejection Remarks Modal -->
+  <div id="lotRejectionRemarksModalCompleted" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:99999; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:12px; padding:24px; max-width:420px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.3); position:relative;">
+      <button onclick="document.getElementById('lotRejectionRemarksModalCompleted').style.display='none';"
+        style="position:absolute; top:10px; right:14px; background:none; border:none; font-size:20px; cursor:pointer; color:#555;">&times;</button>
+      <h5 style="margin:0 0 16px; color:#d32f2f; font-weight:700; font-size:15px;">
+        <i class="fa fa-info-circle" style="margin-right:6px;"></i>Lot Rejection Remarks
+      </h5>
+      <div id="lotRejectionRemarksContentCompleted" style="font-size:13px; color:#333; line-height:1.6; word-break:break-word;">
+        Loading...
+      </div>
+    </div>
+  </div>
+
+
 <script nonce="{{ csp_nonce }}">
 document.addEventListener("DOMContentLoaded", function() {
   console.log('Initializing date filtering with simple indicators...');
@@ -2607,6 +2637,98 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script nonce="{{ csp_nonce }}">
+// ✅ Lot Rejection Remarks Modal for IS_Completed_Table
+function showRejectionRemarksModalCompleted(lotId) {
+  console.log('✅ [showRejectionRemarksModalCompleted] lotId:', lotId);
+  const modal = document.getElementById('lotRejectionRemarksModalCompleted');
+  const content = document.getElementById('lotRejectionRemarksContentCompleted');
+  if (!modal || !content) return;
 
+  content.innerHTML = 'Loading...';
+  modal.style.display = 'flex';
+
+  fetch(`/inputscreening/get_rejection_remarks/?lot_id=${encodeURIComponent(lotId)}`)
+    .then(r => r.json())
+    .then(data => {
+      const remarks = data.rejection_remarks || [];
+      console.log('✅ [showRejectionRemarksModalCompleted] remarks:', remarks);
+      if (remarks.length === 0) {
+        content.innerHTML = '<span style="color:#888; font-style:italic;">No rejection remarks found.</span>';
+        return;
+      }
+      // Show lot rejection remark prominently
+      let html = '';
+      remarks.forEach(item => {
+        if (item.reason === 'Lot Rejection' || item.lot_rejected_comment) {
+          const remark = item.lot_rejected_comment || item.reason || '';
+          html += `<div style="background:#fff3f3; border-left:4px solid #d32f2f; padding:10px 14px; border-radius:4px; margin-bottom:8px;">
+            <div style="font-weight:600; color:#d32f2f; font-size:12px;">Lot Rejection</div>
+            <div style="margin-top:4px; color:#333;">${remark}</div>
+            ${item.qty ? `<div style="margin-top:4px; font-size:12px; color:#666;">Qty: ${item.qty}</div>` : ''}
+          </div>`;
+        } else {
+          html += `<div style="padding:6px 0; border-bottom:1px solid #eee; font-size:13px;">
+            <strong>${item.reason || ''}</strong>${item.qty ? ` — ${item.qty}` : ''}
+          </div>`;
+        }
+      });
+      content.innerHTML = html || '<span style="color:#888; font-style:italic;">No lot rejection remarks.</span>';
+    })
+    .catch(err => {
+      console.error('❌ [showRejectionRemarksModalCompleted] Error:', err);
+      content.innerHTML = '<span style="color:#d32f2f;">Error loading remarks.</span>';
+    });
+}
+
+// Close modal when clicking backdrop
+document.getElementById('lotRejectionRemarksModalCompleted').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
+
+<script nonce="{{ csp_nonce }}">
+// Hover tooltip for lot rejection info icons in Completed Table
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.lot-rej-info').forEach(function(icon) {
+    let tooltipEl = null;
+    function createTooltip(text) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'lot-rej-tooltip';
+      tooltipEl.style.position = 'absolute';
+      tooltipEl.style.background = '#fff';
+      tooltipEl.style.border = '1px solid #ddd';
+      tooltipEl.style.padding = '8px 10px';
+      tooltipEl.style.borderRadius = '6px';
+      tooltipEl.style.boxShadow = '0 6px 18px rgba(0,0,0,0.12)';
+      tooltipEl.style.zIndex = 20000;
+      tooltipEl.style.maxWidth = '360px';
+      tooltipEl.style.fontSize = '13px';
+      tooltipEl.textContent = text;
+      document.body.appendChild(tooltipEl);
+      return tooltipEl;
+    }
+    function showTooltip() {
+      const text = icon.getAttribute('data-lot-comment') || icon.getAttribute('title') || 'No remarks';
+      createTooltip(text);
+      const rect = icon.getBoundingClientRect();
+      const top = window.scrollY + rect.top - (tooltipEl.offsetHeight || 44) - 8;
+      const left = window.scrollX + rect.left + (rect.width / 2) - (tooltipEl.offsetWidth / 2);
+      tooltipEl.style.top = (top > 8 ? top : window.scrollY + rect.bottom + 8) + 'px';
+      tooltipEl.style.left = (Math.max(8, left)) + 'px';
+    }
+    function hideTooltip() {
+      if (tooltipEl && tooltipEl.parentNode) {
+        tooltipEl.parentNode.removeChild(tooltipEl);
+        tooltipEl = null;
+      }
+    }
+    icon.addEventListener('mouseenter', showTooltip);
+    icon.addEventListener('mouseleave', hideTooltip);
+    icon.addEventListener('focus', showTooltip);
+    icon.addEventListener('blur', hideTooltip);
+  });
+});
+</script>
 
 {% endblock %} {% endblock content %}

@@ -3285,7 +3285,7 @@ class IS_RejectTable(APIView):
             data['rejection_reason_letters'] = rejection_letters
             data['batch_rejection'] = batch_rejection
             
-            # Get rejection quantity from IP_Rejection_ReasonStore
+            # Get rejection quantity and lot_rejected_comment from IP_Rejection_ReasonStore
             if stock_lot_id:
                 try:
                     rejection_qty = 0
@@ -3298,13 +3298,17 @@ class IS_RejectTable(APIView):
                         print(f"Found rejection for {stock_lot_id}: {rejection_record.total_rejection_quantity}")
                     
                     data['ip_rejection_total_qty'] = rejection_qty
+                    data['lot_rejected_comment'] = rejection_record.lot_rejected_comment if rejection_record else ""
                     print(f"Set rejection qty for {stock_lot_id}: {rejection_qty}")
+                    print(f"✅ [IS_RejectTable] lot_rejected_comment for {stock_lot_id}: {data['lot_rejected_comment']}")
                                 
                 except Exception as e:
                     print(f"Error getting rejection for {stock_lot_id}: {str(e)}")
                     data['ip_rejection_total_qty'] = 0
+                    data['lot_rejected_comment'] = ""
             else:
                 data['ip_rejection_total_qty'] = 0
+                data['lot_rejected_comment'] = ""
                 print(f"No stock_lot_id for batch {data.get('batch_id')}")
             
             # Calculate vendor location
@@ -4360,6 +4364,44 @@ def get_rejection_details(request):
         import traceback
         traceback.print_exc()
         return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_rejection_remarks(request):
+    """
+    Returns rejection remarks for a lot for the info-icon modal.
+    For batch rejection: returns lot_rejected_comment.
+    For partial rejection: returns individual rejection reasons with quantities.
+    """
+    lot_id = request.GET.get('lot_id')
+    if not lot_id:
+        return JsonResponse({'success': False, 'error': 'Missing lot_id'}, status=400)
+    try:
+        reason_store = IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+        remarks = []
+
+        if reason_store:
+            if reason_store.batch_rejection:
+                print(f"✅ [get_rejection_remarks] Found batch rejection remark for {lot_id}")
+                remarks.append({
+                    'reason': 'Lot Rejection',
+                    'qty': reason_store.total_rejection_quantity,
+                    'lot_rejected_comment': reason_store.lot_rejected_comment or ""
+                })
+            else:
+                for r in reason_store.rejection_reason.all():
+                    remarks.append({
+                        'reason': r.rejection_reason,
+                        'qty': reason_store.total_rejection_quantity,
+                        'lot_rejected_comment': ""
+                    })
+
+        return JsonResponse({'success': True, 'rejection_remarks': remarks})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @csrf_exempt

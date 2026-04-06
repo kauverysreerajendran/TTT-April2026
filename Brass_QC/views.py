@@ -4795,12 +4795,11 @@ def brass_save_single_top_tray_scan(request):
                     brass_delink_tray_obj = BrassTrayId.objects.filter(tray_id=delink_tray_id, lot_id=lot_id).first()
                     if brass_delink_tray_obj:
                         brass_delink_tray_obj.delink_tray = True
-                        brass_delink_tray_obj.lot_id = None
-                        brass_delink_tray_obj.batch_id = None
+                        # ✅ KEEP lot_id so delinked tray still appears in completed table view
                         brass_delink_tray_obj.IP_tray_verified = False
                         brass_delink_tray_obj.top_tray = False
                         brass_delink_tray_obj.save(update_fields=[
-                            'delink_tray', 'lot_id', 'batch_id', 'IP_tray_verified', 'top_tray'
+                            'delink_tray', 'IP_tray_verified', 'top_tray'
                         ])
                         print(f"✅ Delinked BrassTrayId tray: {delink_tray_id}")
         
@@ -5020,9 +5019,24 @@ def brass_view_tray_list(request):
                 'tray_qty': tray.tray_quantity,
                 'brass_top_tray': getattr(tray, 'top_tray', False),
                 'is_rejected': getattr(tray, 'rejected_tray', False),
-                'delink_tray': getattr(tray, 'delink_tray', False),  # <-- Added field
-                # Add other fields as needed for modal
+                'delink_tray': getattr(tray, 'delink_tray', False),
             })
+            added_tray_ids.add(tray.tray_id)
+
+        # --- FALLBACK: Delinked trays whose lot_id was cleared in BrassTrayId ---
+        # IPTrayId keeps lot_id intact when delinked, so use it to recover missing delinked trays
+        ip_delinked = IPTrayId.objects.filter(lot_id=lot_id, delink_tray=True)
+        for tray in ip_delinked:
+            if tray.tray_id not in added_tray_ids:
+                tray_list.append({
+                    'sno': len(tray_list) + 1,
+                    'tray_id': tray.tray_id,
+                    'tray_qty': tray.tray_quantity,
+                    'brass_top_tray': False,
+                    'is_rejected': False,
+                    'delink_tray': True,
+                })
+                added_tray_ids.add(tray.tray_id)
 
         return Response({
             'success': True,
