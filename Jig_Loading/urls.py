@@ -5,6 +5,7 @@ from .views import JigView, TrayInfoView, JigCompletedTable
 from .views import JigLoadInitAPI, JigLoadUpdateAPI, JigLoadSubmitAPI
 from .views import JigSaveDraftAPI, JigSubmitFinalAPI
 from .views import ModelCombinationValidateAPI, JigHoldToggleAPI
+from .views import DeleteJigPickRecordAPI, UpdateRemarkAPI
 
 urlpatterns = [
         path('JigView/', JigView.as_view(), name='JigView'),
@@ -24,6 +25,10 @@ urlpatterns = [
 
         # ===== Hold/Unhold API =====
         path('api/hold-toggle/', JigHoldToggleAPI.as_view(), name='jig-hold-toggle'),
+
+        # ===== Delete & Remark APIs =====
+        path('api/delete-pick-record/', DeleteJigPickRecordAPI.as_view(), name='jig-delete-pick-record'),
+        path('api/update-remark/', UpdateRemarkAPI.as_view(), name='jig-update-remark'),
 
         # ===== Read-only support endpoint (tray modal) =====
         path('tray-info/', TrayInfoView.as_view(), name='tray-info'),

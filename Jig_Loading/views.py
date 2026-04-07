@@ -3851,3 +3851,232 @@ class JigHoldToggleAPI(APIView):
 			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# =============================================================================
+# DELETE JIG PICK RECORD API
+# =============================================================================
+
+class DeleteJigPickRecordAPI(APIView):
+	"""POST /jig_loading/api/delete-pick-record/ — Delete a draft jig loading record.
+	
+	Deletes DRAFT status records only (not submitted).
+	Request: { "lot_id": "...", "batch_id": "..." }
+	Response: { "success": true, "message": "...", "deleted_count": 1 }
+	"""
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		payload = request.data
+		lot_id = payload.get('lot_id')
+		batch_id = payload.get('batch_id')
+
+		if not lot_id or not batch_id:
+			return Response(
+				{'success': False, 'error': 'lot_id and batch_id are required'},
+				status=status.HTTP_400_BAD_REQUEST
+			)
+
+		logging.info(json.dumps({
+			'event': 'DELETE_PICK_RECORD_REQUEST',
+			'lot_id': lot_id,
+			'batch_id': batch_id,
+			'user': request.user.username,
+		}))
+
+		try:
+			deleted_count = 0
+
+			# Delete from JigLoadingRecord (DRAFT status only)
+			try:
+				dr = JigLoadingRecord.objects.filter(
+					lot_id=lot_id,
+					batch_id=batch_id,
+					user=request.user,
+					status_flag='DRAFT'
+				)
+				if dr.exists():
+					deleted_count += dr.count()
+					dr.delete()
+					logging.info(f'[DELETE] Deleted {deleted_count} JigLoadingRecord(s)')
+			except Exception as e:
+				logging.exception(f'[DELETE] JigLoadingRecord delete failed: {e}')
+
+			# Also delete from JigLoadingManualDraft (old table for backward compatibility)
+			try:
+				df = JigLoadingManualDraft.objects.filter(
+					lot_id=lot_id,
+					batch_id=batch_id,
+					user=request.user
+				)
+				if df.exists():
+					df.delete()
+					logging.info(f'[DELETE] Deleted JigLoadingManualDraft record(s)')
+			except Exception as e:
+				logging.exception(f'[DELETE] JigLoadingManualDraft delete failed: {e}')
+
+			# Also delete any JigCompleted entries that represent excess/half-filled trays
+			# These entries are included in the pick table as excess lots — remove them on explicit delete
+			try:
+				jc_qs = JigCompleted.objects.filter(lot_id=lot_id, batch_id=batch_id)
+				# Only remove completed records that actually contribute to pick table (have half_filled_tray_qty > 0)
+				jc_excess = jc_qs.filter(half_filled_tray_qty__gt=0)
+				if jc_excess.exists():
+					deleted_count += jc_excess.count()
+					jc_excess.delete()
+					logging.info(f'[DELETE] Deleted JigCompleted excess record(s)')
+			except Exception as e:
+				logging.exception(f'[DELETE] JigCompleted delete failed: {e}')
+
+			# Create a JigCompleted placeholder with draft_status='submitted' to ensure the lot
+			# is excluded from the pick table (JigView excludes submitted JigCompleted lot_ids).
+			# This acts as a permanent removal from the pick table without altering TotalStockModel.
+			try:
+				exists_submitted = JigCompleted.objects.filter(lot_id=lot_id, batch_id=batch_id, draft_status='submitted').exists()
+				if not exists_submitted:
+					JigCompleted.objects.create(
+						lot_id=lot_id,
+						batch_id=batch_id,
+						user=request.user,
+						draft_status='submitted',
+						draft_data={
+							'deleted': True,
+							'deleted_by': request.user.username,
+							'deleted_at': timezone.now().isoformat()
+						}
+					)
+			except Exception as e:
+				logging.exception(f'[DELETE] JigCompleted create(submitted) failed: {e}')
+
+			logging.info(json.dumps({
+				'event': 'DELETE_PICK_RECORD_SUCCESS',
+				'lot_id': lot_id,
+				'batch_id': batch_id,
+				'deleted_count': deleted_count,
+				'user': request.user.username,
+			}))
+
+			return Response({
+				'success': True,
+				'message': 'Record deleted successfully',
+				'deleted_count': deleted_count,
+				'lot_id': lot_id,
+				'batch_id': batch_id,
+			}, status=status.HTTP_200_OK)
+
+		except Exception as e:
+			logging.exception(f'DeleteJigPickRecordAPI error: {str(e)}')
+			return Response({
+				'success': False,
+				'error': str(e),
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =============================================================================
+# UPDATE REMARK API
+# =============================================================================
+
+class UpdateRemarkAPI(APIView):
+	"""POST /jig_loading/api/update-remark/ — Update/save remark for a pick table record.
+	
+	Request: {
+		"lot_id": "...",
+		"batch_id": "...",
+		"remark_text": "user entered text",
+		"remark_type": "text" or "audio"
+	}
+	Response: { "success": true, "message": "...", "remark_text": "..." }
+	"""
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		payload = request.data
+		lot_id = payload.get('lot_id')
+		batch_id = payload.get('batch_id')
+		remark_text = payload.get('remark_text', '').strip()
+		remark_type = payload.get('remark_type', 'text')
+
+		if not lot_id or not batch_id:
+			return Response(
+				{'success': False, 'error': 'lot_id and batch_id are required'},
+				status=status.HTTP_400_BAD_REQUEST
+			)
+
+		logging.info(json.dumps({
+			'event': 'UPDATE_REMARK_REQUEST',
+			'lot_id': lot_id,
+			'batch_id': batch_id,
+			'remark_type': remark_type,
+			'remark_length': len(remark_text),
+			'user': request.user.username,
+		}))
+
+		try:
+			# Update JigLoadingRecord (DRAFT status)
+			record = JigLoadingRecord.objects.filter(
+				lot_id=lot_id,
+				batch_id=batch_id,
+				user=request.user,
+				status_flag='DRAFT'
+			).first()
+
+			if record:
+				record.remarks = remark_text
+				record.save(update_fields=['remarks', 'updated_at'])
+				logging.info(f'[UPDATE_REMARK] JigLoadingRecord updated')
+			else:
+				# If no DRAFT record exists, create one with the remark
+				record, created = JigLoadingRecord.objects.get_or_create(
+					lot_id=lot_id,
+					batch_id=batch_id,
+					user=request.user,
+					defaults={
+						'jig_id': None,
+						'lot_qty': 0,
+						'jig_capacity': 0,
+						'effective_capacity': 0,
+						'remarks': remark_text,
+						'status_flag': 'DRAFT',
+					}
+				)
+				if created:
+					logging.info(f'[UPDATE_REMARK] NEW JigLoadingRecord created with remark')
+				else:
+					record.remarks = remark_text
+					record.save(update_fields=['remarks', 'updated_at'])
+					logging.info(f'[UPDATE_REMARK] Existing JigLoadingRecord updated')
+
+			# Also update JigLoadingManualDraft for backward compatibility
+			try:
+				draft, _ = JigLoadingManualDraft.objects.get_or_create(
+					lot_id=lot_id,
+					batch_id=batch_id,
+					user=request.user,
+					defaults={'draft_status': 'active'}
+				)
+				draft.remarks = remark_text
+				draft.save()
+			except Exception as e:
+				logging.warning(f'[UPDATE_REMARK] JigLoadingManualDraft update failed (non-fatal): {e}')
+
+			logging.info(json.dumps({
+				'event': 'UPDATE_REMARK_SUCCESS',
+				'lot_id': lot_id,
+				'batch_id': batch_id,
+				'remark_length': len(remark_text),
+			}))
+
+			return Response({
+				'success': True,
+				'message': 'Remark saved successfully',
+				'remark_text': remark_text,
+				'lot_id': lot_id,
+				'batch_id': batch_id,
+			}, status=status.HTTP_200_OK)
+
+		except Exception as e:
+			logging.exception(f'UpdateRemarkAPI error: {str(e)}')
+			return Response({
+				'success': False,
+				'error': str(e),
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
