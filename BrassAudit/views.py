@@ -4509,6 +4509,9 @@ class BrassAuditBatchRejectionDraftAPIView(APIView):
                 }
             )
 
+            # Update TotalStockModel to mark this lot as having a brass-audit draft "Lot Status = Draft"
+            TotalStockModel.objects.filter(lot_id=lot_id).update(brass_audit_draft=True)
+
             return Response({
                 'success': True, 
                 'message': 'Batch rejection draft saved successfully',
