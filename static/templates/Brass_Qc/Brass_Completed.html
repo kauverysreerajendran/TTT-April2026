@@ -3753,8 +3753,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (trayValidateInput) trayValidateInput.style.display = 'none';
             if (trayScanRedoBtn) trayScanRedoBtn.style.display = 'none';
 
-            // Fetch tray details from API
-            fetchTrayDetails(lotId, trayDetailsDiv);
+            // ✅ FIXED: Pass batchId to fetchTrayDetails for accurate API call
+            fetchTrayDetails(lotId, trayDetailsDiv, batchId);
 
             // Show modal
             if (modal) {
@@ -3787,8 +3787,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Function to fetch tray details from API
-    function fetchTrayDetails(lotId, trayDetailsDiv, retryCount = 0) {
-        console.log('🌐 Fetching tray details for lot_id:', lotId, 'retry:', retryCount);
+    function fetchTrayDetails(lotId, trayDetailsDiv, batchId = null, retryCount = 0) {
+        console.log('🌐 Fetching tray details for lot_id:', lotId, 'batch_id:', batchId, 'retry:', retryCount);
 
         // Show loading state
         trayDetailsDiv.innerHTML = `
@@ -3797,11 +3797,32 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
 
+        // ✅ FIXED: Check if modal already has tray data cached to avoid duplicate API calls
+        const modal = document.getElementById('trayScanModal_DayPlanning');
+        
+        if (modal && modal.traysData && modal.traysData.length > 0) {
+            console.log('✅ Using cached tray data from existing modal (avoiding duplicate API call)');
+            console.log('📊 Cached trays count:', modal.traysData.length);
+            
+            // Render using cached data
+            buildTrayDetailsHTML({ success: true, trays: modal.traysData }, trayDetailsDiv);
+            return;
+        }
+
+        console.log('⏳ No cached data found, making fresh API call');
+
         // Make API call with increased timeout and better retry logic
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-        fetch(`/brass_qc/brass_view_tray_list/?lot_id=${encodeURIComponent(lotId)}`, {
+        // ✅ Use correct API endpoint with batch_id and lot_id for accurate rejection data
+        const apiUrl = batchId 
+            ? `/brass_qc/AfterCheck_pick_CompleteTable_tray_id_list/?batch_id=${encodeURIComponent(batchId)}&lot_id=${encodeURIComponent(lotId)}`
+            : `/brass_qc/AfterCheck_pick_CompleteTable_tray_id_list/?lot_id=${encodeURIComponent(lotId)}`;
+        
+        console.log('📍 API Endpoint:', apiUrl);
+
+        fetch(apiUrl, {
             signal: controller.signal
         })
             .then(response => {
@@ -3829,6 +3850,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 if (data.success) {
+                    // Cache the data in modal for future use
+                    if (modal) {
+                        modal.traysData = data.trays || [];
+                        console.log('💾 Cached fetched tray data for future use');
+                    }
+                    
                     // Always build the HTML, even if trays array is empty
                     buildTrayDetailsHTML(data, trayDetailsDiv);
                 } else {
@@ -3843,7 +3870,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (retryCount < 3) {
                     console.log(`⚠️ Fetch error (${error.message}), retrying in 1 second...`);
                     setTimeout(() => {
-                        fetchTrayDetails(lotId, trayDetailsDiv, retryCount + 1);
+                        fetchTrayDetails(lotId, trayDetailsDiv, batchId, retryCount + 1);
                     }, 1000); // Increased retry delay
                 } else {
                     showError('Failed to load tray details after multiple attempts. Please try again.', trayDetailsDiv, lotId, retryCount);
@@ -3855,6 +3882,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function buildTrayDetailsHTML(data, trayDetailsDiv) {
         console.log('🔧 Building tray details HTML', 'Total trays:', data.trays ? data.trays.length : 0);
 
+        // ✅ CRITICAL: Clear old HTML to prevent duplicate rows from accumulating
+        trayDetailsDiv.innerHTML = '';
+        
         let html = `
             <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
                 <thead>
@@ -3870,10 +3900,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.trays && data.trays.length > 0) {
             let rowCounter = 1;
 
-            // Separate rejected, delinked, and accepted trays
-            const rejectedTrays = data.trays.filter(tray => tray.is_rejected === true);
-            const delinkedTrays = data.trays.filter(tray => tray.delink_tray === true && tray.is_rejected !== true);
-            const acceptedTrays = data.trays.filter(tray => tray.is_rejected !== true && tray.delink_tray !== true);
+            // ✅ FIXED: Use correct field names from AfterCheck API (rejected_tray, tray_quantity, not is_rejected, tray_qty)
+            const rejectedTrays = data.trays.filter(tray => tray.rejected_tray === true);
+            const delinkedTrays = data.trays.filter(tray => tray.delink_tray === true && tray.rejected_tray !== true);
+            const acceptedTrays = data.trays.filter(tray => tray.rejected_tray !== true && tray.delink_tray !== true);
 
             console.log(`📊 Tray breakdown: ${rejectedTrays.length} rejected, ${delinkedTrays.length} delinked, ${acceptedTrays.length} accepted`);
 
@@ -3890,15 +3920,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Find top tray among accepted
                 const topAcceptedTray = acceptedTrays.find(tray => {
-                    return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
+                    return tray.is_top_tray || tray.top_tray || tray.ip_top_tray;
                 });
 
                 if (topAcceptedTray) {
-                    let displayQuantity = topAcceptedTray.tray_qty;
+                    // Use tray_quantity (from correct API) or fallback to tray_qty (from old API)
+                    let displayQuantity = topAcceptedTray.tray_quantity || topAcceptedTray.tray_qty || 0;
                     if (topAcceptedTray.ip_top_tray_qty !== null && topAcceptedTray.ip_top_tray_qty !== undefined) {
                         displayQuantity = topAcceptedTray.ip_top_tray_qty;
-                    } else if (topAcceptedTray.brass_top_tray_qty !== null && topAcceptedTray.brass_top_tray_qty !== undefined) {
-                        displayQuantity = topAcceptedTray.brass_top_tray_qty;
                     }
 
                     console.log(`🔝 Found top accepted tray: ${topAcceptedTray.tray_id} (qty: ${displayQuantity})`);
@@ -3919,7 +3948,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Add regular accepted trays
                 const regularAcceptedTrays = acceptedTrays.filter(tray => {
-                    return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
+                    return !(tray.is_top_tray || tray.top_tray || tray.ip_top_tray);
                 });
 
                 regularAcceptedTrays.sort((a, b) => {
@@ -3929,7 +3958,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 regularAcceptedTrays.forEach((tray) => {
-                    console.log(`  - Accepted tray ${rowCounter}: ${tray.tray_id} (qty: ${tray.tray_qty || 0})`);
+                    const qty = tray.tray_quantity || tray.tray_qty || 0;
+                    console.log(`  - Accepted tray ${rowCounter}: ${tray.tray_id} (qty: ${qty})`);
                     html += `
                         <tr>
                             <td>${rowCounter}</td>
@@ -3937,7 +3967,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
                             </td>
                             <td>
-                                <input type="number" class="form-control" value="${tray.tray_qty || 0}" readonly style="width: 100%;" />
+                                <input type="number" class="form-control" value="${qty || 0}" readonly style="width: 100%;" />
                             </td>
                         </tr>
                     `;
@@ -3957,11 +3987,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Find top tray among rejected (if any)
                 const topRejectedTray = rejectedTrays.find(tray => {
-                    return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
+                    return tray.is_top_tray || tray.top_tray || tray.ip_top_tray;
                 });
 
                 if (topRejectedTray) {
-                    const displayQty = topRejectedTray.tray_qty;
+                    const displayQty = topRejectedTray.tray_quantity || topRejectedTray.tray_qty || 0;
                     console.log(`🔝 Found top rejected tray: ${topRejectedTray.tray_id} (qty: ${displayQty})`);
                     html += `
                         <tr class="top-tray-row" style="background:#ffcdd2;">
@@ -3978,12 +4008,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 const regularRejectedTrays = rejectedTrays.filter(tray => {
-                    return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
+                    return !(tray.is_top_tray || tray.top_tray || tray.ip_top_tray);
                 });
 
                 regularRejectedTrays.forEach((tray) => {
-                    const displayQty = tray.tray_qty;
-                    console.log(`  - Rejected tray ${rowCounter}: ${tray.tray_id} (qty: ${displayQty})`);
+                    const qty = tray.tray_quantity || tray.tray_qty || 0;
+                    console.log(`  - Rejected tray ${rowCounter}: ${tray.tray_id} (qty: ${qty})`);
                     html += `
                         <tr>
                             <td>${rowCounter}</td>
@@ -3991,7 +4021,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
                             </td>
                             <td>
-                                <input type="number" class="form-control" value="${displayQty}" readonly style="width: 100%;" />
+                                <input type="number" class="form-control" value="${qty}" readonly style="width: 100%;" />
                             </td>
                         </tr>
                     `;

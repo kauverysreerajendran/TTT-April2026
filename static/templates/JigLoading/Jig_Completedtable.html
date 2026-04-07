@@ -1269,7 +1269,7 @@
                   {% for jig in jig_details %}
                   <tr class="highlighted-tray-scan" data-lot-id="{{ jig.lot_id }}" data-batch-id="{{ jig.batch_id }}" data-jig-id="{{ jig.jig_id }}" data-delink-tray-info='{{ jig.delink_tray_info|safe }}' data-half-filled-tray-info='{{ jig.half_filled_tray_info|safe }}'>
                     <td>
-                        {{forloop.counter}}
+                        {{ page_obj.start_index|add:forloop.counter0 }}
                     </td>
                   <td>
                     {{ jig.jig_loaded_date_time|date:"d-M-y" }}<br>

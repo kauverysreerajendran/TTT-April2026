@@ -270,8 +270,8 @@ class JigView(TemplateView):
 					'model_stock_no': getattr(batch, 'model_stock_no', None) if batch else None,
 					# model images: prefer batch images, else model master images
 					'model_images': (getattr(batch, 'images', []) if batch and getattr(batch, 'images', None) else (getattr(batch, 'model_stock_no', None).images if batch and getattr(batch, 'model_stock_no', None) and getattr(batch.model_stock_no, 'images', None) else [])),
-					'jig_hold_lot': False,
-					'jig_holding_reason': '',
+					'jig_hold_lot': getattr(stock, 'jig_hold_lot', False),
+					'jig_holding_reason': getattr(stock, 'jig_holding_reason', ''),
 				}
 
 				# Populate jig_capacity from JigLoadingMaster when available
@@ -284,7 +284,16 @@ class JigView(TemplateView):
 				except Exception:
 					pass
 				master_data.append(data)
-			context['master_data'] = master_data
+			# Paginate master_data so pick table behaves like other modules (BrassAudit)
+			from django.core.paginator import Paginator
+			page_number = self.request.GET.get('page', 1)
+			paginator = Paginator(master_data, 10)  # 10 records per page
+			page_obj = paginator.get_page(page_number)
+			# Expose paginated page as `master_data` for template compatibility and `page_obj` for pagination controls
+			context['master_data'] = page_obj
+			context['page_obj'] = page_obj
+			# Keep full list available if other code expects it
+			context['master_data_full'] = master_data
 			# master_data provided to template; no extra JSON needed
 
 			# ===== ADD HALF-FILLED / EXCESS LOT RECORDS BACK TO PICK TABLE =====
@@ -3196,6 +3205,52 @@ class JigCompletedTable(TemplateView):
 
 
 # =============================================================================
+# MODEL COMBINATION VALIDATION API
+# =============================================================================
+
+class ModelCombinationValidateAPI(APIView):
+	"""POST /api/model-combination/validate/
+	Validate which models can be added alongside the already-selected models.
+	Always returns HTTP 200 — errors are in the response body.
+
+	Input:  { "selected_models": ["2617SAA02"] }
+	Output: { "eligible_models": [...], "non_eligible_models": [...],
+	          "blocked_lookalike_plating_stk_nos": [...],
+	          "warnings": [...], "errors": [...] }
+	"""
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		try:
+			body = request.data if hasattr(request, 'data') else {}
+			selected_models = body.get('selected_models', [])
+			if not isinstance(selected_models, list):
+				selected_models = [str(selected_models)] if selected_models else []
+
+			logging.info(f'[MODEL_COMBINATION_VALIDATE] POST from user={request.user} selected_models={selected_models}')
+
+			from .model_combination_validator import validate_model_combination
+			result = validate_model_combination(selected_models)
+
+			logging.info(f'[MODEL_COMBINATION_VALIDATE] eligible={len(result["eligible_models"])} '
+				f'non_eligible={len(result["non_eligible_models"])} '
+				f'blocked_lookalike={len(result["blocked_lookalike_plating_stk_nos"])} '
+				f'errors={result["errors"]}')
+
+			return Response(result, status=status.HTTP_200_OK)
+
+		except Exception as e:
+			logging.exception(f'[MODEL_COMBINATION_VALIDATE] Unhandled exception: {e}')
+			return Response({
+				'eligible_models': [],
+				'non_eligible_models': [],
+				'blocked_lookalike_plating_stk_nos': [],
+				'warnings': [],
+				'errors': [f'Validation error: {str(e)}'],
+			}, status=status.HTTP_200_OK)
+
+
+# =============================================================================
 # NEW CLEAN APIs — EXACT FRONTEND SNAPSHOT STORAGE
 # =============================================================================
 
@@ -3693,5 +3748,106 @@ class JigSubmitFinalAPI(APIView):
 			'excess_lot_id': excess_lot_id,
 			'excess_trays_created': excess_trays_created,
 		})
+
+
+# =============================================================================
+# JIG LOADING HOLD/UNHOLD API
+# =============================================================================
+
+class JigHoldToggleAPI(APIView):
+	"""
+	POST /api/hold-toggle/ — Save hold/unhold reason for jig loading
+	
+	Request:
+	{
+		"lot_id": "LID070420260947350002",
+		"batch_id": "BATCH-20260407094059434767-84",
+		"action": "hold" or "unhold",
+		"reason": "Quality issue" (required for hold, optional for unhold)
+	}
+	
+	Response:
+	{
+		"success": true/false,
+		"hold_status": true/false,
+		"message": "Lot moved to hold" or "Lot released from hold"
+	}
+	"""
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		try:
+			data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+			lot_id = data.get('lot_id', '').strip()
+			batch_id = data.get('batch_id', '').strip()
+			action = data.get('action', '').strip().lower()
+			reason = data.get('reason', '').strip()
+
+			# ===== VALIDATION =====
+			if not lot_id:
+				return Response({'success': False, 'error': 'lot_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+			if not batch_id:
+				return Response({'success': False, 'error': 'batch_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+			if action not in ['hold', 'unhold']:
+				return Response({'success': False, 'error': 'action must be hold or unhold'}, status=status.HTTP_400_BAD_REQUEST)
+			if action == 'hold' and not reason:
+				return Response({'success': False, 'error': 'reason is required for hold action'}, status=status.HTTP_400_BAD_REQUEST)
+
+			# ===== FETCH LOT =====
+			lot_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+			if not lot_obj:
+				return Response({'success': False, 'error': 'Lot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+			# ===== UPDATE LOT STATUS =====
+			logging.info(json.dumps({
+				'event': 'JIG_HOLD_TOGGLE',
+				'lot_id': lot_id,
+				'batch_id': batch_id,
+				'action': action,
+				'user': request.user.username,
+			}))
+
+			if action == 'hold':
+				lot_obj.jig_hold_lot = True
+				lot_obj.jig_holding_reason = reason
+				# clear any previous release flags when newly holding
+				lot_obj.jig_release_lot = False
+				lot_obj.jig_release_reason = ''
+				message = 'Lot moved to hold'
+				hold_status = True
+			else:  # unhold
+				# mark as released; preserve previous holding reason and record release reason if provided
+				lot_obj.jig_hold_lot = False
+				if reason:
+					lot_obj.jig_release_lot = True
+					lot_obj.jig_release_reason = reason
+				else:
+					# still mark as released even if no explicit reason provided
+					lot_obj.jig_release_lot = True
+					lot_obj.jig_release_reason = ''
+				message = 'Lot released from hold'
+				hold_status = False
+
+			lot_obj.save(update_fields=['jig_hold_lot', 'jig_holding_reason', 'jig_release_lot', 'jig_release_reason'])
+
+			logging.info(json.dumps({
+				'event': 'JIG_HOLD_TOGGLE_COMPLETE',
+				'lot_id': lot_id,
+				'action': action,
+				'hold_status': hold_status,
+			}))
+
+			return Response({
+				'success': True,
+				'hold_status': hold_status,
+				'message': message,
+			}, status=status.HTTP_200_OK)
+
+		except Exception as e:
+			logging.error(f'JigHoldToggleAPI error: {str(e)}')
+			return Response({
+				'success': False,
+				'error': str(e)
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

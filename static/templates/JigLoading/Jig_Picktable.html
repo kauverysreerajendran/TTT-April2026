@@ -7,6 +7,19 @@
 
 <!-- Jig Loading - Inline Styles -->
 <style> 
+
+@keyframes jcFadeIn { from { opacity:0; transform:scale(0.985); } to { opacity:1; transform:scale(1); } }
+.jc-stat-card { flex:1; min-width:110px; border-radius:12px; padding:14px 16px; text-align:center; transition:transform 0.15s; }
+.jc-stat-card:hover { transform:translateY(-2px); }
+.jc-stat-num { font-size:28px; font-weight:800; line-height:1.1; }
+.jc-stat-lbl { font-size:10px; font-weight:700; text-transform:uppercase; margin-top:4px; opacity:0.75; }
+.jc-section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#028084; border-left:3px solid #028084; padding-left:10px; margin:20px 0 10px; }
+.jc-tray-chip { border-radius:9px; padding:9px 12px; font-size:11px; min-width:120px; display:flex; flex-direction:column; gap:3px; border:1.5px solid transparent; transition:transform 0.12s, box-shadow 0.12s; cursor:default; }
+.jc-tray-chip:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.09); }
+.jc-tid { font-weight:700; font-family:monospace; font-size:12px; }
+.jc-badge { display:inline-block; border-radius:10px; padding:1px 8px; font-size:9px; font-weight:700; color:#fff; margin-top:3px; align-self:flex-start; }
+.jc-progress-bar { width:100%; background:#e0e0e0; border-radius:20px; height:8px; overflow:hidden; margin-top:6px; }
+.jc-progress-fill { height:100%; border-radius:20px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1); }
   .tray-duplicate-error { border: 2px solid #dc3545 !important; background: #fff1f0 !important; }
   .tray-duplicate-message { color: #dc3545; font-size: 12px; margin-top: 6px; }
 
@@ -1181,8 +1194,8 @@
     #order-listing td:nth-child(1) {
       position: sticky;
       left: 0 !important;
-      min-width: 90px !important;
-      max-width: 90px !important;
+      min-width: 110px !important;
+      max-width: 110px !important;
       background: #f7fafd;
       z-index: 30;
     }
@@ -1578,8 +1591,8 @@
     left: 0 !important;
     z-index: 12; /* Above header */
     background: #f7fafd;
-    min-width: 75px;
-    max-width: 75px;
+    min-width: 110px;
+    max-width: 110px;
   }
 
   /* Freeze 2nd column - Last Updated*/
@@ -1622,25 +1635,28 @@
     white-space: nowrap;
   }
 
-  /* FIX 1a: Hold row blur - only non-S.No cells get blur + not-allowed cursor */
+  /* FIX 1a: Hold row blur - only non-S.No cells get a subtle grey blur; remove strike-through */
   .blurred-heading,
   .blurred-cell {
-    filter: blur(2px) grayscale(0.7) opacity(0.6);
+    filter: grayscale(1) blur(1px);
+    color: #6b6b6b !important;
+    text-decoration: none !important;
     pointer-events: none !important;
-    user-select: none;
+    user-select: none !important;
     cursor: not-allowed !important;
-    background: #f5f5f5 !important;
+    background: transparent !important;
   }
 
   /* FIX 1b: Hold row - applied to tr, but td:first-child (S.No) must be exempt */
   tr.row-on-hold td {
-    filter: blur(2px) grayscale(0.7) opacity(0.6);
+    filter: grayscale(1) blur(1px);
+    color: #6b6b6b !important;
     pointer-events: none !important;
-    user-select: none;
+    user-select: none !important;
     cursor: not-allowed !important;
-    background: #f5f5f5 !important;
+    background: transparent !important;
   }
-  /* S.No cell (first td) is NOT blurred and cursor is normal */
+  /* S.No cell (first td) is NOT blurred and remains interactive */
   tr.row-on-hold td:first-child {
     filter: none !important;
     pointer-events: auto !important;
@@ -1649,13 +1665,16 @@
     background: inherit !important;
   }
 
-  /* FIX 1c: S.No number must not be cropped - ensure min-width and no overflow hidden on sno-value */
+  /* FIX 1c: S.No number must not be cropped — constrain and ellipsize long numbers */
   .sno-value {
     display: inline-block;
-    min-width: 18px;
+    min-width: 22px;
+    max-width: 56px;
     text-align: right;
     white-space: nowrap;
-    overflow: visible;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
   }
   /* Show remark tooltip above the trigger instead of below */
   .remark-tooltip {
@@ -2317,21 +2336,25 @@
 
 /* Row styling when held */
 tr.row-inactive {
-  background-color: #fff3cd !important; /* Light yellow background */
-  opacity: 0.75;
-  transition: all 0.3s ease;
+  background-color: #f5f5f5 !important; /* Neutral light grey background to indicate hold */
+  transition: all 0.25s ease;
 }
 
 tr.row-inactive td.row-inactive-blur {
-  color: #999;
-  text-decoration: line-through;
-  opacity: 0.6;
+  filter: grayscale(1) blur(1px);
+  color: #777 !important; /* muted grey text */
+  text-decoration: none !important; /* ensure no strike-through */
+  opacity: 0.95;
+  pointer-events: none !important;
+  user-select: none !important;
 }
 
 tr.row-inactive td:first-child {
-  opacity: 1;
-  color: inherit;
-  text-decoration: none;
+  filter: none !important;
+  opacity: 1 !important;
+  color: inherit !important;
+  text-decoration: none !important;
+  pointer-events: auto !important;
 }
 
 /* Hold remark icon */
@@ -2714,11 +2737,15 @@ tr.row-inactive td:first-child {
             </tr>
           </thead>
           <tbody>
-            {% for data in master_data %}
+            {% for data in page_obj %}
             <tr
               class="highlighted-tray-scan"
               data-batch-id="{{ data.batch_id }}"
               data-stock-lot-id="{{ data.stock_lot_id }}"
+              data-plating-stk-no="{{ data.plating_stk_no|default:'' }}"
+              data-plating-color="{{ data.plating_color|default:'' }}"
+              data-polish-finish="{{ data.polish_finish|default:'' }}"
+              data-jig-capacity="{{ data.jig_capacity|default:'' }}"
               data-jig-hold-lot="{{ data.jig_hold_lot|yesno:'true,false' }}"
               data-jig-holding-reason="{{ data.jig_holding_reason|default_if_none:''|escapejs }}"
               data-jig-release-lot="{{ data.jig_release_lot|yesno:'true,false' }}"
@@ -2755,7 +2782,7 @@ tr.row-inactive td:first-child {
                         style="width: 12px; height: 12px"
                       />
                     </span>
-                      <span class="sno-value">{{ forloop.counter }}</span>
+                      <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
 
                   </span>
                 </div>
@@ -3348,6 +3375,195 @@ tr.row-inactive td:first-child {
       </div>
     </div>
 
+    <script nonce="{{ csp_nonce }}">
+    // Hold/unhold toggle handler for Jig Pick Table
+    window.holdToggleState = {
+      currentHoldCell: null,
+      intendedState: null,
+      currentBatchId: null,
+      currentLotId: null
+    };
+
+    // ===== APPLY HOLD STYLING FROM DATA ATTRIBUTES ON PAGE LOAD =====
+    function applyHoldStylingFromData() {
+      document.querySelectorAll('tbody tr').forEach(function(row) {
+        const isOnHold = row.getAttribute('data-jig-hold-lot') === 'true';
+        const isReleased = row.getAttribute('data-jig-release-lot') === 'true';
+        const holdingReason = (row.getAttribute('data-jig-holding-reason') || '').trim();
+        const releaseReason = (row.getAttribute('data-jig-release-reason') || '').trim();
+        const toggleBtn = row.querySelector('.hold-toggle-btn');
+        const holdIcon = row.querySelector('.hold-remark-icon');
+
+        if (isOnHold) {
+          // Apply blur styling
+          row.classList.add('row-inactive');
+          row.querySelectorAll('td').forEach(function(td, idx) {
+            if (idx > 0) {
+              td.classList.add('row-inactive-blur');
+            } else {
+              td.classList.remove('row-inactive-blur');
+            }
+          });
+          // Update toggle button state
+          if (toggleBtn) toggleBtn.checked = false;
+          // Show hold reason icon
+          if (holdIcon) holdIcon.style.display = 'inline-block';
+        } else {
+          // Remove blur styling
+          row.classList.remove('row-inactive');
+          row.querySelectorAll('td').forEach(function(td) {
+            td.classList.remove('row-inactive-blur');
+          });
+          // Update toggle button state
+          if (toggleBtn) toggleBtn.checked = true;
+          // Show hold/release icon if any reason exists or release flag is set
+          if (holdIcon) {
+            if (holdingReason || releaseReason || isReleased) {
+              holdIcon.style.display = 'inline-block';
+              let title = '';
+              if (holdingReason) title += 'Holding Reason: ' + holdingReason;
+              if (releaseReason) title += (title ? '\n' : '') + 'Release Reason: ' + releaseReason;
+              holdIcon.setAttribute('title', title);
+            } else {
+              holdIcon.style.display = 'none';
+            }
+          }
+        }
+      });
+      console.log('[HOLD_STYLING] Applied hold state to all rows from data attributes');
+    }
+
+    function attachHoldToggleListeners() {
+      // Attach batch_id to each row for easy access
+      document.querySelectorAll("tbody tr").forEach(function (row) {
+        const trayScanBtn = row.querySelector('.tray-scan-btn, .tray-scan-btn-Jig');
+        if (trayScanBtn) {
+          row.setAttribute('data-batch-id', trayScanBtn.getAttribute('data-batch-id'));
+        }
+      });
+
+      document.querySelectorAll('.hold-toggle-btn').forEach(function (btn) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const holdCell = newBtn.closest('td');
+          const row = holdCell.closest('tr');
+          window.holdToggleState = {
+            currentHoldCell: holdCell,
+            intendedState: newBtn.checked,
+            currentBatchId: row.getAttribute('data-batch-id'),
+            currentLotId: row.getAttribute('data-stock-lot-id'),
+            rowIdentifier: row.getAttribute('data-stock-lot-id') || row.getAttribute('data-batch-id')
+          };
+
+          document.getElementById('holdRemarkModal').querySelector('h5').textContent = 
+            window.holdToggleState.intendedState ? 'Unholding Reason' : 'Holding Reason';
+          document.getElementById('holdRemarkInput').value = '';
+          document.getElementById('holdRemarkError').textContent = '';
+          document.getElementById('holdRemarkModal').style.display = 'flex';
+          document.getElementById('holdRemarkInput').focus();
+        });
+      });
+
+      const saveBtn = document.getElementById('saveHoldRemarkBtn');
+      if (saveBtn && !window.holdSaveHandlerAttached) {
+        window.holdSaveHandlerAttached = true;
+        saveBtn.onclick = function () {
+          const remark = document.getElementById('holdRemarkInput').value.trim();
+          if (!remark) {
+            document.getElementById('holdRemarkError').textContent = 'Remark required!';
+            return;
+          }
+          if (!window.holdToggleState.currentLotId) {
+            document.getElementById('holdRemarkError').textContent = 'Lot ID not found!';
+            return;
+          }
+          const action = window.holdToggleState.intendedState ? 'unhold' : 'hold';
+
+          fetch('/jig_loading/api/hold-toggle/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': (function(){
+                const name = 'csrftoken'; let cookieValue = null; if (document.cookie && document.cookie !== '') { const cookies = document.cookie.split(';'); for (let i = 0; i < cookies.length; i++) { const cookie = cookies[i].trim(); if (cookie.substring(0, name.length + 1) === (name + '=')) { cookieValue = decodeURIComponent(cookie.substring(name.length + 1)); break; } } } return cookieValue; })()
+            },
+            body: JSON.stringify({
+              lot_id: window.holdToggleState.currentLotId,
+              batch_id: window.holdToggleState.currentBatchId,
+              action: action,
+              ...(action === 'hold' && { reason: remark })
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              document.getElementById('holdRemarkModal').style.display = 'none';
+              const currentRow = document.querySelector(`tr[data-stock-lot-id="${window.holdToggleState.currentLotId}"]`);
+              if (currentRow) {
+                // ===== UPDATE DATA ATTRIBUTES SO BLUR PERSISTS AFTER REFRESH =====
+                if (action === 'hold') {
+                  currentRow.setAttribute('data-jig-hold-lot', 'true');
+                  currentRow.setAttribute('data-jig-holding-reason', remark);
+                } else {
+                  currentRow.setAttribute('data-jig-hold-lot', 'false');
+                  currentRow.setAttribute('data-jig-holding-reason', '');
+                }
+                
+                // ===== APPLY STYLING IMMEDIATELY =====
+                const toggle = currentRow.querySelector('.hold-toggle-btn');
+                const icon = currentRow.querySelector('.hold-remark-icon');
+                if (data.hold_status) {
+                  if (toggle) toggle.checked = false;
+                  currentRow.classList.add('row-inactive');
+                  currentRow.querySelectorAll('td').forEach((td, idx) => {
+                    if (idx > 0) td.classList.add('row-inactive-blur'); else td.classList.remove('row-inactive-blur');
+                  });
+                    if (icon) { icon.style.display = 'inline-block'; icon.setAttribute('title', 'Holding Reason: ' + (action === 'hold' ? remark : (currentRow.getAttribute('data-jig_holding_reason')||''))); }
+                } else {
+                  if (toggle) toggle.checked = true;
+                  currentRow.classList.remove('row-inactive');
+                  currentRow.querySelectorAll('td').forEach(td => td.classList.remove('row-inactive-blur'));
+                    // show icon for released rows if a release or earlier holding reason exists
+                    if (icon) {
+                      const existingHold = currentRow.getAttribute('data-jig-holding-reason') || '';
+                      if (remark || existingHold) {
+                        icon.style.display = 'inline-block';
+                        const titleParts = [];
+                        if (existingHold) titleParts.push('Holding Reason: ' + existingHold);
+                        if (remark) titleParts.push('Release Reason: ' + remark);
+                        icon.setAttribute('title', titleParts.join('\n'));
+                      } else {
+                        icon.style.display = 'none';
+                      }
+                    }
+                    // update release attributes
+                    currentRow.setAttribute('data-jig-release-lot', 'true');
+                    currentRow.setAttribute('data-jig-release-reason', remark || '');
+                }
+              }
+              setTimeout(() => { if (typeof refreshTableData === 'function') { refreshTableData(); } else { location.reload(); } }, 500);
+            } else {
+              document.getElementById('holdRemarkError').textContent = data.error || 'Failed to save reason!';
+            }
+          }).catch(err => { document.getElementById('holdRemarkError').textContent = 'Network error!'; });
+        };
+      }
+
+      const closeBtn = document.getElementById('closeHoldRemarkModal');
+      if (closeBtn && !window.holdCloseHandlerAttached) {
+        window.holdCloseHandlerAttached = true;
+        closeBtn.onclick = function () { document.getElementById('holdRemarkModal').style.display = 'none'; window.holdToggleState = { currentHoldCell: null, intendedState: null, currentBatchId: null, currentLotId: null }; };
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () { 
+      applyHoldStylingFromData(); 
+      attachHoldToggleListeners(); 
+    });
+    </script>
+    </div>
+
     <hr style="margin: 10px 0 14px 0; border-color: #e9ecef" />
 
     <div
@@ -3361,9 +3577,7 @@ tr.row-inactive td:first-child {
       <h5 style="margin: 0; font-weight: 700; color: #028084">
         Jig Loading - Tray Scan
       </h5>
-
     </div>
-
     <div id="trayScanDetails_Jig" class="table-grid tray-scan-table"></div>
   </div>
 </div>
@@ -3371,6 +3585,11 @@ tr.row-inactive td:first-child {
 <!-- Add Jig Button - Window (functional) -->
 <div id="jigAddModal" class="right-slide-modal" tabindex="-1">
   <div class="add-jig-window">
+    <!-- Inline error banner for Add Model validation errors -->
+    <div id="addModelErrorBanner" style="display:none; background:#fce4ec; border:1.5px solid #dc3545; border-radius:8px; padding:10px 16px; margin:10px 16px 0 16px; font-size:13px; color:#c62828; font-weight:600;">
+      <span id="addModelErrorText"></span>
+      <button type="button" onclick="document.getElementById('addModelErrorBanner').style.display='none'" style="float:right; background:none; border:none; color:#c62828; cursor:pointer; font-weight:700; font-size:16px; line-height:1;">&times;</button>
+    </div>
     <!-- Header -->
     <div class="jig-modal-header">
       <h3 id="jigAddModalTitle">
@@ -7677,45 +7896,129 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Multi-model selection handlers -->
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
-  // Hook dynamic Add Model card to close modal and open JigView with exclusion
+  // ============================================================
+  // ADD MODEL button click → call validate API → navigate with eligibility params
+  // ============================================================
   try {
     document.addEventListener('click', function (ev) {
       const modalAddBtn = ev.target && ev.target.closest ? ev.target.closest('#addModelBtn') : null;
       if (!modalAddBtn) return;
       if (modalAddBtn.hasAttribute('disabled')) return;
 
-      // 🔒 Multi-model: Mark model selection incomplete when adding another model
+      // Mark multi-model selection as incomplete while adding
       window.isModelSelectionComplete = false;
-      window.disableBH();
+      if (typeof window.disableBH === 'function') window.disableBH();
       console.log('[ADD_MODEL] BH disabled during model addition');
 
+      const primary = window.CURRENT_LOT_ID || window.currentJigLotId || '';
+      const batch = window.currentJigBatchId || window.CURRENT_BATCH_ID || '';
+      if (!primary) {
+        console.warn('[ADD_MODEL] Primary lot missing, cannot open Add Model list');
+        return;
+      }
+
+      // Collect currently selected model plating_stk_no values
+      const selectedModels = [];
+      const primaryPsn = window.CURRENT_MODEL_NO || '';
+      if (primaryPsn) selectedModels.push(primaryPsn);
       try {
-        const primary = window.CURRENT_LOT_ID || window.currentJigLotId || '';
-        const batch = window.currentJigBatchId || window.CURRENT_BATCH_ID || '';
-        if (!primary) {
-          console.warn('Primary lot missing, cannot open Add Model list');
-          return;
-        }
-        // Persist existing secondary lots so they survive the Add Model page navigation
-        try {
-          const existingLots = window._currentSecondaryLots || [];
-          sessionStorage.setItem('secondary_lots', JSON.stringify(existingLots));
-          console.log('[ADD_MODEL] Persisted', existingLots.length, 'existing secondary lots');
-        } catch(e) { console.warn('[ADD_MODEL] Failed to store secondary lots', e); }
-        // ✅ Persist scanned tray values so they survive Add Model page navigation
-        if (typeof window.persistScannedTraysToStorage === 'function') {
-          window.persistScannedTraysToStorage();
-        }
-        const modal = document.getElementById('jigAddModal'); if (modal) modal.classList.remove('open');
-        // Build exclude param with ALL already-selected lot IDs
-        let excludeIds = [primary];
-        try {
-          (window._currentSecondaryLots || []).forEach(function(s) { if(s.lot_id) excludeIds.push(s.lot_id); });
-        } catch(e) {}
-        const excludeParam = excludeIds.map(function(id){ return encodeURIComponent(id); }).join(',');
-        const url = `/jig_loading/JigView/?exclude_lot_id=${excludeParam}&primary_lot_id=${encodeURIComponent(primary)}&primary_batch_id=${encodeURIComponent(batch)}`;
-        window.location.href = url;
-      } catch (e) { console.warn('Add Model click failed', e); }
+        (window._currentSecondaryLots || []).forEach(function(s) {
+          if (s.plating_stk_no) selectedModels.push(s.plating_stk_no);
+        });
+      } catch(e) {}
+      // Also try to read from model cards in the strip
+      try {
+        document.querySelectorAll('#modelCardStrip .model-card[data-plating-stk-no]').forEach(function(card) {
+          const psn = card.getAttribute('data-plating-stk-no');
+          if (psn && !selectedModels.includes(psn)) selectedModels.push(psn);
+        });
+      } catch(e) {}
+
+      console.log('[ADD_MODEL] selected_models=', selectedModels);
+
+      // Hide any previous error
+      const errBanner = document.getElementById('addModelErrorBanner');
+      if (errBanner) errBanner.style.display = 'none';
+
+      // Disable the button during API call to prevent double-click
+      modalAddBtn.setAttribute('disabled', 'disabled');
+      modalAddBtn.title = 'Checking eligible models...';
+
+      // Call validation API
+      fetch('/jig_loading/api/model-combination/validate/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (function(){ try{ var c=document.cookie.split(';').find(function(s){return s.trim().startsWith('csrftoken=');}); return c?c.trim().split('=')[1]:''; }catch(e){return '';}}()) },
+        credentials: 'same-origin',
+        body: JSON.stringify({ selected_models: selectedModels }),
+      })
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+          console.log('[ADD_MODEL] API response:', data);
+
+          // Re-enable button
+          modalAddBtn.removeAttribute('disabled');
+          modalAddBtn.title = '';
+
+          const eligibleList = data.eligible_models || [];
+          const blockedLookalike = data.blocked_lookalike_plating_stk_nos || [];
+          const nonEligibleList = data.non_eligible_models || [];
+          const apiErrors = data.errors || [];
+
+          if (apiErrors.length && !eligibleList.length) {
+            // No eligible models — show inline error, do NOT navigate
+            const errEl = document.getElementById('addModelErrorBanner');
+            const errTxt = document.getElementById('addModelErrorText');
+            if (errEl && errTxt) {
+              errTxt.textContent = apiErrors[0] || 'No compatible models for this selection.';
+              errEl.style.display = 'block';
+            }
+            console.warn('[ADD_MODEL] No eligible models:', apiErrors);
+            return;
+          }
+
+          // Persist secondary lots and scanned trays for round-trip
+          try {
+            sessionStorage.setItem('secondary_lots', JSON.stringify(window._currentSecondaryLots || []));
+          } catch(e) {}
+          if (typeof window.persistScannedTraysToStorage === 'function') {
+            window.persistScannedTraysToStorage();
+          }
+
+          // Build exclude param (all already-selected lot IDs)
+          let excludeIds = [primary];
+          try { (window._currentSecondaryLots || []).forEach(function(s){ if(s.lot_id) excludeIds.push(s.lot_id); }); } catch(e) {}
+          const excludeParam = excludeIds.map(function(id){ return encodeURIComponent(id); }).join(',');
+
+          // Pass eligibility lists as URL params for the filter screen
+          const eligibleParam = eligibleList.map(function(m){ return encodeURIComponent(m.plating_stk_no); }).join(',');
+          const blockedParam = blockedLookalike.map(function(id){ return encodeURIComponent(id); }).join(',');
+          const nonEligibleParam = nonEligibleList.map(function(m){ return encodeURIComponent(m.plating_stk_no); }).join(',');
+
+          // Close the modal
+          const modal = document.getElementById('jigAddModal');
+          if (modal) modal.classList.remove('open');
+
+          const url = '/jig_loading/JigView/?'
+            + 'exclude_lot_id=' + excludeParam
+            + '&primary_lot_id=' + encodeURIComponent(primary)
+            + '&primary_batch_id=' + encodeURIComponent(batch)
+            + (eligibleParam ? '&eligible_models=' + eligibleParam : '')
+            + (blockedParam ? '&blocked_lookalike=' + blockedParam : '')
+            + (nonEligibleParam ? '&non_eligible_models=' + nonEligibleParam : '');
+
+          console.log('[ADD_MODEL] Navigating to filter screen with eligibility params');
+          window.location.href = url;
+        })
+        .catch(function(err) {
+          console.error('[ADD_MODEL] API call failed:', err);
+          modalAddBtn.removeAttribute('disabled');
+          const errEl = document.getElementById('addModelErrorBanner');
+          const errTxt = document.getElementById('addModelErrorText');
+          if (errEl && errTxt) {
+            errTxt.textContent = 'Unable to check model compatibility. Please try again.';
+            errEl.style.display = 'block';
+          }
+        });
     });
   } catch (e) { /* ignore */ }
 
@@ -7743,6 +8046,96 @@ document.addEventListener('DOMContentLoaded', function () {
     var headerArea = document.querySelector('.d-flex.align-items-center.gap-2.mb-4');
     if (headerArea) headerArea.appendChild(exitBtn);
   } catch(e) { console.warn('[EXIT_BTN] Failed to add:', e); }
+
+  // ============================================================
+  // FILTER SCREEN — sort rows by eligibility (API-driven)
+  // eligible_models=...  blocked_lookalike=...  non_eligible_models=...
+  // RULE: eligible TOP, non-eligible BOTTOM (greyed), lookalike HIDDEN
+  // ============================================================
+  (function applyEligibilityFilter() {
+    try {
+      const eligibleRaw   = params.get('eligible_models') || '';
+      const blockedRaw    = params.get('blocked_lookalike') || '';
+      const nonEligRaw    = params.get('non_eligible_models') || '';
+
+      // No filter params = old flow (show all, no sorting)
+      if (!eligibleRaw && !blockedRaw && !nonEligRaw) return;
+
+      const eligibleSet   = new Set(eligibleRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
+      const blockedSet    = new Set(blockedRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
+      const nonEligSet    = new Set(nonEligRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
+
+      console.log('[FILTER] eligible=', eligibleSet.size, 'blocked_lookalike=', blockedSet.size, 'non_eligible=', nonEligSet.size);
+
+      // Add compact info banner at top of table
+      try {
+        var infoBanner = document.createElement('div');
+        infoBanner.style.cssText = 'background:linear-gradient(135deg,#e8f5e9,#e3f2fd); border:1px solid #028084; border-radius:8px; padding:8px 16px; margin-bottom:10px; font-size:12px; color:#014d4e; font-weight:600; display:flex; gap:12px; flex-wrap:wrap; align-items:center;';
+        infoBanner.innerHTML = '<span>✅ Eligible: <strong>' + eligibleSet.size + '</strong></span>'
+          + (blockedSet.size ? '<span>🚫 Lookalike blocked (hidden): <strong>' + blockedSet.size + '</strong></span>' : '')
+          + (nonEligSet.size ? '<span>❌ Incompatible: <strong>' + nonEligSet.size + '</strong></span>' : '');
+        var tableWrapper = document.querySelector('#order-listing');
+        if (tableWrapper && tableWrapper.parentNode) {
+          tableWrapper.parentNode.insertBefore(infoBanner, tableWrapper);
+        } else {
+          var pageBody = document.querySelector('.content-wrapper') || document.body;
+          if (pageBody && pageBody.firstChild) pageBody.insertBefore(infoBanner, pageBody.firstChild);
+        }
+      } catch(e) { console.warn('[FILTER_BANNER] Failed:', e); }
+
+      // Collect tbody rows
+      var tbody = document.querySelector('#order-listing tbody');
+      if (!tbody) { console.warn('[FILTER] No tbody found'); return; }
+
+      var rows = Array.from(tbody.querySelectorAll('tr.highlighted-tray-scan'));
+      var eligibleRows = [], nonEligRows = [], hiddenRows = [];
+
+      rows.forEach(function(tr) {
+        var psn = tr.getAttribute('data-plating-stk-no') || '';
+        if (blockedSet.has(psn)) {
+          // Lookalike — hide completely
+          tr.style.display = 'none';
+          hiddenRows.push(tr);
+        } else if (nonEligSet.has(psn)) {
+          // Non-eligible — grey out, add inline reason, move to bottom
+          tr.style.opacity = '0.4';
+          tr.style.pointerEvents = 'none';
+          // Show reason badge in first td
+          try {
+            var snoTd = tr.querySelector('td:first-child');
+            if (snoTd) {
+              var badge = document.createElement('span');
+              badge.style.cssText = 'display:block; font-size:9px; color:#c62828; font-weight:700; background:#fce4ec; border-radius:4px; padding:1px 5px; margin-top:2px; white-space:nowrap;';
+              badge.textContent = '❌';
+              snoTd.appendChild(badge);
+            }
+          } catch(e2) {}
+          nonEligRows.push(tr);
+        } else if (eligibleSet.has(psn)) {
+          // Eligible — add visual badge, move to top
+          try {
+            var snoTd = tr.querySelector('td:first-child');
+            if (snoTd) {
+              var badge = document.createElement('span');
+              badge.style.cssText = 'display:block; font-size:9px; color:#155724; font-weight:700; background:#d4edda; border-radius:4px; padding:1px 5px; margin-top:2px; white-space:nowrap;';
+              badge.textContent = '✅';
+              snoTd.appendChild(badge);
+            }
+          } catch(e2) {}
+          eligibleRows.push(tr);
+        }
+        // Rows not in any list = already excluded (not in pick table) — leave as is
+      });
+
+      // Re-append in order: eligible first, non-eligible last
+      eligibleRows.forEach(function(tr) { tbody.appendChild(tr); });
+      nonEligRows.forEach(function(tr) { tbody.appendChild(tr); });
+
+      console.log('[FILTER] Sorted: eligible=' + eligibleRows.length + ' top, non_eligible=' + nonEligRows.length + ' bottom, hidden=' + hiddenRows.length);
+    } catch(err) {
+      console.error('[FILTER] applyEligibilityFilter failed:', err);
+    }
+  })();
 
   // NEW: Use sessionStorage and single-redirect flow on checkbox select
   document.querySelectorAll('.add-model-checkbox').forEach(cb => {
@@ -8533,24 +8926,6 @@ if (window.jQuery) {
 
 })();
 </script>
-
-<!-- ================================================================
-     JIG COMPOSITION GALLERY — CSS + JS
-     ================================================================ -->
-<style>
-@keyframes jcFadeIn { from { opacity:0; transform:scale(0.985); } to { opacity:1; transform:scale(1); } }
-.jc-stat-card { flex:1; min-width:110px; border-radius:12px; padding:14px 16px; text-align:center; transition:transform 0.15s; }
-.jc-stat-card:hover { transform:translateY(-2px); }
-.jc-stat-num { font-size:28px; font-weight:800; line-height:1.1; }
-.jc-stat-lbl { font-size:10px; font-weight:700; text-transform:uppercase; margin-top:4px; opacity:0.75; }
-.jc-section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#028084; border-left:3px solid #028084; padding-left:10px; margin:20px 0 10px; }
-.jc-tray-chip { border-radius:9px; padding:9px 12px; font-size:11px; min-width:120px; display:flex; flex-direction:column; gap:3px; border:1.5px solid transparent; transition:transform 0.12s, box-shadow 0.12s; cursor:default; }
-.jc-tray-chip:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.09); }
-.jc-tid { font-weight:700; font-family:monospace; font-size:12px; }
-.jc-badge { display:inline-block; border-radius:10px; padding:1px 8px; font-size:9px; font-weight:700; color:#fff; margin-top:3px; align-self:flex-start; }
-.jc-progress-bar { width:100%; background:#e0e0e0; border-radius:20px; height:8px; overflow:hidden; margin-top:6px; }
-.jc-progress-fill { height:100%; border-radius:20px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1); }
-</style>
 
 <script nonce="{{ csp_nonce }}">
 (function(){
