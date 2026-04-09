@@ -2112,7 +2112,9 @@ def fetch_lot_data(lot_id, batch_id, jig_capacity_override=None):
 							model_image_url = first_img.master_image.url
 			except Exception:
 				pass
-			model_image_label = getattr(mm, 'plating_stk_no', '') or getattr(mm, 'model_no', '') or ''
+			# Prefer batch-level plating_stk_no (ModelMasterCreation) — consistent with pick table and fetch_model_metadata
+			batch_plating = (getattr(batch_obj, 'plating_stk_no', '') or '') if batch_obj else ''
+			model_image_label = batch_plating or getattr(mm, 'plating_stk_no', '') or getattr(mm, 'model_no', '') or ''
 			nickel_bath_type = getattr(mm, 'ep_bath_type', '') or ''
 			try:
 				tt = getattr(mm, 'tray_type', None)

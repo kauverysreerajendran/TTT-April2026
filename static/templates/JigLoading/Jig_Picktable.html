@@ -140,10 +140,11 @@
   font-weight: 600;
   color: #475569;
   line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 80px;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: 240px;
 }
 .model-card .model-card-qty {
   font-size: 10px;
@@ -5641,6 +5642,22 @@ document.addEventListener('DOMContentLoaded', function () {
   window.BACKEND_BROKEN_HOOKS = 0;
   window.BACKEND_EMPTY_HOOKS = 0;
   window.BACKEND_EFFECTIVE_CAPACITY = 0;
+  // STRICT: Clear ALL multi-model and stale state from previous lot session
+  window._pendingSecondaryLots = null;
+  window._pendingSecondaryLot = null;
+  window._currentSecondaryLots = [];
+  window._lastMultiModelAllocation = [];
+  window._lastHalfFilledTrayInfo = {};
+  window._lastInitData = null;
+  window._trayAllocations = {};
+  window._PLANNED_EMPTY_HOOKS = 0;
+  window.isModelSelectionComplete = false;
+  window.CURRENT_LOT_ID = null;
+  window.CURRENT_BATCH_ID = null;
+  window.CURRENT_MODEL_NO = '';
+  try { sessionStorage.removeItem('scanned_trays'); } catch(e) {}
+  try { sessionStorage.removeItem('secondary_lots'); } catch(e) {}
+  try { sessionStorage.removeItem('secondary_lot'); } catch(e) {}
     // Immediately disable BH until init confirms empty_hooks = 0
     if (typeof window.disableBH === 'function') window.disableBH();
 
@@ -7302,6 +7319,16 @@ function resetJigModalState() {
   window.currentDelinkQty = 0;
   window._lastSentBH = null;
   window.isModelSelectionComplete = false;
+  window._lastMultiModelAllocation = [];
+  window._lastHalfFilledTrayInfo = {};
+  window._lastInitData = null;
+  window._trayAllocations = {};
+  window._PLANNED_EMPTY_HOOKS = 0;
+
+  // 4a. Clear sessionStorage remnants from previous lot
+  try { sessionStorage.removeItem('scanned_trays'); } catch(e) {}
+  try { sessionStorage.removeItem('secondary_lots'); } catch(e) {}
+  try { sessionStorage.removeItem('secondary_lot'); } catch(e) {}
 
   // 4b. Fire-and-forget backend clear to delete stale draft
   const _clearLot = window.CURRENT_LOT_ID || window.currentJigLotId;
