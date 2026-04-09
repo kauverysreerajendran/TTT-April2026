@@ -41,16 +41,6 @@ def auto_calculate_top_tray(lot_id):
     try:
         print(f"🔄 [auto_calculate_top_tray] Calculating top tray for lot_id: {lot_id}")
 
-        # ✅ FIX: For lots from IQF, use IQF_Submitted — BrassTrayId may not exist yet
-        total_stock_check = TotalStockModel.objects.filter(lot_id=lot_id).first()
-        if total_stock_check and total_stock_check.send_brass_qc:
-            from IQF.models import IQF_Submitted
-            iqf_record = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
-            if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
-                # Top tray already stored in IQF_Submitted snapshot — skip BrassTrayId calc
-                print(f"✅ [auto_calculate_top_tray] Lot {lot_id} from IQF — top_tray preserved in IQF_Submitted, skipping BrassTrayId calc")
-                return True
-        
         # Get all non-rejected BrassTrayId records for this lot
         all_brass_trays = BrassTrayId.objects.filter(
             lot_id=lot_id,
@@ -61,26 +51,11 @@ def auto_calculate_top_tray(lot_id):
             print(f"⚠️ [auto_calculate_top_tray] No non-rejected trays found for lot_id: {lot_id}")
             return False
 
-        # Prefer the source top_tray if it exists in BrassAudit (preserve origin)
-        try:
-            from BrassAudit.models import BrassAuditTrayId
-            source_top_tray_id = BrassAuditTrayId.objects.filter(lot_id=lot_id, top_tray=True).values_list('tray_id', flat=True).first()
-        except Exception:
-            source_top_tray_id = None
-
         # Reset all top_tray flags first
         all_brass_trays.update(top_tray=False)
 
-        if source_top_tray_id:
-            matched = all_brass_trays.filter(tray_id=source_top_tray_id).first()
-            if matched:
-                matched.top_tray = True
-                matched.save(update_fields=['top_tray'])
-                print(f"✅ [auto_calculate_top_tray] Preserved source top_tray for {matched.tray_id} (qty: {matched.tray_quantity})")
-                return True
-
-        # Fallback: choose the tray with the smallest quantity (remainder)
-        min_qty = all_brass_trays.order_by('tray_quantity').first()
+        # Always choose the tray with the smallest quantity (dynamic recalculation)
+        min_qty = all_brass_trays.order_by('tray_quantity', 'id').first()
         if min_qty:
             min_qty.top_tray = True
             min_qty.save(update_fields=['top_tray'])
@@ -118,25 +93,11 @@ def auto_calculate_top_tray_brass_audit(lot_id):
             print(f"⚠️ [auto_calculate_top_tray_brass_audit] No non-rejected trays found for lot_id: {lot_id}")
             return False
 
-        # Prefer existing top_tray from BrassTrayId (preserve QC origin) if available
-        try:
-            matched_qc_top = BrassTrayId.objects.filter(lot_id=lot_id, top_tray=True).values_list('tray_id', flat=True).first()
-        except Exception:
-            matched_qc_top = None
-
         # Reset all top_tray flags first
         all_audit_trays.update(top_tray=False)
 
-        if matched_qc_top:
-            matched = all_audit_trays.filter(tray_id=matched_qc_top).first()
-            if matched:
-                matched.top_tray = True
-                matched.save(update_fields=['top_tray'])
-                print(f"✅ [auto_calculate_top_tray_brass_audit] Preserved QC top_tray for {matched.tray_id} (qty: {matched.tray_quantity})")
-                return True
-
-        # Fallback: choose the tray with the smallest quantity (remainder)
-        min_qty = all_audit_trays.order_by('tray_quantity').first()
+        # Always choose the tray with the smallest quantity (dynamic recalculation)
+        min_qty = all_audit_trays.order_by('tray_quantity', 'id').first()
         if min_qty:
             min_qty.top_tray = True
             min_qty.save(update_fields=['top_tray'])
@@ -1063,6 +1024,12 @@ class BrassSaveIPCheckboxView(APIView):
                 else:
                     display_accepted_qty = 0
 
+            # ✅ FIX: For IQF-returned lots, use IQF accepted qty instead of stale total_IP_accpeted_quantity
+            _send_brass_qc = getattr(total_stock, 'send_brass_qc', False)
+            if _send_brass_qc and hasattr(total_stock, 'iqf_accepted_qty') and total_stock.iqf_accepted_qty and total_stock.iqf_accepted_qty > 0:
+                display_accepted_qty = total_stock.iqf_accepted_qty
+                print(f"✅ [BrassSaveIPCheckboxView] IQF-returned lot: overriding display_accepted_qty to {display_accepted_qty}")
+
             if missing_qty not in [None, ""]:
                 try:
                     missing_qty = int(missing_qty)
@@ -1080,6 +1047,38 @@ class BrassSaveIPCheckboxView(APIView):
             
                 self.create_brass_tray_instances(lot_id)
                 IQFTrayId.objects.filter(lot_id=lot_id).delete()
+                
+                # ✅ FIX: Reset TrayId.rejected_tray for trays coming from IQF
+                # When IQF accepts trays and sends them back to Brass QC, the TrayId
+                # master records may still have rejected_tray=True from the previous cycle.
+                _send_brass_qc = getattr(total_stock, 'send_brass_qc', False)
+                if _send_brass_qc:
+                    from IQF.models import IQF_Submitted as _IQFSub
+                    _iqf_rec = _IQFSub.objects.filter(lot_id=lot_id, is_completed=True).last()
+                    if _iqf_rec and _iqf_rec.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                        if _iqf_rec.submission_type == 'FULL_ACCEPT' and _iqf_rec.full_accept_data:
+                            _iqf_tray_ids = [t.get('tray_id', '') for t in _iqf_rec.full_accept_data.get('trays', [])]
+                        elif _iqf_rec.submission_type == 'PARTIAL' and _iqf_rec.partial_accept_data:
+                            _iqf_tray_ids = [t.get('tray_id', '') for t in _iqf_rec.partial_accept_data.get('trays', [])]
+                        else:
+                            _iqf_tray_ids = []
+                        if _iqf_tray_ids:
+                            _reset_count = TrayId.objects.filter(
+                                lot_id=lot_id,
+                                tray_id__in=_iqf_tray_ids
+                            ).update(rejected_tray=False, brass_rejected_tray=False)
+                            print(f"✅ [BrassSaveIPCheckboxView] Reset rejected_tray for {_reset_count} TrayId records from IQF return")
+                        
+                        # ✅ FIX: Clear stale Brass QC rejection data from previous cycle
+                        # These records belong to the PREVIOUS Brass QC cycle and must not
+                        # interfere with the current cycle's tray validation.
+                        Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
+                        Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).delete()
+                        Brass_QC_Draft_Store.objects.filter(lot_id=lot_id).delete()
+                        Brass_TopTray_Draft_Store.objects.filter(lot_id=lot_id).delete()
+                        Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+                        Brass_Qc_Accepted_TrayScan.objects.filter(lot_id=lot_id).delete()
+                        print(f"✅ [BrassSaveIPCheckboxView] Cleared stale Brass QC data from previous cycle for IQF-returned lot {lot_id}")
                 
                 # ✅ NEW: Automatically calculate top tray without needing checkbox click
                 auto_calculate_top_tray(lot_id)
@@ -1284,6 +1283,19 @@ class BrassSaveIPCheckboxView(APIView):
                         )
                         brass_tray.save()
                         created_count += 1
+
+            # ✅ CRITICAL FIX: Remove stale BrassTrayId records that are NOT in the current
+            # IQF source set. When a lot cycles through IQF→Brass QC multiple times,
+            # old BrassTrayId records from previous stages remain and pollute the tray set.
+            if processed_tray_ids:
+                stale_brass_trays = BrassTrayId.objects.filter(lot_id=lot_id).exclude(
+                    tray_id__in=processed_tray_ids
+                )
+                stale_count = stale_brass_trays.count()
+                if stale_count > 0:
+                    stale_ids = list(stale_brass_trays.values_list('tray_id', flat=True))
+                    stale_brass_trays.delete()
+                    print(f"🧹 [create_brass_tray_instances] Removed {stale_count} stale BrassTrayId records not in current source: {stale_ids}")
 
             # ✅ NOTE: Top tray calculation moved to auto_calculate_top_tray() function
             # Called separately after this method completes
@@ -1821,6 +1833,10 @@ class BQ_Accepted_form(APIView):
             try:
                 from IQF.models import IQFTrayId
                 from Brass_QC.models import Brass_QC_Rejected_TrayScan
+                
+                # ✅ FIX: Clear old IQFTrayId records from previous cycle before creating new ones
+                IQFTrayId.objects.filter(lot_id=lot_id).delete()
+                
                 # Collect rejected scans for this lot (ignore empty tray ids)
                 rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(
                     lot_id=lot_id
@@ -2007,6 +2023,51 @@ class BQBatchRejectionAPIView(APIView):
             # Get brass_physical_qty if set and > 0, else use total_stock
             qty = total_stock.brass_physical_qty
 
+            # ✅ FIX: For IQF-returned lots, use IQF_Submitted data for correct qty and tray set.
+            # brass_physical_qty retains the ORIGINAL lot qty (e.g., 100) but the IQF-returned
+            # lot might only be 40. Also clean stale BrassTrayId from previous cycles.
+            _iqf_returned_tray_map = None  # will be set if IQF-returned
+            if total_stock.send_brass_qc:
+                try:
+                    _iqf_sub = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+                    if _iqf_sub:
+                        # Determine the correct qty from IQF_Submitted
+                        if _iqf_sub.submission_type == 'FULL_ACCEPT' and _iqf_sub.full_accept_data:
+                            _iqf_trays = _iqf_sub.full_accept_data.get('trays', [])
+                            _iqf_qty = sum(int(t.get('qty', 0)) for t in _iqf_trays)
+                        elif _iqf_sub.submission_type == 'PARTIAL' and _iqf_sub.partial_accept_data:
+                            _iqf_trays = _iqf_sub.partial_accept_data.get('trays', [])
+                            _iqf_qty = sum(int(t.get('qty', 0)) for t in _iqf_trays)
+                        else:
+                            _iqf_trays = []
+                            _iqf_qty = _iqf_sub.iqf_incoming_qty or 0
+
+                        if _iqf_qty > 0:
+                            print(f"[BATCH REJECTION] IQF-returned lot detected: overriding qty from {qty} to {_iqf_qty}")
+                            qty = _iqf_qty
+
+                        # Build IQF-sourced tray map for the IQF transfer section
+                        if _iqf_trays:
+                            _iqf_returned_tray_map = {}
+                            for _t in _iqf_trays:
+                                _tid = str(_t.get('tray_id', '')).strip()
+                                _tqty = int(_t.get('qty', 0))
+                                if _tid and _tqty > 0:
+                                    _iqf_returned_tray_map[_tid] = _tqty
+                            print(f"[BATCH REJECTION] IQF-sourced tray map: {_iqf_returned_tray_map}")
+
+                            # Clean stale BrassTrayId records that don't belong to current cycle
+                            _valid_tray_ids = set(_iqf_returned_tray_map.keys())
+                            _stale_deleted = BrassTrayId.objects.filter(
+                                lot_id=lot_id
+                            ).exclude(
+                                tray_id__in=_valid_tray_ids
+                            ).delete()[0]
+                            if _stale_deleted > 0:
+                                print(f"[BATCH REJECTION] Cleaned {_stale_deleted} stale BrassTrayId records")
+                except Exception as _iqf_err:
+                    print(f"[BATCH REJECTION] IQF override failed: {_iqf_err}")
+
             # Set brass_qc_rejection = True (original batch rejection logic)
             total_stock.brass_qc_rejection = True
             total_stock.last_process_module = "Brass QC"
@@ -2019,11 +2080,15 @@ class BQBatchRejectionAPIView(APIView):
             total_stock.iqf_acceptance = False
             total_stock.iqf_rejection = False
             total_stock.iqf_few_cases_acceptance = False
+            # ✅ FIX: Reset stale IQF qty fields from previous cycle
+            total_stock.iqf_accepted_qty = 0
+            total_stock.iqf_after_rejection_qty = 0
             
             total_stock.save(update_fields=[
                 'brass_qc_rejection', 'last_process_module', 'next_process_module', 
                 'bq_last_process_date_time', 'send_brass_audit_to_qc', 'send_brass_qc',
-                'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance'
+                'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance',
+                'iqf_accepted_qty', 'iqf_after_rejection_qty',
             ])
 
             # Update BrassTrayId records (only for non-delinked trays)
@@ -2064,34 +2129,50 @@ class BQBatchRejectionAPIView(APIView):
             # ─── Transfer rejected trays to IQF ──────────────────────────────
             # Build tray→qty map from BrassTrayId (non-delinked), fall back to
             # Brass_QC_Rejected_TrayScan for any missing quantities.
+            # ✅ FIX: For IQF-returned lots, use IQF-sourced tray map instead of stale BrassTrayId.
             try:
                 from IQF.models import IQFTrayId as _IQFTrayId
                 print(f"[BATCH REJECTION IQF] Starting IQF transfer for lot {lot_id}")
 
-                _remaining = BrassTrayId.objects.filter(lot_id=lot_id)
-                if delink_tray_ids:
-                    _remaining = _remaining.exclude(tray_id__in=delink_tray_ids)
+                if _iqf_returned_tray_map:
+                    # IQF-returned lot: use the tray map from IQF_Submitted (authoritative)
+                    _tray_map = dict(_iqf_returned_tray_map)
+                    print(f"[BATCH REJECTION IQF] Using IQF-sourced tray map: {_tray_map}")
+                else:
+                    # Normal lot: use BrassTrayId as before
+                    _remaining = BrassTrayId.objects.filter(lot_id=lot_id)
+                    if delink_tray_ids:
+                        _remaining = _remaining.exclude(tray_id__in=delink_tray_ids)
 
-                print(f"[BATCH REJECTION IQF] Found {_remaining.count()} remaining trays to transfer")
+                    print(f"[BATCH REJECTION IQF] Found {_remaining.count()} remaining trays to transfer")
 
-                _tray_map = {t.tray_id: (t.tray_quantity if t.tray_quantity is not None else 0)
-                             for t in _remaining}
-                print(f"[BATCH REJECTION IQF] Tray map: {_tray_map}")
+                    _tray_map = {t.tray_id: (t.tray_quantity if t.tray_quantity is not None else 0)
+                                 for t in _remaining}
+                    print(f"[BATCH REJECTION IQF] Tray map: {_tray_map}")
 
-                # Fallback: fill missing / zero qtys from scan records
-                for _scan in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(
-                        rejected_tray_id__isnull=True).exclude(rejected_tray_id=''):
-                    _tid = (_scan.rejected_tray_id or '').strip()
-                    if not _tid:
-                        continue
-                    try:
-                        _rq = int(_scan.rejected_tray_quantity or 0)
-                    except Exception:
-                        _rq = 0
-                    if _tray_map.get(_tid, 0) == 0 and _rq > 0:
-                        _tray_map[_tid] = _rq
+                    # Fallback: fill missing / zero qtys from scan records
+                    for _scan in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(
+                            rejected_tray_id__isnull=True).exclude(rejected_tray_id=''):
+                        _tid = (_scan.rejected_tray_id or '').strip()
+                        if not _tid:
+                            continue
+                        try:
+                            _rq = int(_scan.rejected_tray_quantity or 0)
+                        except Exception:
+                            _rq = 0
+                        if _tray_map.get(_tid, 0) == 0 and _rq > 0:
+                            _tray_map[_tid] = _rq
 
-                print(f"[BATCH REJECTION IQF] Final tray map (after scan fallback): {_tray_map}")
+                print(f"[BATCH REJECTION IQF] Final tray map: {_tray_map}")
+
+                # ✅ FIX: Clean old IQFTrayId records before creating new ones
+                _old_iqf_deleted = _IQFTrayId.objects.filter(lot_id=lot_id).delete()[0]
+                if _old_iqf_deleted > 0:
+                    print(f"[BATCH REJECTION IQF] Cleaned {_old_iqf_deleted} old IQFTrayId records")
+                # ✅ FIX: Clean stale IQF_Submitted so view icon uses fresh IQFTrayId data
+                _sub_deleted = IQF_Submitted.objects.filter(lot_id=lot_id).delete()[0]
+                if _sub_deleted > 0:
+                    print(f"[BATCH REJECTION IQF] Cleaned {_sub_deleted} stale IQF_Submitted records")
 
                 _iqf_created = 0
                 for _tid, _tq in _tray_map.items():
@@ -2102,18 +2183,18 @@ class BQBatchRejectionAPIView(APIView):
                     except Exception:
                         _qty_val = 0
                     
-                    if _IQFTrayId.objects.filter(lot_id=lot_id, tray_id=_tid).exists():
-                        print(f"[BATCH REJECTION IQF] Tray {_tid} already exists in IQFTrayId, skipping")
-                        continue
-                    
-                    print(f"[BATCH REJECTION IQF] Creating IQFTrayId: lot_id={lot_id}, tray_id={_tid}, qty={_qty_val}, rejected_tray=True")
+                    # ✅ FIX: Set top_tray based on qty < capacity so downstream IQF reads correct flag
+                    _tray_cap = mmc.tray_capacity if mmc and hasattr(mmc, 'tray_capacity') and mmc.tray_capacity else 16
+                    _is_top = (_qty_val > 0 and _qty_val < _tray_cap)
+                    print(f"[BATCH REJECTION IQF] Creating IQFTrayId: lot_id={lot_id}, tray_id={_tid}, qty={_qty_val}, rejected_tray=True, top_tray={_is_top}")
                     _IQFTrayId.objects.create(
                         lot_id=lot_id,
                         tray_id=_tid,
                         tray_quantity=_qty_val,
                         batch_id=mmc,
                         user=request.user,
-                        rejected_tray=True
+                        rejected_tray=True,
+                        top_tray=_is_top
                     )
                     _iqf_created += 1
 
@@ -2283,9 +2364,20 @@ class BQTrayRejectionAPIView(APIView):
             total_stock_obj.iqf_acceptance = False
             total_stock_obj.iqf_rejection = False
             total_stock_obj.iqf_few_cases_acceptance = False
+            # ✅ FIX: Reset stale IQF qty fields from previous cycle
+            total_stock_obj.iqf_accepted_qty = 0
+            total_stock_obj.iqf_after_rejection_qty = 0
             
-            total_stock_obj.save(update_fields=['send_brass_audit_to_iqf', 'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance'])
+            total_stock_obj.save(update_fields=['send_brass_audit_to_iqf', 'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance', 'iqf_accepted_qty', 'iqf_after_rejection_qty'])
             print(f"✅ [BQTrayRejectionAPIView] Set send_brass_audit_to_iqf=True for lot {lot_id} after tray rejection.")
+            
+            # ✅ FIX: Clean stale IQF_Submitted so view icon uses fresh IQFTrayId data
+            try:
+                _sub_deleted = IQF_Submitted.objects.filter(lot_id=lot_id).delete()[0]
+                if _sub_deleted > 0:
+                    print(f"✅ [BQTrayRejectionAPIView] Cleaned {_sub_deleted} stale IQF_Submitted records")
+            except Exception:
+                pass
 
             # ✅ Update TrayId records for ALL individual tray IDs
             unique_tray_ids = list(set([item['tray_id'] for item in saved_rejections]))
@@ -2497,23 +2589,35 @@ class BQTrayRejectionAPIView(APIView):
                     total_stock_obj.send_brass_audit_to_iqf = True
                     total_stock_obj.save(update_fields=['send_brass_audit_to_iqf'])
                     
-                    # Create IQF records for all rejected trays
-                    iqf_created = 0
+                    # ✅ FIX: Aggregate per-tray totals BEFORE creating IQFTrayId records.
+                    # saved_rejections has per-reason records (e.g., NB-A00002 appears 3 times
+                    # with qty 4, 8, 4). IQFTrayId needs the SUM = 16 for that tray.
+                    iqf_tray_totals = {}
                     for rejection in saved_rejections:
                         tray_id = rejection.get('tray_id')
                         qty = rejection.get('qty', 0)
-                        
                         if tray_id and qty > 0:
-                            # Check if IQF record already exists 
-                            if not IQFTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists():
-                                IQFTrayId.objects.create(
-                                    lot_id=lot_id,
-                                    tray_id=tray_id,
-                                    tray_quantity=qty,
-                                    user=request.user,
-                                    rejected_tray=True
-                                )
-                                iqf_created += 1
+                            iqf_tray_totals[tray_id] = iqf_tray_totals.get(tray_id, 0) + qty
+                    
+                    # Clear old IQFTrayId records from any previous cycle
+                    IQFTrayId.objects.filter(lot_id=lot_id).delete()
+                    # Note: IQF_Submitted already cleaned above in the flag-reset block
+                    
+                    # ✅ FIX: Resolve tray capacity for top_tray flag
+                    _tray_cap = total_stock_obj.batch_id.tray_capacity if total_stock_obj.batch_id and hasattr(total_stock_obj.batch_id, 'tray_capacity') and total_stock_obj.batch_id.tray_capacity else 16
+                    
+                    iqf_created = 0
+                    for tray_id, total_qty in iqf_tray_totals.items():
+                        _is_top = (total_qty > 0 and total_qty < _tray_cap)
+                        IQFTrayId.objects.create(
+                            lot_id=lot_id,
+                            tray_id=tray_id,
+                            tray_quantity=total_qty,
+                            user=request.user,
+                            rejected_tray=True,
+                            top_tray=_is_top
+                        )
+                        iqf_created += 1
                     
                     print(f"✅ [BQTrayRejectionAPIView] Created {iqf_created} IQFTrayId records for rejected trays (lot: {lot_id})")
                     
@@ -2656,12 +2760,31 @@ def brass_reject_check_tray_id(request):
             })
 
         # ✅ CHECK 3: Must NOT be already rejected
+        # ✅ IQF-RETURN FIX: For lots returned from IQF, the TrayId.rejected_tray flag
+        # may be stale from the previous Brass QC cycle. Check if this tray is part of
+        # the current IQF-accepted set — if so, it's valid for reuse.
         if hasattr(tray_obj, 'rejected_tray') and tray_obj.rejected_tray:
-            return JsonResponse({
-                'exists': False,
-                'error': 'Already rejected',
-                'status_message': 'Already Rejected'
-            })
+            _skip_global_rejected = False
+            _ts_check = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if _ts_check and getattr(_ts_check, 'send_brass_qc', False):
+                from IQF.models import IQF_Submitted
+                _iqf_chk = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+                if _iqf_chk and _iqf_chk.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                    if _iqf_chk.submission_type == 'FULL_ACCEPT' and _iqf_chk.full_accept_data:
+                        _iqf_tids = [t.get('tray_id', '') for t in _iqf_chk.full_accept_data.get('trays', [])]
+                    elif _iqf_chk.submission_type == 'PARTIAL' and _iqf_chk.partial_accept_data:
+                        _iqf_tids = [t.get('tray_id', '') for t in _iqf_chk.partial_accept_data.get('trays', [])]
+                    else:
+                        _iqf_tids = []
+                    if tray_id in _iqf_tids:
+                        _skip_global_rejected = True
+                        print(f"[brass_reject_check_tray_id] Skipping stale TrayId.rejected_tray for {tray_id} — tray is in IQF accepted list")
+            if not _skip_global_rejected:
+                return JsonResponse({
+                    'exists': False,
+                    'error': 'Already rejected',
+                    'status_message': 'Already Rejected'
+                })
 
         # ✅ CHECK 4: Must NOT be in Brass_QC_Rejected_TrayScan for this lot
         already_rejected_in_brass = Brass_QC_Rejected_TrayScan.objects.filter(
@@ -2980,12 +3103,33 @@ def brass_reject_check_tray_id_simple(request):
 
     if brass_tray_obj:
         if brass_tray_obj.rejected_tray:
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': 'Already rejected in Brass QC',
-                'status_message': 'Already Rejected'
-            })
+            # ✅ IQF-RETURN FIX: For lots returned from IQF, the rejected_tray flag
+            # may be stale from the previous Brass QC cycle. Check if this tray is
+            # part of the IQF-accepted trays — if so, it's valid for reuse.
+            _skip_rejected_block = False
+            _ts = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
+            if _ts and getattr(_ts, 'send_brass_qc', False):
+                from IQF.models import IQF_Submitted
+                _iqf_rec = IQF_Submitted.objects.filter(lot_id=current_lot_id, is_completed=True).last()
+                if _iqf_rec and _iqf_rec.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+                    # Check if this tray is in the IQF accepted tray list
+                    if _iqf_rec.submission_type == 'FULL_ACCEPT' and _iqf_rec.full_accept_data:
+                        _iqf_tray_ids = [t.get('tray_id', '') for t in _iqf_rec.full_accept_data.get('trays', [])]
+                    elif _iqf_rec.submission_type == 'PARTIAL' and _iqf_rec.partial_accept_data:
+                        _iqf_tray_ids = [t.get('tray_id', '') for t in _iqf_rec.partial_accept_data.get('trays', [])]
+                    else:
+                        _iqf_tray_ids = []
+                    if tray_id in _iqf_tray_ids:
+                        _skip_rejected_block = True
+                        print(f"[BRASS_REUSE] Skipping stale rejected_tray flag for {tray_id} — tray is in IQF accepted list")
+
+            if not _skip_rejected_block:
+                return JsonResponse({
+                    'exists': False,
+                    'valid_for_rejection': False,
+                    'error': 'Already rejected in Brass QC',
+                    'status_message': 'Already Rejected'
+                })
 
     # -----------------------------------------------------------------
     # STEP 5: COVERAGE-BASED PHYSICAL REUSE
@@ -3001,6 +3145,28 @@ def brass_reject_check_tray_id_simple(request):
     physical_qty = 0
     if total_stock and hasattr(total_stock, 'brass_physical_qty') and total_stock.brass_physical_qty:
         physical_qty = int(total_stock.brass_physical_qty)
+
+    # ✅ IQF-RETURN FIX: For lots returned from IQF, brass_physical_qty and saved
+    # rejection records belong to the PREVIOUS Brass QC cycle and are stale.
+    # Use IQF_Submitted as the single source of truth for the current cycle.
+    is_iqf_returned_lot = False
+    if total_stock and getattr(total_stock, 'send_brass_qc', False):
+        from IQF.models import IQF_Submitted
+        iqf_record = IQF_Submitted.objects.filter(lot_id=current_lot_id, is_completed=True).last()
+        if iqf_record and iqf_record.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
+            is_iqf_returned_lot = True
+            # Override physical_qty with IQF accepted qty (current cycle lot qty)
+            physical_qty = iqf_record.accepted_qty or 0
+            # Override tray distribution from IQF_Submitted snapshot
+            if iqf_record.submission_type == 'FULL_ACCEPT' and iqf_record.full_accept_data:
+                iqf_source_trays = iqf_record.full_accept_data.get('trays', [])
+            elif iqf_record.submission_type == 'PARTIAL' and iqf_record.partial_accept_data:
+                iqf_source_trays = iqf_record.partial_accept_data.get('trays', [])
+            else:
+                iqf_source_trays = []
+            if iqf_source_trays:
+                original_tray_quantities = [int(t.get('qty', 0)) for t in iqf_source_trays if int(t.get('qty', 0)) > 0]
+            print(f"[BRASS_REUSE] IQF-returned lot detected: physical_qty={physical_qty}, trays={original_tray_quantities}")
 
     # 5c. Derive tray capacity (prefer batch master, then actual tray quantities)
     tray_capacity = None
@@ -3035,8 +3201,14 @@ def brass_reject_check_tray_id_simple(request):
     delink_count = len(original_tray_quantities) - physical_trays
 
     # 5f. Get total rejection qty from all sources
-    saved_rejections = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=current_lot_id)
-    total_saved_rejection = sum(int(r.rejected_tray_quantity or 0) for r in saved_rejections)
+    # ✅ IQF-RETURN FIX: For IQF-returned lots, saved rejections belong to the
+    # previous Brass QC cycle — ignore them for current cycle reuse calculation.
+    if is_iqf_returned_lot:
+        total_saved_rejection = 0
+        print(f"[BRASS_REUSE] IQF-returned lot: ignoring stale saved rejections from previous cycle")
+    else:
+        saved_rejections = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=current_lot_id)
+        total_saved_rejection = sum(int(r.rejected_tray_quantity or 0) for r in saved_rejections)
 
     total_session_rejection = 0
     for alloc in current_session_allocations:

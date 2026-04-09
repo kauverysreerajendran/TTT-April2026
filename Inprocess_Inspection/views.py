@@ -127,7 +127,8 @@ class InprocessInspectionView(TemplateView):
                 
                 
                 jig_details = JigCompleted.objects.filter(
-                    jig_position__isnull=True  # Only get records NOT completed (no jig_position selected)
+                    jig_position__isnull=True,  # Only get records NOT completed (no jig_position selected)
+                    draft_status='submitted'     # Only show fully submitted jigs (not drafts/active)
                 ).annotate(
                     polish_finish=Coalesce(Subquery(total_polish_finish_subquery), Subquery(recovery_polish_finish_subquery))
                 ).order_by('-updated_at')
@@ -136,7 +137,7 @@ class InprocessInspectionView(TemplateView):
         except Exception as e:
             print(f"⚠️ Error with polish_finish annotation, using default: {e}")
             # Fallback without polish_finish annotation
-            jig_details = JigCompleted.objects.order_by('-updated_at')
+            jig_details = JigCompleted.objects.filter(draft_status='submitted').order_by('-updated_at')
             # Add default polish_finish_name to each jig_detail
             for jig_detail in jig_details:
                 jig_detail.polish_finish_name = 'No Polish Finish'

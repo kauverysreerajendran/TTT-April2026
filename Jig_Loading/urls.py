@@ -2,8 +2,8 @@
 from . import views
 from .views import *
 from .views import JigView, TrayInfoView, JigCompletedTable
-from .views import JigLoadInitAPI, JigLoadUpdateAPI, JigLoadSubmitAPI
-from .views import JigSaveDraftAPI, JigSubmitFinalAPI
+from .views import JigLoadInitAPI, JigLoadUpdateAPI
+from .views import JigSaveAPI, JigValidateAPI
 from .views import ModelCombinationValidateAPI, JigHoldToggleAPI
 from .views import DeleteJigPickRecordAPI, UpdateRemarkAPI
 
@@ -11,14 +11,15 @@ urlpatterns = [
         path('JigView/', JigView.as_view(), name='JigView'),
         path('JigCompletedTable/', JigCompletedTable.as_view(), name='JigCompletedTable'),
 
-        # ===== NEW CONSOLIDATED APIs (one API per action) =====
+        # ===== CONSOLIDATED APIs =====
         path('api/load/init/', JigLoadInitAPI.as_view(), name='jig-load-init'),
         path('api/load/update/', JigLoadUpdateAPI.as_view(), name='jig-load-update'),
-        path('api/load/submit/', JigLoadSubmitAPI.as_view(), name='jig-load-submit'),
 
-        # ===== NEW CLEAN APIs - exact frontend snapshot storage =====
-        path('api/jig/save/', JigSaveDraftAPI.as_view(), name='jig-save-draft'),
-        path('api/jig/submit/', JigSubmitFinalAPI.as_view(), name='jig-submit-final'),
+        # ===== SINGLE UNIFIED API — Draft + Submit (ONE ENDPOINT) =====
+        path('api/jig/save/', JigSaveAPI.as_view(), name='jig-save'),
+
+        # ===== Jig ID real-time validation (existence check against Jig master) =====
+        path('api/jig/validate/', JigValidateAPI.as_view(), name='jig-validate'),
 
         # ===== Model combination validation (Add Model eligibility) =====
         path('api/model-combination/validate/', ModelCombinationValidateAPI.as_view(), name='model-combination-validate'),

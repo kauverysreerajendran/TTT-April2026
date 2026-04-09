@@ -802,7 +802,15 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td>{{data.polish_finish}}</td>
                     <td>{{data.location__location_name}}</td>
                     <td>{{data.tray_type}} {{data.tray_capacity}}</td>
-                    <td>{{data.iqf_rejection_total_qty}}</td>
+                    <td>
+                      {% if data.original_lot_qty %}
+                        {{ data.original_lot_qty }}
+                      {% elif data.brass_rejection_total_qty %}
+                        {{ data.brass_rejection_total_qty }}
+                      {% else %}
+                        0
+                      {% endif %}
+                    </td>
                     <td>
                       {{data.iqf_rejection_total_qty}}
       <a href="#"

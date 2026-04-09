@@ -430,6 +430,12 @@
     margin: 20px !important;
     animation: modalSlideUp 0.3s cubic-bezier(0.16,1,0.3,1);
   }
+  /* FORCE UNIFORM FONT SIZE INSIDE THE JIG MODAL */
+  /* Adjust the value below to the desired uniform size (e.g., 14px) */
+  .add-jig-window, .add-jig-window * {
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
   @keyframes modalSlideUp {
     from { opacity: 0; transform: translateY(24px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
@@ -7547,6 +7553,8 @@ document.addEventListener('click', function (e) {
     const payload = window._buildJigPayload();
     // Override jig_id from the validated input (user may have typed it)
     payload.jig_id = jigId.trim();
+    // Add action for unified API
+    payload.action = 'submit';
 
     console.log('[SUBMIT] Full snapshot payload:', payload.tray_data.length, 'trays, delink:', payload.total_delink_qty, 'excess:', payload.total_excess_qty);
 
@@ -7559,8 +7567,8 @@ document.addEventListener('click', function (e) {
       return v ? v.pop() : '';
     }
 
-    // 6. Call NEW submit API with full snapshot — single API, no parallel calls
-    fetch('/jig_loading/api/jig/submit/', {
+    // 6. Call unified save API with action=submit — single API, no parallel calls
+    fetch('/jig_loading/api/jig/save/', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
@@ -8849,6 +8857,58 @@ if (window.jQuery) {
     return v ? v.pop() : '';
   }
 
+  // ===== JIG ID REAL-TIME VALIDATION (blur → check Jig master table) =====
+  document.addEventListener('DOMContentLoaded', function() {
+    var jigIdEl = document.getElementById('jigIdInput');
+    var jigIdErrEl = document.getElementById('jigIdError');
+    if (!jigIdEl) return;
+
+    // Sanitize input: uppercase, allow only A-Z 0-9 -
+    jigIdEl.addEventListener('input', function() {
+      this.value = (this.value || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    });
+
+    // Validate against Jig master on blur
+    jigIdEl.addEventListener('blur', function() {
+      var val = (this.value || '').trim().toUpperCase();
+      this.value = val;
+      if (!val) {
+        this.classList.remove('jig-id-error', 'jig-id-valid');
+        if (jigIdErrEl) { jigIdErrEl.textContent = ''; jigIdErrEl.style.display = 'none'; }
+        return;
+      }
+      // Format check: J###-#### (9 chars)
+      if (!/^J\d{3}-\d{4}$/.test(val)) {
+        this.classList.add('jig-id-error');
+        this.classList.remove('jig-id-valid');
+        if (jigIdErrEl) { jigIdErrEl.textContent = 'Invalid format. Expected J###-#### (e.g. J098-0001)'; jigIdErrEl.style.display = 'block'; }
+        return;
+      }
+      // Existence check — call backend
+      var me = this;
+      fetch('/jig_loading/api/jig/validate/?jig_id=' + encodeURIComponent(val), {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': _getCsrf() }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.exists) {
+          me.classList.add('jig-id-valid');
+          me.classList.remove('jig-id-error');
+          if (jigIdErrEl) { jigIdErrEl.textContent = ''; jigIdErrEl.style.display = 'none'; }
+        } else {
+          me.classList.add('jig-id-error');
+          me.classList.remove('jig-id-valid');
+          if (jigIdErrEl) { jigIdErrEl.textContent = 'Jig ' + val + ' not found in Jig master.'; jigIdErrEl.style.display = 'block'; }
+        }
+      })
+      .catch(function() {
+        me.classList.remove('jig-id-error', 'jig-id-valid');
+      });
+    });
+  });
+
   // ===== Collect FULL tray_data snapshot from the split panel tables =====
   // Returns: [{tray_id, original_qty, delink_qty, excess_qty, top_tray, model_code, source_lot_id}, ...]
   function collectTrayDataSnapshot() {
@@ -8978,7 +9038,10 @@ if (window.jQuery) {
       totalExcessQty += parseInt(t.excess_qty || 0) || 0;
     });
 
-    var isMultiModel = !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0);
+    var isMultiModel = !!(
+      (window._currentSecondaryLots && window._currentSecondaryLots.length > 0) ||
+      (window._lastMultiModelAllocation && window._lastMultiModelAllocation.length > 1)
+    );
     var multiModelAllocation = isMultiModel
       ? (window._lastMultiModelAllocation || window._currentSecondaryLots || [])
       : [];
@@ -9052,6 +9115,9 @@ if (window.jQuery) {
       return;
     }
 
+    // Add action for unified API
+    payload.action = 'draft';
+
     var draftBtn = document.getElementById('draftJigBtn');
     if (draftBtn) { draftBtn.setAttribute('disabled', 'disabled'); draftBtn.innerText = 'Saving...'; }
 
@@ -9068,17 +9134,33 @@ if (window.jQuery) {
       if (result.ok && result.data.status === 'success') {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
-            icon: 'success', title: 'Draft Saved',
-            text: 'Your jig loading draft has been saved. You can resume later.',
-            confirmButtonText: 'OK', timer: 3000, timerProgressBar: true,
+            icon: 'success', title: 'Drafted Successfully',
+            text: 'Your jig loading draft has been saved.',
+            confirmButtonText: 'OK', timer: 2500, timerProgressBar: true,
+            allowOutsideClick: false,
+          }).then(function() {
+            // CRITICAL: Do NOT call resetJigModalState() here.
+            // It sends action='clear' to /api/load/update/ which DELETES the draft we just saved.
+            // Just close the modal visually and redirect — the page reload will reset everything.
+            try {
+              var modal = document.getElementById('jigAddModal');
+              if (modal) modal.classList.remove('open');
+            } catch (e) {}
+            window.location.href = '/jig_loading/JigView/';
           });
         } else {
-          alert('Draft saved successfully!');
+          alert('Drafted successfully!');
+          try {
+            // Do NOT call resetJigModalState() — it sends 'clear' which deletes the draft.
+            var modal = document.getElementById('jigAddModal');
+            if (modal) modal.classList.remove('open');
+          } catch (e) {}
+          window.location.href = '/jig_loading/JigView/';
         }
       } else {
         Swal.fire({ icon: 'error', title: 'Draft Failed', text: 'Draft save failed: ' + (result.data.message || 'Unknown error'), confirmButtonColor: '#028084' });
+        if (draftBtn) { draftBtn.removeAttribute('disabled'); draftBtn.innerHTML = '<i class="fa fa-save" style="font-size:12px;"></i> Draft'; }
       }
-      if (draftBtn) { draftBtn.removeAttribute('disabled'); draftBtn.innerHTML = '<i class="fa fa-save" style="font-size:12px;"></i> Draft'; }
     })
     .catch(function(err) {
       console.error('[DRAFT] Error:', err);
@@ -9157,6 +9239,32 @@ if (window.jQuery) {
       if (data.multi_model_allocation && data.multi_model_allocation.length > 0) {
         window._lastMultiModelAllocation = data.multi_model_allocation;
         window._currentSecondaryLots = data.multi_model_allocation;
+      }
+
+      // ===== Multi-model draft: re-trigger init to restore full tray table =====
+      if (data.is_multi_model && data.multi_model_allocation && data.multi_model_allocation.length > 1) {
+        var secondaryLots = data.multi_model_allocation.slice(1).map(function(m) {
+          return { lot_id: m.lot_id, batch_id: m.batch_id || '', qty: parseInt(m.allocated_qty || m.qty || 0) || 0 };
+        });
+        window._currentSecondaryLots = secondaryLots;
+        window._pendingSecondaryLots = secondaryLots;
+        try { sessionStorage.setItem('secondary_lots', JSON.stringify(secondaryLots)); } catch(e) {}
+
+        console.log('[DRAFT_RESTORE] Multi-model detected — re-calling init with', secondaryLots.length, 'secondary models');
+        if (typeof window.callInitAPI === 'function') {
+          window.callInitAPI({
+            lot_id: data.lot_id || lotId,
+            batch_id: data.batch_id || batchId,
+            jig_capacity: parseInt(data.jig_capacity || 0) || 0,
+            multi_model: true,
+            secondary_lots: secondaryLots,
+          }, function(initData) {
+            if (initData && typeof window.applyResponseToUI === 'function') {
+              window.applyResponseToUI(initData);
+              console.log('[DRAFT_RESTORE] Multi-model tray table re-rendered');
+            }
+          });
+        }
       }
 
       // ===== Restore scanned tray values into split panel inputs =====

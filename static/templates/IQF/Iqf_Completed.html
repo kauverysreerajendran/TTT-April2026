@@ -509,10 +509,14 @@
     cursor: not-allowed;
     background: #f5f5f5 !important;
   }
-  /* Show remark tooltip above the trigger instead of below */
+  /* Show remark tooltip to the LEFT of the trigger — avoids sticky header overlap */
   .remark-tooltip {
-    top: auto !important;
-    bottom: 110% !important;
+    top: 50% !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: 110% !important;
+    transform: translateY(-50%) !important;
+    width: 280px !important;
   }
   #trayScanDetails.table-grid {
     display: grid !important;
@@ -927,86 +931,86 @@
                         </div>
                       </div>
                     </td>
-<td>
-  
+                    <td>
+                      
 
-  <!-- Status Display (Simplified) -->
-  {% if data.iqf_acceptance %}
-    <!-- Show "Accepted" status -->
-    <span class="status-badge accepted" style="
-      background-color: #66bb6a; 
-      color: white; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 12px; 
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    ">
-      <i class="fa fa-check-circle"></i>Accepted
-    </span>
+                      <!-- Status Display (Simplified) -->
+                      {% if data.iqf_acceptance %}
+                        <!-- Show "Accepted" status -->
+                        <span class="status-badge accepted" style="
+                          background-color: #66bb6a; 
+                          color: white; 
+                          padding: 6px 12px; 
+                          border-radius: 20px; 
+                          font-size: 12px; 
+                          font-weight: 600;
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 4px;
+                        ">
+                          <i class="fa fa-check-circle"></i>Accepted
+                        </span>
 
-  {% elif data.iqf_rejection %}
-    <!-- Show "Rejected" status -->
-    <span class="status-badge rejected" style="
-      background-color: #e57373; 
-      color: white; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 12px; 
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    ">
-      <i class="fa fa-times-circle"></i>Rejected
-    </span>
+                      {% elif data.iqf_rejection %}
+                        <!-- Show "Rejected" status -->
+                        <span class="status-badge rejected" style="
+                          background-color: #e57373; 
+                          color: white; 
+                          padding: 6px 12px; 
+                          border-radius: 20px; 
+                          font-size: 12px; 
+                          font-weight: 600;
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 4px;
+                        ">
+                          <i class="fa fa-times-circle"></i>Rejected
+                        </span>
 
-  {% elif data.iqf_few_cases_acceptance %}
-    <!-- Show "Partial Reject" status -->
-    <span class="status-badge partial-rejected" style="
-      background-color: #fb9393; 
-      color: white; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 12px; 
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    ">
-      <i class="fa fa-adjust"></i>Partial Rejected
-    </span>
+                      {% elif data.iqf_few_cases_acceptance %}
+                        <!-- Show "Partial Reject" status -->
+                        <span class="status-badge partial-rejected" style="
+                          background-color: #fb9393; 
+                          color: white; 
+                          padding: 6px 12px; 
+                          border-radius: 20px; 
+                          font-size: 12px; 
+                          font-weight: 600;
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 4px;
+                        ">
+                          <i class="fa fa-adjust"></i>Partial Rejected
+                        </span>
 
-  {% endif %}
+                      {% endif %}
 
-    <!-- Eye icon to view submitted "Tray Scan Table" -->
-    <a href="#"
-      title="View"
-      class="text-primary tray-scan-btn-Jig"
-      style="text-decoration: underline; margin-left: 8px;"
-      data-stock-lot-id="{{ data.stock_lot_id }}"
-      data-batch-id="{{ data.batch_id }}"
-      data-model-no="{{ data.plating_stk_no }}"
-      data-no-of-trays="{{ data.no_of_trays }}"
-      data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-      data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
-      data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-      data-accepted-ip-stock="{{ data.iqf_acceptance|yesno:'true,false' }}"
-      data-rejected-ip-stock="{{ data.iqf_rejection|yesno:'true,false' }}"
-      data-model-image="{{ data.model_images.0|default:'' }}"
-      data-few-cases-accepted-ip-stock="{{ data.iqf_few_cases_acceptance|yesno:'true,false' }}"
-        data-total-batch-quantity="{{ data.brass_rejection_total_qty }}"
-    data-missing-qty="{{ data.iqf_missing_qty }}"
-    data-physical-qty="{{ data.iqf_physical_qty }}">
+                        <!-- Eye icon to view submitted "Tray Scan Table" -->
+                        <a href="#"
+                          title="View"
+                          class="text-primary tray-scan-btn-Jig"
+                          style="text-decoration: underline; margin-left: 8px;"
+                          data-stock-lot-id="{{ data.stock_lot_id }}"
+                          data-batch-id="{{ data.batch_id }}"
+                          data-model-no="{{ data.plating_stk_no }}"
+                          data-no-of-trays="{{ data.no_of_trays }}"
+                          data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                          data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
+                          data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+                          data-accepted-ip-stock="{{ data.iqf_acceptance|yesno:'true,false' }}"
+                          data-rejected-ip-stock="{{ data.iqf_rejection|yesno:'true,false' }}"
+                          data-model-image="{{ data.model_images.0|default:'' }}"
+                          data-few-cases-accepted-ip-stock="{{ data.iqf_few_cases_acceptance|yesno:'true,false' }}"
+                            data-total-batch-quantity="{{ data.brass_rejection_total_qty }}"
+                        data-missing-qty="{{ data.iqf_missing_qty }}"
+                        data-physical-qty="{{ data.iqf_physical_qty }}">
 
-      
-      <img src="{% static 'assets/icons/view.png' %}"
-          alt="View"
-          style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
-    </a>
-</td>
+                          
+                          <img src="{% static 'assets/icons/view.png' %}"
+                              alt="View"
+                              style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+                        </a>
+                    </td>
                     <td>
                       {% if data.brass_onhold_picking  %}
                         <div
@@ -1084,7 +1088,7 @@
                       <!-- VoiceRec with tooltip (audio remark) -->
                         <a href="#" title="Add Audio Remark" class="remark-tooltip-trigger" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; position: relative; cursor: pointer;">
                           <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec" style="width: 20px; height: 20px"/>
-                          <div class="remark-tooltip" style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;">
+                          <div class="remark-tooltip" style="position: absolute; top: 50%; left: auto; right: 110%; transform: translateY(-50%); width: 280px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;">
                             
                             <!-- Audio recording UI placeholder -->
                             <div style="display: flex; align-items: center; gap: 10px;">
@@ -1114,10 +1118,10 @@
                         />
                         <div
                           class="remark-tooltip"
-                          style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;"
+                          style="position: absolute; top: 50%; left: auto; right: 110%; transform: translateY(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;"
                         >
                           <div
-                            style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 10px solid #fff;"
+                            style="position: absolute; top: 50%; right: -10px; transform: translateY(-50%); width: 0; height: 0; border-top: 10px solid transparent; border-bottom: 10px solid transparent; border-left: 10px solid #fff;"
                           ></div>
                           <textarea
                             placeholder="Type your remark..."
@@ -1128,20 +1132,47 @@
                             {% if not data.IQF_pick_remarks %}
                             <button
                               type="button"
+                              data-iqf-save-remark
                               style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;"
                             >
                               <i class="fa fa-send"></i>
                             </button>
                             {% else %}
-                            <div style="margin-top: 40px; color: #31708f; background: #d9edf7; border: 1px solid #bce8f1; border-radius: 4px; padding: 8px 12px; font-size: 10px; text-align: left;">
-                              <i class="fa fa-info-circle" style="margin-right: 6px;"></i>
-                              Remark already saved and cannot be edited.
-                            </div>
+              
                             {% endif %}
                           </div>
                         </div>
                       </a>
                        {% else %}
+                      {% if data.IQF_pick_remarks %}
+                      <!-- Chat Remark Icon (read-only) — submitted lot with saved remark -->
+                      <a
+                        href="#"
+                        title="View Remark"
+                        class="remark-tooltip-trigger"
+                        style="display: inline-flex; align-items: center; height: 20px; margin-left: 5px; position: relative; cursor: pointer;"
+                      >
+                        <img
+                          src="{% static 'assets/icons/chat_icon.png' %}"
+                          alt="Chat"
+                          style="width: 20px; height: 20px; filter: grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2); opacity: 1;"
+                        />
+                        <div
+                          class="remark-tooltip"
+                          style="position: absolute; top: 50%; left: auto; right: 110%; transform: translateY(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;"
+                        >
+                          <div
+                            style="position: absolute; top: 50%; right: -10px; transform: translateY(-50%); width: 0; height: 0; border-top: 10px solid transparent; border-bottom: 10px solid transparent; border-left: 10px solid #fff;"
+                          ></div>
+                          <textarea
+                            placeholder="No remark saved."
+                            style="width: 85%; height: 40px; resize: vertical; border: 1px solid #ccc; padding: 5px; border-radius: 4px; font-family: Arial, sans-serif; font-size: 14px;"
+                            readonly
+                          >{{ data.IQF_pick_remarks|default_if_none:"" }}</textarea>
+                 
+                        </div>
+                      </a>
+                      {% else %}
                       <!-- Audio Remark Icon (disabled) -->
                       <span title="Disabled after moved" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; opacity: 0.5; pointer-events: none;">
                         <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
@@ -1150,6 +1181,7 @@
                       <span title="Disabled after moved" style="display: inline-flex; align-items: center; height: 20px; margin-left: 5px; opacity: 0.5; pointer-events: none;">
                         <img src="{% static 'assets/icons/chat_icon.png' %}" alt="Chat Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
                       </span>
+                      {% endif %}
                     {% endif %}
                     {% if data.Bq_pick_remarks %}
                       <a href="#" title="{{ data.Bq_pick_remarks }}" class="prev-remark-tooltip-trigger" style="margin-left: 5px;">
@@ -2831,6 +2863,59 @@ document.addEventListener('DOMContentLoaded', function() {
             window.location.href = url.toString();
         });
     });
+});
+</script>
+
+<!-- IQF Remarks Handler -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('click', function(e) {
+    var sendBtn = e.target.closest('[data-iqf-save-remark]');
+    if (!sendBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    var tooltipContainer = sendBtn.closest('.remark-tooltip');
+    var textarea = tooltipContainer ? tooltipContainer.querySelector('textarea') : null;
+    if (!textarea) { alert('Remark field not found.'); return; }
+
+    var remarkText = (textarea.value || '').trim();
+    if (!remarkText) { alert('Please enter a remark before sending.'); return; }
+
+    var row = sendBtn.closest('tr');
+    var lotId = row ? (row.getAttribute('data-stock-lot-id') || '') : '';
+    if (!lotId) { alert('Unable to identify lot.'); return; }
+
+    sendBtn.disabled = true;
+    var origHTML = sendBtn.innerHTML;
+    sendBtn.innerHTML = '&#x23F3;';
+
+    var csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value
+      || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+
+    fetch('/iqf/iqf_save_pick_remark/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ lot_id: lotId, IQF_pick_remarks: remarkText }),
+      credentials: 'same-origin'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        textarea.setAttribute('readonly', 'readonly');
+        sendBtn.style.display = 'none';
+        var triggerLink = sendBtn.closest('.remark-tooltip-trigger');
+        if (triggerLink) {
+          var chatIcon = triggerLink.querySelector('img');
+          if (chatIcon) { chatIcon.style.filter = 'grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2)'; chatIcon.style.opacity = '1'; }
+        }
+      } else {
+        sendBtn.disabled = false; sendBtn.innerHTML = origHTML;
+        alert('Error: ' + (data.error || 'Failed to save remark'));
+      }
+    })
+    .catch(function() { sendBtn.disabled = false; sendBtn.innerHTML = origHTML; alert('Network error.'); });
+  }, true);
 });
 </script>
 

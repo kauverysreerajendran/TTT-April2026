@@ -1009,10 +1009,14 @@
     cursor: not-allowed;
     background: #f5f5f5 !important;
   }
-  /* Show remark tooltip above the trigger instead of below */
+  /* Show remark tooltip to the LEFT of the trigger — avoids sticky header overlap */
   .remark-tooltip {
-    top: auto !important;
-    bottom: 110% !important;
+    top: 50% !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: 110% !important;
+    transform: translateY(-50%) !important;
+    width: 280px !important;
   }
   #trayScanDetails.table-grid {
     display: grid !important;
@@ -1877,7 +1881,7 @@
                         <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
                       </a>
                       {% else %}
-                        <span title="Delete Disabled" style="opacity: 0.5; pointer-events: none;">
+                        <span class="delete-batch-disabled" title="Delete Disabled" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.stock_lot_id }}" style="opacity: 0.5; pointer-events: none;">
                           <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 20px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);" />
                         </span>
                       {% endif %}
@@ -1993,10 +1997,11 @@
                         class="remark-tooltip"
                         style="
                           position: absolute;
-                          top: 110%;
-                          left: 50%;
-                          transform: translateX(-50%);
-                          width: 265px;
+                          top: 50%;
+                          left: auto;
+                          right: 110%;
+                          transform: translateY(-50%);
+                          width: 280px;
                           background: #fff;
                           border: 1px solid #ccc;
                           border-radius: 6px;
@@ -2073,9 +2078,10 @@
                         class="remark-tooltip"
                         style="
                           position: absolute;
-                          top: 110%;
-                          left: 50%;
-                          transform: translateX(-50%);
+                          top: 50%;
+                          left: auto;
+                          right: 110%;
+                          transform: translateY(-50%);
                           width: 300px;
                           background: #fff;
                           border: 1px solid #ccc;
@@ -2113,6 +2119,7 @@
                           {% if not data.ui.remarks_saved %}
                           <button
                             type="button"
+                            data-iqf-save-remark
                             style="
                               background-color: #007bff;
                               color: #fff;
@@ -2138,11 +2145,7 @@
                               text-align: left;
                             "
                           >
-                            <i
-                              class="fa fa-info-circle"
-                              style="margin-right: 6px"
-                            ></i>
-                            Remark already saved and cannot be edited.
+                         
                           </div>
                           {% endif %}
                         </div>
@@ -2390,8 +2393,8 @@
               </nav>
             </div>
     </div>
-  </div>
 </div>
+
 
 <!-- Hold Remark Modal -->
 <div id="holdRemarkModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.18); z-index:20000; align-items:center; justify-content:center;">
@@ -3321,11 +3324,46 @@ document.addEventListener('click', function(evt){
                   auditBtn.style.cursor = 'pointer';
                   auditBtn.style.pointerEvents = 'auto';
                 }
+                // Enable bin icon: replace disabled span with active anchor
+                try{
+                  var binSpan = row.querySelector('.delete-batch-disabled');
+                  if(binSpan){
+                    var batchId = binSpan.getAttribute('data-batch-id') || '';
+                    var stockLotId = binSpan.getAttribute('data-stock-lot-id') || '';
+                    var binAnchor = document.createElement('a');
+                    binAnchor.href = '#';
+                    binAnchor.className = 'delete-batch-btn';
+                    binAnchor.title = 'Delete';
+                    binAnchor.setAttribute('data-batch-id', batchId);
+                    binAnchor.setAttribute('data-stock-lot-id', stockLotId);
+                    binAnchor.innerHTML = '<img src="/static/assets/icons/bin.png" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />';
+                    binSpan.parentNode.replaceChild(binAnchor, binSpan);
+                  }
+                }catch(e){ console.error('enable bin icon failed', e); }
               }
             }catch(e){ console.error('enable audit btn failed', e); }
           } else {
             // unchecked: leave as unchecked input (was disabled for request), re-enable it
             el.disabled = false;
+            // Disable bin icon: replace active anchor with disabled span
+            try{
+              var rowU = el.closest('tr');
+              if(rowU){
+                var binAnchorU = rowU.querySelector('.delete-batch-btn');
+                if(binAnchorU){
+                  var batchIdU = binAnchorU.getAttribute('data-batch-id') || '';
+                  var stockLotIdU = binAnchorU.getAttribute('data-stock-lot-id') || '';
+                  var binSpanU = document.createElement('span');
+                  binSpanU.className = 'delete-batch-disabled';
+                  binSpanU.title = 'Delete Disabled';
+                  binSpanU.setAttribute('data-batch-id', batchIdU);
+                  binSpanU.setAttribute('data-stock-lot-id', stockLotIdU);
+                  binSpanU.style.cssText = 'opacity: 0.5; pointer-events: none;';
+                  binSpanU.innerHTML = '<img src="/static/assets/icons/bin.png" alt="Delete Disabled" style="width: 20px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);" />';
+                  binAnchorU.parentNode.replaceChild(binSpanU, binAnchorU);
+                }
+              }
+            }catch(e){ console.error('disable bin icon failed', e); }
           }
         } else {
           // server error: re-enable and show message
@@ -4148,6 +4186,190 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     }
   }, true);
+});
+</script>
+
+<!-- ✅ IQF Pick Table Remarks Handler —  Send inline remarks to backend -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('[IQF REMARKS] Initializing remarks handler...');
+
+  function getCsrfToken() {
+    return (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value
+      || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1]
+      || '';
+  }
+
+  document.addEventListener('click', function(e) {
+    var sendBtn = e.target.closest('[data-iqf-save-remark]');
+    if (!sendBtn) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // ── 1. Find textarea: walk up to .remark-tooltip, then find textarea inside ──
+    var tooltipContainer = sendBtn.closest('.remark-tooltip');
+    var textarea = tooltipContainer ? tooltipContainer.querySelector('textarea') : null;
+
+    if (!textarea) {
+      console.error('[IQF REMARKS] textarea not found');
+      alert('Remark field not found. Please refresh and try again.');
+      return;
+    }
+
+    var remarkText = (textarea.value || '').trim();
+    if (!remarkText) {
+      alert('Please enter a remark before sending.');
+      return;
+    }
+
+    // ── 2. Find lot_id from table row ──
+    var row = sendBtn.closest('tr');
+    var lotId = row ? (row.getAttribute('data-stock-lot-id') || '') : '';
+
+    if (!lotId) {
+      console.error('[IQF REMARKS] lot_id not found on row');
+      alert('Unable to identify lot. Please refresh and try again.');
+      return;
+    }
+
+    // ── 3. Disable button, show saving state ──
+    sendBtn.disabled = true;
+    var origHTML = sendBtn.innerHTML;
+    sendBtn.innerHTML = '⏳';
+    sendBtn.style.opacity = '0.6';
+
+    // ── 4. POST to backend ──
+    console.log('[IQF REMARKS] Saving remark for lot=' + lotId);
+
+    fetch('/iqf/iqf_save_pick_remark/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      },
+      body: JSON.stringify({ lot_id: lotId, IQF_pick_remarks: remarkText }),
+      credentials: 'same-origin'
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data && data.success) {
+        console.log('[IQF REMARKS] Saved successfully');
+
+        // Lock textarea + hide send button
+        textarea.setAttribute('readonly', 'readonly');
+        sendBtn.style.display = 'none';
+
+        // Turn chat icon green (remark saved indicator)
+        var triggerLink = sendBtn.closest('.remark-tooltip-trigger');
+        if (triggerLink) {
+          var chatIcon = triggerLink.querySelector('img');
+          if (chatIcon) {
+            chatIcon.style.filter = 'grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2)';
+            chatIcon.style.opacity = '1';
+          }
+        }
+
+        // Brief confirmation
+        var msg = document.createElement('div');
+        msg.style.cssText = 'color:#28a745;font-weight:600;font-size:12px;margin-top:4px;';
+        msg.textContent = '✓ Saved';
+        textarea.parentNode.appendChild(msg);
+        setTimeout(function() { msg.remove(); }, 2000);
+      } else {
+        console.error('[IQF REMARKS] Error:', data.error);
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = origHTML;
+        sendBtn.style.opacity = '1';
+        if (typeof Swal !== 'undefined') {
+          Swal.fire('Error', data.error || 'Failed to save remark', 'error');
+        } else {
+          alert('Error: ' + (data.error || 'Failed to save remark'));
+        }
+      }
+    })
+    .catch(function(err) {
+      console.error('[IQF REMARKS] Network error:', err);
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = origHTML;
+      sendBtn.style.opacity = '1';
+      alert('Network error. Please try again.');
+    });
+  }, true);
+
+  console.log('[IQF REMARKS] Handler ready');
+});
+</script>
+
+<!-- IQF Delete Lot — confirmation + backend call -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('click', function(evt) {
+  var el = evt.target.closest('.delete-batch-btn');
+  if (!el) return;
+  evt.preventDefault();
+
+  var lotId = el.getAttribute('data-stock-lot-id') || '';
+  var batchId = el.getAttribute('data-batch-id') || '';
+  if (!lotId) return;
+
+  function _doDelete() {
+    fetch('/iqf/iqf_delete_lot/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || ''
+      },
+      body: JSON.stringify({ lot_id: lotId })
+    })
+    .then(function(resp) { return resp.json().then(function(b) { return { status: resp.status, body: b }; }); })
+    .then(function(result) {
+      if (result.status === 200 && result.body && result.body.success) {
+        var row = el.closest('tr');
+        if (row) {
+          row.style.transition = 'opacity 0.4s';
+          row.style.opacity = '0';
+          setTimeout(function() { row.parentNode && row.parentNode.removeChild(row); }, 400);
+        }
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ icon: 'success', title: 'Deleted', text: 'Lot ' + lotId + ' has been removed from the IQF queue.', timer: 2000, showConfirmButton: false });
+        }
+      } else {
+        var msg = (result.body && result.body.error) ? result.body.error : 'Failed to delete lot';
+        if (typeof Swal !== 'undefined') {
+          Swal.fire('Error', msg, 'error');
+        } else {
+          alert('Error: ' + msg);
+        }
+      }
+    })
+    .catch(function(err) {
+      console.error('[IQF DELETE LOT] fetch error', err);
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Network Error', 'Failed to connect to server. Please try again.', 'error');
+      } else {
+        alert('Network error. Please try again.');
+      }
+    });
+  }
+
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Remove from IQF queue?',
+      html: 'Lot <strong>' + lotId + '</strong> will be removed.<br>All IQF draft and tray data will be cleared.<br><br><strong>This action cannot be undone.</strong>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, delete it'
+    }).then(function(result) {
+      if (result.isConfirmed) { _doDelete(); }
+    });
+  } else {
+    if (confirm('Remove lot ' + lotId + ' from the IQF queue?\nAll IQF draft and tray data for this lot will be cleared.\nThis action cannot be undone.')) {
+      _doDelete();
+    }
+  }
 });
 </script>
 

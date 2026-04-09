@@ -1049,9 +1049,8 @@ def iqf_submit_audit(request):
                 return 16  # safe default
 
             if submission_type == IQF_Submitted.SUB_FULL_ACCEPT:
-                # ✅ FULL ACCEPT — DISTRIBUTE iqf_incoming_qty across IQFTrayId trays BY CAPACITY
-                # IQFTrayId.tray_quantity is unreliable (contains per-scan rejection qty, NOT full capacity).
-                # We MUST distribute the total accepted qty across trays using their real capacity.
+                # ✅ FULL ACCEPT — Use actual IQFTrayId.tray_quantity when reliable,
+                # fall back to capacity-based distribution only when sum doesn't match.
                 fa_trays_qs = list(IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id'))
 
                 if not fa_trays_qs:
@@ -1061,24 +1060,46 @@ def iqf_submit_audit(request):
                     }, status=400)
 
                 accepted_trays = []
-                remaining = iqf_incoming_qty
 
-                for t in fa_trays_qs:
-                    if remaining <= 0:
-                        break
-                    cap = _resolve_tray_capacity(t)
-                    qty = min(remaining, cap)
-                    remaining -= qty
-                    is_last = (remaining == 0)
-                    is_top = is_last and qty < cap  # partial fill → top tray
+                # ✅ FIX: Check if stored tray_quantity values sum to iqf_incoming_qty.
+                # If they do, the tray distribution is already correct — preserve it.
+                stored_sum = sum(int(getattr(t, 'tray_quantity', 0) or 0) for t in fa_trays_qs)
+                use_stored_qty = (stored_sum == iqf_incoming_qty and stored_sum > 0)
+                print(f'  [FA DISTRIBUTE] stored_sum={stored_sum}, iqf_incoming_qty={iqf_incoming_qty}, use_stored_qty={use_stored_qty}')
 
-                    # Persist remaining_qty to DB so downstream always reads it
-                    t.remaining_qty = qty
-                    t.top_tray = is_top
-                    t.save(update_fields=['remaining_qty', 'top_tray'])
+                if use_stored_qty:
+                    # Tray quantities are reliable — preserve the original distribution
+                    for t in fa_trays_qs:
+                        qty = int(getattr(t, 'tray_quantity', 0) or 0)
+                        if qty <= 0:
+                            continue
+                        cap = _resolve_tray_capacity(t)
+                        is_top = (qty < cap)
 
-                    accepted_trays.append({'tray_id': t.tray_id, 'qty': qty, 'top_tray': is_top})
-                    print(f'  [FA DISTRIBUTE] tray={t.tray_id}, cap={cap}, assigned={qty}, remaining={remaining}, top={is_top}')
+                        t.remaining_qty = qty
+                        t.top_tray = is_top
+                        t.save(update_fields=['remaining_qty', 'top_tray'])
+
+                        accepted_trays.append({'tray_id': t.tray_id, 'qty': qty, 'top_tray': is_top})
+                        print(f'  [FA DISTRIBUTE] tray={t.tray_id}, stored_qty={qty}, cap={cap}, top={is_top}')
+                else:
+                    # Fallback: distribute by capacity (original behaviour)
+                    remaining = iqf_incoming_qty
+                    for t in fa_trays_qs:
+                        if remaining <= 0:
+                            break
+                        cap = _resolve_tray_capacity(t)
+                        qty = min(remaining, cap)
+                        remaining -= qty
+                        is_last = (remaining == 0)
+                        is_top = is_last and qty < cap
+
+                        t.remaining_qty = qty
+                        t.top_tray = is_top
+                        t.save(update_fields=['remaining_qty', 'top_tray'])
+
+                        accepted_trays.append({'tray_id': t.tray_id, 'qty': qty, 'top_tray': is_top})
+                        print(f'  [FA DISTRIBUTE] tray={t.tray_id}, cap={cap}, assigned={qty}, remaining={remaining}, top={is_top}')
 
                 # If no tray was marked top_tray (all full fills), mark the last one
                 if accepted_trays and not any(tr['top_tray'] for tr in accepted_trays):
@@ -1262,6 +1283,16 @@ def iqf_submit_audit(request):
                 ts.iqf_few_cases_acceptance = False
                 ts.send_brass_qc = True  # push lot to Brass QC
                 ts.next_process_module = 'Brass QC'  # ✅ LOCK: downstream reads from IQF_Submitted
+                # ✅ FIX: Reset Brass QC fields for fresh cycle when lot returns from IQF
+                ts.brass_qc_accepted_qty_verified = False
+                ts.brass_qc_accptance = False
+                ts.brass_qc_rejection = False
+                ts.brass_qc_few_cases_accptance = False
+                ts.brass_draft = False
+                ts.brass_onhold_picking = False
+                ts.brass_accepted_tray_scan_status = False
+                ts.brass_physical_qty = 0
+                ts.brass_missing_qty = 0
             elif submission_type == IQF_Submitted.SUB_FULL_REJECT:
                 ts.iqf_rejection = True
                 ts.iqf_acceptance = False
@@ -1291,6 +1322,9 @@ def iqf_submit_audit(request):
                 'last_process_module', 'send_brass_audit_to_iqf',
                 'send_brass_qc', 'next_process_module',
                 'iqf_last_process_date_time',
+                'brass_qc_accepted_qty_verified', 'brass_qc_accptance', 'brass_qc_rejection',
+                'brass_qc_few_cases_accptance', 'brass_draft', 'brass_onhold_picking',
+                'brass_accepted_tray_scan_status', 'brass_physical_qty', 'brass_missing_qty',
             ])
 
             print(f'[MOVEMENT] iqf_acceptance={ts.iqf_acceptance}, '
@@ -1555,6 +1589,13 @@ class IQFCompletedPageView(APIView):
                 'batch_id__location', 'created_by'
             ).filter(is_completed=True).order_by('-created_at')
 
+            # Pre-fetch pick table remarks from TotalStockModel (SINGLE SOURCE OF TRUTH)
+            all_lot_ids = list(submitted_qs.values_list('lot_id', flat=True))
+            pick_remarks_map = dict(
+                TotalStockModel.objects.filter(lot_id__in=all_lot_ids)
+                .values_list('lot_id', 'IQF_pick_remarks')
+            )
+
             master_data = []
             for sub in submitted_qs:
                 batch = sub.batch_id
@@ -1617,7 +1658,7 @@ class IQFCompletedPageView(APIView):
                     'model_images': images,
                     'status_label': status_label,
                     'submission_type': sub.submission_type,
-                    'remarks': sub.remarks or '',
+                    'IQF_pick_remarks': pick_remarks_map.get(sub.lot_id) or '',
                     'tray_qty_list': '',
                 })
 
@@ -1645,6 +1686,13 @@ class IQFAcceptTablePageView(APIView):
             ).exclude(
                 submission_type__in=['FULL_REJECT', 'LOT_REJECTION']
             ).order_by('-created_at')
+
+            # Pre-fetch pick table remarks from TotalStockModel
+            all_lot_ids = list(submitted_qs.values_list('lot_id', flat=True))
+            pick_remarks_map = dict(
+                TotalStockModel.objects.filter(lot_id__in=all_lot_ids)
+                .values_list('lot_id', 'IQF_pick_remarks')
+            )
 
             master_data = []
             for sub in submitted_qs:
@@ -1698,7 +1746,7 @@ class IQFAcceptTablePageView(APIView):
                     'status_label': 'ACCEPT' if sub.submission_type == 'FULL_ACCEPT' else 'PARTIAL',
                     'submission_type': sub.submission_type,
                     'accepted_comment': accepted_comment or '',
-                    'IQF_pick_remarks': sub.remarks or '',
+                    'IQF_pick_remarks': pick_remarks_map.get(sub.lot_id) or '',
                     'tray_qty_list': '',
                 })
 
@@ -1733,6 +1781,12 @@ class IQFRejectionTableView(APIView):
                 IQFTrayId.objects.filter(
                     lot_id__in=all_lot_ids, delink_tray=False
                 ).values_list('lot_id', flat=True).distinct()
+            )
+
+            # Pre-fetch pick table remarks from TotalStockModel
+            pick_remarks_map = dict(
+                TotalStockModel.objects.filter(lot_id__in=all_lot_ids)
+                .values_list('lot_id', 'IQF_pick_remarks')
             )
 
             master_data = []
@@ -1797,6 +1851,9 @@ class IQFRejectionTableView(APIView):
                     'tray_id_in_trayid': sub.lot_id in lots_with_trays,
                     'status_label': status_label,
                     'submission_type': sub.submission_type,
+                    # Original lot quantity BEFORE any rejection (preferred for UI display)
+                    'original_lot_qty': int(sub.original_lot_qty or (sub.batch_id.total_batch_quantity if sub.batch_id and getattr(sub.batch_id, 'total_batch_quantity', None) else 0)),
+                    'IQF_pick_remarks': pick_remarks_map.get(sub.lot_id) or '',
                 })
 
             # Pagination
@@ -1882,9 +1939,22 @@ def iqf_verify_trays_confirm(request):
         ts.send_brass_audit_to_iqf = False  # Now remove from IQF pick table
         ts.iqf_accepted_qty_verified = False  # Reset for fresh cycle on re-entry
         ts.next_process_module = 'Brass QC'
+        # ✅ FIX: Reset Brass QC fields for fresh cycle when lot returns from IQF
+        ts.brass_qc_accepted_qty_verified = False
+        ts.brass_qc_accptance = False
+        ts.brass_qc_rejection = False
+        ts.brass_qc_few_cases_accptance = False
+        ts.brass_draft = False
+        ts.brass_onhold_picking = False
+        ts.brass_accepted_tray_scan_status = False
+        ts.brass_physical_qty = 0
+        ts.brass_missing_qty = 0
         ts.save(update_fields=[
             'iqf_few_cases_acceptance', 'iqf_onhold_picking',
             'send_brass_qc', 'send_brass_audit_to_iqf', 'iqf_accepted_qty_verified', 'next_process_module',
+            'brass_qc_accepted_qty_verified', 'brass_qc_accptance', 'brass_qc_rejection',
+            'brass_qc_few_cases_accptance', 'brass_draft', 'brass_onhold_picking',
+            'brass_accepted_tray_scan_status', 'brass_physical_qty', 'brass_missing_qty',
         ])
         print(f'[IQF VERIFY CONFIRM] lot={lot_id} finalized: few_cases=True, onhold=False, send_brass_qc=True, send_brass_audit_to_iqf=False')
 
@@ -1923,6 +1993,108 @@ def iqf_toggle_verified(request):
         print('[IQF TOGGLE VERIFIED ERROR]', str(e))
         traceback.print_exc()
         return Response({'success': False, 'error': 'Server error'}, status=500)
+
+
+# ── IQF Pick Table Inline Remarks — Save to TotalStockModel ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def iqf_save_pick_remark(request):
+    """Save inline remarks entered in IQF pick table.
+
+    Expects JSON: { "lot_id": "LID...", "IQF_pick_remarks": "text" }
+    Saves to: TotalStockModel.IQF_pick_remarks
+    """
+    try:
+        lot_id = (request.data.get('lot_id') or '').strip()
+        remark = request.data.get('IQF_pick_remarks')
+
+        if not lot_id:
+            return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
+
+        if remark is None:
+            return Response({'success': False, 'error': 'Remark field not found'}, status=400)
+
+        remark = str(remark).strip()[:100]  # Enforce max_length=100
+
+        ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        if not ts:
+            return Response({'success': False, 'error': 'Lot not found'}, status=404)
+
+        ts.IQF_pick_remarks = remark
+        ts.save(update_fields=['IQF_pick_remarks'])
+
+        print(f'[IQF SAVE REMARK] lot={lot_id}, remark={remark[:50]}')
+
+        return Response({
+            'success': True,
+            'message': 'Remark saved successfully',
+            'IQF_pick_remarks': remark,
+            'remarks_saved': bool(remark),
+        })
+    except Exception as e:
+        print('[IQF SAVE REMARK ERROR]', str(e))
+        traceback.print_exc()
+        return Response({'success': False, 'error': 'Server error'}, status=500)
+
+
+# ── IQF Delete Lot — Remove lot from IQF processing queue ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def iqf_delete_lot(request):
+    """Remove a verified lot from the IQF pick table queue.
+
+    Only lots with iqf_accepted_qty_verified=True (can_delete=True) are eligible.
+    Resets all IQF-specific flags and clears IQF data so the lot can be re-evaluated.
+
+    Expects JSON: { "lot_id": "LID..." }
+    """
+    try:
+        lot_id = request.data.get('lot_id', '').strip()
+        if not lot_id:
+            return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
+
+        ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        if not ts:
+            return Response({'success': False, 'error': 'Lot not found'}, status=404)
+
+        # Enforce can_delete gate: only verified lots may be deleted
+        if not ts.iqf_accepted_qty_verified:
+            return Response({'success': False, 'error': 'Lot quantity has not been verified. Cannot delete.'}, status=403)
+
+        # Clear all IQF-specific records for this lot
+        IQF_Submitted.objects.filter(lot_id=lot_id).delete()
+        IQF_Draft_Store.objects.filter(lot_id=lot_id).delete()
+        IQF_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+        IQF_Accepted_TrayScan.objects.filter(lot_id=lot_id).delete()
+        IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
+        IQF_Rejection_ReasonStore.objects.filter(lot_id=lot_id).delete()
+        IQFTrayId.objects.filter(lot_id=lot_id).delete()
+        IQF_OptimalDistribution_Draft.objects.filter(lot_id=lot_id).delete()
+
+        # Reset IQF flags on TotalStockModel — lot leaves the IQF queue
+        ts.iqf_acceptance = False
+        ts.iqf_rejection = False
+        ts.iqf_few_cases_acceptance = False
+        ts.iqf_accepted_qty_verified = False
+        ts.iqf_onhold_picking = False
+        ts.iqf_missing_qty = 0
+        ts.iqf_physical_qty = 0
+        ts.iqf_physical_qty_edited = False
+        ts.iqf_accepted_qty = 0
+        ts.send_brass_audit_to_iqf = False
+        ts.save(update_fields=[
+            'iqf_acceptance', 'iqf_rejection', 'iqf_few_cases_acceptance',
+            'iqf_accepted_qty_verified', 'iqf_onhold_picking',
+            'iqf_missing_qty', 'iqf_physical_qty', 'iqf_physical_qty_edited',
+            'iqf_accepted_qty', 'send_brass_audit_to_iqf',
+        ])
+
+        print(f'[IQF DELETE LOT] Lot {lot_id} removed from IQF queue by {request.user}')
+        return Response({'success': True, 'lot_id': lot_id, 'message': 'Lot removed from IQF queue successfully.'})
+    except Exception as e:
+        print('[IQF DELETE LOT ERROR]', str(e))
+        traceback.print_exc()
+        return Response({'success': False, 'error': str(e)}, status=500)
 
 
 # ── IQF Accepted Tray Slots — Backend computes, frontend renders ──
@@ -2472,9 +2644,22 @@ def iqf_accept_delink_modal(request):
                 ts.send_brass_audit_to_iqf = False
                 ts.iqf_accepted_qty_verified = False
                 ts.next_process_module = 'Brass QC'
+                # ✅ FIX: Reset Brass QC fields for fresh cycle when lot returns from IQF
+                ts.brass_qc_accepted_qty_verified = False
+                ts.brass_qc_accptance = False
+                ts.brass_qc_rejection = False
+                ts.brass_qc_few_cases_accptance = False
+                ts.brass_draft = False
+                ts.brass_onhold_picking = False
+                ts.brass_accepted_tray_scan_status = False
+                ts.brass_physical_qty = 0
+                ts.brass_missing_qty = 0
                 ts.save(update_fields=[
                     'iqf_few_cases_acceptance', 'iqf_onhold_picking',
                     'send_brass_qc', 'send_brass_audit_to_iqf', 'iqf_accepted_qty_verified', 'next_process_module',
+                    'brass_qc_accepted_qty_verified', 'brass_qc_accptance', 'brass_qc_rejection',
+                    'brass_qc_few_cases_accptance', 'brass_draft', 'brass_onhold_picking',
+                    'brass_accepted_tray_scan_status', 'brass_physical_qty', 'brass_missing_qty',
                 ])
 
                 print(f'[IQF DELINK CONFIRM] lot={lot_id} finalized: delinked={sorted(delinked_set)}, reject_trays={[r["tray_id"] for r in reject_allocation]}')

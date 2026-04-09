@@ -18,6 +18,7 @@ import re
 import json
 from django.db import transaction
 from django.core.paginator import Paginator
+from django.db.models import Count
 from datetime import datetime, timezone as dt_timezone
 from django.views.generic import TemplateView
 from rest_framework.permissions import IsAuthenticated
@@ -206,7 +207,7 @@ class JigView(TemplateView):
 			base_qs = TotalStockModel.objects.filter(
 				_Q(brass_audit_accptance=True) |
 				_Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
-			).select_related('batch_id')
+			).select_related('batch_id', 'batch_id__model_stock_no')
 			# Optional exclusion: when JigView is opened to "Add Model", exclude already-selected lots
 			# Frontend sends comma-separated lot IDs: exclude_lot_id=LID1,LID2,LID3
 			exclude_lot_raw = self.request.GET.get('exclude_lot_id', '')
@@ -219,25 +220,29 @@ class JigView(TemplateView):
 				logging.info("[JIG PICK] Unable to count base_qs before exclude")
 			if exclude_list:
 				base_qs = base_qs.exclude(lot_id__in=exclude_list)
-			# Exclude lots already submitted in JigCompleted (they move to Completed table)
+			# Exclude lots already SUBMITTED in JigCompleted (they move to Completed table).
+			# Drafted lots stay visible in pick table with "Draft" / "Partial Draft" status.
+			# For Add Model popup (primary_lot_id present), also exclude drafted lots.
 			try:
-				submitted_records = JigCompleted.objects.filter(draft_status='submitted').only(
-					'lot_id', 'is_multi_model', 'multi_model_allocation'
-				)
-				submitted_lot_ids = set()
-				for rec in submitted_records:
-					submitted_lot_ids.add(rec.lot_id)
-					# For multi-model, also exclude secondary lot IDs from pick table
+				is_add_model_popup = bool(primary_lot)
+				exclude_statuses = ['submitted', 'draft'] if is_add_model_popup else ['submitted']
+				active_records = JigCompleted.objects.filter(
+					draft_status__in=exclude_statuses
+				).only('lot_id', 'is_multi_model', 'multi_model_allocation')
+				exclude_lot_ids = set()
+				for rec in active_records:
+					exclude_lot_ids.add(rec.lot_id)
+					# For multi-model, also exclude secondary lot IDs
 					if rec.is_multi_model and rec.multi_model_allocation:
 						for m in rec.multi_model_allocation:
 							mlot = m.get('lot_id', '') if isinstance(m, dict) else ''
 							if mlot:
-								submitted_lot_ids.add(mlot)
-				if submitted_lot_ids:
-					base_qs = base_qs.exclude(lot_id__in=list(submitted_lot_ids))
-					logging.info(f"[JIG PICK] Excluded {len(submitted_lot_ids)} submitted lots from pick table")
+								exclude_lot_ids.add(mlot)
+				if exclude_lot_ids:
+					base_qs = base_qs.exclude(lot_id__in=list(exclude_lot_ids))
+					logging.info(f"[JIG PICK] Excluded {len(exclude_lot_ids)} lots (statuses={exclude_statuses}) from pick table")
 			except Exception:
-				logging.exception("[JIG PICK] Failed to exclude submitted lots")
+				logging.exception("[JIG PICK] Failed to exclude submitted/draft lots")
 			try:
 				final_count = base_qs.count()
 				logging.info(f"[JIG PICK] Excluding lots: {exclude_list} (primary: {primary_lot}) -> Final count: {final_count}")
@@ -245,16 +250,37 @@ class JigView(TemplateView):
 				logging.info("[JIG PICK] Unable to count base_qs after exclude")
 			# Apply ordering and slicing last
 			qs = base_qs.order_by('-brass_audit_last_process_date_time')[:200]
+
+			# ===== BULK PRE-FETCH: eliminate N+1 queries in the row loop =====
+			try:
+				saved_tray_counts = dict(
+					Brass_Audit_Accepted_TrayID_Store.objects
+					.filter(is_save=True)
+					.values('lot_id')
+					.annotate(cnt=Count('id'))
+					.values_list('lot_id', 'cnt')
+				)
+				all_tray_counts = dict(
+					Brass_Audit_Accepted_TrayID_Store.objects
+					.values('lot_id')
+					.annotate(cnt=Count('id'))
+					.values_list('lot_id', 'cnt')
+				)
+			except Exception:
+				saved_tray_counts = {}
+				all_tray_counts = {}
+			try:
+				master_capacity_map = {
+					m.model_stock_no_id: int(m.jig_capacity)
+					for m in JigLoadingMaster.objects.filter(jig_capacity__isnull=False)
+				}
+			except Exception:
+				master_capacity_map = {}
+
 			for stock in qs:
 				batch = getattr(stock, 'batch_id', None)
-				# Try to count accepted trays transferred/stored for this lot
-				no_of_trays = 0
-				try:
-					no_of_trays = Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=stock.lot_id, is_save=True).count()
-					if no_of_trays == 0:
-						no_of_trays = Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=stock.lot_id).count()
-				except Exception:
-					no_of_trays = 0
+				# Use pre-fetched tray counts (no per-row DB query)
+				no_of_trays = saved_tray_counts.get(stock.lot_id, 0) or all_tray_counts.get(stock.lot_id, 0)
 				data = {
 					'batch_id': getattr(batch, 'batch_id', '') if batch else '',
 					'stock_lot_id': getattr(stock, 'lot_id', ''),
@@ -274,27 +300,13 @@ class JigView(TemplateView):
 					'jig_holding_reason': getattr(stock, 'jig_holding_reason', ''),
 				}
 
-				# Populate jig_capacity from JigLoadingMaster when available
-				try:
-					model_obj = getattr(batch, 'model_stock_no', None) if batch else None
-					if model_obj:
-						master = JigLoadingMaster.objects.filter(model_stock_no=model_obj).first()
-						if master and getattr(master, 'jig_capacity', None):
-							data['jig_capacity'] = int(master.jig_capacity)
-				except Exception:
-					pass
+				# Use pre-fetched capacity map (no per-row DB query)
+				model_obj = getattr(batch, 'model_stock_no', None) if batch else None
+				if model_obj:
+					cap = master_capacity_map.get(getattr(model_obj, 'id', None))
+					if cap:
+						data['jig_capacity'] = cap
 				master_data.append(data)
-			# Paginate master_data so pick table behaves like other modules (BrassAudit)
-			from django.core.paginator import Paginator
-			page_number = self.request.GET.get('page', 1)
-			paginator = Paginator(master_data, 10)  # 10 records per page
-			page_obj = paginator.get_page(page_number)
-			# Expose paginated page as `master_data` for template compatibility and `page_obj` for pagination controls
-			context['master_data'] = page_obj
-			context['page_obj'] = page_obj
-			# Keep full list available if other code expects it
-			context['master_data_full'] = master_data
-			# master_data provided to template; no extra JSON needed
 
 			# ===== ADD HALF-FILLED / EXCESS LOT RECORDS BACK TO PICK TABLE =====
 			# When a jig is submitted with excess qty, those trays (stored in half_filled_tray_info)
@@ -366,39 +378,69 @@ class JigView(TemplateView):
 						'source_jig_id': jc.jig_id,
 						'half_filled_tray_info_json': json.dumps(jc.half_filled_tray_info or []),
 					}
-					# Populate jig_capacity from JigLoadingMaster
-					try:
-						model_obj = getattr(batch, 'model_stock_no', None) if batch else None
-						if model_obj:
-							master = JigLoadingMaster.objects.filter(model_stock_no=model_obj).first()
-							if master and getattr(master, 'jig_capacity', None):
-								excess_data['jig_capacity'] = int(master.jig_capacity)
-					except Exception:
-						pass
+					# Use pre-fetched capacity map (no per-row DB query)
+					model_obj = getattr(batch, 'model_stock_no', None) if batch else None
+					if model_obj:
+						cap = master_capacity_map.get(getattr(model_obj, 'id', None))
+						if cap:
+							excess_data['jig_capacity'] = cap
 					master_data.append(excess_data)
 				logging.info(f"[JIG PICK] Added {submitted_with_excess.count()} excess lot entries to pick table")
 			except Exception:
 				logging.exception("[JIG PICK] Failed to add excess lot records to pick table")
 
 			# ===== MARK LOTS WITH ACTIVE DRAFT STATUS =====
+			# Supports per-model status for multi-model drafts:
+			#   Primary model → "Draft", Secondary model(s) → "Partial Draft"
+			# Excess lots always → "Yet to Start"
 			try:
 				all_lot_ids = [d.get('stock_lot_id', '') for d in master_data if d.get('stock_lot_id')]
 				if all_lot_ids:
-					draft_lot_ids = set(
-						JigLoadingRecord.objects.filter(
-							lot_id__in=all_lot_ids,
-							status_flag='DRAFT'
-						).values_list('lot_id', flat=True)
-					)
+					draft_records = JigCompleted.objects.filter(
+						draft_status='draft'
+					).only('lot_id', 'is_multi_model', 'multi_model_allocation')
+
+					draft_lot_ids = set()
+					partial_draft_lot_ids = set()
+
+					for rec in draft_records:
+						if rec.is_multi_model and rec.multi_model_allocation:
+							for m in rec.multi_model_allocation:
+								mlot = m.get('lot_id', '') if isinstance(m, dict) else ''
+								mstatus = m.get('status', '') if isinstance(m, dict) else ''
+								if mlot:
+									if mstatus == 'partial_draft':
+										partial_draft_lot_ids.add(mlot)
+									else:
+										draft_lot_ids.add(mlot)
+						else:
+							draft_lot_ids.add(rec.lot_id)
+
 					for d in master_data:
-						if d.get('stock_lot_id') in draft_lot_ids:
+						# Excess lots are always fresh — never inherit draft status
+						if d.get('is_excess_lot'):
+							d['lot_status'] = 'Yet to Start'
+							d['lot_status_class'] = 'lot-status-yet'
+						elif d.get('stock_lot_id') in draft_lot_ids:
 							d['lot_status'] = 'Draft'
 							d['lot_status_class'] = 'lot-status-draft'
+						elif d.get('stock_lot_id') in partial_draft_lot_ids:
+							d['lot_status'] = 'Partial Draft'
+							d['lot_status_class'] = 'lot-status-few'
 						else:
 							d.setdefault('lot_status', 'Yet to Start')
 							d.setdefault('lot_status_class', 'lot-status-yet')
 			except Exception:
 				logging.exception('[JIG PICK] Failed to compute lot draft statuses')
+
+			# ===== PAGINATE — MUST be LAST, after excess lots + status marking =====
+			from django.core.paginator import Paginator
+			page_number = self.request.GET.get('page', 1)
+			paginator = Paginator(master_data, 10)  # 10 records per page
+			page_obj = paginator.get_page(page_number)
+			context['master_data'] = page_obj
+			context['page_obj'] = page_obj
+			context['master_data_full'] = master_data
 
 		except Exception:
 			logging.exception('Failed to populate master_data for Jig pick')
@@ -435,7 +477,7 @@ class TrayInfoView(APIView):
 
 
 class InitJigLoad(APIView):
-	"""Initialize or return an active JigLoadingManualDraft for the user and lot.
+	"""Initialize or return an active draft from JigCompleted for the user and lot.
 
 	Returns lot qty, jig_capacity, current draft state and tray list (from TrayInfoView).
 	"""
@@ -482,7 +524,7 @@ class InitJigLoad(APIView):
 		# NOTE: Do NOT create or modify a persistent draft here. Per UI flow,
 		# the draft must only be saved when the user clicks the Draft button.
 		# Try to fetch an existing draft if present, but do not create one.
-		draft = JigLoadingManualDraft.objects.filter(batch_id=batch_id, lot_id=lot_id, user=request.user).first()
+		draft = JigCompleted.objects.filter(batch_id=batch_id, lot_id=lot_id, user=request.user, draft_status__in=['draft', 'active']).first()
 
 		# Fetch trays directly from DB (single source of truth)
 		try:
@@ -1074,7 +1116,7 @@ class ScanTray(APIView):
 def compute_jig_loading(trays, jig_capacity, broken_hooks, tray_capacity=12):
 	"""
 	Core computation engine for Jig Loading. Single source of truth.
-	Called by: JigLoadInitAPI, JigLoadUpdateAPI, JigLoadSubmitAPI.
+	Called by: JigLoadInitAPI, JigLoadUpdateAPI, JigSaveAPI.
 
 	BH Logic: Apply broken hooks from LAST tray → FIRST.
 	- If tray qty becomes 0 → REMOVE tray from output
@@ -2125,7 +2167,7 @@ def fetch_trays_for_lot(lot_id):
 
 def aggregate_multi_model_trays(primary_lot_id, secondary_lots):
 	"""Aggregate trays from all model lots (primary + secondary) into one combined list.
-	Used by JigLoadUpdateAPI and JigLoadSubmitAPI for multi-model recomputation.
+	Used by JigLoadUpdateAPI and JigSaveAPI for multi-model recomputation.
 	compute_jig_loading receives ALL trays and distributes up to jig_capacity."""
 	all_trays = []
 	seen_lot_ids = set()
@@ -2237,9 +2279,9 @@ class JigLoadInitAPI(APIView):
 			except Exception:
 				logging.exception('[INIT_EXCESS_LOT] Failed to check submitted JigCompleted — continuing with normal flow')
 
-		# 2. Fetch draft (read-only — never created here)
-		draft = JigLoadingManualDraft.objects.filter(
-			batch_id=batch_id, lot_id=lot_id, user=request.user
+		# 2. Check for existing draft in JigCompleted (single source of truth)
+		draft = JigCompleted.objects.filter(
+			batch_id=batch_id, lot_id=lot_id, user=request.user, draft_status__in=['draft', 'active']
 		).first()
 		# STRICT: NEVER load broken_hooks from draft — only from explicit frontend payload.
 		# This prevents stale BH from previous sessions bleeding into fresh init.
@@ -2643,15 +2685,16 @@ class JigLoadUpdateAPI(APIView):
 				'tray_qty': 0,
 			}
 
-		# Handle clear: FULL RESET — delete draft, zero all state
+		# Handle clear: FULL RESET — delete WORKING-STATE drafts, zero all state
+		# Only delete 'active' (auto-created during scanning), NOT explicit 'draft' (user clicked Draft)
 		if action == 'clear':
 			broken_hooks = 0
 			scanned_trays = []
 			try:
-				JigLoadingManualDraft.objects.filter(
-					batch_id=batch_id, lot_id=lot_id, user=request.user
+				JigCompleted.objects.filter(
+					batch_id=batch_id, lot_id=lot_id, user=request.user, draft_status='active'
 				).delete()
-				logging.info(f'[CLEAR] Draft deleted for lot={lot_id}, batch={batch_id}')
+				logging.info(f'[CLEAR] Working-state draft deleted for lot={lot_id}, batch={batch_id}')
 			except Exception:
 				logging.exception('JigLoadUpdateAPI: clear draft delete failed')
 
@@ -2717,19 +2760,27 @@ class JigLoadUpdateAPI(APIView):
 				excess_trays, lot_data['tray_capacity']
 			)
 
-		# Persist draft state (NOT on clear — draft already deleted above)
+		# Persist working state to JigCompleted (single source of truth)
+		# Use 'active' for auto-drafts during scanning. Preserve 'draft' if user explicitly drafted.
 		if action in ('scan_tray', 'unscan_tray', 'save_draft', 'update_broken_hooks'):
 			try:
-				JigLoadingManualDraft.objects.update_or_create(
+				defaults = {
+					'broken_hooks': broken_hooks,
+					'loaded_cases_qty': loaded_cases_qty,
+					'jig_capacity': lot_data['jig_capacity'],
+					'original_lot_qty': lot_data['lot_qty'],
+					'delink_tray_info': computed['delink_tray_info'],
+					'delink_tray_qty': computed['delink_tray_qty'],
+				}
+				# Only set draft_status to 'active' if record doesn't already have explicit 'draft'
+				existing = JigCompleted.objects.filter(
+					batch_id=batch_id, lot_id=lot_id, user=request.user
+				).values_list('draft_status', flat=True).first()
+				if existing != 'draft':
+					defaults['draft_status'] = 'active'
+				JigCompleted.objects.update_or_create(
 					batch_id=batch_id, lot_id=lot_id, user=request.user,
-					defaults={
-						'broken_hooks': broken_hooks,
-						'loaded_cases_qty': loaded_cases_qty,
-						'jig_capacity': lot_data['jig_capacity'],
-						'original_lot_qty': lot_data['lot_qty'],
-						'delink_tray_info': computed['delink_tray_info'],
-						'delink_tray_qty': computed['delink_tray_qty'],
-					}
+					defaults=defaults
 				)
 			except Exception:
 				logging.exception('JigLoadUpdateAPI: draft save failed')
@@ -2857,244 +2908,8 @@ class JigLoadUpdateAPI(APIView):
 		return Response(response)
 
 
-class JigLoadSubmitAPI(APIView):
-	"""POST /api/jig/load/submit/ — Final submission: validate, create JigCompleted, lock jig."""
-	permission_classes = [IsAuthenticated]
-
-	@transaction.atomic
-	def post(self, request):
-		payload = request.data
-		lot_id = payload.get('lot_id')
-		batch_id = payload.get('batch_id')
-		jig_id = payload.get('jig_id')
-		broken_hooks = int(payload.get('broken_hooks', 0) or 0)
-		jig_capacity_override = payload.get('jig_capacity')
-		scanned_trays = payload.get('scanned_trays', [])
-		remarks = payload.get('remarks', '')
-		multi_model_flag = payload.get('multi_model', False)
-		secondary_lots = payload.get('secondary_lots', [])
-		primary_lot_id = payload.get('primary_lot_id', lot_id)
-		primary_batch_id = payload.get('primary_batch_id', batch_id)
-
-		if not lot_id or not batch_id or not jig_id:
-			return Response(
-				{'status': 'error', 'message': 'lot_id, batch_id, and jig_id are required'},
-				status=status.HTTP_400_BAD_REQUEST
-			)
-
-		# Normalize jig_id to uppercase
-		jig_id = jig_id.strip().upper()
-
-		logging.info(json.dumps({
-			'event': 'JIG_LOAD_SUBMIT',
-			'lot_id': lot_id, 'batch_id': batch_id, 'jig_id': jig_id
-		}))
-
-		# Final computation
-		lot_data = fetch_lot_data(lot_id, batch_id, jig_capacity_override)
-
-		# --- Jig ID Format Validation ---
-		# Must be "J" + 3-digit zero-padded capacity + "-" + 4 digits (e.g. J098-0000 for 98, J144-0000 for 144)
-		jig_capacity_val = int(lot_data.get('jig_capacity', 0) or 0)
-		expected_jig_id = f'J{jig_capacity_val:03d}-'
-		if not jig_id.startswith(expected_jig_id):
-			return Response(
-				{'status': 'error', 'message': f'Invalid Jig ID. Expected format: {expected_jig_id}#### (e.g. {expected_jig_id}0000) for capacity {jig_capacity_val}.'},
-				status=status.HTTP_400_BAD_REQUEST
-			)
-		if len(jig_id) != 9 or not jig_id[5:].isdigit():
-			return Response(
-				{'status': 'error', 'message': f'Invalid Jig ID format. Must be 9 characters: J###-#### (e.g. {expected_jig_id}0000).'},
-				status=status.HTTP_400_BAD_REQUEST
-			)
-
-		# --- Jig ID Uniqueness Check ---
-		# Ensure jig is not already loaded by another lot/batch/user
-		already_loaded = JigCompleted.objects.filter(
-			jig_id=jig_id, draft_status='submitted'
-		).exclude(
-			batch_id=batch_id, lot_id=lot_id, user=request.user
-		).exists()
-		if already_loaded:
-			return Response(
-				{'status': 'error', 'message': f'Jig {jig_id} is already in use. Please unload it before reuse.'},
-				status=status.HTTP_409_CONFLICT
-			)
-		jig_obj_loaded = Jig.objects.filter(jig_qr_id=jig_id, is_loaded=True).exclude(
-			current_user=request.user, batch_id=batch_id, lot_id=lot_id
-		).exists()
-		if jig_obj_loaded:
-			return Response(
-				{'status': 'error', 'message': f'Jig {jig_id} is currently loaded. Unload before reuse.'},
-				status=status.HTTP_409_CONFLICT
-			)
-		# Multi-model: aggregate trays from ALL lots for correct computation
-		if multi_model_flag and secondary_lots:
-			trays = aggregate_multi_model_trays(primary_lot_id, secondary_lots)
-			logging.info(f"[SUBMIT_MM] Aggregated {len(trays)} trays from primary={primary_lot_id} + {len(secondary_lots)} secondary lots")
-		else:
-			trays = fetch_trays_for_lot(lot_id)
-		computed = compute_jig_loading(trays, lot_data['jig_capacity'], broken_hooks, lot_data['tray_capacity'])
-
-		if computed['validation']['errors']:
-			return Response(
-				{'status': 'error', 'message': 'Validation failed', 'errors': computed['validation']['errors']},
-				status=status.HTTP_400_BAD_REQUEST
-			)
-
-		loaded_cases_qty = sum(int(s.get('qty', 0) or 0) for s in scanned_trays)
-
-		# 🔥 OVERRIDE: derive loaded from DELINK PLAN (backend = source of truth)
-		scanned_ids_submit = set(s.get('tray_id', '') for s in scanned_trays if s.get('tray_id'))
-		delink_plan_submit = {dt['tray_id']: dt['qty'] for dt in computed['delink_tray_info']}
-		loaded_cases_qty = sum(delink_plan_submit.get(sid, 0) for sid in scanned_ids_submit)
-
-		# 🔥 STRICT CAPACITY ENFORCEMENT: loaded qty must NEVER exceed effective capacity
-		if loaded_cases_qty > computed['effective_capacity']:
-			return Response(
-				{'status': 'error', 'message': f'Loaded qty ({loaded_cases_qty}) exceeds effective capacity ({computed["effective_capacity"]}). Cannot submit.'},
-				status=status.HTTP_400_BAD_REQUEST
-			)
-
-		# Validate jig not locked by another user
-		try:
-			jig = Jig.objects.filter(jig_qr_id=jig_id).first()
-			if jig and jig.is_locked_by_other_user(request.user):
-				return Response(
-					{'status': 'error', 'message': f'Jig {jig_id} is locked by another user'},
-					status=status.HTTP_409_CONFLICT
-				)
-		except Exception:
-			pass
-
-		# Collect half-filled tray data from payload (outside try for scope)
-		half_filled_trays = payload.get('half_filled_trays', [])
-		is_multi_model = bool(payload.get('is_multi_model', False))
-		multi_model_allocation_data = payload.get('multi_model_allocation', [])
-
-		# Build no_of_model_cases: compact per-model qty string for admin display
-		no_of_model_cases_str = ''
-		if is_multi_model and multi_model_allocation_data:
-			parts = []
-			for m in multi_model_allocation_data:
-				label = m.get('model_image_label') or m.get('model') or m.get('display_name', '')
-				lot = m.get('lot_id', '')
-				qty = m.get('allocated_qty') or m.get('qty', 0)
-				parts.append(f"{label}({lot}):{qty}")
-			no_of_model_cases_str = ' | '.join(parts)
-
-		# Create JigCompleted record
-		try:
-			# Compute half-filled summary — at submit time, delink IS complete, assign tray IDs
-			half_filled_computed = computed.get('half_filled_tray_info', {})
-			if isinstance(half_filled_computed, dict) and half_filled_computed.get('exists'):
-				excess_trays_submit = computed.get('excess_info', {}).get('excess_trays', [])
-				half_filled_computed = assign_half_filled_tray_ids(
-					half_filled_computed, computed['delink_tray_info'],
-					excess_trays_submit, lot_data['tray_capacity']
-				)
-			# Use frontend-sent half_filled if provided (user may have overridden tray IDs)
-			half_filled_info = half_filled_trays if half_filled_trays else half_filled_computed
-			half_filled_qty = sum(int(t.get('qty', 0) or 0) for t in half_filled_trays) if half_filled_trays else computed.get('half_filled_tray_qty', 0)
-
-			# For multi-model, build combined plating_stock_num from all models
-			effective_plating_stk = lot_data['model_image_label']
-			if is_multi_model and multi_model_allocation_data:
-				model_names = []
-				for m in multi_model_allocation_data:
-					mn = m.get('model') or m.get('model_name') or m.get('display_name', '')
-					if mn:
-						model_names.append(mn)
-				if model_names:
-					effective_plating_stk = ', '.join(model_names)
-
-			# loaded_cases_qty for JigCompleted = delink_tray_qty (what was actually loaded)
-			actual_loaded = computed['delink_tray_qty']
-
-			JigCompleted.objects.update_or_create(
-				batch_id=batch_id, lot_id=lot_id, user=request.user,
-				defaults={
-					'jig_id': jig_id,
-					'jig_capacity': lot_data['jig_capacity'],
-					'broken_hooks': broken_hooks,
-					'loaded_cases_qty': actual_loaded,
-					'original_lot_qty': lot_data['lot_qty'],
-					'delink_tray_info': computed['delink_tray_info'],
-					'delink_tray_qty': computed['delink_tray_qty'],
-					'delink_tray_count': len(computed['delink_tray_info']),
-					'draft_status': 'submitted',
-					'plating_stock_num': effective_plating_stk,
-					'remarks': remarks,
-					'is_multi_model': is_multi_model,
-					'effective_capacity': computed['effective_capacity'],
-					'tray_capacity': lot_data['tray_capacity'],
-					'nickel_bath_type': lot_data['nickel_bath_type'],
-					'tray_type': lot_data['tray_type'],
-					'half_filled_tray_info': half_filled_info,
-					'half_filled_tray_qty': half_filled_qty,
-					'multi_model_allocation': multi_model_allocation_data,  # full tray-level detail
-					'no_of_model_cases': no_of_model_cases_str or None,
-					'scanned_trays': scanned_trays,
-					'empty_hooks': max(0, computed['effective_capacity'] - loaded_cases_qty),
-					'excess_qty': computed.get('excess_qty', 0),
-					'draft_data': {
-						'scanned_trays': scanned_trays,
-						'jig_id': jig_id,
-						'half_filled_trays': half_filled_trays,
-						'multi_model_allocation': multi_model_allocation_data,
-					},
-				}
-			)
-		except Exception as e:
-			logging.exception(f'JigLoadSubmitAPI: save failed: {e}')
-			return Response(
-				{'status': 'error', 'message': 'Failed to save submission'},
-				status=status.HTTP_500_INTERNAL_SERVER_ERROR
-			)
-
-		# Lock jig
-		try:
-			jig = Jig.objects.filter(jig_qr_id=jig_id).first()
-			if jig:
-				jig.is_loaded = True
-				jig.current_user = request.user
-				jig.locked_at = timezone.now()
-				jig.drafted = False
-				jig.batch_id = batch_id
-				jig.lot_id = lot_id
-				jig.save()
-		except Exception:
-			logging.exception('JigLoadSubmitAPI: jig lock failed')
-
-		# Mark draft as submitted
-		try:
-			JigLoadingManualDraft.objects.filter(
-				batch_id=batch_id, lot_id=lot_id, user=request.user
-			).update(draft_status='submitted')
-		except Exception:
-			pass
-
-		logging.info(json.dumps({
-			'event': 'JIG_LOAD_SUBMITTED',
-			'lot_id': lot_id, 'batch_id': batch_id, 'jig_id': jig_id,
-			'loaded_cases_qty': loaded_cases_qty,
-			'effective_capacity': computed['effective_capacity']
-		}))
-
-		return Response({
-			'status': 'success',
-			'message': 'Jig loading submitted successfully',
-			'lot_id': lot_id,
-			'batch_id': batch_id,
-			'jig_id': jig_id,
-			'loaded_cases_qty': loaded_cases_qty,
-			'effective_capacity': computed['effective_capacity'],
-			'delink_completed': True,
-			'half_filled': half_filled_info,
-			'model_image_label': lot_data.get('model_image_label', ''),
-			'lot_qty': lot_data.get('lot_qty', 0),
-			'no_of_model_cases': no_of_model_cases_str if is_multi_model else None,
-		})
+# JigLoadSubmitAPI REMOVED — all submit logic consolidated into JigSaveAPI (POST /api/jig/save/)
+# JigSaveAPI handles both draft (action="draft") and submit (action="submit") in a single endpoint.
 
 
 # Jig Loading - Complete Table View
@@ -3251,25 +3066,39 @@ class ModelCombinationValidateAPI(APIView):
 
 
 # =============================================================================
-# NEW CLEAN APIs — EXACT FRONTEND SNAPSHOT STORAGE
+# SINGLE UNIFIED API — DRAFT + SUBMIT (SINGLE SOURCE OF TRUTH: JigCompleted)
 # =============================================================================
 
-class JigSaveDraftAPI(APIView):
-	"""POST /api/jig/save — Store full UI snapshot as DRAFT.
-	
+class JigSaveAPI(APIView):
+	"""POST /api/jig/save/ — Unified API for Draft + Submit.
+
+	Single source of truth: JigCompleted table.
+	Differentiated by action = "draft" / "submit".
 	No recomputation. Stores exactly what the frontend sends.
-	On re-open, returns the same data for UI rehydration.
 	"""
 	permission_classes = [IsAuthenticated]
 
+	@transaction.atomic
 	def post(self, request):
 		payload = request.data
+		user = request.user
+		action = payload.get('action', 'draft')  # "draft" or "submit"
 		lot_id = payload.get('lot_id')
 		batch_id = payload.get('batch_id')
-		jig_id = payload.get('jig_id', '') or ''
+		jig_id = (payload.get('jig_id', '') or '').strip().upper()
 
-		if not lot_id or not batch_id:
-			return Response({'status': 'error', 'message': 'lot_id and batch_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+		logging.info(json.dumps({
+			'event': 'JIG_SAVE_API',
+			'action': action,
+			'lot_id': lot_id, 'batch_id': batch_id, 'jig_id': jig_id,
+			'user': user.username,
+		}))
+
+		if not lot_id or not batch_id or not action:
+			return Response({'status': 'error', 'message': 'lot_id, batch_id, and action are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+		if action not in ('draft', 'submit'):
+			return Response({'status': 'error', 'message': 'action must be "draft" or "submit"'}, status=status.HTTP_400_BAD_REQUEST)
 
 		# Extract EXACT UI values — no recalculation
 		lot_qty = int(payload.get('lot_qty', 0) or 0)
@@ -3285,85 +3114,310 @@ class JigSaveDraftAPI(APIView):
 		multi_model_allocation = payload.get('multi_model_allocation', [])
 		half_filled_tray_info = payload.get('half_filled_tray_info', [])
 		is_multi_model = bool(payload.get('is_multi_model', False))
+		# Auto-detect: if allocation has multiple entries, treat as multi-model regardless of flag
+		if len(multi_model_allocation) > 1:
+			is_multi_model = True
 		nickel_bath_type = payload.get('nickel_bath_type', '') or ''
 		tray_type = payload.get('tray_type', '') or ''
 		tray_capacity = int(payload.get('tray_capacity', 12) or 12)
 		plating_stock_num = payload.get('plating_stock_num', '') or ''
 		remarks = payload.get('remarks', '') or ''
 
-		logging.info(json.dumps({
-			'event': 'JIG_SAVE_DRAFT',
-			'lot_id': lot_id, 'batch_id': batch_id, 'jig_id': jig_id,
-			'lot_qty': lot_qty, 'jig_capacity': jig_capacity,
-			'total_delink_qty': total_delink_qty, 'total_excess_qty': total_excess_qty,
-			'tray_count': len(tray_data), 'scanned_count': len(scanned_trays),
-			'payload_keys': list(payload.keys()),
-		}))
+		# === SUBMIT-SPECIFIC VALIDATIONS ===
+		if action == 'submit':
+			if not jig_id:
+				return Response({'status': 'error', 'message': 'jig_id is required for submit'}, status=status.HTTP_400_BAD_REQUEST)
 
-		# Validation — sums must be consistent
-		validation_errors = []
-		sum_orig = sum(int(t.get('original_qty', 0) or 0) for t in tray_data)
-		sum_delink = sum(int(t.get('delink_qty', 0) or 0) for t in tray_data)
-		sum_excess = sum(int(t.get('excess_qty', 0) or 0) for t in tray_data)
+			# Jig ID format validation
+			lot_data = fetch_lot_data(lot_id, batch_id, jig_capacity)
+			jig_capacity_val = int(lot_data.get('jig_capacity', 0) or 0) or jig_capacity
+			expected_jig_prefix = f'J{jig_capacity_val:03d}-'
+			if not jig_id.startswith(expected_jig_prefix):
+				return Response({'status': 'error', 'message': f'Invalid Jig ID. Expected format: {expected_jig_prefix}#### for capacity {jig_capacity_val}.'}, status=status.HTTP_400_BAD_REQUEST)
+			if len(jig_id) != 9 or not jig_id[5:].isdigit():
+				return Response({'status': 'error', 'message': f'Invalid Jig ID format. Must be 9 characters: J###-####.'}, status=status.HTTP_400_BAD_REQUEST)
 
-		# Per-tray integrity: delink + excess must equal original across all trays
-		if sum_orig > 0 and (sum_delink + sum_excess) != sum_orig:
-			validation_errors.append(f'sum(delink_qty)+sum(excess_qty)={sum_delink + sum_excess} != sum(original_qty)={sum_orig}')
-		if sum_delink != total_delink_qty:
-			validation_errors.append(f'sum(delink_qty)={sum_delink} != total_delink_qty={total_delink_qty}')
-		if sum_excess != total_excess_qty:
-			validation_errors.append(f'sum(excess_qty)={sum_excess} != total_excess_qty={total_excess_qty}')
+			# Jig existence check — jig_id must exist in Jig master table
+			if not Jig.objects.filter(jig_qr_id=jig_id).exists():
+				return Response({'status': 'error', 'message': f'Jig {jig_id} does not exist. Please scan a valid Jig ID from the Jig master.'}, status=status.HTTP_400_BAD_REQUEST)
 
-		if validation_errors:
-			logging.warning(json.dumps({'event': 'JIG_SAVE_DRAFT_VALIDATION_WARN', 'errors': validation_errors}))
-			# Warn but don't block — draft should always save
+			# Jig uniqueness check
+			already_loaded = JigCompleted.objects.filter(
+				jig_id=jig_id, draft_status='submitted'
+			).exclude(batch_id=batch_id, lot_id=lot_id, user=user).exists()
+			if already_loaded:
+				return Response({'status': 'error', 'message': f'Jig {jig_id} is already in use.'}, status=status.HTTP_409_CONFLICT)
+			jig_obj_loaded = Jig.objects.filter(jig_qr_id=jig_id, is_loaded=True).exclude(
+				current_user=user, batch_id=batch_id, lot_id=lot_id
+			).exists()
+			if jig_obj_loaded:
+				return Response({'status': 'error', 'message': f'Jig {jig_id} is currently loaded.'}, status=status.HTTP_409_CONFLICT)
 
+			# Check jig not locked by another user
+			jig_obj = Jig.objects.filter(jig_qr_id=jig_id).first()
+			if jig_obj and jig_obj.is_locked_by_other_user(user):
+				return Response({'status': 'error', 'message': f'Jig {jig_id} is locked by another user.'}, status=status.HTTP_409_CONFLICT)
+
+			# Sum validation (strict for submit)
+			validation_errors = []
+			sum_orig = sum(int(t.get('original_qty', 0) or 0) for t in tray_data)
+			sum_delink = sum(int(t.get('delink_qty', 0) or 0) for t in tray_data)
+			sum_excess = sum(int(t.get('excess_qty', 0) or 0) for t in tray_data)
+			if sum_orig > 0 and (sum_delink + sum_excess) != sum_orig:
+				validation_errors.append(f'sum(delink_qty)+sum(excess_qty)={sum_delink + sum_excess} != sum(original_qty)={sum_orig}')
+			if sum_delink != total_delink_qty:
+				validation_errors.append(f'sum(delink_qty)={sum_delink} != total_delink_qty={total_delink_qty}')
+			if sum_excess != total_excess_qty:
+				validation_errors.append(f'sum(excess_qty)={sum_excess} != total_excess_qty={total_excess_qty}')
+			if validation_errors:
+				logging.error(json.dumps({'event': 'JIG_SUBMIT_VALIDATION_FAILED', 'errors': validation_errors}))
+				return Response({'status': 'error', 'message': 'Validation failed: data integrity mismatch', 'errors': validation_errors}, status=status.HTTP_400_BAD_REQUEST)
+		else:
+			# DRAFT: warn but don't block
+			sum_orig = sum(int(t.get('original_qty', 0) or 0) for t in tray_data)
+			sum_delink = sum(int(t.get('delink_qty', 0) or 0) for t in tray_data)
+			sum_excess = sum(int(t.get('excess_qty', 0) or 0) for t in tray_data)
+			if sum_orig > 0 and (sum_delink + sum_excess) != sum_orig:
+				logging.warning(json.dumps({'event': 'JIG_DRAFT_VALIDATION_WARN', 'sum_mismatch': True}))
+			# DRAFT: validate jig_id against Jig master if provided
+			if jig_id and not Jig.objects.filter(jig_qr_id=jig_id).exists():
+				return Response({'status': 'error', 'message': f'Jig {jig_id} does not exist. Please scan a valid Jig ID from the Jig master.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		draft_status = 'draft' if action == 'draft' else 'submitted'
+
+		# Build no_of_model_cases string for multi-model display
+		no_of_model_cases_str = ''
+		effective_plating_stock_num = plating_stock_num
+		if is_multi_model and multi_model_allocation:
+			parts = []
+			model_names = []
+			for m in multi_model_allocation:
+				label = m.get('model_image_label') or m.get('model') or m.get('display_name', '')
+				mlot = m.get('lot_id', '')
+				mqty = m.get('allocated_qty') or m.get('qty', 0)
+				parts.append(f"{label}({mlot}):{mqty}")
+				model_name = m.get('model') or m.get('model_name') or m.get('display_name', '')
+				if model_name:
+					model_names.append(model_name)
+			no_of_model_cases_str = ' | '.join(parts)
+			if model_names:
+				effective_plating_stock_num = ', '.join(model_names)
+
+		# Compute half_filled_tray_qty from info
+		half_filled_tray_qty = 0
+		if isinstance(half_filled_tray_info, list):
+			half_filled_tray_qty = sum(int(t.get('qty', 0) or 0) for t in half_filled_tray_info)
+		elif isinstance(half_filled_tray_info, dict):
+			half_filled_tray_qty = int(half_filled_tray_info.get('total_qty', 0) or 0)
+
+		# ===== MULTI-MODEL: Inject per-model role + status (backend owns this logic) =====
+		if is_multi_model and multi_model_allocation:
+			for idx, m in enumerate(multi_model_allocation):
+				m['role'] = 'primary' if idx == 0 else 'secondary'
+				if action == 'draft':
+					m['status'] = 'draft' if idx == 0 else 'partial_draft'
+				else:
+					m['status'] = 'submitted'
+
+		# ===== SINGLE TABLE STORAGE: JigCompleted =====
 		try:
-			record, created = JigLoadingRecord.objects.update_or_create(
-				lot_id=lot_id, batch_id=batch_id, user=request.user,
+			record, created = JigCompleted.objects.update_or_create(
+				lot_id=lot_id, batch_id=batch_id, user=user,
 				defaults={
-					'jig_id': jig_id.strip().upper() if jig_id else None,
-					'lot_qty': lot_qty,
+					'draft_data': payload,  # FULL UI SNAPSHOT
+					'jig_id': jig_id or None,
 					'jig_capacity': jig_capacity,
 					'effective_capacity': effective_capacity,
 					'broken_hooks': broken_hooks,
-					'loaded_cases_qty': loaded_cases_qty,
-					'empty_hooks': empty_hooks,
-					'nickel_bath_type': nickel_bath_type,
-					'tray_type': tray_type,
-					'tray_capacity': tray_capacity,
-					'plating_stock_num': plating_stock_num,
+					'loaded_cases_qty': total_delink_qty if action == 'submit' else loaded_cases_qty,
+					'original_lot_qty': lot_qty,
+					'delink_tray_info': [t for t in tray_data if int(t.get('delink_qty', 0) or 0) > 0],
+					'delink_tray_qty': total_delink_qty,
+					'delink_tray_count': sum(1 for t in tray_data if int(t.get('delink_qty', 0) or 0) > 0),
+					'draft_status': draft_status,
+					'plating_stock_num': effective_plating_stock_num,
 					'remarks': remarks,
 					'is_multi_model': is_multi_model,
-					'tray_data': tray_data,
-					'total_delink_qty': total_delink_qty,
-					'total_excess_qty': total_excess_qty,
-					'scanned_trays': scanned_trays,
-					'multi_model_allocation': multi_model_allocation,
+					'tray_capacity': tray_capacity,
+					'nickel_bath_type': nickel_bath_type,
+					'tray_type': tray_type,
 					'half_filled_tray_info': half_filled_tray_info,
-					'status_flag': 'DRAFT',
+					'half_filled_tray_qty': half_filled_tray_qty,
+					'multi_model_allocation': multi_model_allocation,
+					'no_of_model_cases': no_of_model_cases_str or None,
+					'scanned_trays': scanned_trays,
+					'empty_hooks': empty_hooks,
+					'excess_qty': total_excess_qty,
 				}
 			)
 			logging.info(json.dumps({
-				'event': 'JIG_DRAFT_STORED',
+				'event': 'JIG_SAVE_STORED',
+				'action': action, 'draft_status': draft_status,
 				'record_id': record.id, 'created': created,
 				'lot_id': lot_id, 'batch_id': batch_id,
-				'tray_count': len(tray_data),
-				'total_delink_qty': total_delink_qty,
-				'total_excess_qty': total_excess_qty,
 			}))
 		except Exception as e:
-			logging.exception(f'JigSaveDraftAPI: save failed: {e}')
-			return Response({'status': 'error', 'message': 'Failed to save draft'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+			logging.exception(f'JigSaveAPI: save failed: {e}')
+			return Response({'status': 'error', 'message': 'Failed to save'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-		return Response({
+		# ===== SUBMIT-ONLY: Delink records, Excess lot, Jig lock =====
+		delink_created = 0
+		excess_lot_id = None
+		excess_trays_created = 0
+
+		if action == 'submit':
+			# Create JigDelinkRecord entries
+			try:
+				JigDelinkRecord.objects.filter(
+					jig_id=jig_id, lot_id=lot_id, batch_id=batch_id
+				).delete()
+
+				for tray in tray_data:
+					d_qty = int(tray.get('delink_qty', 0) or 0)
+					if d_qty <= 0:
+						continue
+					tray_id_val = tray.get('tray_id', '')
+					# Find the JigLoadingRecord for FK (create minimal one if needed)
+					jlr, _ = JigLoadingRecord.objects.update_or_create(
+						lot_id=lot_id, batch_id=batch_id, user=user,
+						defaults={
+							'jig_id': jig_id,
+							'lot_qty': lot_qty,
+							'jig_capacity': jig_capacity,
+							'effective_capacity': effective_capacity,
+							'broken_hooks': broken_hooks,
+							'loaded_cases_qty': total_delink_qty,
+							'empty_hooks': empty_hooks,
+							'tray_data': tray_data,
+							'total_delink_qty': total_delink_qty,
+							'total_excess_qty': total_excess_qty,
+							'scanned_trays': scanned_trays,
+							'status_flag': 'SUBMITTED',
+							'is_multi_model': is_multi_model,
+							'multi_model_allocation': multi_model_allocation,
+							'half_filled_tray_info': half_filled_tray_info,
+							'nickel_bath_type': nickel_bath_type,
+							'tray_type': tray_type,
+							'tray_capacity': tray_capacity,
+							'plating_stock_num': effective_plating_stock_num,
+							'remarks': remarks,
+						}
+					)
+
+					JigDelinkRecord.objects.create(
+						jig_loading_record=jlr,
+						jig_id=jig_id,
+						lot_id=tray.get('source_lot_id', '') or lot_id,
+						batch_id=batch_id,
+						tray_id=tray_id_val,
+						delink_qty=d_qty,
+						original_qty=int(tray.get('original_qty', 0) or 0),
+						model_code=tray.get('model_code', '') or effective_plating_stock_num,
+						scanned_tray_id=tray_id_val,
+					)
+					delink_created += 1
+				logging.info(json.dumps({'event': 'JIG_DELINK_RECORDS_CREATED', 'count': delink_created}))
+			except Exception as e:
+				logging.exception(f'JigSaveAPI: delink records failed: {e}')
+				return Response({'status': 'error', 'message': 'Failed to create delink records'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+			# Create ExcessLotRecord + ExcessLotTray
+			if total_excess_qty > 0:
+				try:
+					import time
+					ts = int(time.time() * 1000) % 100000
+					excess_lot_id = f'EX-{lot_id}-{ts:05d}'
+					while ExcessLotRecord.objects.filter(new_lot_id=excess_lot_id).exists():
+						ts = (ts + 1) % 100000
+						excess_lot_id = f'EX-{lot_id}-{ts:05d}'
+
+					excess_lot = ExcessLotRecord.objects.create(
+						jig_loading_record=jlr,
+						new_lot_id=excess_lot_id,
+						parent_lot_id=lot_id,
+						parent_batch_id=batch_id,
+						lot_qty=total_excess_qty,
+						jig_id=jig_id,
+					)
+					for tray in tray_data:
+						e_qty = int(tray.get('excess_qty', 0) or 0)
+						if e_qty <= 0:
+							continue
+						ExcessLotTray.objects.create(
+							excess_lot=excess_lot,
+							lot_id=excess_lot_id,
+							tray_id=tray.get('tray_id', ''),
+							qty=e_qty,
+							original_qty=int(tray.get('original_qty', 0) or 0),
+							model_code=tray.get('model_code', '') or effective_plating_stock_num,
+						)
+						excess_trays_created += 1
+					logging.info(json.dumps({'event': 'JIG_EXCESS_LOT_CREATED', 'new_lot_id': excess_lot_id, 'qty': total_excess_qty}))
+				except Exception as e:
+					logging.exception(f'JigSaveAPI: excess lot creation failed: {e}')
+					return Response({'status': 'error', 'message': 'Failed to create excess lot'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+			# Lock Jig
+			try:
+				jig_obj = Jig.objects.filter(jig_qr_id=jig_id).first()
+				if jig_obj:
+					jig_obj.is_loaded = True
+					jig_obj.current_user = user
+					jig_obj.locked_at = timezone.now()
+					jig_obj.drafted = False
+					jig_obj.batch_id = batch_id
+					jig_obj.lot_id = lot_id
+					jig_obj.save()
+			except Exception:
+				logging.exception('JigSaveAPI: jig lock failed')
+
+		elif action == 'draft' and jig_id:
+			# Draft: mark jig as drafted (not fully loaded)
+			try:
+				Jig.objects.filter(jig_qr_id=jig_id).update(
+					drafted=True,
+					lot_id=lot_id,
+					batch_id=batch_id,
+					current_user=user,
+				)
+			except Exception:
+				logging.exception('JigSaveAPI: jig draft lock failed')
+
+		# Build response
+		message = 'Drafted successfully' if action == 'draft' else 'Submitted successfully'
+		lot_status = 'Draft' if action == 'draft' else 'Completed'
+
+		logging.info(json.dumps({
+			'event': 'JIG_SAVE_COMPLETE',
+			'action': action, 'lot_id': lot_id, 'draft_status': draft_status,
+		}))
+
+		response_data = {
 			'status': 'success',
-			'message': 'Draft saved successfully',
+			'message': message,
+			'lot_status': lot_status,
 			'record_id': record.id,
 			'lot_id': lot_id,
 			'batch_id': batch_id,
-			'status_flag': 'DRAFT',
-		})
+			'draft_status': draft_status,
+		}
+
+		if action == 'submit':
+			response_data.update({
+				'jig_id': jig_id,
+				'loaded_cases_qty': total_delink_qty,
+				'effective_capacity': effective_capacity,
+				'total_delink_qty': total_delink_qty,
+				'total_excess_qty': total_excess_qty,
+				'delink_records_created': delink_created,
+				'excess_lot_id': excess_lot_id,
+				'excess_trays_created': excess_trays_created,
+				'model_image_label': effective_plating_stock_num,
+				'lot_qty': lot_qty,
+				'no_of_model_cases': no_of_model_cases_str if is_multi_model else None,
+			})
+
+		return Response(response_data)
 
 	def get(self, request):
 		"""GET /api/jig/save?lot_id=X&batch_id=Y — Fetch existing draft for rehydration."""
@@ -3373,381 +3427,63 @@ class JigSaveDraftAPI(APIView):
 		if not lot_id or not batch_id:
 			return Response({'status': 'error', 'message': 'lot_id and batch_id required'}, status=status.HTTP_400_BAD_REQUEST)
 
-		record = JigLoadingRecord.objects.filter(
-			lot_id=lot_id, batch_id=batch_id, user=request.user, status_flag='DRAFT'
+		record = JigCompleted.objects.filter(
+			lot_id=lot_id, batch_id=batch_id, user=request.user, draft_status__in=['draft', 'active']
 		).first()
 
 		if not record:
 			return Response({'status': 'not_found', 'message': 'No draft found'}, status=status.HTTP_404_NOT_FOUND)
 
+		# Return the full draft_data snapshot for exact UI rehydration
+		draft_data = record.draft_data or {}
+
 		return Response({
 			'status': 'success',
+			'is_draft': True,
 			'record_id': record.id,
-			'status_flag': record.status_flag,
+			'draft_status': record.draft_status,
 			'jig_id': record.jig_id or '',
 			'lot_id': record.lot_id,
 			'batch_id': record.batch_id,
-			'lot_qty': record.lot_qty,
-			'jig_capacity': record.jig_capacity,
-			'effective_capacity': record.effective_capacity,
-			'broken_hooks': record.broken_hooks,
-			'loaded_cases_qty': record.loaded_cases_qty,
-			'empty_hooks': record.empty_hooks,
-			'nickel_bath_type': record.nickel_bath_type or '',
-			'tray_type': record.tray_type or '',
-			'tray_capacity': record.tray_capacity,
-			'plating_stock_num': record.plating_stock_num or '',
-			'remarks': record.remarks or '',
-			'is_multi_model': record.is_multi_model,
-			'tray_data': record.tray_data,
-			'total_delink_qty': record.total_delink_qty,
-			'total_excess_qty': record.total_excess_qty,
-			'scanned_trays': record.scanned_trays,
-			'multi_model_allocation': record.multi_model_allocation,
-			'half_filled_tray_info': record.half_filled_tray_info,
+			'lot_qty': draft_data.get('lot_qty', record.original_lot_qty or 0),
+			'jig_capacity': draft_data.get('jig_capacity', record.jig_capacity or 0),
+			'effective_capacity': draft_data.get('effective_capacity', record.effective_capacity or 0),
+			'broken_hooks': draft_data.get('broken_hooks', record.broken_hooks or 0),
+			'loaded_cases_qty': draft_data.get('loaded_cases_qty', record.loaded_cases_qty or 0),
+			'empty_hooks': draft_data.get('empty_hooks', record.empty_hooks or 0),
+			'nickel_bath_type': draft_data.get('nickel_bath_type', record.nickel_bath_type or ''),
+			'tray_type': draft_data.get('tray_type', record.tray_type or ''),
+			'tray_capacity': draft_data.get('tray_capacity', record.tray_capacity or 12),
+			'plating_stock_num': draft_data.get('plating_stock_num', record.plating_stock_num or ''),
+			'remarks': draft_data.get('remarks', record.remarks or ''),
+			'is_multi_model': draft_data.get('is_multi_model', record.is_multi_model),
+			'tray_data': draft_data.get('tray_data', []),
+			'total_delink_qty': draft_data.get('total_delink_qty', record.delink_tray_qty or 0),
+			'total_excess_qty': draft_data.get('total_excess_qty', record.excess_qty or 0),
+			'scanned_trays': draft_data.get('scanned_trays', record.scanned_trays or []),
+			'multi_model_allocation': draft_data.get('multi_model_allocation', record.multi_model_allocation or []),
+			'half_filled_tray_info': draft_data.get('half_filled_tray_info', record.half_filled_tray_info or []),
 			'updated_at': record.updated_at.isoformat() if record.updated_at else None,
 		})
 
 
-class JigSubmitFinalAPI(APIView):
-	"""POST /api/jig/submit-final — Submit jig with full snapshot + delink + excess lot creation.
-	
-	Steps:
-	1. Update JigLoadingRecord.status_flag = 'SUBMITTED'
-	2. Create JigDelinkRecord for each tray with delink_qty > 0
-	3. Create ExcessLotRecord + ExcessLotTray for trays with excess_qty > 0
-	4. Lock jig + update JigCompleted (for backward compat)
-	
-	NO RECOMPUTATION. All data from frontend payload.
+# =============================================================================
+# JIG ID VALIDATION API — lightweight existence check
+# =============================================================================
+
+class JigValidateAPI(APIView):
+	"""GET /api/jig/validate/?jig_id=J098-0001
+	Returns {exists: true/false} for real-time frontend validation.
+	No side-effects — read-only check against Jig master table.
 	"""
 	permission_classes = [IsAuthenticated]
 
-	@transaction.atomic
-	def post(self, request):
-		payload = request.data
-		lot_id = payload.get('lot_id')
-		batch_id = payload.get('batch_id')
-		jig_id = (payload.get('jig_id', '') or '').strip().upper()
-
-		if not lot_id or not batch_id or not jig_id:
-			return Response({'status': 'error', 'message': 'lot_id, batch_id, and jig_id are required'}, status=status.HTTP_400_BAD_REQUEST)
-
-		# Extract EXACT UI values — NO recomputation
-		lot_qty = int(payload.get('lot_qty', 0) or 0)
-		jig_capacity = int(payload.get('jig_capacity', 0) or 0)
-		effective_capacity = int(payload.get('effective_capacity', 0) or 0)
-		broken_hooks = int(payload.get('broken_hooks', 0) or 0)
-		loaded_cases_qty = int(payload.get('loaded_cases_qty', 0) or 0)
-		empty_hooks = int(payload.get('empty_hooks', 0) or 0)
-		tray_data = payload.get('tray_data', [])
-		total_delink_qty = int(payload.get('total_delink_qty', 0) or 0)
-		total_excess_qty = int(payload.get('total_excess_qty', 0) or 0)
-		scanned_trays = payload.get('scanned_trays', [])
-		multi_model_allocation = payload.get('multi_model_allocation', [])
-		half_filled_tray_info = payload.get('half_filled_tray_info', [])
-		is_multi_model = bool(payload.get('is_multi_model', False))
-		nickel_bath_type = payload.get('nickel_bath_type', '') or ''
-		tray_type = payload.get('tray_type', '') or ''
-		tray_capacity = int(payload.get('tray_capacity', 12) or 12)
-		plating_stock_num = payload.get('plating_stock_num', '') or ''
-		remarks = payload.get('remarks', '') or ''
-
-		logging.info(json.dumps({
-			'event': 'JIG_SUBMIT_FINAL',
-			'lot_id': lot_id, 'batch_id': batch_id, 'jig_id': jig_id,
-			'lot_qty': lot_qty, 'jig_capacity': jig_capacity,
-			'total_delink_qty': total_delink_qty, 'total_excess_qty': total_excess_qty,
-			'tray_count': len(tray_data), 'scanned_count': len(scanned_trays),
-		}))
-
-		# ===== VALIDATION (sum checks — no recomputation) =====
-		validation_errors = []
-		sum_orig = sum(int(t.get('original_qty', 0) or 0) for t in tray_data)
-		sum_delink = sum(int(t.get('delink_qty', 0) or 0) for t in tray_data)
-		sum_excess = sum(int(t.get('excess_qty', 0) or 0) for t in tray_data)
-
-		# Per-tray integrity: delink + excess must equal original across all trays
-		# NOTE: For multi-model, lot_qty is the primary model's qty, but tray_data
-		# spans ALL models. So sum(original_qty) != lot_qty is expected.
-		# The correct check is: sum(delink) + sum(excess) == sum(original).
-		if sum_orig > 0 and (sum_delink + sum_excess) != sum_orig:
-			validation_errors.append(f'sum(delink_qty)+sum(excess_qty)={sum_delink + sum_excess} != sum(original_qty)={sum_orig}')
-		if sum_delink != total_delink_qty:
-			validation_errors.append(f'sum(delink_qty)={sum_delink} != total_delink_qty={total_delink_qty}')
-		if sum_excess != total_excess_qty:
-			validation_errors.append(f'sum(excess_qty)={sum_excess} != total_excess_qty={total_excess_qty}')
-
-		if validation_errors:
-			logging.error(json.dumps({'event': 'JIG_SUBMIT_VALIDATION_FAILED', 'errors': validation_errors}))
-			return Response({
-				'status': 'error',
-				'message': 'Validation failed: data integrity mismatch',
-				'errors': validation_errors,
-			}, status=status.HTTP_400_BAD_REQUEST)
-
-		# ===== Jig ID validations =====
-		lot_data = fetch_lot_data(lot_id, batch_id, jig_capacity)
-		jig_capacity_val = int(lot_data.get('jig_capacity', 0) or 0) or jig_capacity
-		expected_jig_prefix = f'J{jig_capacity_val:03d}-'
-		if not jig_id.startswith(expected_jig_prefix):
-			return Response({
-				'status': 'error',
-				'message': f'Invalid Jig ID. Expected format: {expected_jig_prefix}#### for capacity {jig_capacity_val}.',
-			}, status=status.HTTP_400_BAD_REQUEST)
-		if len(jig_id) != 9 or not jig_id[5:].isdigit():
-			return Response({
-				'status': 'error',
-				'message': f'Invalid Jig ID format. Must be 9 characters: J###-####.',
-			}, status=status.HTTP_400_BAD_REQUEST)
-
-		# Jig uniqueness check
-		already_loaded = JigCompleted.objects.filter(
-			jig_id=jig_id, draft_status='submitted'
-		).exclude(batch_id=batch_id, lot_id=lot_id, user=request.user).exists()
-		if already_loaded:
-			return Response({'status': 'error', 'message': f'Jig {jig_id} is already in use.'}, status=status.HTTP_409_CONFLICT)
-		jig_obj_loaded = Jig.objects.filter(jig_qr_id=jig_id, is_loaded=True).exclude(
-			current_user=request.user, batch_id=batch_id, lot_id=lot_id
-		).exists()
-		if jig_obj_loaded:
-			return Response({'status': 'error', 'message': f'Jig {jig_id} is currently loaded.'}, status=status.HTTP_409_CONFLICT)
-
-		# Check jig not locked by another user
-		jig = Jig.objects.filter(jig_qr_id=jig_id).first()
-		if jig and jig.is_locked_by_other_user(request.user):
-			return Response({'status': 'error', 'message': f'Jig {jig_id} is locked by another user.'}, status=status.HTTP_409_CONFLICT)
-
-		# ===== STEP 1: Save/Update JigLoadingRecord with status_flag='SUBMITTED' =====
-		try:
-			record, _ = JigLoadingRecord.objects.update_or_create(
-				lot_id=lot_id, batch_id=batch_id, user=request.user,
-				defaults={
-					'jig_id': jig_id,
-					'lot_qty': lot_qty,
-					'jig_capacity': jig_capacity,
-					'effective_capacity': effective_capacity,
-					'broken_hooks': broken_hooks,
-					'loaded_cases_qty': loaded_cases_qty,
-					'empty_hooks': empty_hooks,
-					'nickel_bath_type': nickel_bath_type,
-					'tray_type': tray_type,
-					'tray_capacity': tray_capacity,
-					'plating_stock_num': plating_stock_num,
-					'remarks': remarks,
-					'is_multi_model': is_multi_model,
-					'tray_data': tray_data,
-					'total_delink_qty': total_delink_qty,
-					'total_excess_qty': total_excess_qty,
-					'scanned_trays': scanned_trays,
-					'multi_model_allocation': multi_model_allocation,
-					'half_filled_tray_info': half_filled_tray_info,
-					'status_flag': 'SUBMITTED',
-				}
-			)
-			logging.info(json.dumps({'event': 'JIG_SUBMIT_RECORD_SAVED', 'record_id': record.id}))
-		except Exception as e:
-			logging.exception(f'JigSubmitFinalAPI: record save failed: {e}')
-			return Response({'status': 'error', 'message': 'Failed to save submission record'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-		# ===== STEP 2: Create JigDelinkRecord entries =====
-		delink_created = 0
-		try:
-			# Clear old delink records for this submission
-			JigDelinkRecord.objects.filter(jig_loading_record=record).delete()
-
-			for tray in tray_data:
-				d_qty = int(tray.get('delink_qty', 0) or 0)
-				if d_qty <= 0:
-					continue
-				# Find matching scanned tray to get actual scanned ID
-				tray_id = tray.get('tray_id', '')
-				scanned_id = tray_id  # default
-				for st in scanned_trays:
-					if st.get('tray_id', '') and st.get('lot_id', '') == tray.get('source_lot_id', lot_id):
-						# Match by position in same lot or by tray_id reference
-						pass
-				# Try direct match from scanned list
-				for st in scanned_trays:
-					scan_tid = st.get('tray_id', '')
-					if scan_tid:
-						scanned_id = scan_tid
-						break
-
-				JigDelinkRecord.objects.create(
-					jig_loading_record=record,
-					jig_id=jig_id,
-					lot_id=tray.get('source_lot_id', '') or lot_id,
-					batch_id=batch_id,
-					tray_id=tray_id,
-					delink_qty=d_qty,
-					original_qty=int(tray.get('original_qty', 0) or 0),
-					model_code=tray.get('model_code', '') or plating_stock_num,
-					scanned_tray_id=tray_id,
-				)
-				delink_created += 1
-
-			logging.info(json.dumps({'event': 'JIG_DELINK_RECORDS_CREATED', 'count': delink_created, 'record_id': record.id}))
-		except Exception as e:
-			logging.exception(f'JigSubmitFinalAPI: delink records failed: {e}')
-			return Response({'status': 'error', 'message': 'Failed to create delink records'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-		# ===== STEP 3: Create ExcessLotRecord + ExcessLotTray =====
-		excess_lot_id = None
-		excess_trays_created = 0
-		if total_excess_qty > 0:
-			try:
-				# Generate excess lot ID: EX-<parent_lot>-<timestamp>
-				import time
-				ts = int(time.time() * 1000) % 100000
-				excess_lot_id = f'EX-{lot_id}-{ts:05d}'
-
-				# Ensure uniqueness
-				while ExcessLotRecord.objects.filter(new_lot_id=excess_lot_id).exists():
-					ts = (ts + 1) % 100000
-					excess_lot_id = f'EX-{lot_id}-{ts:05d}'
-
-				excess_lot = ExcessLotRecord.objects.create(
-					jig_loading_record=record,
-					new_lot_id=excess_lot_id,
-					parent_lot_id=lot_id,
-					parent_batch_id=batch_id,
-					lot_qty=total_excess_qty,
-					jig_id=jig_id,
-				)
-
-				for tray in tray_data:
-					e_qty = int(tray.get('excess_qty', 0) or 0)
-					if e_qty <= 0:
-						continue
-					ExcessLotTray.objects.create(
-						excess_lot=excess_lot,
-						lot_id=excess_lot_id,
-						tray_id=tray.get('tray_id', ''),
-						qty=e_qty,
-						original_qty=int(tray.get('original_qty', 0) or 0),
-						model_code=tray.get('model_code', '') or plating_stock_num,
-					)
-					excess_trays_created += 1
-
-				logging.info(json.dumps({
-					'event': 'JIG_EXCESS_LOT_CREATED',
-					'new_lot_id': excess_lot_id,
-					'parent_lot_id': lot_id,
-					'lot_qty': total_excess_qty,
-					'tray_count': excess_trays_created,
-				}))
-			except Exception as e:
-				logging.exception(f'JigSubmitFinalAPI: excess lot creation failed: {e}')
-				return Response({'status': 'error', 'message': 'Failed to create excess lot'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-		# ===== STEP 4: Lock Jig =====
-		try:
-			if jig:
-				jig.is_loaded = True
-				jig.current_user = request.user
-				jig.locked_at = timezone.now()
-				jig.drafted = False
-				jig.batch_id = batch_id
-				jig.lot_id = lot_id
-				jig.save()
-		except Exception:
-			logging.exception('JigSubmitFinalAPI: jig lock failed')
-
-		# ===== STEP 5: Backward compat — also update JigCompleted =====
-		try:
-			no_of_model_cases_str = ''
-			# For multi-model, build combined plating_stock_num from all models (M1, M2, M3 format)
-			effective_plating_stock_num = plating_stock_num
-			if is_multi_model and multi_model_allocation:
-				parts = []
-				model_names = []
-				for m in multi_model_allocation:
-					label = m.get('model_image_label') or m.get('model') or m.get('display_name', '')
-					mlot = m.get('lot_id', '')
-					mqty = m.get('allocated_qty') or m.get('qty', 0)
-					parts.append(f"{label}({mlot}):{mqty}")
-					# Collect model names for plating_stock_num display
-					model_name = m.get('model') or m.get('model_name') or m.get('display_name', '')
-					if model_name:
-						model_names.append(model_name)
-				no_of_model_cases_str = ' | '.join(parts)
-				if model_names:
-					effective_plating_stock_num = ', '.join(model_names)
-
-			# loaded_cases_qty for JigCompleted = total_delink_qty (what was actually loaded into jig)
-			actual_loaded_cases = total_delink_qty
-
-			JigCompleted.objects.update_or_create(
-				batch_id=batch_id, lot_id=lot_id, user=request.user,
-				defaults={
-					'jig_id': jig_id,
-					'jig_capacity': jig_capacity,
-					'broken_hooks': broken_hooks,
-					'loaded_cases_qty': actual_loaded_cases,
-					'original_lot_qty': lot_qty,
-					'delink_tray_info': [t for t in tray_data if int(t.get('delink_qty', 0) or 0) > 0],
-					'delink_tray_qty': total_delink_qty,
-					'delink_tray_count': delink_created,
-					'draft_status': 'submitted',
-					'plating_stock_num': effective_plating_stock_num,
-					'remarks': remarks,
-					'is_multi_model': is_multi_model,
-					'effective_capacity': effective_capacity,
-					'tray_capacity': tray_capacity,
-					'nickel_bath_type': nickel_bath_type,
-					'tray_type': tray_type,
-					'half_filled_tray_info': half_filled_tray_info,
-					'half_filled_tray_qty': sum(int(t.get('qty', 0) or 0) for t in half_filled_tray_info) if isinstance(half_filled_tray_info, list) else 0,
-					'multi_model_allocation': multi_model_allocation,
-					'no_of_model_cases': no_of_model_cases_str or None,
-					'scanned_trays': scanned_trays,
-					'empty_hooks': empty_hooks,
-					'excess_qty': total_excess_qty,
-					'draft_data': {
-						'scanned_trays': scanned_trays,
-						'jig_id': jig_id,
-						'tray_data': tray_data,
-						'half_filled_tray_info': half_filled_tray_info,
-						'multi_model_allocation': multi_model_allocation,
-					},
-				}
-			)
-		except Exception:
-			logging.exception('JigSubmitFinalAPI: JigCompleted backward compat failed (non-fatal)')
-
-		# Mark old draft as submitted
-		try:
-			JigLoadingManualDraft.objects.filter(
-				batch_id=batch_id, lot_id=lot_id, user=request.user
-			).update(draft_status='submitted')
-		except Exception:
-			pass
-
-		logging.info(json.dumps({
-			'event': 'JIG_SUBMIT_FINAL_COMPLETE',
-			'lot_id': lot_id, 'batch_id': batch_id, 'jig_id': jig_id,
-			'loaded_cases_qty': loaded_cases_qty,
-			'delink_records': delink_created,
-			'excess_lot_id': excess_lot_id,
-			'excess_trays': excess_trays_created,
-			'record_id': record.id,
-		}))
-
-		return Response({
-			'status': 'success',
-			'message': 'Jig loading submitted successfully',
-			'record_id': record.id,
-			'lot_id': lot_id,
-			'batch_id': batch_id,
-			'jig_id': jig_id,
-			'loaded_cases_qty': loaded_cases_qty,
-			'effective_capacity': effective_capacity,
-			'total_delink_qty': total_delink_qty,
-			'total_excess_qty': total_excess_qty,
-			'delink_records_created': delink_created,
-			'excess_lot_id': excess_lot_id,
-			'excess_trays_created': excess_trays_created,
-		})
+	def get(self, request):
+		jig_id = (request.GET.get('jig_id', '') or '').strip().upper()
+		if not jig_id:
+			return Response({'exists': False, 'message': 'jig_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		exists = Jig.objects.filter(jig_qr_id=jig_id).exists()
+		return Response({'exists': exists, 'jig_id': jig_id})
 
 
 # =============================================================================
@@ -3885,7 +3621,22 @@ class DeleteJigPickRecordAPI(APIView):
 		try:
 			deleted_count = 0
 
-			# Delete from JigLoadingRecord (DRAFT status only)
+			# Delete from JigCompleted (single source of truth — draft records)
+			try:
+				jc_draft = JigCompleted.objects.filter(
+					lot_id=lot_id,
+					batch_id=batch_id,
+					user=request.user,
+					draft_status__in=['draft', 'active']
+				)
+				if jc_draft.exists():
+					deleted_count += jc_draft.count()
+					jc_draft.delete()
+					logging.info(f'[DELETE] Deleted {deleted_count} JigCompleted draft record(s)')
+			except Exception as e:
+				logging.exception(f'[DELETE] JigCompleted draft delete failed: {e}')
+
+			# Delete JigLoadingRecord if any exist (backward compat)
 			try:
 				dr = JigLoadingRecord.objects.filter(
 					lot_id=lot_id,
@@ -3894,31 +3645,18 @@ class DeleteJigPickRecordAPI(APIView):
 					status_flag='DRAFT'
 				)
 				if dr.exists():
-					deleted_count += dr.count()
 					dr.delete()
-					logging.info(f'[DELETE] Deleted {deleted_count} JigLoadingRecord(s)')
+					logging.info(f'[DELETE] Deleted JigLoadingRecord(s)')
 			except Exception as e:
 				logging.exception(f'[DELETE] JigLoadingRecord delete failed: {e}')
-
-			# Also delete from JigLoadingManualDraft (old table for backward compatibility)
-			try:
-				df = JigLoadingManualDraft.objects.filter(
-					lot_id=lot_id,
-					batch_id=batch_id,
-					user=request.user
-				)
-				if df.exists():
-					df.delete()
-					logging.info(f'[DELETE] Deleted JigLoadingManualDraft record(s)')
-			except Exception as e:
-				logging.exception(f'[DELETE] JigLoadingManualDraft delete failed: {e}')
 
 			# Also delete any JigCompleted entries that represent excess/half-filled trays
 			# These entries are included in the pick table as excess lots — remove them on explicit delete
 			try:
-				jc_qs = JigCompleted.objects.filter(lot_id=lot_id, batch_id=batch_id)
-				# Only remove completed records that actually contribute to pick table (have half_filled_tray_qty > 0)
-				jc_excess = jc_qs.filter(half_filled_tray_qty__gt=0)
+				jc_excess = JigCompleted.objects.filter(
+					lot_id=lot_id, batch_id=batch_id,
+					half_filled_tray_qty__gt=0
+				)
 				if jc_excess.exists():
 					deleted_count += jc_excess.count()
 					jc_excess.delete()
@@ -4010,52 +3748,37 @@ class UpdateRemarkAPI(APIView):
 		}))
 
 		try:
-			# Update JigLoadingRecord (DRAFT status)
-			record = JigLoadingRecord.objects.filter(
+			# Update JigCompleted (single source of truth)
+			record = JigCompleted.objects.filter(
 				lot_id=lot_id,
 				batch_id=batch_id,
 				user=request.user,
-				status_flag='DRAFT'
+				draft_status__in=['draft', 'active']
 			).first()
 
 			if record:
 				record.remarks = remark_text
 				record.save(update_fields=['remarks', 'updated_at'])
-				logging.info(f'[UPDATE_REMARK] JigLoadingRecord updated')
+				logging.info(f'[UPDATE_REMARK] JigCompleted draft updated')
 			else:
-				# If no DRAFT record exists, create one with the remark
-				record, created = JigLoadingRecord.objects.get_or_create(
+				# If no draft record exists, create one with the remark
+				record, created = JigCompleted.objects.get_or_create(
 					lot_id=lot_id,
 					batch_id=batch_id,
 					user=request.user,
 					defaults={
 						'jig_id': None,
-						'lot_qty': 0,
 						'jig_capacity': 0,
-						'effective_capacity': 0,
 						'remarks': remark_text,
-						'status_flag': 'DRAFT',
+						'draft_status': 'draft',
 					}
 				)
 				if created:
-					logging.info(f'[UPDATE_REMARK] NEW JigLoadingRecord created with remark')
+					logging.info(f'[UPDATE_REMARK] NEW JigCompleted draft created with remark')
 				else:
 					record.remarks = remark_text
 					record.save(update_fields=['remarks', 'updated_at'])
-					logging.info(f'[UPDATE_REMARK] Existing JigLoadingRecord updated')
-
-			# Also update JigLoadingManualDraft for backward compatibility
-			try:
-				draft, _ = JigLoadingManualDraft.objects.get_or_create(
-					lot_id=lot_id,
-					batch_id=batch_id,
-					user=request.user,
-					defaults={'draft_status': 'active'}
-				)
-				draft.remarks = remark_text
-				draft.save()
-			except Exception as e:
-				logging.warning(f'[UPDATE_REMARK] JigLoadingManualDraft update failed (non-fatal): {e}')
+					logging.info(f'[UPDATE_REMARK] Existing JigCompleted updated')
 
 			logging.info(json.dumps({
 				'event': 'UPDATE_REMARK_SUCCESS',
