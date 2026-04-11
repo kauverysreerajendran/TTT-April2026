@@ -221,6 +221,7 @@ class JigCompleted(models.Model):
     last_process_module = models.CharField(max_length=100, blank=True, null=True)
     remarks = models.TextField(blank=True, null=True)
     pick_remarks = models.TextField(blank=True, null=True)
+    unloading_remarks = models.TextField(blank=True, null=True, help_text="Remark entered during Jig Unloading")
     bath_numbers = models.ForeignKey('BathNumbers', on_delete=models.SET_NULL, blank=True, null=True)
     no_of_model_cases = models.TextField(blank=True, null=True)
     partial_lot_id = models.CharField(max_length=100, blank=True, null=True, help_text="New lot ID for remaining cases in partial submission")

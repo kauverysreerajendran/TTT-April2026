@@ -1947,6 +1947,31 @@ body.add-model-mode #selectAllCheckbox {
                                 </div>
                               </div>
                           </a>
+
+                          <!-- ERR4: Previous module remark icon (Jig Loading remarks) -->
+                          {% if jig_detail.remarks or jig_detail.pick_remarks %}
+                          <a href="#" title="Previous Module Remark" class="remark-tooltip-trigger"
+                             style="display: inline-flex; align-items: center; height: 20px; margin-left: 5px; position: relative; cursor: pointer;">
+                            <img src="{% static 'assets/icons/chat_icon.png' %}" alt="Previous Remark"
+                                 style="width: 20px; height: 20px; filter: grayscale(0) brightness(1.1) sepia(1) hue-rotate(190deg) saturate(3) contrast(1.2); opacity: 1;" />
+                            <div class="remark-tooltip"
+                                 style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid #a0c4e8; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;">
+                              <div style="font-size: 11px; font-weight: 700; color: #0d47a1; margin-bottom: 6px;">
+                                <i class="fa fa-history" style="margin-right: 4px;"></i> Previous Module Remark
+                              </div>
+                              {% if jig_detail.pick_remarks %}
+                              <div style="font-size: 12px; color: #333; margin-bottom: 4px;">
+                                <strong>Pick Remark:</strong> {{ jig_detail.pick_remarks }}
+                              </div>
+                              {% endif %}
+                              {% if jig_detail.remarks %}
+                              <div style="font-size: 12px; color: #333;">
+                                <strong>Remark:</strong> {{ jig_detail.remarks }}
+                              </div>
+                              {% endif %}
+                            </div>
+                          </a>
+                          {% endif %}
                  
                     </td>
                     </tr>
@@ -2357,6 +2382,22 @@ document.addEventListener('DOMContentLoaded', function() {
             showTrayError('Invalid tray ID: ' + this.value);
             this.select();
             return;
+          }
+          // Tray code prefix validation: must match expected tray_code from model data
+          const expectedTrayCode = (currentModelsData && currentModelsData.models && currentModelsData.models[currentModelIndex])
+            ? (currentModelsData.models[currentModelIndex].tray_code || '') : '';
+          if (expectedTrayCode) {
+            const expectedPrefix = expectedTrayCode.toUpperCase() + '-';
+            if (!this.value.toUpperCase().startsWith(expectedPrefix)) {
+              this.style.borderColor = '#ef5350';
+              this.style.boxShadow = '0 0 0 2px rgba(239,83,80,0.15)';
+              showTrayError('Tray ID "' + this.value + '" does not match expected tray code "' + expectedTrayCode + '". Expected prefix: ' + expectedPrefix);
+              this.value = '';
+              this.style.borderColor = '#cfd8dc';
+              this.style.boxShadow = '';
+              this.focus();
+              return;
+            }
           }
           // Check for duplicates across all tray inputs
           const currentVal = this.value;
@@ -2798,6 +2839,211 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('Z1 Unload JS loaded. Found',
     document.querySelectorAll('.z1-unload-btn').length, 'unload buttons,',
     document.querySelectorAll('.z1-view-btn').length, 'view buttons');
+
+  // ========== ERR2: Remark send button handler ==========
+  document.querySelectorAll('.remark-tooltip-trigger[data-jig-lot-id]').forEach(function(trigger) {
+    const sendBtn = trigger.querySelector('button');
+    if (!sendBtn) return;
+    sendBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const textarea = trigger.querySelector('textarea');
+      const remark = textarea ? textarea.value.trim() : '';
+      if (!remark) { alert('Please enter a remark before sending.'); return; }
+      // Find jig_completed_id from the closest table row
+      const row = trigger.closest('tr');
+      const jigCompletedId = row ? row.getAttribute('data-jig-completed-id') : null;
+      if (!jigCompletedId) { alert('Could not identify the jig record.'); return; }
+      fetch('/jig_unloading/api/save_jig_pick_remark_z1/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify({ jig_completed_id: jigCompletedId, unloading_remarks: remark })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          alert('Remark saved successfully.');
+          // Make textarea readonly and update icon color
+          textarea.readOnly = true;
+          const img = trigger.querySelector('img');
+          if (img) img.style.filter = 'grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2)';
+          // Replace send button with info message
+          sendBtn.parentElement.innerHTML = '<div style="margin-top:40px;color:#31708f;background:#d9edf7;border:1px solid #bce8f1;border-radius:4px;padding:8px 12px;font-size:10px;text-align:left;"><i class="fa fa-info-circle" style="margin-right:6px;"></i>Remark already saved and cannot be edited.</div>';
+        } else {
+          alert('Failed to save remark: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(function(err) { alert('Network error: ' + err.message); });
+    });
+  });
+
+  // ========== ERR3: Scan button handler ==========
+  (function() {
+    const scanBtn = document.getElementById('scanButton');
+    const scanInput = document.getElementById('scanHiddenInput');
+    const scanStatus = document.getElementById('scanStatusMessage');
+    const scanMsg = document.getElementById('scanMessage');
+    if (!scanBtn || !scanInput) return;
+
+    let scanActive = false;
+
+    scanBtn.addEventListener('click', function() {
+      scanActive = !scanActive;
+      if (scanActive) {
+        scanStatus.style.display = 'inline';
+        scanInput.style.position = 'absolute';
+        scanInput.style.left = '-9999px';
+        scanInput.value = '';
+        scanInput.focus();
+        scanBtn.style.backgroundColor = '#dc3545';
+        scanBtn.style.borderColor = '#dc3545';
+        scanBtn.innerHTML = '<i class="fa fa-times" style="margin-right:6px;"></i>Cancel Scan';
+      } else {
+        scanStatus.style.display = 'none';
+        scanBtn.style.backgroundColor = '#028084';
+        scanBtn.style.borderColor = '#028084';
+        scanBtn.innerHTML = '<i class="fa fa-qrcode" style="margin-right:6px;"></i>Scan';
+        scanMsg.style.display = 'none';
+      }
+    });
+
+    scanInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const trayId = this.value.trim();
+        this.value = '';
+        if (!trayId) return;
+
+        // Show searching message
+        scanMsg.style.display = 'block';
+        scanMsg.style.background = '#fff3cd';
+        scanMsg.style.color = '#856404';
+        scanMsg.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Searching for tray: ' + trayId;
+
+        fetch('/jig_unloading/api/get_jig_for_tray_z1/?tray_id=' + encodeURIComponent(trayId))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success) {
+              const jigId = data.jig_id || data.lot_id;
+              // Try to find the row on the current page
+              const rows = document.querySelectorAll('#order-listing tbody tr[data-jig-completed-id]');
+              let found = false;
+              rows.forEach(function(row) {
+                if (row.getAttribute('data-jig-completed-id') === String(data.jig_completed_id)) {
+                  found = true;
+                  // Highlight and scroll to row
+                  row.style.transition = 'background-color 0.3s';
+                  row.style.backgroundColor = '#d4edda';
+                  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  setTimeout(function() { row.style.backgroundColor = ''; }, 5000);
+                  scanMsg.style.display = 'block';
+                  scanMsg.style.background = '#d4edda';
+                  scanMsg.style.color = '#155724';
+                  scanMsg.innerHTML = '<i class="fa fa-check-circle"></i> Tray ' + trayId + ' found in JIG: ' + jigId;
+                }
+              });
+              if (!found) {
+                // Tray found but on a different page — search across pages
+                scanMsg.style.display = 'block';
+                scanMsg.style.background = '#cce5ff';
+                scanMsg.style.color = '#004085';
+                scanMsg.innerHTML = '<i class="fa fa-info-circle"></i> Tray ' + trayId + ' found in JIG: ' + jigId + '. Navigating to the correct page...';
+                // Try to navigate to the page containing this record
+                z1ScanSearchAcrossPages(data.jig_completed_id, trayId, jigId);
+              }
+            } else {
+              scanMsg.style.display = 'block';
+              scanMsg.style.background = '#f8d7da';
+              scanMsg.style.color = '#721c24';
+              scanMsg.innerHTML = '<i class="fa fa-times-circle"></i> ' + (data.error || 'Tray not found');
+            }
+          })
+          .catch(function(err) {
+            scanMsg.style.display = 'block';
+            scanMsg.style.background = '#f8d7da';
+            scanMsg.style.color = '#721c24';
+            scanMsg.innerHTML = '<i class="fa fa-exclamation-triangle"></i> Network error: ' + err.message;
+          });
+
+        // Re-focus for next scan
+        setTimeout(function() { scanInput.focus(); }, 100);
+      }
+    });
+
+    function z1ScanSearchAcrossPages(jigCompletedId, trayId, jigId) {
+      // Navigate through pagination pages to find the row
+      const paginationLinks = document.querySelectorAll('.pagination a.page-link, .pagination a');
+      let pageLinks = [];
+      paginationLinks.forEach(function(link) {
+        const href = link.getAttribute('href');
+        if (href && href.includes('page=')) {
+          const match = href.match(/page=(\d+)/);
+          if (match) pageLinks.push({ page: parseInt(match[1]), href: href });
+        }
+      });
+      // Navigate to each page URL with a highlight parameter
+      if (pageLinks.length > 0) {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('highlight_jig', jigCompletedId);
+        currentUrl.searchParams.set('scan_tray', trayId);
+        // Try pages sequentially
+        for (let i = 0; i < pageLinks.length; i++) {
+          const pageUrl = new URL(pageLinks[i].href, window.location.origin);
+          pageUrl.searchParams.set('highlight_jig', jigCompletedId);
+          pageUrl.searchParams.set('scan_tray', trayId);
+          window.location.href = pageUrl.toString();
+          return;
+        }
+      }
+    }
+
+    // On page load, check if we need to highlight a row from cross-page scan
+    const urlParams = new URLSearchParams(window.location.search);
+    const highlightJig = urlParams.get('highlight_jig');
+    const scanTray = urlParams.get('scan_tray');
+    if (highlightJig) {
+      const rows = document.querySelectorAll('#order-listing tbody tr[data-jig-completed-id]');
+      let found = false;
+      rows.forEach(function(row) {
+        if (row.getAttribute('data-jig-completed-id') === highlightJig) {
+          found = true;
+          row.style.transition = 'background-color 0.3s';
+          row.style.backgroundColor = '#d4edda';
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(function() { row.style.backgroundColor = ''; }, 5000);
+          if (scanMsg) {
+            scanMsg.style.display = 'block';
+            scanMsg.style.background = '#d4edda';
+            scanMsg.style.color = '#155724';
+            scanMsg.innerHTML = '<i class="fa fa-check-circle"></i> Tray ' + (scanTray || '') + ' found and highlighted.';
+          }
+        }
+      });
+      if (!found && scanMsg) {
+        // Not on this page either — try next page
+        const currentPage = parseInt(urlParams.get('page') || '1');
+        const nextPageLink = document.querySelector('.pagination a[href*="page=' + (currentPage + 1) + '"]');
+        if (nextPageLink) {
+          const nextUrl = new URL(nextPageLink.getAttribute('href'), window.location.origin);
+          nextUrl.searchParams.set('highlight_jig', highlightJig);
+          nextUrl.searchParams.set('scan_tray', scanTray || '');
+          window.location.href = nextUrl.toString();
+        } else {
+          scanMsg.style.display = 'block';
+          scanMsg.style.background = '#f8d7da';
+          scanMsg.style.color = '#721c24';
+          scanMsg.innerHTML = '<i class="fa fa-times-circle"></i> Tray record not found on any page.';
+        }
+      }
+      // Clean URL params
+      if (found) {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('highlight_jig');
+        cleanUrl.searchParams.delete('scan_tray');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      }
+    }
+  })();
 });
 </script>
 {% endblock %}

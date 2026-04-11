@@ -1429,6 +1429,24 @@ class JU_Zone_MainTable(TemplateView):
                 if not hasattr(jig_detail, _fld) or getattr(jig_detail, _fld) is None:
                     setattr(jig_detail, _fld, [])
 
+            # Populate all_polishing_stk_nos from enhanced data if still empty
+            if not jig_detail.all_polishing_stk_nos:
+                if getattr(jig_detail, 'lot_polishing_stk_nos_list', None):
+                    jig_detail.all_polishing_stk_nos = list(jig_detail.lot_polishing_stk_nos_list)
+                elif getattr(jig_detail, 'lot_polishing_stk_nos', None):
+                    jig_detail.all_polishing_stk_nos = list(jig_detail.lot_polishing_stk_nos)
+                elif getattr(jig_detail, 'final_polishing_stk_nos', None):
+                    jig_detail.all_polishing_stk_nos = [jig_detail.final_polishing_stk_nos]
+
+            # Populate all_plating_stk_nos from enhanced data if still empty
+            if not jig_detail.all_plating_stk_nos:
+                if getattr(jig_detail, 'lot_plating_stk_nos_list', None):
+                    jig_detail.all_plating_stk_nos = list(jig_detail.lot_plating_stk_nos_list)
+                elif getattr(jig_detail, 'lot_plating_stk_nos', None):
+                    jig_detail.all_plating_stk_nos = list(jig_detail.lot_plating_stk_nos)
+                elif getattr(jig_detail, 'final_plating_stk_nos', None):
+                    jig_detail.all_plating_stk_nos = [jig_detail.final_plating_stk_nos]
+
             # Guarantee unique_* fields are always initialized (template requires them)
             for _ufld in ['unique_versions', 'unique_vendors', 'unique_locations', 'unique_tray_types',
                           'unique_plating_stk_nos', 'unique_polishing_stk_nos']:
@@ -1591,6 +1609,22 @@ class JU_Zone_MainTable(TemplateView):
             # Set BOTH flags to ensure template works
             jig_detail.has_unload_draft = has_draft
             jig_detail.jig_unload_draft = has_draft
+            
+            # Compute all_models_submitted_z1 for View icon
+            _dd_z1 = getattr(jig_detail, 'draft_data', {}) or {}
+            _alloc_z1 = _dd_z1.get('multi_model_allocation', []) if isinstance(_dd_z1, dict) else []
+            _liq_z1 = _dd_z1.get('lot_id_quantities', {}) if isinstance(_dd_z1, dict) else {}
+            if _alloc_z1:
+                _all_lids_z1 = set(a['lot_id'] for a in _alloc_z1 if a.get('lot_id'))
+            elif _liq_z1:
+                _all_lids_z1 = set(_liq_z1.keys())
+            else:
+                _all_lids_z1 = {jig_detail.lot_id}
+            _submitted_z1 = set(
+                JUSubmittedZ1.objects.filter(jig_completed_id=jig_detail.id, is_draft=False)
+                .values_list('lot_id', flat=True)
+            )
+            jig_detail.all_models_submitted_z1 = _all_lids_z1.issubset(_submitted_z1) and len(_submitted_z1) > 0
             
             if has_draft:
                 print(f"🎯 Zone 2 - JIG {jig_detail.jig_id} MARKED AS DRAFT")
@@ -1928,13 +1962,21 @@ class JU_Zone_JigPickRemarkAPIView(APIView):
     def post(self, request):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+            jig_completed_id = data.get('jig_completed_id')
             jig_lot_id = data.get('jig_lot_id')
             remark = data.get('unloading_remarks', '').strip()
-            if not jig_lot_id:
-                return JsonResponse({'success': False, 'error': 'JIG Lot ID not found.'}, status=400)
-            jig_detail = JigCompleted.objects.filter(jig_lot_id=jig_lot_id).first()
+
+            jig_detail = None
+            if jig_completed_id:
+                jig_detail = JigCompleted.objects.filter(id=jig_completed_id).first()
+            if not jig_detail and jig_lot_id:
+                # Fallback: search by lot_id or jig_id
+                jig_detail = JigCompleted.objects.filter(lot_id=jig_lot_id).first()
+                if not jig_detail:
+                    jig_detail = JigCompleted.objects.filter(jig_id=jig_lot_id).first()
             if not jig_detail:
-                return JsonResponse({'success': False, 'error': 'Lot not found in JigCompleted'}, status=404)
+                return JsonResponse({'success': False, 'error': 'JigCompleted record not found.'}, status=404)
+
             jig_detail.unloading_remarks = remark
             jig_detail.save(update_fields=['unloading_remarks'])
             return JsonResponse({'success': True, 'message': 'Remark saved'})
@@ -3627,7 +3669,17 @@ class JU_Zone_Completedtable(TemplateView):
         def _is_zone2_record(rec):
             """Return True if the record belongs to Zone 2 (non-IPS)."""
             if rec.plating_color:
-                return rec.plating_color_id not in ips_color_ids
+                if rec.plating_color_id not in ips_color_ids:
+                    return True
+                # FK is IPS — but check if ANY combine_lot_id has a non-IPS color
+                # (happens for multi-model jigs with mixed plating colors)
+                if rec.combine_lot_ids:
+                    for _cid in rec.combine_lot_ids:
+                        _lid = _extract_lot_id_z2(_cid)
+                        _tsm = TotalStockModel.objects.filter(lot_id=_lid).select_related('plating_color').first()
+                        if _tsm and _tsm.plating_color and _tsm.plating_color.id not in ips_color_ids:
+                            return True
+                return False
             # plating_color is null — resolve from combine_lot_ids
             if rec.combine_lot_ids:
                 for _cid in rec.combine_lot_ids:
