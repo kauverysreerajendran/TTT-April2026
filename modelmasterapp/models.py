@@ -401,6 +401,8 @@ class TotalStockModel(models.Model):
     last_process_module = models.CharField(max_length=255, null=True, blank=True, help_text="Last Process Module")
     next_process_module = models.CharField(max_length=255, null=True, blank=True, help_text="Next Process Module")
 
+
+
     bq_last_process_date_time = models.DateTimeField(null=True, blank=True, help_text="Last Process Date/Time")
     iqf_last_process_date_time = models.DateTimeField(null=True, blank=True, help_text="Last Process Date/Time")
     brass_audit_last_process_date_time = models.DateTimeField(null=True, blank=True, help_text="Last Process Date/Time")

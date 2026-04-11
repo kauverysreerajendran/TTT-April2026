@@ -6503,20 +6503,23 @@ class PickTrayIdList_Complete_APIView(APIView):
 
                 if source_trays:
                     _iqf_data = []
-                    for _i, _t in enumerate(sorted(source_trays, key=lambda x: x.get('qty', 0))):
+                    sorted_trays = sorted(source_trays, key=lambda x: x.get('qty', 0))
+                    for _i, _t in enumerate(sorted_trays):
+                        # ✅ FIX: Mark first (smallest qty) tray as top_tray after sorting
+                        is_top = (_i == 0) and len(sorted_trays) > 0
                         _iqf_data.append({
                             's_no': _i + 1,
                             'tray_id': _t.get('tray_id', ''),
                             'tray_quantity': int(_t.get('qty', 0)),
                             'position': _i,
-                            'is_top_tray': bool(_t.get('top_tray', False)),
+                            'is_top_tray': is_top,
                             'rejected_tray': False,
                             'delink_tray': False,
                             'rejection_details': [],
-                            'top_tray': bool(_t.get('top_tray', False)),
+                            'top_tray': is_top,
                             'model_used': 'IQF_Submitted'
                         })
-                    print(f"✅ [PickTrayIdList] Using IQF_Submitted ({iqf_record.submission_type}): {len(_iqf_data)} tray(s) for lot {lot_id}")
+                    print(f"✅ [PickTrayIdList] Using IQF_Submitted ({iqf_record.submission_type}): {len(_iqf_data)} tray(s) for lot {lot_id} (smallest qty: {sorted_trays[0].get('tray_id')} marked as top)")
                     return JsonResponse({
                         'success': True,
                         'trays': _iqf_data,
@@ -6628,10 +6631,9 @@ class PickTrayIdList_Complete_APIView(APIView):
         print(f"Flags: send_brass_qc={send_brass_qc}, send_brass_audit_to_qc={send_brass_audit_to_qc}")
         print(f"Total accepted trays found: {base_queryset.count()}")
 
-        # Find top tray from accepted trays only
-        top_tray = base_queryset.filter(top_tray=True).first()
-        other_trays = base_queryset.exclude(pk=top_tray.pk if top_tray else None).order_by('id')
-
+        # ✅ FIX: Sort all trays by quantity ascending, mark smallest qty as top tray
+        all_trays = list(base_queryset.order_by('tray_quantity'))  # Sort by qty ascending
+        
         data = []
         row_counter = 1
 
@@ -6646,20 +6648,20 @@ class PickTrayIdList_Complete_APIView(APIView):
                 'rejected_tray': False,
                 'delink_tray': False,
                 'rejection_details': [],
-                'top_tray': getattr(tray_obj, 'top_tray', False),
+                'top_tray': is_top,  # ✅ FIX: Override with position-based logic
                 'tray_quantity': getattr(tray_obj, 'tray_quantity', None),
                 'model_used': tray_model_used  # Add info about which model was used
             }
 
-        if top_tray:
-            tray_data = create_tray_data(top_tray, is_top=True)
+        # ✅ First tray (smallest qty) is always top tray
+        for idx, tray in enumerate(all_trays):
+            is_top = (idx == 0) and len(all_trays) > 0
+            tray_data = create_tray_data(tray, is_top=is_top)
             data.append(tray_data)
             row_counter += 1
-
-        for tray in other_trays:
-            tray_data = create_tray_data(tray, is_top=False)
-            data.append(tray_data)
-            row_counter += 1
+        
+        if all_trays:
+            print(f"✅ [PickTrayIdList_Complete_APIView] Sorted {len(all_trays)} trays by quantity. Top tray: {all_trays[0].tray_id} (qty={all_trays[0].tray_quantity})")
 
         print(f"✅ [PickTrayIdList_Complete_APIView] Total accepted trays returned: {len(data)}")
 
@@ -7098,10 +7100,19 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                 row_counter += 1
 
             # 2. Add rejected trays
-            for tray in rejected_trays:
-                tray_data = create_tray_data(tray, 'rejected', False)
+            # ✅ NEW: Sort rejected trays by quantity (ascending) to identify "display top"
+            # The smallest quantity rejected tray should be marked as top for display purposes
+            rejected_trays_sorted = sorted(rejected_trays, key=lambda x: int(x.tray_quantity or 0))
+            
+            for idx, tray in enumerate(rejected_trays_sorted):
+                # Mark ONLY the first (smallest quantity) rejected tray as display top
+                is_top = (idx == 0) and len(rejected_trays_sorted) > 0
+                tray_data = create_tray_data(tray, 'rejected', is_top)
                 data.append(tray_data)
                 row_counter += 1
+                
+                if is_top:
+                    print(f"✅ [rejectedTrays] Marked display top for rejected section: {tray.tray_id} (qty={tray.tray_quantity})")
 
             # 3. Add delinked trays (only those with delink_tray=True)
             for tray in delinked_trays:

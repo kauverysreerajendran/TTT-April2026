@@ -2345,9 +2345,20 @@ def iqf_validate_tray_scan(request):
             'top_tray': bool(getattr(iqf_match, 'top_tray', False)),
         })
 
-    # Check BrassTrayId for the same lot
+    # Check BrassTrayId for the same lot — ONLY rejected trays are valid for IQF reuse
+    # (Accepted Brass QC trays are committed to the acceptance flow and must not be reused in IQF)
     brass_match = BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=False).first()
     if brass_match:
+        # ✅ FIX: Only allow BrassTrayId trays that are REJECTED (IQF processes rejected Brass QC trays)
+        # Accepted/top trays from Brass QC are already committed and must be blocked
+        if not brass_match.rejected_tray:
+            print(f"🚫 [TRAY_VALIDATION] {tray_id}: Found in BrassTrayId for lot {lot_id} but NOT rejected (accepted/top tray) — blocking")
+            return Response({
+                'success': True,
+                'status': 'invalid_format',
+                'message': 'Tray already accepted in Brass QC — cannot reuse',
+                'tray_id': tray_id,
+            })
         if max_reuse_limit > 0 and reuse_count >= max_reuse_limit:
             return Response({
                 'success': True,
@@ -2364,15 +2375,24 @@ def iqf_validate_tray_scan(request):
             'top_tray': bool(getattr(brass_match, 'top_tray', False)),
         })
 
-    # ── RULE 4: Not in current lot — check if it exists anywhere (delink case) ──
-    exists_elsewhere = (
-        IQFTrayId.objects.filter(tray_id=tray_id).exists() or
-        BrassTrayId.objects.filter(tray_id=tray_id).exists() or
-        TrayId.objects.filter(tray_id=tray_id).exists()
-    )
-
-    if exists_elsewhere:
-        # Tray exists in system but not in this lot → delink/new tray
+    # ── RULE 4: Not in current lot — check if it's a genuinely NEW tray ──
+    # ✅ FIX: A tray is only "new" if it is UNOCCUPIED in the TrayId master table.
+    # If it has a lot_id assigned and is not delinked, it is already in use — REJECT.
+    master_tray = TrayId.objects.filter(tray_id=tray_id).first()
+    if master_tray:
+        # Check if tray is occupied (has a lot_id and is not delinked)
+        master_lot = str(master_tray.lot_id or '').strip()
+        is_occupied = master_lot not in ('', 'None') and not master_tray.delink_tray
+        if is_occupied:
+            print(f"🚫 [TRAY_VALIDATION] {tray_id}: Occupied in TrayId master (lot={master_tray.lot_id}, delink={master_tray.delink_tray}) — blocking")
+            return Response({
+                'success': True,
+                'status': 'invalid_format',
+                'message': 'Tray already allocated to a lot — cannot reuse',
+                'tray_id': tray_id,
+            })
+        # Tray exists in master but is unoccupied/delinked → valid new tray
+        print(f"✅ [TRAY_VALIDATION] {tray_id}: Found in TrayId master, unoccupied — valid new tray")
         return Response({
             'success': True,
             'status': 'delink',
@@ -2380,11 +2400,25 @@ def iqf_validate_tray_scan(request):
             'tray_id': tray_id,
         })
 
-    # Tray ID format valid but not found anywhere in the system
+    # Also check if tray exists in other tray tables (cross-module) but not in master
+    exists_elsewhere = (
+        IQFTrayId.objects.filter(tray_id=tray_id).exists() or
+        BrassTrayId.objects.filter(tray_id=tray_id).exists()
+    )
+    if exists_elsewhere:
+        print(f"🚫 [TRAY_VALIDATION] {tray_id}: Found in IQFTrayId/BrassTrayId (different lot) — blocking")
+        return Response({
+            'success': True,
+            'status': 'invalid_format',
+            'message': 'Tray already in use in another module — cannot reuse',
+            'tray_id': tray_id,
+        })
+
+    # Tray ID format valid but not found anywhere in the system — not registered
     return Response({
         'success': True,
-        'status': 'delink',
-        'message': 'New Tray',
+        'status': 'invalid_format',
+        'message': 'Tray not found in system registry',
         'tray_id': tray_id,
     })
 

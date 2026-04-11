@@ -1921,13 +1921,6 @@ footer {
 }
 /* Day Planning Complete table end */
 
-/* Input Screening Pick Table Start (2029-3270)  */
-.new-popup-modal.open {
-  left: 100px;
-  max-height: 500px !important;
-  margin-top: 40px;
-  border-radius: 20px;
-}
 
 .tray-scan-modal-DayPlanning.open {
   display: block !important;
@@ -2825,12 +2818,12 @@ html {
   z-index: 9999;
 }
 
-/* ...existing code... */
+
 
 /* Rejection Details Modal Styles */
 .new-popup-modal {
   position: fixed;
-  top: 50px;
+  top: 35px;
   right: 0;
   width: 420px;
   max-width: 95vw;
@@ -2847,7 +2840,7 @@ html {
 .new-popup-modal.open {
   display: block;
   animation: slideInFromRight 0.3s;
-  left: 270px;
+  left: 1100px;
   max-height: 500px !important;
   margin-top: 0 !important;
   border-radius: 15px;

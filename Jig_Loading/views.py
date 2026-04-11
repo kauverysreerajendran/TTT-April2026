@@ -426,7 +426,7 @@ class JigView(TemplateView):
 							d['lot_status_class'] = 'lot-status-draft'
 						elif d.get('stock_lot_id') in partial_draft_lot_ids:
 							d['lot_status'] = 'Partial Draft'
-							d['lot_status_class'] = 'lot-status-few'
+							d['lot_status_class'] = 'lot-status-partial-draft'
 						else:
 							d.setdefault('lot_status', 'Yet to Start')
 							d.setdefault('lot_status_class', 'lot-status-yet')
@@ -3851,5 +3851,269 @@ class UpdateRemarkAPI(APIView):
 				'success': False,
 				'error': str(e),
 			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class LotFetchAPI(APIView):
+	"""GET /api/lots/ — Consolidated Lot Fetch API (backend-driven filtering).
+
+	Modes:
+	  ?mode=ADD&primary_lot_id=X&primary_batch_id=Y
+	    → Returns lots available for Add Model, with dynamically computed available_qty.
+	    → available_qty = total_lot_qty - qty already allocated in the CURRENT draft's
+	      multi_model_allocation (active entries only).
+
+	  Default (no mode)
+	    → Returns all brass-audit-accepted lots for the pick table.
+
+	RULE: Available qty is ALWAYS computed dynamically. Draft state never locks qty.
+	"""
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request):
+		mode = (request.GET.get('mode', '') or '').strip().upper()
+		primary_lot_id = request.GET.get('primary_lot_id', '') or ''
+		primary_batch_id = request.GET.get('primary_batch_id', '') or ''
+
+		logging.info(json.dumps({
+			'event': 'LOT_FETCH_API',
+			'mode': mode,
+			'primary_lot_id': primary_lot_id,
+			'primary_batch_id': primary_batch_id,
+			'user': request.user.username,
+		}))
+
+		if mode == 'ADD':
+			return self._handle_add_model_mode(request, primary_lot_id, primary_batch_id)
+
+		# Default: return all brass-audit-accepted lots
+		return self._handle_default_mode(request)
+
+	def _handle_add_model_mode(self, request, primary_lot_id, primary_batch_id):
+		"""Return lots available for Add Model with dynamically computed available_qty."""
+
+		# 1. Get the CURRENT draft's multi_model_allocation to find actively allocated lots
+		allocated_lot_ids = set()
+		if primary_lot_id:
+			try:
+				draft = JigCompleted.objects.filter(
+					lot_id=primary_lot_id,
+					draft_status__in=['draft', 'active'],
+				).first()
+				if draft and draft.is_multi_model and draft.multi_model_allocation:
+					for m in draft.multi_model_allocation:
+						if isinstance(m, dict):
+							mlot = m.get('lot_id', '')
+							if mlot:
+								allocated_lot_ids.add(mlot)
+				# Also add the primary lot itself
+				allocated_lot_ids.add(primary_lot_id)
+			except Exception:
+				logging.exception('[LOT_FETCH] Failed to read draft multi_model_allocation')
+				allocated_lot_ids.add(primary_lot_id)
+
+		# 2. Get lots already SUBMITTED (permanently consumed — exclude from results)
+		submitted_lot_ids = set()
+		try:
+			submitted_records = JigCompleted.objects.filter(
+				draft_status='submitted'
+			).only('lot_id', 'is_multi_model', 'multi_model_allocation')
+			for rec in submitted_records:
+				submitted_lot_ids.add(rec.lot_id)
+				if rec.is_multi_model and rec.multi_model_allocation:
+					for m in rec.multi_model_allocation:
+						if isinstance(m, dict):
+							mlot = m.get('lot_id', '')
+							if mlot:
+								submitted_lot_ids.add(mlot)
+		except Exception:
+			logging.exception('[LOT_FETCH] Failed to read submitted lots')
+
+		# 3. Get lots in OTHER drafts (not the current primary's draft)
+		other_draft_lot_ids = set()
+		try:
+			other_drafts = JigCompleted.objects.filter(
+				draft_status__in=['draft', 'active']
+			).exclude(lot_id=primary_lot_id).only('lot_id', 'is_multi_model', 'multi_model_allocation')
+			for rec in other_drafts:
+				other_draft_lot_ids.add(rec.lot_id)
+				if rec.is_multi_model and rec.multi_model_allocation:
+					for m in rec.multi_model_allocation:
+						if isinstance(m, dict):
+							mlot = m.get('lot_id', '')
+							if mlot:
+								other_draft_lot_ids.add(mlot)
+		except Exception:
+			logging.exception('[LOT_FETCH] Failed to read other drafts')
+
+		# 4. Fetch brass-audit-accepted lots, excluding submitted + other drafts + already allocated
+		exclude_ids = submitted_lot_ids | other_draft_lot_ids | allocated_lot_ids
+		try:
+			from django.db.models import Q as _Q
+			base_qs = TotalStockModel.objects.filter(
+				_Q(brass_audit_accptance=True) |
+				_Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
+			).select_related('batch_id', 'batch_id__model_stock_no')
+			if exclude_ids:
+				base_qs = base_qs.exclude(lot_id__in=list(exclude_ids))
+			lots = base_qs.order_by('-brass_audit_last_process_date_time')[:200]
+		except Exception:
+			logging.exception('[LOT_FETCH] Failed to query TotalStockModel')
+			return Response({'status': 'error', 'message': 'Failed to fetch lots'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+		# 5. Build response with dynamically computed available_qty
+		results = []
+		for stock in lots:
+			batch = getattr(stock, 'batch_id', None)
+			total_qty = int(
+				getattr(stock, 'brass_audit_accepted_qty', None)
+				or getattr(stock, 'brass_audit_physical_qty', None)
+				or getattr(stock, 'total_stock', 0) or 0
+			)
+			results.append({
+				'lot_id': getattr(stock, 'lot_id', ''),
+				'batch_id': getattr(batch, 'batch_id', '') if batch else '',
+				'total_qty': total_qty,
+				'used_qty': 0,
+				'available_qty': total_qty,
+				'plating_stk_no': getattr(batch, 'plating_stk_no', '') if batch else '',
+				'polishing_stk_no': getattr(batch, 'polishing_stk_no', '') if batch else '',
+				'plating_color': getattr(batch, 'plating_color', '') if batch else '',
+				'polish_finish': getattr(batch, 'polish_finish', '') if batch else '',
+				'model_stock_no': str(getattr(batch, 'model_stock_no', '')) if batch else '',
+			})
+
+		logging.info(json.dumps({
+			'event': 'LOT_FETCH_API_RESULT',
+			'mode': 'ADD',
+			'primary_lot_id': primary_lot_id,
+			'excluded_count': len(exclude_ids),
+			'returned_count': len(results),
+		}))
+
+		return Response({
+			'status': 'success',
+			'mode': 'ADD',
+			'lots': results,
+		}, status=status.HTTP_200_OK)
+
+	def _handle_default_mode(self, request):
+		"""Default lot fetch — returns all available lots."""
+		try:
+			from django.db.models import Q as _Q
+			base_qs = TotalStockModel.objects.filter(
+				_Q(brass_audit_accptance=True) |
+				_Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
+			).select_related('batch_id', 'batch_id__model_stock_no')
+
+			# Exclude submitted lots
+			try:
+				submitted_lot_ids = set(
+					JigCompleted.objects.filter(draft_status='submitted').values_list('lot_id', flat=True)
+				)
+				if submitted_lot_ids:
+					base_qs = base_qs.exclude(lot_id__in=list(submitted_lot_ids))
+			except Exception:
+				logging.exception('[LOT_FETCH] Failed to exclude submitted lots')
+
+			lots = base_qs.order_by('-brass_audit_last_process_date_time')[:200]
+			results = []
+			for stock in lots:
+				batch = getattr(stock, 'batch_id', None)
+				total_qty = int(
+					getattr(stock, 'brass_audit_accepted_qty', None)
+					or getattr(stock, 'brass_audit_physical_qty', None)
+					or getattr(stock, 'total_stock', 0) or 0
+				)
+				results.append({
+					'lot_id': getattr(stock, 'lot_id', ''),
+					'batch_id': getattr(batch, 'batch_id', '') if batch else '',
+					'total_qty': total_qty,
+					'available_qty': total_qty,
+					'plating_stk_no': getattr(batch, 'plating_stk_no', '') if batch else '',
+				})
+
+			return Response({
+				'status': 'success',
+				'lots': results,
+			}, status=status.HTTP_200_OK)
+		except Exception as e:
+			logging.exception(f'LotFetchAPI default mode error: {str(e)}')
+			return Response({
+				'status': 'error',
+				'message': str(e),
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def jig_get_lot_id_for_tray(request):
+	"""
+	Get lot_id for a given tray_id to support barcode scanner in Jig Loading pick table.
+	Searches JigLoadTrayId first, then BrassAudit tables, then TrayId as fallback.
+	Only returns lot_ids that are brass-audit-accepted (visible in pick table).
+
+	GET /jig_loading/api/get_lot_id_for_tray/?tray_id=<tray_id>
+	"""
+	tray_id = request.GET.get('tray_id', '').strip()
+
+	if not tray_id:
+		return JsonResponse({'success': False, 'error': 'tray_id parameter is required'})
+
+	try:
+		# Strategy 1: Check JigLoadTrayId table (most specific to Jig Loading)
+		jig_tray = JigLoadTrayId.objects.filter(tray_id=tray_id).first()
+		if jig_tray and jig_tray.lot_id:
+			lot_id = str(jig_tray.lot_id)
+			# Verify lot is in pick table (brass-audit-accepted)
+			from django.db.models import Q as _Q
+			exists = TotalStockModel.objects.filter(
+				_Q(brass_audit_accptance=True) | _Q(brass_audit_few_cases_accptance=True),
+				lot_id=lot_id
+			).exists()
+			if exists:
+				return JsonResponse({'success': True, 'lot_id': lot_id, 'source': 'JigLoadTrayId'})
+
+		# Strategy 2: Check BrassAudit tables
+		try:
+			from BrassAudit.models import BrassAuditTrayId, BrassTrayId
+			ba_tray = BrassAuditTrayId.objects.filter(tray_id=tray_id).first()
+			if ba_tray and ba_tray.lot_id:
+				lot_id = str(ba_tray.lot_id)
+				from django.db.models import Q as _Q
+				exists = TotalStockModel.objects.filter(
+					_Q(brass_audit_accptance=True) | _Q(brass_audit_few_cases_accptance=True),
+					lot_id=lot_id
+				).exists()
+				if exists:
+					return JsonResponse({'success': True, 'lot_id': lot_id, 'source': 'BrassAuditTrayId'})
+			brass_tray = BrassTrayId.objects.filter(tray_id=tray_id).first()
+			if brass_tray and brass_tray.lot_id:
+				lot_id = str(brass_tray.lot_id)
+				from django.db.models import Q as _Q
+				exists = TotalStockModel.objects.filter(
+					_Q(brass_audit_accptance=True) | _Q(brass_audit_few_cases_accptance=True),
+					lot_id=lot_id
+				).exists()
+				if exists:
+					return JsonResponse({'success': True, 'lot_id': lot_id, 'source': 'BrassTrayId'})
+		except ImportError:
+			pass
+
+		# Strategy 3: Check TrayId table (fallback)
+		from modelmasterapp.models import TrayId
+		tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
+		if tray_obj and tray_obj.lot_id:
+			lot_id = str(tray_obj.lot_id)
+			from django.db.models import Q as _Q
+			exists = TotalStockModel.objects.filter(
+				_Q(brass_audit_accptance=True) | _Q(brass_audit_few_cases_accptance=True),
+				lot_id=lot_id
+			).exists()
+			if exists:
+				return JsonResponse({'success': True, 'lot_id': lot_id, 'source': 'TrayId'})
+
+		return JsonResponse({'success': False, 'error': f'Tray {tray_id} not found in Jig Loading system'})
+
+	except Exception as e:
+		logging.exception(f'jig_get_lot_id_for_tray error: {str(e)}')
+		return JsonResponse({'success': False, 'error': f'Database error: {str(e)}'})
 
 

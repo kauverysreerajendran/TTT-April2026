@@ -928,6 +928,12 @@
     color: #1976d2;
   }
 
+  .lot-status-partial-draft {
+    background: linear-gradient(135deg, #e8e8e8, #d5d5d5);
+    border-color: #555;
+    color: #333;
+  }
+
   .lot-status-accepted {
     background: linear-gradient(135deg, #e8f5e8, #e6fff0);
     border-color: #2e7d32;
@@ -1057,16 +1063,29 @@
     border-radius: 50%;
     object-fit: cover;
   }
-  .new-popup-modal { display: none; position: fixed; top: 0; width: 34%; max-width: 980px; height: 100%; background: #fff; border-radius: 12px; margin: 20px; padding: 20px; max-height: 95vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 12000; align-items: flex-start; justify-content: flex-end; }
+  .new-popup-modal { display: none; position: fixed; top: 35%; right: 20px; transform: translateY(-50%); width: 34%; max-width: 980px; max-height: calc(100vh - 40px); background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); z-index: 12000; flex-direction: column; overflow: hidden; }
   .new-popup-modal.open { display: flex; }
-  .new-popup-modal .tray-scan-close { position: absolute; right: 28px; top: 18px; font-size: 28px; color: #d9534f; cursor: pointer; }
+  .new-popup-modal > div { display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
+  
+  /* Responsive: Tablet and smaller screens */
+  @media (max-width: 1200px) {
+    .new-popup-modal { width: 40%; right: 15px; }
+  }
+  
+  @media (max-width: 900px) {
+    .new-popup-modal { width: 50%; right: 12px; max-height: calc(100vh - 30px); }
+  }
+  
+  @media (max-width: 600px) {
+    .new-popup-modal { width: 90%; right: 10px; left: 10px; transform: translateY(-50%); max-height: calc(100vh - 20px); padding: 16px; }
+  }
+  .new-popup-modal .tray-scan-close { position: absolute; right: 12px; top: 8px; font-size: 28px; color: #d9534f; cursor: pointer; z-index: 100; }
 
   /* Force modal header background to match BrassAudit */
   .new-popup-modal .modal-top-header {
-    
     padding: 12px 20px !important;
     border-bottom: 1px solid #e6e6e6;
-    width: calc(100% + 40px);
+    width: calc(100% + 48px);
     margin-left: -20px;
     padding: 16px 20px;
     box-sizing: border-box;
@@ -1077,11 +1096,15 @@
 
   /* Accepted trays table: compact rows and forced header color */
   .new-popup-modal .accepted-trays-table thead { background: #f5f5f5 !important; color: #333 !important; }
-  .new-popup-modal .accepted-trays-table tbody td { padding: 6px 8px !important; vertical-align: middle !important; }
-  .new-popup-modal .accepted-trays-table tbody td .form-control { padding: 4px 8px !important; height: 30px !important; line-height: 1.2 !important; font-size: 14px !important; }
-  .new-popup-modal .accepted-trays-table th, .new-popup-modal .accepted-trays-table td { border-color: #e6e6e6 !important; }
-  .new-popup-modal .top-tray-badge { background:#ffd54f; color:#5d4037; font-weight:700; padding:4px 8px; border-radius:12px; font-size:12px; }
-  .new-popup-modal .top-tray-row td { background: #fffbea; }
+  .new-popup-modal .accepted-trays-table tbody td { padding: 10px 12px !important; vertical-align: middle !important; font-size: 13px !important; }
+  .new-popup-modal .accepted-trays-table tbody tr { border-bottom: 1px solid #e8e8e8 !important; }
+  .new-popup-modal .accepted-trays-table tbody tr:hover { background: #f9fafb !important; }
+  .new-popup-modal .accepted-trays-table tbody td .form-control { padding: 6px 10px !important; height: 34px !important; line-height: 1.2 !important; font-size: 13px !important; border: 1px solid #d1d5db !important; max-width: 100%; }
+  .new-popup-modal .accepted-trays-table { table-layout: auto; width: 100%; }
+  .new-popup-modal .accepted-trays-table th, .new-popup-modal .accepted-trays-table td { border-color: #e6e6e6 !important; word-break: break-word; }
+  .new-popup-modal .top-tray-badge { background: #ffd54f; color: #5d4037; font-weight: 700; padding: 6px 10px; border-radius: 12px; font-size: 11px; display: inline-block; }
+  .new-popup-modal .top-tray-row td { background: #fffbea !important; font-weight: 500; }
+  .new-popup-modal .top-tray-row td:first-child { border-left: 3px solid #ffd54f; }
 
   .status-icon.active.pass {
     background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%) !important;
@@ -3233,30 +3256,44 @@ tr.row-inactive td:first-child {
 </div>
 
 <!-- Jig Loading Tray Scan Modal (Right-side UI, copied from BrassAudit) -->
-<div id="newPopupModal_Jig" class="new-popup-modal" style="left: 780px;">
+<div id="newPopupModal_Jig" class="new-popup-modal">
   <div>
     <span id="closeNewPopupModal_Jig" class="tray-scan-close">&times;</span>
-    <div class="modal-top-header" style="display:flex; align-items:center; gap:16px;">
-      <div class="user-profile" style="display:flex; align-items:center; gap:8px;">
-        <img id="trayModalUserImg_Jig_top" src="/static/assets/images/imagePlaceholder.jpg" alt="Model image" style="border-radius:50%; width:50px; height:50px; object-fit:cover;" />
-      </div>
-      <div style="flex:1">
-        <h5 style="margin:0; font-weight:600; color:#595959">Jig Loading - Tray Scan</h5>
-        <p style="margin:4px 0 0 0; font-size:13px; color:#666">Lot Qty: <span id="modalLotQty_Jig_top" style="font-weight:700;color:#e67e22;"></span></p>
-      </div>
-      <div style="display:flex; gap:8px; align-items:center">
-        <button id="trayValidateBtn_Jig_top" type="button" class="tray-validate-btn">Tray Validate</button>
-        <img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoBtn_Jig_top" style="width:24px; height:24px; cursor:pointer;" title="Clear Tray IDs" />
+    
+    <!-- Header Section with Model Details -->
+    <div style="background: linear-gradient(135deg, #e8f5f7 0%, #f0fafb 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #028084;">
+      <div style="display: flex; align-items: flex-start; gap: 12px;">
+        <img id="trayModalUserImg_Jig_top" src="/static/assets/images/imagePlaceholder.jpg" alt="Model image" style="border-radius: 4px; width: 60px; height: 60px; object-fit: contain; background: #fff; padding: 4px;" />
+        <div style="flex: 1;">
+          <h6 style="margin: 0 0 8px 0; font-weight: 700; color: #028084; font-size: 13px;">MODEL NO: <span id="modalModelNo_Jig_top" style="font-size: 14px;"></span></h6>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
+            <div>
+              <span style="color: #666; font-weight: 500;">Lot Qty:</span>
+              <span id="modalLotQty_Jig_top" style="font-weight: 700; color: #e67e22; margin-left: 4px;"></span>
+            </div>
+
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-direction: column; margin-top: 2px;">
+          <button id="trayValidateBtn_Jig_top" type="button" class="tray-validate-btn" style="white-space: nowrap; padding: 6px 14px; font-size: 12px;">Tray Validate</button>
+          <img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoBtn_Jig_top" style="width: 24px; height: 24px; cursor: pointer; align-self: center;" title="Clear Tray IDs" />
+        </div>
       </div>
     </div>
 
-    <div id="trayScanDetails_Jig_top" style="margin-top:12px;">
+    <!-- Section Title -->
+    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #028084; border-left: 3px solid #028084; padding-left: 10px; margin: 16px 0 12px 0;">
+      Jig Loading - Tray Scan
+    </div>
+
+    <!-- Tray Details Table -->
+    <div id="trayScanDetails_Jig_top" style="margin-top: 8px;">
       <table class="table accepted-trays-table" style="width:100%; border-collapse:collapse;">
         <thead>
           <tr style="background:#f5f5f5; color:#333;">
-            <th style="width:60px; text-align:center; padding:12px; border-bottom:1px solid #ddd;">S.no</th>
-            <th style="text-align:left; padding:12px; border-bottom:1px solid #ddd;">Tray ID</th>
-            <th style="width:150px; text-align:center; padding:12px; border-bottom:1px solid #ddd;">Tray Qty</th>
+            <th style="width:70px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">S.no</th>
+            <th style="text-align:left; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray ID</th>
+            <th style="width:130px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray Qty</th>
           </tr>
         </thead>
         <tbody id="acceptedTraysBody_Jig">
@@ -3995,39 +4032,50 @@ document.addEventListener('DOMContentLoaded', function () {
 
         function renderModal(meta) {
           const lotQtyDisplay = lotQtyFromMeta(meta) || '';
+          const missingQty = meta && meta.missing_qty ? meta.missing_qty : 0;
+          const physicalQty = meta && meta.brass_audit_physical_qty ? meta.brass_audit_physical_qty : lotQtyDisplay;
+          
           let html = '';
           html += `<div class="new-popup-inner" style="width:100%">`;
           html += `<span id="closeNewPopupModal_Jig" class="tray-scan-close">&times;</span>`;
-          html += `<div class="modal-top-header" style="display:flex; align-items:center; gap:16px;">`;
-          html += `<div class="user-profile"><img src="/static/assets/images/imagePlaceholder.jpg" style="width:50px;height:50px;border-radius:50%;" alt="Model image"></div>`;
-          html += `<div style="flex:1"><h5 style="margin:0; font-weight:600; color:#595959">Jig Loading - Tray Scan</h5>`;
-          html += `<p style="margin:4px 0 0 0; font-size:13px; color:#666">Lot Qty: <span id="modalLotQty_Jig_top" style="font-weight:700;color:#e67e22;">${lotQtyDisplay}</span></p>`;
-          html += `</div>`;
-          html += `<div style="display:flex; gap:8px; align-items:center">`;
-          html += `<button id="trayValidateBtn_Jig_top" type="button" class="tray-validate-btn">Tray Validate</button>`;
-          html += `<img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoBtn_Jig_top" style="width:24px; height:24px; cursor:pointer;" title="Clear Tray IDs" />`;
+          
+          // Header section with model details - matching the image layout
+          html += `<div style="background: linear-gradient(135deg, #e8f5f7 0%, #f0fafb 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #028084;">`;
+          html += `<div style="display: flex; align-items: flex-start; gap: 12px;">`;
+          html += `<img id="trayModalUserImg_Jig_top" src="/static/assets/images/imagePlaceholder.jpg" alt="Model image" style="border-radius: 4px; width: 60px; height: 60px; object-fit: contain; background: #fff; padding: 4px;" />`;
+          html += `<div style="flex: 1;">`;
+          html += `<h6 style="margin: 0 0 8px 0; font-weight: 700; color: #028084; font-size: 13px;">MODEL NO: <span id="modalModelNo_Jig_top" style="font-size: 14px;"></span></h6>`;
+          html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">`;
+          html += `<div><span style="color: #666; font-weight: 500;">Lot Qty:</span><span id="modalLotQty_Jig_top" style="font-weight: 700; color: #e67e22; margin-left: 4px;">${lotQtyDisplay}</span></div>`;
           html += `</div></div>`;
-
-          html += `<div id="trayScanDetails_Jig_top" class="table-grid" style="margin-top:12px;">`;
+          html += `<div style="display: flex; gap: 8px; flex-direction: column; margin-top: 2px;">`;
+          html += `<button id="trayValidateBtn_Jig_top" type="button" class="tray-validate-btn" style="white-space: nowrap; padding: 6px 14px; font-size: 12px;">Tray Validate</button>`;
+          html += `<img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoBtn_Jig_top" style="width: 24px; height: 24px; cursor: pointer; align-self: center;" title="Clear Tray IDs" />`;
+          html += `</div></div></div>`;
+          
+          // Section title
+          html += `<div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #028084; border-left: 3px solid #028084; padding-left: 10px; margin: 16px 0 12px 0;">Jig Loading - Tray Scan</div>`;
+          
+          // Table section
+          html += `<div id="trayScanDetails_Jig_top" style="margin-top: 8px;">`;
 
           if (!accepted.length) {
             html += '<div style="padding:12px">No accepted trays available</div>';
           } else {
-            html += '<div style="overflow-x:auto;"><table class="table table-bordered accepted-trays-table" style="width:100%; margin-bottom:0;"><thead><tr><th style="min-width:60px;">S.no</th><th style="min-width:120px;">Tray ID</th><th style="min-width:100px;">Tray Qty</th></tr></thead><tbody>';
+            html += '<table class="table accepted-trays-table" style="width:100%; border-collapse:collapse;"><thead><tr style="background:#f5f5f5; color:#333;"><th style="width:70px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">S.no</th><th style="text-align:left; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray ID</th><th style="width:130px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray Qty</th></tr></thead><tbody>';
             accepted.forEach((t, i) => {
               const trayId = (t.tray_id || t.tray || t.trayId || '').toString();
               const qty = (t.qty || t.tray_quantity || t.tray_qty || '').toString();
               const isTop = !!(t.top_tray || t.topTray || t.top);
               const trClass = isTop ? 'top-tray-row' : '';
-              // Move top-tray indicator into the S.no cell as plain text (no extra UI elements)
+              // Move top-tray indicator into the S.no cell as plain text
               const snoText = isTop ? `${i+1} (Top Tray)` : `${i+1}`;
-              html += `<tr class="${trClass}"><td style="white-space:nowrap;">${snoText}</td><td><input type="text" class="form-control" style="width:100%;" value="${trayId}" readonly></td><td><input type="text" class="form-control" style="width:70px;" value="${qty}" readonly></td></tr>`;
+              html += `<tr class="${trClass}"><td style="white-space:nowrap; text-align:center; padding:10px 12px; font-size:13px;">${snoText}</td><td style="text-align:left; padding:10px 12px; font-size:13px;"><input type="text" class="form-control" style="width:100%; padding: 6px 10px; height: 34px; font-size:13px; border: 1px solid #d1d5db;" value="${trayId}" readonly></td><td style="text-align:center; padding:10px 12px; font-size:13px;"><input type="text" class="form-control" style="width:100%; padding: 6px 10px; height: 34px; font-size:13px; border: 1px solid #d1d5db; text-align:center;" value="${qty}" readonly></td></tr>`;
             });
-            html += '</tbody></table></div>';
+            html += '</tbody></table>';
           }
 
-
-
+          html += `</div>`; // close trayScanDetails_Jig_top
           html += `</div>`; // close new-popup-inner
 
           content.innerHTML = html;
@@ -4035,9 +4083,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
           const closeBtn = document.getElementById('closeNewPopupModal_Jig');
           if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.remove('open'));
-
-          // Do not auto-focus or auto-select any tray input on open
-          // (prevents the top tray being auto-selected when viewing trays)
         }
 
         // If brass metadata wasn't provided by earlier calls, fetch it so we can show lot qty
@@ -4884,6 +4929,12 @@ document.addEventListener('DOMContentLoaded', function () {
       // Clean up any stale gate messages from previous renders
       var staleGate = document.getElementById('delinkGateMessage');
       if (staleGate) staleGate.remove();
+
+      // err1+err2: If no excess panel, enable Select All immediately
+      if (!excessExists) {
+        var dsAll = document.getElementById('delinkSelectAll');
+        if (dsAll) { dsAll.disabled = false; dsAll.style.opacity = ''; }
+      }
     }
 
     // Attach scan handlers to both panels
@@ -5237,6 +5288,8 @@ document.addEventListener('DOMContentLoaded', function () {
           inputEl.value = '';
           _undoTrayAllocation(trayId);
         }
+        // err4: Auto-select invalid input so user can re-type
+        try { inputEl.select(); } catch(e) {}
       }
     } catch (err) {
       console.error('[SPLIT_SCAN] Error:', err);
@@ -5247,6 +5300,8 @@ document.addEventListener('DOMContentLoaded', function () {
         inputEl.value = '';
         _undoTrayAllocation(trayId);
       }
+      // err4: Auto-select on error so user can re-type
+      try { inputEl.select(); } catch(e) {}
     }
   }
 
@@ -7219,6 +7274,9 @@ function clearJigUserInputs() {
     inp.style.background = '';
     inp.style.border = '';
     inp.readOnly = false;
+    inp.disabled = false;
+    inp.style.opacity = '';
+    inp.title = '';
   });
   // Clear excess checkboxes
   const excessCheckboxes = document.querySelectorAll('.excess-row-checkbox');
@@ -7235,6 +7293,7 @@ function clearJigUserInputs() {
   });
   document.querySelectorAll('#delinkPanelTableBody tr').forEach(function(tr) {
     tr.classList.remove('delink-row-scanned', 'delink-row-disabled');
+    tr.title = '';
     var lastCell = tr.cells[tr.cells.length - 1];
     if (lastCell) lastCell.innerHTML = '';
   });
@@ -7282,6 +7341,7 @@ function clearJigUserInputs() {
     delinkSelectAll.style.opacity = '0.5';
     delinkSelectAll.checked = false;
   }
+  const lotId = window.CURRENT_LOT_ID || window.currentJigLotId;
   const batchId = window.CURRENT_BATCH_ID || window.currentJigBatchId;
   if (lotId && batchId) {
     const csrfToken = (function() { const v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; })();
@@ -9743,6 +9803,172 @@ if (window.jQuery) {
         });
       });
       observer.observe(jigModal, {attributes:true});
+    }
+  });
+})();
+
+// ===== err5: PICK TABLE SCAN BUTTON HANDLER =====
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var scanBtn = document.getElementById('pickTableScanBtn');
+    var scanInput = document.getElementById('pickTableScanInput');
+    var scanStatus = document.getElementById('pickTableScanStatus');
+    if (!scanBtn || !scanInput || !scanStatus) return;
+
+    // State for highlighted row restoration
+    window._jigScanHighlightedRow = null;
+    window._jigScanOriginalPosition = null;
+
+    scanBtn.addEventListener('click', function() {
+      scanInput.value = '';
+      scanInput.focus();
+      scanStatus.textContent = 'PLEASE SCAN';
+      scanStatus.style.display = 'inline-block';
+      scanStatus.style.color = '#28a745';
+    });
+
+    scanInput.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      var trayId = scanInput.value.trim();
+      if (trayId.length < 8) {
+        scanStatus.style.display = 'inline-block';
+        scanStatus.style.color = '#28a745';
+        scanStatus.textContent = 'PLEASE SCAN';
+        return;
+      }
+
+      fetch('/jig_loading/api/get_lot_id_for_tray/?tray_id=' + encodeURIComponent(trayId))
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.success && data.lot_id) {
+            var row = document.querySelector('tr[data-stock-lot-id="' + data.lot_id + '"]');
+            if (row) {
+              _jigScanHighlightAndMoveToTop(row, data.lot_id);
+              scanInput.value = '';
+              scanStatus.style.color = '#28a745';
+              scanStatus.textContent = 'PLEASE SCAN';
+            } else {
+              // Search across pages
+              var currentUrl = new URL(window.location);
+              var currentPage = currentUrl.searchParams.get('page') || '1';
+              scanStatus.style.color = '#dc3545';
+              scanStatus.textContent = 'Lot not on this page, searching...';
+              _jigScanSearchAcrossPages(data.lot_id, currentPage);
+            }
+          } else {
+            scanStatus.style.display = 'inline-block';
+            scanStatus.style.color = '#dc3545';
+            scanStatus.textContent = 'Invalid Tray ID!';
+            scanInput.value = '';
+            scanInput.focus();
+          }
+        })
+        .catch(function() {
+          scanStatus.style.display = 'inline-block';
+          scanStatus.style.color = '#dc3545';
+          scanStatus.textContent = 'Network error!';
+          scanInput.value = '';
+          scanInput.focus();
+        });
+    });
+  });
+
+  function _jigScanHighlightAndMoveToTop(row, lotId) {
+    // Restore previous highlighted row
+    if (window._jigScanHighlightedRow && window._jigScanOriginalPosition) {
+      var prev = window._jigScanOriginalPosition;
+      window._jigScanHighlightedRow.style.background = '';
+      window._jigScanHighlightedRow.style.boxShadow = '';
+      if (prev.nextSibling) {
+        prev.parent.insertBefore(prev.row, prev.nextSibling);
+      } else {
+        prev.parent.appendChild(prev.row);
+      }
+      window._jigScanHighlightedRow = null;
+      window._jigScanOriginalPosition = null;
+    }
+
+    var tbody = row.parentElement;
+    window._jigScanHighlightedRow = row;
+    window._jigScanOriginalPosition = {
+      row: row,
+      parent: tbody,
+      nextSibling: row.nextElementSibling
+    };
+
+    row.style.background = '#fff3cd';
+    row.style.boxShadow = 'inset 0 0 0 2px #ffc107';
+    tbody.insertBefore(row, tbody.firstChild);
+
+    var table = tbody.closest('table');
+    if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function _jigScanSearchAcrossPages(lotId, currentPage) {
+    // Store lot_id in sessionStorage, then navigate page-by-page
+    sessionStorage.setItem('jigScanPendingLotId', lotId);
+    sessionStorage.setItem('jigScanOriginPage', currentPage);
+
+    var totalPages = document.querySelectorAll('.pagination .page-link[href]').length;
+    // Try next page first, wrap around
+    var nextPage = parseInt(currentPage) + 1;
+    var url = new URL(window.location);
+
+    // Check all pages starting from 1
+    for (var p = 1; p <= 100; p++) {
+      if (String(p) === String(currentPage)) continue;
+      url.searchParams.set('page', p);
+      window.location.href = url.toString();
+      return;
+    }
+
+    // If we get here, not found
+    var scanStatus = document.getElementById('pickTableScanStatus');
+    if (scanStatus) {
+      scanStatus.style.color = '#dc3545';
+      scanStatus.textContent = 'Lot not found!';
+    }
+    sessionStorage.removeItem('jigScanPendingLotId');
+    sessionStorage.removeItem('jigScanOriginPage');
+  }
+
+  // On page load: check if we're searching for a lot across pages
+  document.addEventListener('DOMContentLoaded', function() {
+    var pendingLotId = sessionStorage.getItem('jigScanPendingLotId');
+    if (!pendingLotId) return;
+
+    var row = document.querySelector('tr[data-stock-lot-id="' + pendingLotId + '"]');
+    if (row) {
+      sessionStorage.removeItem('jigScanPendingLotId');
+      sessionStorage.removeItem('jigScanOriginPage');
+      _jigScanHighlightAndMoveToTop(row, pendingLotId);
+      var scanStatus = document.getElementById('pickTableScanStatus');
+      if (scanStatus) {
+        scanStatus.style.color = '#28a745';
+        scanStatus.textContent = 'PLEASE SCAN';
+        scanStatus.style.display = 'inline-block';
+      }
+    } else {
+      // Not found on this page either — try next page
+      var currentUrl = new URL(window.location);
+      var currentPage = parseInt(currentUrl.searchParams.get('page') || '1');
+      var originPage = parseInt(sessionStorage.getItem('jigScanOriginPage') || '1');
+      var nextPage = currentPage + 1;
+
+      // If we've wrapped back to origin, give up
+      if (nextPage === originPage || currentPage > 100) {
+        sessionStorage.removeItem('jigScanPendingLotId');
+        sessionStorage.removeItem('jigScanOriginPage');
+        var scanStatus = document.getElementById('pickTableScanStatus');
+        if (scanStatus) {
+          scanStatus.style.color = '#dc3545';
+          scanStatus.textContent = 'Lot not found!';
+          scanStatus.style.display = 'inline-block';
+        }
+        return;
+      }
+      currentUrl.searchParams.set('page', nextPage);
+      window.location.href = currentUrl.toString();
     }
   });
 })();

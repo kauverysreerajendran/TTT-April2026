@@ -5,7 +5,8 @@ from .views import JigView, TrayInfoView, JigCompletedTable
 from .views import JigLoadInitAPI, JigLoadUpdateAPI
 from .views import JigSaveAPI, JigValidateAPI
 from .views import ModelCombinationValidateAPI, JigHoldToggleAPI
-from .views import DeleteJigPickRecordAPI, UpdateRemarkAPI
+from .views import DeleteJigPickRecordAPI, UpdateRemarkAPI, LotFetchAPI
+from .views import jig_get_lot_id_for_tray
 
 urlpatterns = [
         path('JigView/', JigView.as_view(), name='JigView'),
@@ -30,6 +31,12 @@ urlpatterns = [
         # ===== Delete & Remark APIs =====
         path('api/delete-pick-record/', DeleteJigPickRecordAPI.as_view(), name='jig-delete-pick-record'),
         path('api/update-remark/', UpdateRemarkAPI.as_view(), name='jig-update-remark'),
+
+        # ===== Consolidated Lot Fetch API (backend-driven filtering) =====
+        path('api/lots/', LotFetchAPI.as_view(), name='jig-lots-fetch'),
+
+        # ===== Barcode scanner — tray ID to lot ID lookup =====
+        path('api/get_lot_id_for_tray/', jig_get_lot_id_for_tray, name='jig-get-lot-id-for-tray'),
 
         # ===== Read-only support endpoint (tray modal) =====
         path('tray-info/', TrayInfoView.as_view(), name='tray-info'),
