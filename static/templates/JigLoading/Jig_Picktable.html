@@ -541,7 +541,13 @@
   .btn-action.teal {
     background: linear-gradient(135deg, #028a8c, #01676a);
   }
-  .btn-action.teal:hover { background: linear-gradient(135deg, #01676a, #014d4e); }
+  .btn-action.teal:hover { background: linear-gradient(135deg, #0e5b5e, #014d4e); }
+  .btn-action.teal[disabled] {
+    background: #b0b0b0 !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+    pointer-events: auto;
+  }
 
   .btn-action.blue {
     background: linear-gradient(135deg, #2196f3, #1976d2);
@@ -3741,6 +3747,7 @@ tr.row-inactive td:first-child {
           <thead style="position:sticky; top:0; z-index:2;">
             <tr style="background:linear-gradient(135deg, #e6f7f8, #d0f0f2); color:#1e293b;">
               <th style="width:36px; text-align:center;">S.No</th>
+              <th style="width:36px; text-align:center;"></th>
               <th style="min-width:70px;">Model</th>
               <th style="width:45px; text-align:center;">Qty</th>
               <th style="min-width:120px;">Scan Tray ID</th>
@@ -3768,7 +3775,7 @@ tr.row-inactive td:first-child {
 
     <!-- Footer -->
     <div class="jig-modal-footer">
-      <button type="button" class="btn-action teal" id="submitJigBtn" style="padding:9px 28px; font-size:14px;">
+      <button type="button" class="btn-action teal" id="submitJigBtn" disabled style="padding:9px 28px; font-size:14px;">
         <i class="fa fa-check" style="font-size:12px;"></i> Submit
       </button>
       <button type="button" class="btn-action blue" id="draftJigBtn" style="padding:9px 24px; font-size:14px;">
@@ -4723,6 +4730,12 @@ document.addEventListener('DOMContentLoaded', function () {
           if (topTrayQtyEl) topTrayQtyEl.innerText = 'Qty: ' + (topTray.qty || 0);
          /*  if (topTrayOrigEl) topTrayOrigEl.innerText = 'Original: ' + (topTray.model_code || ''); */
           if (topTrayStatusEl) topTrayStatusEl.innerText = '';
+          // Reset top tray checkbox state (prevents stale locked state from previous lot)
+          if (topTrayCheckbox && !prevTopTrayVal) {
+            topTrayCheckbox.checked = false;
+            topTrayCheckbox.disabled = false;
+            topTrayCheckbox.classList.remove('locked');
+          }
           if (topTrayInput) {
             topTrayInput.dataset.expectedQty = topTray.qty || 0;
             topTrayInput.dataset.autoTrayId = topTray.scan_tray_id || '';
@@ -4730,7 +4743,7 @@ document.addEventListener('DOMContentLoaded', function () {
             topTrayInput.dataset.modelCode = topTray.model_code || '';
             topTrayInput.dataset.lotId = topTray.lot_id || '';
             topTrayInput.placeholder = (topTray.model_code || '').replace(/\s*\[.*\]$/, '') || 'Scan / Type Top Tray ID';
-            // Restore validated state
+            // Restore validated state OR reset to clean
             if (prevTopTrayVal) {
               topTrayInput.value = prevTopTrayVal;
               topTrayInput.classList.add('validated');
@@ -4739,13 +4752,20 @@ document.addEventListener('DOMContentLoaded', function () {
               topTrayInput.style.borderColor = '#028084';
               if (topTrayCheckbox) { topTrayCheckbox.checked = true; topTrayCheckbox.disabled = true; topTrayCheckbox.classList.add('locked'); }
               if (topTrayStatusEl) topTrayStatusEl.innerHTML = '<span class="unified-status-badge status-top-tray">Verified for Top Tray</span>';
+            } else {
+              // Clean state: reset input so stale values from previous lot don't persist
+              topTrayInput.value = '';
+              topTrayInput.readOnly = false;
+              topTrayInput.classList.remove('validated', 'error-input');
+              topTrayInput.style.background = '#fff';
+              topTrayInput.style.borderColor = '';
             }
           }
-          // Checkbox: auto-fill tray ID on check
+          // Checkbox: auto-fill tray ID on check (use input dataset as robust source)
           if (topTrayCheckbox && !topTrayCheckbox.classList.contains('locked')) {
             topTrayCheckbox.onclick = function() {
               if (this.checked && topTrayInput && !topTrayInput.classList.contains('validated')) {
-                var autoId = topTray.scan_tray_id || topTray.tray_id || '';
+                var autoId = topTrayInput.dataset.autoTrayId || topTray.scan_tray_id || topTray.tray_id || '';
                 if (autoId) {
                   topTrayInput.value = autoId;
                   // Trigger validation
@@ -4758,7 +4778,7 @@ document.addEventListener('DOMContentLoaded', function () {
           topTraySection.style.display = 'none';
         }
 
-        // Excess tray rows — S.No, Model, Qty, Scan Tray ID (no checkbox, no status)
+        // Excess tray rows — S.No, Checkbox, Model, Qty, Scan Tray ID
         if (eBody) {
           eBody.innerHTML = '';
           excessTrays.forEach(function(row, idx) {
@@ -4773,6 +4793,21 @@ document.addEventListener('DOMContentLoaded', function () {
             td1.style.cssText = 'text-align:center;font-weight:500;';
             td1.innerText = row.sno || '';
             tr.appendChild(td1);
+
+            // Checkbox — auto-fill scan input from backend-provided scan_tray_id
+            var tdCb = document.createElement('td');
+            tdCb.style.textAlign = 'center';
+            if (row.is_checkbox_enabled) {
+              var ecb = document.createElement('input');
+              ecb.type = 'checkbox';
+              ecb.className = 'excess-row-checkbox';
+              ecb.style.cssText = 'width:14px;height:14px;accent-color:#e67e22;cursor:pointer;';
+              ecb.dataset.rowIndex = idx;
+              ecb.dataset.autoTrayId = row.scan_tray_id || '';
+              ecb.title = 'Auto-fill tray ID';
+              tdCb.appendChild(ecb);
+            }
+            tr.appendChild(tdCb);
 
             // Model
             var tdModel = document.createElement('td');
@@ -4811,11 +4846,31 @@ document.addEventListener('DOMContentLoaded', function () {
               inp.style.background = '#fff4e6';
               inp.style.borderColor = '#e67e22';
               tr.classList.add('excess-row-scanned');
+              // Lock checkbox for validated row
+              var lockedCb = tr.querySelector('.excess-row-checkbox');
+              if (lockedCb) { lockedCb.checked = true; lockedCb.disabled = true; lockedCb.classList.add('locked'); }
             }
             tdScan.appendChild(inp);
             tr.appendChild(tdScan);
 
             eBody.appendChild(tr);
+          });
+          // Attach checkbox handlers to excess rows — auto-fill scan input on check
+          eBody.querySelectorAll('.excess-row-checkbox').forEach(function(ecb) {
+            ecb.addEventListener('change', function() {
+              if (!this.checked) return;
+              var autoId = (this.dataset.autoTrayId || '').trim();
+              if (!autoId) return;
+              var tr = this.closest('tr');
+              if (!tr) return;
+              var scanInp = tr.querySelector('.split-scan-input');
+              if (scanInp && !scanInp.classList.contains('validated') && !scanInp.value.trim()) {
+                scanInp.value = autoId;
+                _validateSplitScan(autoId, scanInp, true);
+                this.disabled = true;
+                this.classList.add('locked');
+              }
+            });
           });
         }
       } else {
@@ -5171,6 +5226,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Move to next
         _moveToNextSplitInput(inputEl);
+        // Re-check submit readiness after successful scan
+        if (typeof window._checkSubmitReadiness === 'function') window._checkSubmitReadiness();
       } else {
         inputEl.classList.add('error-input');
         inputEl.classList.remove('validated');
@@ -5450,6 +5507,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // Expose globally for other script blocks
   window.renderUnifiedTrayTable = renderUnifiedTrayTable;
   window.renderSplitPanels = renderSplitPanels;
+  window._autoLockDelinkForTopTray = _autoLockDelinkForTopTray;
+  window._lockDelinkRowForExcess = _lockDelinkRowForExcess;
+  window._updateDelinkTotalBar = _updateDelinkTotalBar;
+  window._updateDelinkStatsBadge = _updateDelinkStatsBadge;
 
   // ===== SHARED: Render model card strip (horizontal cards with delink) =====
   function renderModelCardStrip(data) {
@@ -5635,6 +5696,10 @@ document.addEventListener('DOMContentLoaded', function () {
   const batchId = btn.dataset.batchId || btn.getAttribute('data-batch-id') || btn.getAttribute('data-batch_id');
   const jigCapacity = btn.dataset.jigCapacity || btn.getAttribute('data-jig-capacity') || btn.dataset.jigQrId || btn.getAttribute('data-jig-qr-id') || '';
 
+  // Preserve merge flow data BEFORE resetting state (Add Model sets these before triggering click)
+  const _savedPendingSecondaryLots = window._pendingSecondaryLots;
+  const _savedPendingSecondaryLot = window._pendingSecondaryLot;
+
   // STRICT: Fresh session — no memory from previous lot
   window.currentBrokenHooks = 0;
   window._lastSentBH = null;
@@ -5660,6 +5725,16 @@ document.addEventListener('DOMContentLoaded', function () {
   try { sessionStorage.removeItem('secondary_lot'); } catch(e) {}
     // Immediately disable BH until init confirms empty_hooks = 0
     if (typeof window.disableBH === 'function') window.disableBH();
+
+  // Restore merge flow data (Add Model → pick table → return sets these before triggering click)
+  if (_savedPendingSecondaryLots && _savedPendingSecondaryLots.length > 0) {
+    window._pendingSecondaryLots = _savedPendingSecondaryLots;
+    console.log('[MERGE_RESTORE] Restored', _savedPendingSecondaryLots.length, 'pending secondary lots after reset');
+  }
+  if (!window._pendingSecondaryLots && _savedPendingSecondaryLot && _savedPendingSecondaryLot.lot_id) {
+    window._pendingSecondaryLot = _savedPendingSecondaryLot;
+    console.log('[MERGE_RESTORE] Restored pending secondary lot:', _savedPendingSecondaryLot.lot_id);
+  }
 
     // expose for external refresh (broken-hooks preview) and immediate refresh
   window.currentJigLotId = lotId;
@@ -6742,6 +6817,8 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
     } catch (e) { console.warn('[applyResponseToUI] failed', e); }
+    // Re-check submit readiness after UI refresh
+    if (typeof window._checkSubmitReadiness === 'function') window._checkSubmitReadiness();
   }
   // Expose for use by clearJigUserInputs and other external scripts
   window.applyResponseToUI = applyResponseToUI;
@@ -7245,6 +7322,8 @@ function clearJigUserInputs() {
       window._lastInitData = data;
       window._trayCapacity = parseInt(data.tray_capacity || window._trayCapacity || 12) || 12;
       console.log('[CLEAR] Backend clear complete: loaded=0, empty=' + window.BACKEND_EMPTY_HOOKS);
+      // Re-check submit readiness after backend clear response
+      if (typeof window._checkSubmitReadiness === 'function') window._checkSubmitReadiness();
     })
     .catch(function(err) {
       console.error('[CLEAR_API_ERROR]', err);
@@ -7259,6 +7338,9 @@ function clearJigUserInputs() {
   // 8. Scroll modal content back to top
   var modalContent = document.querySelector('.jig-modal-content');
   if (modalContent) modalContent.scrollTop = 0;
+
+  // 9. Re-check submit readiness after immediate reset
+  if (typeof window._checkSubmitReadiness === 'function') window._checkSubmitReadiness();
 
   console.log('[CLEAR] Full state reset triggered');
 }
@@ -7374,6 +7456,8 @@ function resetJigModalState() {
   if (jigError) jigError.style.display = 'none';
 
   console.log('[RESET] Jig modal state fully reset');
+  // Re-disable submit button after reset
+  if (typeof window._checkSubmitReadiness === 'function') window._checkSubmitReadiness();
 }
 
 // --- Patch openJigModal to call reset ---
@@ -9297,6 +9381,7 @@ if (window.jQuery) {
       // ===== Restore scanned tray values into split panel inputs =====
       if (data.scanned_trays && data.scanned_trays.length > 0) {
         console.log('[DRAFT_RESTORE] Restoring', data.scanned_trays.length, 'scanned trays');
+        if (!window._trayAllocations) window._trayAllocations = {};
 
         // Restore delink panel scans (match by row order)
         var delinkInputs = document.querySelectorAll('#delinkPanelTableBody .split-scan-input');
@@ -9305,6 +9390,19 @@ if (window.jQuery) {
           if (delinkInputs[i] && !delinkInputs[i].value) {
             delinkInputs[i].value = scan.tray_id;
             delinkInputs[i].classList.add('validated');
+            delinkInputs[i].readOnly = true;
+            delinkInputs[i].style.background = '#d4edda';
+            delinkInputs[i].style.borderColor = '#28a745';
+            window._trayAllocations[scan.tray_id.toUpperCase()] = { type: 'delink' };
+            // Lock checkbox + set status on delink row
+            var tr = delinkInputs[i].closest('tr');
+            if (tr) {
+              tr.classList.add('delink-row-scanned');
+              var cb = tr.querySelector('.delink-row-checkbox');
+              if (cb) { cb.checked = true; cb.disabled = true; cb.classList.add('locked'); }
+              var lastCell = tr.cells[tr.cells.length - 1];
+              if (lastCell) lastCell.innerHTML = '<span class="unified-status-badge status-delinked" style="background:#d4edda;color:#155724;border:1px solid #28a745;">Delinked</span>';
+            }
           }
         });
 
@@ -9315,6 +9413,19 @@ if (window.jQuery) {
           if (topInp && !topInp.value) {
             topInp.value = topScans[0].tray_id;
             topInp.classList.add('validated');
+            topInp.readOnly = true;
+            topInp.style.background = '#d0f0f2';
+            topInp.style.borderColor = '#028084';
+            window._trayAllocations[topScans[0].tray_id.toUpperCase()] = { type: 'top_tray' };
+            // Lock top tray checkbox + status
+            var topCb = document.getElementById('excessTopTrayCheckbox');
+            if (topCb) { topCb.checked = true; topCb.disabled = true; topCb.classList.add('locked'); }
+            var topStatus = document.getElementById('excessTopTrayStatus');
+            if (topStatus) topStatus.innerHTML = '<span class="unified-status-badge status-top-tray" style="background:#d0f0f2;color:#014d4e;border:1px solid #028084;">Verified for Top Tray</span>';
+            // Also lock matching delink row
+            if (typeof window._autoLockDelinkForTopTray === 'function') {
+              window._autoLockDelinkForTopTray(topScans[0].tray_id);
+            }
           }
         }
 
@@ -9325,11 +9436,33 @@ if (window.jQuery) {
           if (excessInputs[i] && !excessInputs[i].value) {
             excessInputs[i].value = scan.tray_id;
             excessInputs[i].classList.add('validated');
+            excessInputs[i].style.background = '#fff4e6';
+            excessInputs[i].style.borderColor = '#e67e22';
+            window._trayAllocations[scan.tray_id.toUpperCase()] = { type: 'excess' };
+            var eTr = excessInputs[i].closest('tr');
+            if (eTr) {
+              eTr.classList.add('excess-row-scanned');
+              // Lock excess row checkbox
+              var eCb = eTr.querySelector('.excess-row-checkbox');
+              if (eCb) { eCb.checked = true; eCb.disabled = true; eCb.classList.add('locked'); }
+            }
+            // Lock matching delink row for excess allocation
+            if (typeof window._lockDelinkRowForExcess === 'function') {
+              window._lockDelinkRowForExcess(scan.tray_id);
+            }
           }
         });
+
+        // Update UI elements after full restore
+        if (typeof window._updatePhaseMessage === 'function') window._updatePhaseMessage();
+        if (typeof window._updateDelinkTotalBar === 'function') window._updateDelinkTotalBar();
+        if (typeof window._updateDelinkStatsBadge === 'function') window._updateDelinkStatsBadge();
+        if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
       }
 
       console.log('[DRAFT_RESTORE] Complete — form fields, BACKEND vars, and scanned trays restored');
+      // Re-check submit readiness after draft restore
+      if (typeof window._checkSubmitReadiness === 'function') window._checkSubmitReadiness();
     })
     .catch(function(err) {
       console.warn('[DRAFT_RESTORE] Failed:', err);
@@ -9339,6 +9472,99 @@ if (window.jQuery) {
   // Expose buildFullPayload for debugging
   window._buildJigPayload = buildFullPayload;
   window._collectTrayData = collectTrayDataSnapshot;
+
+  // ============================================================
+  // SUBMIT BUTTON GATING — enable only when ALL fields are valid
+  // ============================================================
+  function _checkSubmitReadiness() {
+    var btn = document.getElementById('submitJigBtn');
+    if (!btn) return;
+
+    var ready = true;
+
+    // 1. Jig ID: must be non-empty and valid format (9 chars, J###-####)
+    var jigId = ((document.getElementById('jigIdInput') || {}).value || '').trim();
+    if (!jigId || jigId.length !== 9) { ready = false; }
+    else if (typeof window.validateJigIdFormat === 'function') {
+      var fmtRes = window.validateJigIdFormat(jigId.toUpperCase());
+      if (!fmtRes.valid) ready = false;
+    }
+
+    // 2. Lot/batch must exist
+    if (!window.CURRENT_LOT_ID || !window.CURRENT_BATCH_ID) ready = false;
+
+    // 3. All active delink tray scan inputs filled (skip disabled)
+    var scannedIds = {};
+    var anyActive = false;
+    var delinkInputs = document.querySelectorAll('#delinkPanelTableBody .split-scan-input');
+    delinkInputs.forEach(function(inp) {
+      if (inp.disabled) return;
+      anyActive = true;
+      var val = (inp.value || '').trim();
+      if (!val || val.length < 3) { ready = false; return; }
+      var upper = val.toUpperCase();
+      if (scannedIds[upper]) { ready = false; return; }
+      scannedIds[upper] = true;
+    });
+
+    // 4. Top tray scanned if section visible
+    var topInp = document.getElementById('excessTopTrayScanInput');
+    var topSection = document.getElementById('excessTopTraySection');
+    if (topInp && topSection && topSection.style.display !== 'none' && topInp.offsetParent !== null) {
+      var topVal = (topInp.value || '').trim();
+      if (!topVal || topVal.length < 3) { ready = false; }
+      else {
+        var topUpper = topVal.toUpperCase();
+        if (scannedIds[topUpper]) ready = false;
+        scannedIds[topUpper] = true;
+      }
+    }
+
+    // 5. Excess panel inputs (skip disabled)
+    document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+      if (inp.disabled) return;
+      anyActive = true;
+      var val = (inp.value || '').trim();
+      if (!val || val.length < 3) { ready = false; return; }
+      var upper = val.toUpperCase();
+      if (scannedIds[upper]) { ready = false; return; }
+      scannedIds[upper] = true;
+    });
+
+    // 6. At least one tray scanned
+    if (Object.keys(scannedIds).length === 0 && !anyActive) ready = false;
+
+    // 7. Loaded cases must equal effective capacity (jig must be fully loaded)
+    // Jig cannot be submitted unless fully loaded as per jig capacity minus broken hooks.
+    // Use backend values for authoritative state: loaded_cases_qty must equal effective_capacity.
+    var backendLoaded = parseInt(window.BACKEND_LOADED_CASES || 0);
+    var backendEffCap = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0);
+    if (backendEffCap > 0 && backendLoaded < backendEffCap) { ready = false; }
+
+    // Apply state
+    if (ready) {
+      btn.removeAttribute('disabled');
+    } else {
+      btn.setAttribute('disabled', 'disabled');
+    }
+  }
+  window._checkSubmitReadiness = _checkSubmitReadiness;
+
+  // Attach event listeners via delegation — covers dynamically added inputs
+  document.addEventListener('input', function(e) {
+    if (e.target.id === 'jigIdInput' ||
+        e.target.classList.contains('split-scan-input') ||
+        e.target.id === 'excessTopTrayScanInput') {
+      _checkSubmitReadiness();
+    }
+  });
+  document.addEventListener('change', function(e) {
+    if (e.target.id === 'jigIdInput' ||
+        e.target.classList.contains('split-scan-input') ||
+        e.target.id === 'excessTopTrayScanInput') {
+      _checkSubmitReadiness();
+    }
+  });
 
 })();
 </script>

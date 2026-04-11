@@ -112,10 +112,19 @@ class JigLoadingManualDraftAdmin(admin.ModelAdmin):
 
 
 class JigCompletedAdmin(admin.ModelAdmin):
-    list_display = ['lot_id', 'partial_lot_id', 'jig_id', 'user', 'delink_tray_count', 'updated_lot_qty', 'broken_hooks', 'draft_status', 'updated_at', 'original_lot_qty', 'jig_capacity', 'effective_capacity', 'loaded_cases_qty', 'delink_tray_qty', 'half_filled_tray_qty', 'is_multi_model', 'empty_hooks', 'excess_qty']
+    list_display = ['lot_id', 'partial_lot_id', 'jig_id', 'user', 'delink_tray_count', 'updated_lot_qty', 'broken_hooks', 'draft_status', 'updated_at', 'original_lot_qty', 'jig_capacity', 'effective_capacity', 'loaded_cases_qty', 'delink_tray_qty', 'half_filled_tray_qty', 'is_multi_model', 'empty_hooks', 'excess_qty', 'get_remarks_preview']
     list_filter = ['updated_at', 'user', 'draft_status', 'is_multi_model']
-    search_fields = ['lot_id', 'partial_lot_id', 'jig_id', 'user__username']
-    readonly_fields = ['updated_at', 'draft_data', 'multi_model_allocation', 'scanned_trays']
+    search_fields = ['lot_id', 'partial_lot_id', 'jig_id', 'user__username', 'remarks']
+    readonly_fields = ['updated_at', 'draft_data', 'multi_model_allocation', 'scanned_trays', 'remarks']
+    
+    def get_remarks_preview(self, obj):
+        """Display first 50 chars of remarks, with full text in tooltip"""
+        if obj.remarks:
+            preview = obj.remarks[:50] + ('...' if len(obj.remarks) > 50 else '')
+            return preview
+        return '-'
+    get_remarks_preview.short_description = 'Remarks'
+    get_remarks_preview.admin_order_field = 'remarks'
 
 
 admin.site.register(Jig, JigAdmin)

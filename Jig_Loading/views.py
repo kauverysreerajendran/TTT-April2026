@@ -2928,7 +2928,7 @@ class JigCompletedTable(TemplateView):
 			draft_status='submitted'
 		).select_related('user').order_by('-updated_at')
 		
-		# Process each record and enrich with TotalStockModel data
+		# Process each record and enrich with ModelMasterCreation + TotalStockModel data
 		jig_details = []
 		for jig_rec in jig_completed_records:
 			try:
@@ -2937,6 +2937,13 @@ class JigCompletedTable(TemplateView):
 				try:
 					stock_model = TotalStockModel.objects.get(lot_id=jig_rec.lot_id)
 				except TotalStockModel.DoesNotExist:
+					pass
+				
+				# Fetch ModelMasterCreation for polishing_stk_no, plating_color, polish_finish, location
+				batch_obj = None
+				try:
+					batch_obj = ModelMasterCreation.objects.filter(batch_id=jig_rec.batch_id).select_related('location').first()
+				except Exception:
 					pass
 				
 				# Build multi-model allocation string as comma-separated model_name:qty
@@ -2972,6 +2979,24 @@ class JigCompletedTable(TemplateView):
 				
 				# Build enriched record
 				# Use delink_tray_qty as total_cases_loaded (the actual loaded qty, not the stale loaded_cases_qty)
+				# Polishing Stk No: prefer ModelMasterCreation (batch), fallback TotalStockModel
+				polishing_stk_no = getattr(batch_obj, 'polishing_stk_no', '') if batch_obj else ''
+				if not polishing_stk_no:
+					polishing_stk_no = getattr(stock_model, 'lot_polishing_stk_nos', '') if stock_model else ''
+				# Plating color / polish finish: prefer batch, fallback stock
+				p_color = getattr(batch_obj, 'plating_color', '') if batch_obj else ''
+				if not p_color:
+					p_color = getattr(stock_model, 'plating_color', '') if stock_model else ''
+				p_finish = getattr(batch_obj, 'polish_finish', '') if batch_obj else ''
+				if not p_finish:
+					p_finish = getattr(stock_model, 'polish_finish', '') if stock_model else ''
+				# Source / Location: from ModelMasterCreation.location
+				source_location = ''
+				if batch_obj and getattr(batch_obj, 'location', None):
+					source_location = str(batch_obj.location)
+				if not source_location:
+					source_location = getattr(stock_model, 'lot_version_names', '') if stock_model else ''
+				
 				enriched = {
 					'id': jig_rec.id,
 					'lot_id': jig_rec.lot_id,
@@ -2981,17 +3006,17 @@ class JigCompletedTable(TemplateView):
 					'is_multi_model': jig_rec.is_multi_model,
 					'no_of_model_cases': no_of_model_cases_str,
 					'lot_plating_stk_nos': plating_stock_num,
-					'lot_polishing_stk_nos': getattr(stock_model, 'lot_polishing_stk_nos', 'N/A') if stock_model else 'N/A',
-					'plating_color': getattr(stock_model, 'plating_color', 'N/A') if stock_model else 'N/A',
-					'polish_finish': getattr(stock_model, 'polish_finish', 'N/A') if stock_model else 'N/A',
-					'lot_version_names': getattr(stock_model, 'lot_version_names', 'N/A') if stock_model else 'N/A',
+					'lot_polishing_stk_nos': polishing_stk_no or 'N/A',
+					'plating_color': p_color or 'N/A',
+					'polish_finish': p_finish or 'N/A',
+					'lot_version_names': source_location or 'N/A',
 					'tray_type': jig_rec.tray_type or 'N/A',
 					'tray_capacity': jig_rec.tray_capacity or 0,
 					'calculated_no_of_trays': jig_rec.delink_tray_count or 0,
 					'total_cases_loaded': jig_rec.delink_tray_qty or jig_rec.loaded_cases_qty or 0,
 					'jig_type': 'Jig',
 					'jig_capacity': jig_rec.jig_capacity or 0,
-					'jig_qr_id': f"J{jig_rec.jig_id[-3:]}" if jig_rec.jig_id else '',
+					'jig_qr_id': jig_rec.jig_id or '',
 					'half_filled_tray_qty': jig_rec.half_filled_tray_qty or 0,
 					'draft_status': jig_rec.draft_status,
 					'original_lot_qty': jig_rec.original_lot_qty or 0,
@@ -2999,6 +3024,7 @@ class JigCompletedTable(TemplateView):
 					'half_filled_tray_info': json.dumps(jig_rec.half_filled_tray_info or []),
 					'excess_qty': jig_rec.excess_qty or 0,
 					'multi_model_allocation': jig_rec.multi_model_allocation or [],
+					'IP_jig_pick_remarks': jig_rec.remarks or '',
 				}
 				jig_details.append(enriched)
 				
@@ -3124,6 +3150,20 @@ class JigSaveAPI(APIView):
 		tray_capacity = int(payload.get('tray_capacity', 12) or 12)
 		plating_stock_num = payload.get('plating_stock_num', '') or ''
 		remarks = payload.get('remarks', '') or ''
+
+		# Preserve existing remarks if payload sends empty (remarks saved via /api/update-remark/)
+		if not remarks:
+			existing_rec = JigCompleted.objects.filter(lot_id=lot_id, batch_id=batch_id, user=user).first()
+			if existing_rec and existing_rec.remarks:
+				remarks = existing_rec.remarks
+			else:
+				# Fallback: remark may have been saved with a different batch_id (e.g. 'null')
+				# by UpdateRemarkAPI before the real batch_id was assigned during submit
+				draft_with_remark = JigCompleted.objects.filter(
+					lot_id=lot_id, user=user, draft_status__in=['draft', 'active']
+				).exclude(remarks__isnull=True).exclude(remarks='').first()
+				if draft_with_remark:
+					remarks = draft_with_remark.remarks
 
 		# === SUBMIT-SPECIFIC VALIDATIONS ===
 		if action == 'submit':
@@ -3258,6 +3298,13 @@ class JigSaveAPI(APIView):
 				'record_id': record.id, 'created': created,
 				'lot_id': lot_id, 'batch_id': batch_id,
 			}))
+
+			# After submit: clear remarks from any other draft records for this lot
+			# so excess lot rows in pick table don't display stale remarks
+			if action == 'submit' and remarks:
+				JigCompleted.objects.filter(
+					lot_id=lot_id, user=user, draft_status__in=['draft', 'active']
+				).exclude(id=record.id).exclude(remarks__isnull=True).exclude(remarks='').update(remarks='')
 		except Exception as e:
 			logging.exception(f'JigSaveAPI: save failed: {e}')
 			return Response({'status': 'error', 'message': 'Failed to save'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3751,11 +3798,12 @@ class UpdateRemarkAPI(APIView):
 
 		try:
 			# Update JigCompleted (single source of truth)
+			# Include 'submitted' status to allow remarks on completed/submitted records
 			record = JigCompleted.objects.filter(
 				lot_id=lot_id,
 				batch_id=batch_id,
 				user=request.user,
-				draft_status__in=['draft', 'active']
+				draft_status__in=['draft', 'active', 'submitted']
 			).first()
 
 			if record:
