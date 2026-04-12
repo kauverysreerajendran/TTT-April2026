@@ -62,6 +62,23 @@ tr.hold-row td {
 tr.hold-row td:first-child, tr.hold-row td:nth-child(2) {
   filter: none !important; opacity: 1 !important;
 }
+
+/* Remark tooltip */
+.remark-tooltip-trigger { position: relative; display: inline-block; }
+.remark-tooltip {
+  position: absolute; top: 110%; left: 50%; transform: translateX(-50%);
+  width: 270px; background: #fff; border: 1px solid #ccc; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;
+}
+.remark-close-btn {
+  position: absolute; top: 8px; right: 8px; background: #dc3545; color: white;
+  border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 16px;
+  font-weight: bold; cursor: pointer; display: none; line-height: 1; padding: 0;
+  transition: all 0.2s ease; z-index: 1001;
+}
+.remark-close-btn:hover { background: #c82333; transform: scale(1.05); }
+
 @media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
   * { font-size: 20px !important; }
 }
@@ -81,7 +98,7 @@ tr.hold-row td:first-child, tr.hold-row td:nth-child(2) {
               <thead>
                 <tr>
                   <th>S.No</th>
-                  <th>Lot ID</th>
+                  <th>Date & Time</th>
                   <th>Plating Stk No</th>
                   <th>Polishing Stk No</th>
                   <th>Plating Color</th>
@@ -91,7 +108,6 @@ tr.hold-row td:first-child, tr.hold-row td:nth-child(2) {
                   <th>Tray Type</th>
                   <th>Source</th>
                   <th>Input Qty</th>
-                  <th>Tray ID</th>
                   <th>Action</th>
                   <th>Remarks</th>
                 </tr>
@@ -101,15 +117,15 @@ tr.hold-row td:first-child, tr.hold-row td:nth-child(2) {
                 <tr class="{% if item.spider_hold_lot %}hold-row{% endif %}"
                     data-lot-id="{{ item.lot_id }}">
                   <td>{{ forloop.counter }}</td>
+                  <td>{{ item.date_time|date:"d M Y H:i" }}</td>
                   <td>
-                    {{ item.lot_id }}
+                    {{ item.plating_stk_no }}
                     {% if item.images %}
                     <span style="cursor:pointer;color:#028084;">
                       <i class="fa fa-image"></i>
                     </span>
                     {% endif %}
                   </td>
-                  <td>{{ item.plating_stk_no }}</td>
                   <td>{{ item.polishing_stk_no }}</td>
                   <td>{{ item.plating_color }}</td>
                   <td>{{ item.category }}</td>
@@ -118,37 +134,38 @@ tr.hold-row td:first-child, tr.hold-row td:nth-child(2) {
                   <td>{{ item.tray_type }}</td>
                   <td>{{ item.location }}</td>
                   <td>{{ item.total_case_qty }}</td>
-                  <td class="tray-id-cell">
-                    {% if item.linked_tray_id %}
-                      <span class="badge bg-success text-white">{{ item.linked_tray_id }}</span>
-                    {% else %}
-                      <span class="text-muted">—</span>
-                    {% endif %}
-                  </td>
                   <td>
-                    {% if item.linked_tray_id %}
-                      <button type="button" class="ss-btn-danger btn-delink"
-                              data-lot-id="{{ item.lot_id }}">
-                        Delink
-                      </button>
-                    {% else %}
-                      <button type="button" class="ss-btn-success btn-add-spider"
-                              data-lot-id="{{ item.lot_id }}">
-                        Add Spider
-                      </button>
-                    {% endif %}
+                    <button type="button" class="ss-btn-success btn-add-spider"
+                            data-lot-id="{{ item.lot_id }}">
+                      Add Spider
+                    </button>
                   </td>
-                  <td>
-                    <input type="text" class="form-control form-control-sm remark-input"
-                           value="{{ item.spider_pick_remarks }}"
-                           data-lot-id="{{ item.lot_id }}"
-                           placeholder="Enter remarks"
-                           style="min-width:120px;" />
+                  <td style="position:relative;">
+                    <a href="#" title="Add Remark" class="remark-tooltip-trigger">
+                      <img src="{% static 'assets/icons/chat_icon.png' %}" alt="Chat"
+                        style="width:20px;height:20px;{% if item.spider_pick_remarks %}filter:grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2);opacity:1;{% else %}filter:grayscale(1) brightness(0.8);opacity:0.7;{% endif %}" />
+                      <div class="remark-tooltip">
+                        <button type="button" class="remark-close-btn">&times;</button>
+                        <textarea placeholder="Type your remark..." style="width:75%;height:40px;resize:vertical;border:1px solid #ccc;padding:5px;border-radius:4px;font-size:14px;"{% if item.spider_pick_remarks %} readonly{% endif %}>{{ item.spider_pick_remarks|default_if_none:"" }}</textarea>
+                        <div style="text-align:right;margin-top:-35px">
+                          {% if not item.spider_pick_remarks %}
+                          <button type="button" class="remark-send-btn" data-lot-id="{{ item.lot_id }}"
+                            style="background-color:#007bff;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:14px;">
+                            <i class="fa fa-send"></i>
+                          </button>
+                          {% else %}
+                          <div style="margin-top:40px;color:#31708f;background:#d9edf7;border:1px solid #bce8f1;border-radius:4px;padding:8px 12px;font-size:10px;text-align:left;">
+                            <i class="fa fa-info-circle"></i> Remark already saved.
+                          </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </a>
                   </td>
                 </tr>
                 {% empty %}
                 <tr>
-                  <td colspan="14" class="text-center text-muted py-4">
+                  <td colspan="13" class="text-center text-muted py-4">
                     No lots pending for Spider Spindle Z2.
                   </td>
                 </tr>
@@ -189,23 +206,34 @@ tr.hold-row td:first-child, tr.hold-row td:nth-child(2) {
 
 <!-- Add Spider Modal -->
 <div class="ss-modal-overlay" id="addSpiderModal">
-  <div class="ss-modal-box">
+  <div class="ss-modal-box" style="min-width:450px;max-width:600px;">
     <h5><i class="fa fa-plus-circle"></i> Add Spider — Z2</h5>
     <div class="mb-3">
       <label>Lot ID</label>
-      <input type="text" id="modalLotId" class="form-control" readonly />
-    </div>
-    <div class="mb-3">
-      <label>Tray ID (auto-fetched)</label>
-      <input type="text" id="modalTrayId" class="form-control" readonly />
-      <small class="text-muted">Auto-fetched from previous process tray.</small>
+      <input type="text" id="modalLotId" class="form-control form-control-sm" readonly />
     </div>
     <div class="mb-3">
       <label>Total Qty</label>
-      <input type="text" id="modalTotalQty" class="form-control" readonly />
+      <input type="text" id="modalTotalQty" class="form-control form-control-sm" readonly />
+    </div>
+    <div class="mb-3">
+      <label>Tray IDs</label>
+      <div style="max-height:200px;overflow-y:auto;">
+        <table class="table table-sm table-bordered mb-0" id="modalTrayTable">
+          <thead style="background:#028084;color:#fff;">
+            <tr><th>S.No</th><th>Tray ID</th><th>Status</th></tr>
+          </thead>
+          <tbody id="modalTrayTableBody">
+            <tr><td colspan="3" class="text-center">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     <div class="d-flex justify-content-end gap-2 mt-3">
       <button type="button" class="ss-btn-secondary" id="cancelSpiderBtn">Cancel</button>
+      <button type="button" class="ss-btn-danger" id="delinkAllBtn" style="display:none;">
+        <i class="fa fa-unlink"></i> Delink All
+      </button>
       <button type="button" class="ss-btn-primary" id="confirmSpiderBtn">
         <i class="fa fa-check"></i> Confirm Add Spider
       </button>
@@ -218,26 +246,49 @@ document.addEventListener('DOMContentLoaded', function() {
   const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
     || '{{ csrf_token }}';
 
+  // --- Add Spider Modal: open and fetch tray list ---
   document.querySelectorAll('.btn-add-spider').forEach(btn => {
     btn.addEventListener('click', function() {
       const lotId = this.dataset.lotId;
       document.getElementById('modalLotId').value = lotId;
-      document.getElementById('modalTrayId').value = 'Loading...';
       document.getElementById('modalTotalQty').value = '';
+      document.getElementById('modalTrayTableBody').innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+      document.getElementById('confirmSpiderBtn').style.display = '';
+      document.getElementById('delinkAllBtn').style.display = 'none';
+      document.getElementById('confirmSpiderBtn').disabled = false;
+      document.getElementById('delinkAllBtn').disabled = false;
       document.getElementById('addSpiderModal').classList.add('open');
 
-      fetch(`{% url 'ss_z2_get_tray_id' %}?lot_id=${encodeURIComponent(lotId)}`)
+      fetch(`{% url 'ss_z2_get_all_trays' %}?lot_id=${encodeURIComponent(lotId)}`)
         .then(r => r.json())
         .then(data => {
-          document.getElementById('modalTrayId').value = data.tray_id || '(No tray found)';
           document.getElementById('modalTotalQty').value = data.total_case_qty || '';
+          const tbody = document.getElementById('modalTrayTableBody');
+          if (!data.trays || data.trays.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No trays found.</td></tr>';
+            document.getElementById('confirmSpiderBtn').style.display = 'none';
+            return;
+          }
+          const hasLinked = data.trays.some(t => t.linked);
+          tbody.innerHTML = '';
+          data.trays.forEach((t, i) => {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td>' + (i+1) + '</td><td>' + t.tray_id + '</td><td>' +
+              (t.linked ? '<span class="badge bg-success">Linked</span>' : '<span class="badge bg-secondary">Available</span>') + '</td>';
+            tbody.appendChild(row);
+          });
+          if (hasLinked) {
+            document.getElementById('delinkAllBtn').style.display = '';
+            document.getElementById('confirmSpiderBtn').style.display = 'none';
+          }
         })
         .catch(() => {
-          document.getElementById('modalTrayId').value = '(Error fetching)';
+          document.getElementById('modalTrayTableBody').innerHTML = '<tr><td colspan="3" class="text-center text-danger">Error loading trays.</td></tr>';
         });
     });
   });
 
+  // --- Cancel Modal ---
   document.getElementById('cancelSpiderBtn').addEventListener('click', function() {
     document.getElementById('addSpiderModal').classList.remove('open');
   });
@@ -245,36 +296,54 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.target === this) this.classList.remove('open');
   });
 
+  // --- Confirm Add Spider ---
   document.getElementById('confirmSpiderBtn').addEventListener('click', function() {
     const lotId = document.getElementById('modalLotId').value;
-    const trayId = document.getElementById('modalTrayId').value;
-    if (!lotId || !trayId || trayId.startsWith('(')) {
-      alert('Cannot add spider: missing tray ID.');
-      return;
-    }
-    this.disabled = true;
-    fetch("{% url 'ss_z2_add_spider' %}", {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-      body: JSON.stringify({ lot_id: lotId, tray_id: trayId })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        location.reload();
-      } else {
-        alert(data.error || 'Failed to add spider.');
-        this.disabled = false;
-      }
-    })
-    .catch(() => { alert('Network error.'); this.disabled = false; });
+    if (!lotId) { Swal.fire('Error', 'Missing lot ID.', 'error'); return; }
+    const btn = this;
+    Swal.fire({
+      title: 'Confirm Add Spider',
+      text: 'Confirm adding spider for this lot?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#028084',
+      confirmButtonText: 'Yes, Add Spider'
+    }).then((result) => {
+      if (!result.isConfirmed) return;
+      btn.disabled = true;
+      fetch("{% url 'ss_z2_add_spider' %}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ lot_id: lotId })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          Swal.fire({ title: 'Success', text: data.message || 'Spider added successfully!', icon: 'success', timer: 1500, showConfirmButton: false }).then(() => location.reload());
+        } else {
+          Swal.fire('Error', data.error || 'Failed to add spider.', 'error');
+          btn.disabled = false;
+        }
+      })
+      .catch(() => { Swal.fire('Error', 'Network error.', 'error'); btn.disabled = false; });
+    });
   });
 
-  document.querySelectorAll('.btn-delink').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const lotId = this.dataset.lotId;
-      if (!confirm(`Delink spider for lot ${lotId}?`)) return;
-      this.disabled = true;
+  // --- Delink All ---
+  document.getElementById('delinkAllBtn').addEventListener('click', function() {
+    const lotId = document.getElementById('modalLotId').value;
+    if (!lotId) { Swal.fire('Error', 'Missing lot ID.', 'error'); return; }
+    const btn = this;
+    Swal.fire({
+      title: 'Delink All Trays?',
+      text: 'Are you sure you want to delink all trays?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      confirmButtonText: 'Yes, Delink All'
+    }).then((result) => {
+      if (!result.isConfirmed) return;
+      btn.disabled = true;
       fetch("{% url 'ss_z2_delink' %}", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -283,26 +352,108 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          location.reload();
+          Swal.fire({ title: 'Delinked', text: 'All trays delinked successfully!', icon: 'success', timer: 1500, showConfirmButton: false }).then(() => location.reload());
         } else {
-          alert(data.error || 'Failed to delink.');
-          this.disabled = false;
+          Swal.fire('Error', data.error || 'Failed to delink.', 'error');
+          btn.disabled = false;
         }
       })
-      .catch(() => { alert('Network error.'); this.disabled = false; });
+      .catch(() => { Swal.fire('Error', 'Network error.', 'error'); btn.disabled = false; });
     });
   });
 
-  document.querySelectorAll('.remark-input').forEach(input => {
-    input.addEventListener('blur', function() {
-      const lotId = this.dataset.lotId;
-      const remarks = this.value;
-      fetch("{% url 'ss_z2_save_remarks' %}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ lot_id: lotId, remarks: remarks })
-      }).catch(() => {});
+  // --- Remark Tooltip ---
+  document.querySelectorAll('.remark-tooltip-trigger').forEach(trigger => {
+    const tooltip = trigger.querySelector('.remark-tooltip');
+    const closeBtn = tooltip ? tooltip.querySelector('.remark-close-btn') : null;
+    const sendBtn = tooltip ? tooltip.querySelector('.remark-send-btn') : null;
+
+    function positionTooltip() {
+      if (!tooltip) return;
+      const rect = trigger.getBoundingClientRect();
+      const tw = 300;
+      let top = rect.bottom + 8;
+      let left = rect.left + rect.width / 2 - tw / 2;
+      if (left + tw > window.innerWidth - 10) left = window.innerWidth - tw - 10;
+      if (left < 10) left = 10;
+      if (top + 150 > window.innerHeight - 10) top = rect.top - 150 - 8;
+      if (top < 10) top = 10;
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+      tooltip.style.right = 'auto';
+      tooltip.style.transform = 'none';
+    }
+
+    function showTooltip() {
+      if (!tooltip) return;
+      if (tooltip.parentNode !== document.body) {
+        if (!tooltip._placeholder) {
+          const ph = document.createElement('span');
+          ph.style.display = 'none';
+          tooltip.parentNode.insertBefore(ph, tooltip);
+          tooltip._placeholder = ph;
+        }
+        document.body.appendChild(tooltip);
+      }
+      tooltip.style.position = 'fixed';
+      tooltip.style.display = 'block';
+      tooltip.style.opacity = '1';
+      tooltip.style.visibility = 'visible';
+      tooltip.style.zIndex = '1000000';
+      if (closeBtn) closeBtn.style.display = 'block';
+      positionTooltip();
+    }
+
+    function hideTooltip() {
+      if (!tooltip) return;
+      tooltip.style.opacity = '0';
+      tooltip.style.visibility = 'hidden';
+      tooltip.style.display = 'none';
+      if (closeBtn) closeBtn.style.display = 'none';
+      if (tooltip._placeholder && tooltip._placeholder.parentNode) {
+        tooltip._placeholder.parentNode.insertBefore(tooltip, tooltip._placeholder);
+        tooltip._placeholder.remove();
+        tooltip._placeholder = null;
+      }
+    }
+
+    trigger.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (tooltip.style.visibility === 'visible') hideTooltip();
+      else showTooltip();
     });
+
+    if (closeBtn) closeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      hideTooltip();
+    });
+
+    if (sendBtn) {
+      sendBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const textarea = tooltip.querySelector('textarea');
+        const remark = textarea ? textarea.value.trim() : '';
+        if (!remark) { Swal.fire('Warning', 'Please enter a remark.', 'warning'); return; }
+        const lotId = this.dataset.lotId;
+        fetch("{% url 'ss_z2_save_remarks' %}", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ lot_id: lotId, remarks: remark })
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            if (textarea) { textarea.value = remark; textarea.setAttribute('readonly', true); }
+            this.outerHTML = '<div style="margin-top:40px;color:#31708f;background:#d9edf7;border:1px solid #bce8f1;border-radius:4px;padding:8px 12px;font-size:10px;text-align:left;"><i class="fa fa-info-circle"></i> Remark saved.</div>';
+            const img = trigger.querySelector('img');
+            if (img) { img.style.filter = 'grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2)'; img.style.opacity = '1'; }
+            Swal.fire({ title: 'Saved', text: 'Remark saved successfully!', icon: 'success', timer: 1500, showConfirmButton: false });
+          }
+        })
+        .catch(() => { Swal.fire('Error', 'Network error.', 'error'); });
+      });
+    }
   });
 });
 </script>

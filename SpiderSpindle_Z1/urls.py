@@ -6,6 +6,7 @@ from .views import (
     SSZ1DelinkAPIView,
     SSZ1SaveRemarksAPIView,
     SSZ1GetTrayIdAPIView,
+    SSZ1GetAllTraysAPIView,
 )
 
 urlpatterns = [
@@ -15,4 +16,5 @@ urlpatterns = [
     path('api/ss_z1_delink/', SSZ1DelinkAPIView.as_view(), name='ss_z1_delink'),
     path('api/ss_z1_save_remarks/', SSZ1SaveRemarksAPIView.as_view(), name='ss_z1_save_remarks'),
     path('api/ss_z1_get_tray_id/', SSZ1GetTrayIdAPIView.as_view(), name='ss_z1_get_tray_id'),
+    path('api/ss_z1_get_all_trays/', SSZ1GetAllTraysAPIView.as_view(), name='ss_z1_get_all_trays'),
 ]

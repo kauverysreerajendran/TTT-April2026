@@ -27,7 +27,7 @@ from IQF.models import *
 from BrassAudit.models import *
 from Nickel_Inspection.models import *
 from Jig_Unloading.models import *
-from Jig_Unloading.tray_utils import get_upstream_tray_distribution, get_model_master_tray_info
+from Jig_Unloading.tray_utils import get_upstream_tray_distribution
 from Inprocess_Inspection.models import *
 from django.contrib.auth.decorators import login_required
 
@@ -371,10 +371,10 @@ class NQ_Zone_PickTableView(APIView):
                 'location__location_name': _get_input_source(jig_unload_obj),
 
 
-                'tray_type': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0],
+                'tray_type': jig_unload_obj.tray_type or '',
 
 
-                'tray_capacity': self.get_dynamic_tray_capacity(get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0]) if jig_unload_obj.plating_stk_no or jig_unload_obj.tray_type else 0,
+                'tray_capacity': self.get_dynamic_tray_capacity(jig_unload_obj.tray_type) if jig_unload_obj.tray_type else 0,
 
 
                 'wiping_required': False,  # Default value, can be enhanced later
@@ -12690,7 +12690,7 @@ class NQ_Zone_CompletedView(APIView):
                 'location__location_name': _get_input_source(jig_unload_obj),
 
 
-                'tray_type': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0],
+                'tray_type': jig_unload_obj.tray_type or '',
 
 
                 # ✅ FIXED: Apply tray capacity correction (16 → 20 for Normal trays)
@@ -14257,7 +14257,11 @@ def nq_zone_get_all_drafts(request):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+
+
 @method_decorator(login_required, name='dispatch')
+
+
 class NQ_Zone_ClearDraftAPIView(APIView):
 
 
@@ -15115,4 +15119,4 @@ def nq_zone_get_lot_id_for_tray(request):
         else:
             return JsonResponse({'success': False, 'error': 'Tray not found', 'tray_id': tray_id})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e), 'tray_id': tray_id}, status=500)
+        return JsonResponse({'success': False, 'error': str(e), 'tray_id': tray_id}, status=500))

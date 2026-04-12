@@ -47,4 +47,6 @@ urlpatterns = [
     path('na_validate_tray_id/',NAValidateTrayIdAPIView.as_view(), name='na_validate_tray_id'),
     path('na_tray_delink_and_top_tray_update/', NATrayDelinkAndTopTrayUpdateAPIView.as_view(), name='na_tray_delink_and_top_tray_update'),
 
+    path('na_get_lot_id_for_tray/', na_get_lot_id_for_tray, name='na_get_lot_id_for_tray'),
+
 ]

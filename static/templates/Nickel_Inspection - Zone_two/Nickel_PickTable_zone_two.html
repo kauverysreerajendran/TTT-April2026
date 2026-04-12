@@ -574,7 +574,17 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     <div class="col-12 grid-margin stretch-card">
       <div class="card">
         <div class="card-body" style="padding-bottom:12px;">
-          <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Nickel Wiping Pick Table</h5>
+          <div class="mb-4" style="position: relative;">
+            <h5 class="text-left mt-0 mb-0 d-inline-block" style="font-weight:700;">Nickel Wiping Pick Table Zone II
+              <button type="button" class="btn btn-primary btn-sm ms-3" id="scanButton"
+                      style="background-color: #028084; border-color: #028084; font-weight: 600; vertical-align: middle;">
+                <i class="fa fa-qrcode" style="margin-right: 6px;"></i>
+                Scan
+              </button>
+              <span id="scanStatusMessage" style="display: none; margin-left: 12px; vertical-align: middle; color: #28a745; font-size: 15px; font-weight: 700;">PLEASE SCAN</span>
+            </h5>
+            <input type="text" id="scanHiddenInput" style="position: absolute; left: -9999px; opacity: 0;" autocomplete="off" />
+          </div>
 
           
             <!-- Table Section -->
@@ -1707,6 +1717,13 @@ validateInput.addEventListener("keydown", function (e) {
       if (data.data_source) {
         console.log(`   Confirmed Data Source: ${data.data_source}`);
       }
+
+      // Handle backend validation errors (prefix mismatch, occupancy)
+      if (!data.success && data.error) {
+        showError(data.error);
+        validateInput.select();
+        return;
+      }
       
       const rows = detailsDiv.querySelectorAll("tbody tr");
       let found = false;
@@ -1737,6 +1754,10 @@ validateInput.addEventListener("keydown", function (e) {
                 }, 2000);
                 console.log(`✅ [Validation Success] Tray "${trayId}" validated successfully in ${validationConfig.dataSource}`);
               } else {
+                // Show specific error from backend if available
+                if (data.error) {
+                  showError(data.error);
+                }
                 statusCell.innerHTML = `
                   <div class="validation-status">
                     <div class="status-icon fail active">
@@ -1760,16 +1781,19 @@ validateInput.addEventListener("keydown", function (e) {
       
       if (!found) {
         showError(`Tray ID "${trayId}" not found in table (${validationConfig.dataSource}).`);
+        validateInput.select();
+      } else if (data.success && data.exists) {
+        validateInput.value = "";
+        validateInput.focus();
+      } else {
+        // Invalid tray - keep value and auto-select for re-scan
+        validateInput.select();
       }
-      
-      validateInput.value = "";
-      validateInput.focus();
     })
     .catch(error => {
       console.error('❌ [Validation Network Error]', error);
       showError(`Network error occurred while validating the tray ID in ${validationConfig.dataSource}.`);
-      validateInput.value = "";
-      validateInput.focus();
+      validateInput.select();
     });
   }
 });
@@ -1920,6 +1944,18 @@ document.addEventListener("DOMContentLoaded", function () {
           console.log(`✅ [SUCCESS] Fetched ${traysData.length} trays from ${dataSource}`);
         } else {
           console.error(`❌ [ERROR] API call failed:`, result);
+          try {
+            const fallbackUrl = `${currentPathPrefix}/pick_CompleteTable_tray_id_list/?lot_id=${encodeURIComponent(stockLotId)}&include_drafts=false`;
+            const fallbackResp = await fetch(fallbackUrl);
+            const fallbackResult = await fallbackResp.json();
+            if (fallbackResult.success) {
+              traysData = fallbackResult.trays || [];
+              dataSource = fallbackResult.tray_source || 'Fallback';
+              console.log(`✅ [FALLBACK SUCCESS] Fetched ${traysData.length} trays from ${dataSource}`);
+            }
+          } catch (fallbackErr) {
+            console.error(`❌ [FALLBACK ERROR]`, fallbackErr);
+          }
         }
       } catch (e) {
         console.error(`❌ [NETWORK ERROR] Failed to fetch tray data:`, e);
@@ -1969,7 +2005,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
                 </td>
                 <td>
-                  <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+                  <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
                 </td>
                 ${showValidationColumn ? `
                   <td>
@@ -2009,7 +2045,7 @@ document.addEventListener("DOMContentLoaded", function () {
                   <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
                 </td>
                 <td>
-                  <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+                  <input type="number" class="form-control" value="${displayQuantity ?? ''}" readonly style="width: 100%;" />
                 </td>
                 ${showValidationColumn ? `
                   <td>
@@ -2029,6 +2065,8 @@ document.addEventListener("DOMContentLoaded", function () {
           });
           
           console.log(`📊 [Table Complete] Built table with ${rowCounter - 1} rows from ${dataSource}`);
+        } else {
+          html += `<tr><td colspan="${showValidationColumn ? 4 : 3}" style="text-align:center; color:#999; padding:20px;">No tray data found for this lot</td></tr>`;
         }
         
         html += '</tbody></table>';
@@ -9237,6 +9275,162 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 });
+</script>
+
+<!-- Barcode Scanner Script for Nickel Wiping Pick Table Zone 2 -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(() => { nqzCheckPendingScanAfterPageLoad(); }, 500);
+
+  window.nqzCurrentHighlightedRow = null;
+  window.nqzCurrentHighlightedLotId = null;
+  window.nqzOriginalRowPosition = null;
+
+  const scanBtn = document.getElementById("scanButton");
+  const scanInput = document.getElementById("scanHiddenInput");
+  const scanStatus = document.getElementById("scanStatusMessage");
+
+  if (!scanBtn || !scanInput || !scanStatus) return;
+
+  scanBtn.addEventListener("click", function () {
+    const modal = document.getElementById("trayScanModal_DayPlanning");
+    if (modal && modal.style.display === "block") {
+      const validateInput = document.getElementById("trayValidateInput");
+      if (validateInput) validateInput.focus();
+    } else {
+      scanInput.focus();
+      scanStatus.textContent = "PLEASE SCAN";
+      scanStatus.style.display = "inline-block";
+      scanStatus.style.color = "#28a745";
+    }
+  });
+
+  scanInput.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    const trayId = scanInput.value.trim();
+    if (trayId.length < 8) {
+      scanStatus.style.display = "inline-block";
+      scanStatus.style.color = "#28a745";
+      scanStatus.textContent = "PLEASE SCAN";
+      return;
+    }
+
+    fetch(`/nickle_inspection_zone_two/nq_zone_get_lot_id_for_tray/?tray_id=${encodeURIComponent(trayId)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.lot_id) {
+          const row = document.querySelector(`tr[data-stock-lot-id="${data.lot_id}"]`);
+          if (row) {
+            const trayScanModal = document.getElementById('trayScanModal');
+            const dayPlanningModal = document.getElementById('trayScanModal_DayPlanning');
+            if (trayScanModal && trayScanModal.style.display !== 'none') trayScanModal.style.display = 'none';
+            if (dayPlanningModal && dayPlanningModal.style.display !== 'none') dayPlanningModal.style.display = 'none';
+            scanInput.value = "";
+            scanStatus.textContent = "PLEASE SCAN";
+            scanStatus.style.color = "#28a745";
+            nqzHighlightAndMoveRowToTop(row, data.lot_id, true);
+          } else {
+            const currentUrl = new URL(window.location);
+            const currentPage = currentUrl.searchParams.get('page') || '1';
+            scanStatus.style.color = "#dc3545";
+            scanStatus.textContent = "Lot not found on current page, searching...";
+            nqzSearchLotIdAcrossPages(data.lot_id, trayId, currentPage);
+          }
+        } else {
+          scanStatus.style.display = "inline-block";
+          scanStatus.style.color = "#dc3545";
+          scanStatus.textContent = "Invalid Tray ID!";
+          scanInput.value = "";
+          scanInput.focus();
+        }
+      })
+      .catch(() => {
+        scanStatus.style.display = "inline-block";
+        scanStatus.style.color = "#dc3545";
+        scanStatus.textContent = "Network error!";
+        scanInput.value = "";
+        scanInput.focus();
+      });
+  });
+});
+
+function nqzHighlightAndMoveRowToTop(row, lotId, restorePrevious) {
+  if (restorePrevious && window.nqzCurrentHighlightedRow && window.nqzOriginalRowPosition) {
+    nqzRestorePreviousRowPosition();
+  }
+  const tableBody = row.parentElement;
+  const allRows = Array.from(tableBody.children);
+  window.nqzCurrentHighlightedRow = row;
+  window.nqzCurrentHighlightedLotId = lotId;
+  window.nqzOriginalRowPosition = { row: row, parent: tableBody, nextSibling: row.nextElementSibling, index: allRows.indexOf(row) };
+  row.classList.add('dp-row-action-highlight');
+  tableBody.insertBefore(row, tableBody.firstChild);
+  const table = tableBody.closest('table');
+  if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function nqzRestorePreviousRowPosition() {
+  if (!window.nqzOriginalRowPosition) return;
+  const { row, parent, nextSibling } = window.nqzOriginalRowPosition;
+  row.classList.remove('dp-row-action-highlight');
+  if (nextSibling) parent.insertBefore(row, nextSibling);
+  else parent.appendChild(row);
+  window.nqzCurrentHighlightedRow = null;
+  window.nqzCurrentHighlightedLotId = null;
+  window.nqzOriginalRowPosition = null;
+}
+
+function nqzSearchLotIdAcrossPages(lotId, trayId, currentPage) {
+  const maxPages = 10;
+  let pageToCheck = parseInt(sessionStorage.getItem('nqzPendingScanNextPage') || '1');
+  const existingLotId = sessionStorage.getItem('nqzPendingScanLotId');
+  if (!existingLotId || existingLotId !== lotId) pageToCheck = 1;
+
+  function checkNextPage() {
+    if (pageToCheck > maxPages) {
+      sessionStorage.removeItem('nqzPendingScanLotId');
+      sessionStorage.removeItem('nqzPendingScanTrayId');
+      sessionStorage.removeItem('nqzPendingScanNextPage');
+      const scanStatus = document.getElementById("scanStatusMessage");
+      const scanInput = document.getElementById("scanHiddenInput");
+      if (scanStatus) { scanStatus.style.color = "#dc3545"; scanStatus.textContent = "Tray found but lot not visible on any page"; }
+      if (scanInput) { scanInput.value = ""; scanInput.focus(); }
+      return;
+    }
+    if (pageToCheck.toString() === currentPage) { pageToCheck++; checkNextPage(); return; }
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('page', pageToCheck);
+    sessionStorage.setItem('nqzPendingScanLotId', lotId);
+    sessionStorage.setItem('nqzPendingScanTrayId', trayId);
+    sessionStorage.setItem('nqzPendingScanNextPage', (pageToCheck + 1).toString());
+    window.location.href = newUrl.toString();
+  }
+  checkNextPage();
+}
+
+function nqzCheckPendingScanAfterPageLoad() {
+  const pendingLotId = sessionStorage.getItem('nqzPendingScanLotId');
+  const pendingTrayId = sessionStorage.getItem('nqzPendingScanTrayId');
+  if (pendingLotId && pendingTrayId) {
+    const row = document.querySelector(`tr[data-stock-lot-id="${pendingLotId}"]`);
+    if (row) {
+      sessionStorage.removeItem('nqzPendingScanLotId');
+      sessionStorage.removeItem('nqzPendingScanTrayId');
+      sessionStorage.removeItem('nqzPendingScanNextPage');
+      const trayScanModal = document.getElementById('trayScanModal');
+      const dayPlanningModal = document.getElementById('trayScanModal_DayPlanning');
+      if (trayScanModal && trayScanModal.style.display !== 'none') trayScanModal.style.display = 'none';
+      if (dayPlanningModal && dayPlanningModal.style.display !== 'none') dayPlanningModal.style.display = 'none';
+      nqzHighlightAndMoveRowToTop(row, pendingLotId, false);
+      const scanStatus = document.getElementById("scanStatusMessage");
+      if (scanStatus) { scanStatus.style.color = "#28a745"; scanStatus.textContent = "PLEASE SCAN"; }
+    } else {
+      const currentUrl = new URL(window.location);
+      const currentPageNum = parseInt(currentUrl.searchParams.get('page') || '1');
+      nqzSearchLotIdAcrossPages(pendingLotId, pendingTrayId, currentPageNum.toString());
+    }
+  }
+}
 </script>
 
 

@@ -57,4 +57,7 @@ urlpatterns = [
     path('nq_zone_autosave/<str:lot_id>/', load_autosave_nickel_qc_zone_two, name='load_autosave_nickel_qc_zone_two'),
     path('nq_zone_autosave/<str:lot_id>/clear/', clear_autosave_nickel_qc_zone_two, name='clear_autosave_nickel_qc_zone_two'),
 
+    # Scan button endpoint
+    path('nq_zone_get_lot_id_for_tray/', nq_zone_get_lot_id_for_tray, name='nq_zone_get_lot_id_for_tray'),
+
 ]

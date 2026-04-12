@@ -9,6 +9,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def get_model_master_tray_info(plating_stk_no, fallback_type='', fallback_cap=0):
+    """
+    Dynamically look up tray type code from ModelMaster by plating stock number.
+    Returns (tray_type_str, tray_capacity_int).
+    Falls back to provided defaults if lookup fails.
+    """
+    if plating_stk_no:
+        from modelmasterapp.models import ModelMaster
+        mm = ModelMaster.objects.select_related('tray_type').filter(
+            plating_stk_no=plating_stk_no
+        ).first()
+        if mm and mm.tray_type:
+            return mm.tray_type.tray_type, mm.tray_capacity or fallback_cap
+    return fallback_type, fallback_cap
+
+
 def get_upstream_tray_distribution(lot_id):
     """
     When no tray records exist in the current-stage tables, look up the
@@ -21,7 +37,7 @@ def get_upstream_tray_distribution(lot_id):
         (list[dict], str) — (tray_data_list, tray_source) on success
         (None, None)      — when no upstream data is available
     """
-    from Jig_Unloading.models import JigUnloadAfterTable, JigUnload_TrayId
+    from Jig_Unloading.models import JigUnloadAfterTable, JigUnload_TrayId, JUSubmittedZ1
     from BrassAudit.models import BrassAuditTrayId, Brass_Audit_Accepted_TrayID_Store
     from Brass_QC.models import BrassTrayId
     from Jig_Loading.models import JigLoadTrayId
@@ -60,6 +76,31 @@ def get_upstream_tray_distribution(lot_id):
                 len(data), lot_id, lid,
             )
             return data, "JigUnload_TrayId (via combine_lot_ids)"
+
+    # 2b. Try JUSubmittedZ1.tray_data (Zone 1 Jig Unloading stores tray scans here)
+    for lid in combine_lot_ids:
+        ju_sub = JUSubmittedZ1.objects.filter(lot_id=lid, is_draft=False).order_by('-submitted_at').first()
+        if ju_sub and ju_sub.tray_data:
+            data = []
+            for idx, t in enumerate(ju_sub.tray_data, 1):
+                tray_id = t.get('tray_id', '')
+                if not tray_id:
+                    continue
+                data.append({
+                    's_no': idx,
+                    'tray_id': tray_id,
+                    'tray_quantity': t.get('qty', t.get('tray_qty', 0)) or 0,
+                    'top_tray': t.get('is_top_tray', False),
+                    'delink_tray': False,
+                    'rejected_tray': False,
+                })
+            if data:
+                logger.info(
+                    "[upstream_tray] Found %d trays in JUSubmittedZ1 for %s (via %s)",
+                    len(data), lot_id, lid,
+                )
+                print(f"✅ Found {len(data)} trays from JUSubmittedZ1 (via combine_lot_ids)")
+                return data, "JUSubmittedZ1 (via combine_lot_ids)"
 
     # 3. Search upstream tables for REAL tray IDs
     #    Priority: closest upstream stage → farthest

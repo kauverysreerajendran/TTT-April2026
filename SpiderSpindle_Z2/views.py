@@ -15,8 +15,46 @@ import pytz
 import json
 
 from modelmasterapp.models import *
+from datetime import datetime, timedelta  # re-import after wildcard (modelmasterapp shadows datetime)
 from Jig_Unloading.models import JigUnloadAfterTable
 from .models import SpiderSpindleZ2TrayId
+
+
+def _get_upstream_tray_ids(lot_id, jig_obj=None):
+    """Cascade tray lookup: Z2 NickelQcTrayId → NickelQcTrayId → Nickel_AuditTrayId → JigUnload_TrayId → IP_TrayVerificationStatus."""
+    from nickel_audit_zone_two.models import NickelQcTrayId as NickelQcTrayIdZ2
+    tray_ids = list(NickelQcTrayIdZ2.objects.filter(lot_id=lot_id, delink_tray=False).values_list('tray_id', flat=True))
+    if tray_ids:
+        return tray_ids
+
+    from Nickel_Inspection.models import NickelQcTrayId
+    tray_ids = list(NickelQcTrayId.objects.filter(lot_id=lot_id, delink_tray=False).values_list('tray_id', flat=True))
+    if tray_ids:
+        return tray_ids
+
+    from Nickel_Audit.models import Nickel_AuditTrayId
+    tray_ids = list(Nickel_AuditTrayId.objects.filter(lot_id=lot_id, delink_tray=False).values_list('tray_id', flat=True))
+    if tray_ids:
+        return tray_ids
+
+    from Jig_Unloading.models import JigUnload_TrayId
+    tray_ids = list(JigUnload_TrayId.objects.filter(lot_id=lot_id, delink_tray=False).values_list('tray_id', flat=True))
+    if tray_ids:
+        return tray_ids
+
+    # Fallback: check combine_lot_ids via IP_TrayVerificationStatus
+    if jig_obj is None:
+        jig_obj = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
+    if jig_obj and jig_obj.combine_lot_ids:
+        from InputScreening.models import IP_TrayVerificationStatus
+        for clid in jig_obj.combine_lot_ids:
+            tray_ids = list(IP_TrayVerificationStatus.objects.filter(
+                lot_id=clid, is_verified=True, verification_status='pass'
+            ).values_list('tray_id', flat=True))
+            if tray_ids:
+                return tray_ids
+
+    return []
 
 
 def _get_input_source(jig_unload_obj):
@@ -103,7 +141,7 @@ class SSZ2PickTableView(APIView):
             data = {
                 'lot_id': obj.lot_id,
                 'unload_lot_id': obj.unload_lot_id,
-                'date_time': obj.created_at,
+                'date_time': obj.na_last_process_date_time or obj.created_at,
                 'plating_color': obj.plating_color.plating_color if obj.plating_color else '',
                 'polish_finish': obj.polish_finish.polish_finish if obj.polish_finish else '',
                 'version': obj.version.version_name if obj.version else '',
@@ -196,6 +234,7 @@ class SSZ2CompletedView(APIView):
                 'polishing_stk_no': obj.polish_stk_no or '',
                 'category': obj.category or '',
                 'linked_tray_id': linked_tray.tray_id if linked_tray else obj.ss_z2_tray_id or '',
+                'spider_pick_remarks': obj.spider_pick_remarks or '',
                 'images': images,
             }
             master_data.append(data)
@@ -209,41 +248,49 @@ class SSZ2CompletedView(APIView):
 
 
 class SSZ2AddSpiderAPIView(APIView):
-    """Add Spider: auto-fetch tray_id, link it to the lot, mark completed."""
+    """Add Spider: auto-fetch all trays from upstream, link them, mark completed."""
 
     def post(self, request):
         lot_id = request.data.get('lot_id')
-        tray_id = request.data.get('tray_id')
-
-        if not lot_id or not tray_id:
-            return Response({'error': 'lot_id and tray_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not lot_id:
+            return Response({'error': 'lot_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         jig_obj = JigUnloadAfterTable.objects.filter(lot_id=lot_id, ss_z2_completed=False).first()
         if not jig_obj:
             return Response({'error': 'Lot not found or already completed.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if SpiderSpindleZ2TrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).exists():
-            return Response({'error': 'This tray is already linked to this lot.'}, status=status.HTTP_400_BAD_REQUEST)
+        upstream_tray_ids = _get_upstream_tray_ids(lot_id, jig_obj)
 
-        SpiderSpindleZ2TrayId.objects.create(
-            lot_id=lot_id,
-            tray_id=tray_id,
-            linked_by=request.user if request.user.is_authenticated else None,
-        )
+        if not upstream_tray_ids:
+            return Response({'error': 'No trays found for this lot.'}, status=status.HTTP_404_NOT_FOUND)
+
+        linked_tray_ids = []
+        for tid in upstream_tray_ids:
+            if not SpiderSpindleZ2TrayId.objects.filter(lot_id=lot_id, tray_id=tid).exists():
+                SpiderSpindleZ2TrayId.objects.create(
+                    lot_id=lot_id,
+                    tray_id=tid,
+                    linked_by=request.user if request.user.is_authenticated else None,
+                )
+            linked_tray_ids.append(tid)
 
         jig_obj.ss_z2_completed = True
-        jig_obj.ss_z2_tray_id = tray_id
+        jig_obj.ss_z2_tray_id = ','.join(linked_tray_ids)
         jig_obj.ss_z2_completed_at = timezone.now()
         jig_obj.ss_z2_completed_by = request.user if request.user.is_authenticated else None
         jig_obj.save(update_fields=[
             'ss_z2_completed', 'ss_z2_tray_id', 'ss_z2_completed_at', 'ss_z2_completed_by'
         ])
 
-        return Response({'success': True, 'message': f'Spider added for lot {lot_id} with tray {tray_id}.'})
+        return Response({
+            'success': True,
+            'message': f'Spider added for lot {lot_id} with {len(linked_tray_ids)} trays.',
+            'trays': [{'tray_id': tid} for tid in linked_tray_ids],
+        })
 
 
 class SSZ2DelinkAPIView(APIView):
-    """Delink: remove tray link and revert completion."""
+    """Delink: remove ALL tray links, mark TrayIds as reusable, revert completion."""
 
     def post(self, request):
         lot_id = request.data.get('lot_id')
@@ -254,7 +301,14 @@ class SSZ2DelinkAPIView(APIView):
         if not jig_obj:
             return Response({'error': 'Lot not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+        linked_tray_ids = list(SpiderSpindleZ2TrayId.objects.filter(
+            lot_id=lot_id
+        ).values_list('tray_id', flat=True))
+
         SpiderSpindleZ2TrayId.objects.filter(lot_id=lot_id).delete()
+
+        if linked_tray_ids:
+            TrayId.objects.filter(tray_id__in=linked_tray_ids).update(delink_tray=True)
 
         jig_obj.ss_z2_completed = False
         jig_obj.ss_z2_tray_id = None
@@ -264,7 +318,7 @@ class SSZ2DelinkAPIView(APIView):
             'ss_z2_completed', 'ss_z2_tray_id', 'ss_z2_completed_at', 'ss_z2_completed_by'
         ])
 
-        return Response({'success': True, 'message': f'Spider delinked for lot {lot_id}.'})
+        return Response({'success': True, 'message': f'All trays delinked for lot {lot_id}.'})
 
 
 class SSZ2SaveRemarksAPIView(APIView):
@@ -296,25 +350,44 @@ class SSZ2GetTrayIdAPIView(APIView):
         if not jig_obj:
             return Response({'error': 'Lot not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        from nickel_audit_zone_two.models import NickelAuditZoneTwoTrayId
-        tray = None
-        try:
-            tray = NickelAuditZoneTwoTrayId.objects.filter(
-                lot_id=lot_id,
-            ).order_by('-id').first()
-        except Exception:
-            pass
-
-        if not tray:
-            from Nickel_Inspection.models import NickelQcTrayId
-            tray = NickelQcTrayId.objects.filter(
-                lot_id=lot_id,
-                delink_tray=False,
-            ).order_by('-id').first()
-
-        tray_id = tray.tray_id if tray else ''
+        upstream_tray_ids = _get_upstream_tray_ids(lot_id, jig_obj)
+        tray_id = upstream_tray_ids[-1] if upstream_tray_ids else ''
         return Response({
             'tray_id': tray_id,
+            'lot_id': lot_id,
+            'total_case_qty': jig_obj.total_case_qty,
+        })
+
+
+class SSZ2GetAllTraysAPIView(APIView):
+    """Fetch all tray IDs for a lot from upstream and linked records."""
+
+    def get(self, request):
+        lot_id = request.GET.get('lot_id')
+        if not lot_id:
+            return Response({'error': 'lot_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        jig_obj = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
+        if not jig_obj:
+            return Response({'error': 'Lot not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        linked_trays = list(SpiderSpindleZ2TrayId.objects.filter(
+            lot_id=lot_id
+        ).values_list('tray_id', flat=True))
+
+        upstream_trays = _get_upstream_tray_ids(lot_id, jig_obj)
+
+        all_tray_ids = list(dict.fromkeys(linked_trays + upstream_trays))
+
+        trays = []
+        for tid in all_tray_ids:
+            trays.append({
+                'tray_id': tid,
+                'linked': tid in linked_trays,
+            })
+
+        return Response({
+            'trays': trays,
             'lot_id': lot_id,
             'total_case_qty': jig_obj.total_case_qty,
         })

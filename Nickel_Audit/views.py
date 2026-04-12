@@ -29,7 +29,7 @@ from Nickel_Audit.models import *
 from Nickel_Inspection.models import *
 
 from Jig_Unloading.models import *
-from Jig_Unloading.tray_utils import get_upstream_tray_distribution
+from Jig_Unloading.tray_utils import get_upstream_tray_distribution, get_model_master_tray_info
 
 
 def _get_input_source(jig_unload_obj):
@@ -144,8 +144,8 @@ class NA_PickTableView(APIView):
                 'version__version_name': jig_unload_obj.version.version_name if jig_unload_obj.version else '',
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
                 'location__location_name': _get_input_source(jig_unload_obj),
-                'tray_type': jig_unload_obj.tray_type or '',
-                'tray_capacity': jig_unload_obj.tray_capacity or 0,
+                'tray_type': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0],
+                'tray_capacity': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '', jig_unload_obj.tray_capacity or 0)[1],
                 'wiping_required': False,  # Default value, can be enhanced later
                 'brass_audit_rejection': False,  # Not applicable for nickel IP
                 
@@ -3371,8 +3371,8 @@ class NACompletedView(APIView):
                 'version__version_name': jig_unload_obj.version.version_name if jig_unload_obj.version else '',
                 'vendor_internal': '',  # Not available in JigUnloadAfterTable
                 'location__location_name': _get_input_source(jig_unload_obj),
-                'tray_type': jig_unload_obj.tray_type or '',
-                'tray_capacity': jig_unload_obj.tray_capacity or 0,
+                'tray_type': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0],
+                'tray_capacity': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '', jig_unload_obj.tray_capacity or 0)[1],
                 'Moved_to_D_Picker': False,  # Not applicable for JigUnloadAfterTable
                 'Draft_Saved': False,  # Not applicable for JigUnloadAfterTable
                 'na_qc_rejection': jig_unload_obj.na_qc_rejection,
@@ -4009,6 +4009,49 @@ class NickelClearDraftAPIView(APIView):
             return Response({'success': False, 'error': str(e)}, status=500)
 
 
+def _get_expected_tray_prefix_for_lot(lot_id):
+    """Dynamically resolve the expected tray prefix for a lot from ModelMaster via JigUnloadAfterTable."""
+    try:
+        jig_record = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
+        if not jig_record:
+            return None
+        if jig_record.tray_type:
+            return jig_record.tray_type.upper()
+        if jig_record.plating_stk_no:
+            mm = ModelMaster.objects.filter(
+                plating_stk_no=jig_record.plating_stk_no
+            ).select_related('tray_type').first()
+            if mm and mm.tray_type and mm.tray_type.tray_type:
+                return mm.tray_type.tray_type.upper()
+        return None
+    except Exception as e:
+        print(f"⚠️ [_get_expected_tray_prefix_for_lot] Error: {e}")
+        return None
+
+
+def _is_tray_new_or_delinked(tray_id):
+    """Check if a tray is new (no lot assigned) or delinked in master TrayId table."""
+    master = TrayId.objects.filter(tray_id=tray_id).first()
+    if not master:
+        return True
+    if master.delink_tray:
+        return True
+    if not master.lot_id or not master.lot_id.strip():
+        return True
+    return False
+
+
+def _is_tray_occupied_by_other_lot(tray_id, lot_id):
+    """Check if a tray is occupied by another lot across all relevant tray tables."""
+    master = TrayId.objects.filter(tray_id=tray_id).first()
+    if master and master.lot_id and master.lot_id.strip() and master.lot_id != lot_id and not master.delink_tray:
+        return True, master.lot_id
+    na = Nickel_AuditTrayId.objects.filter(tray_id=tray_id).exclude(lot_id=lot_id).filter(delink_tray=False).first()
+    if na and na.lot_id:
+        return True, na.lot_id
+    return False, None
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class PickTrayValidate_Complete_APIView(APIView):
     def post(self, request):
@@ -4023,6 +4066,29 @@ class PickTrayValidate_Complete_APIView(APIView):
                 return JsonResponse({'success': False, 'error': 'Missing tray_id'}, status=400)
 
             print(f"[PickTrayValidate_Complete_APIView] Checking tray_id '{tray_id}' for lot_id '{lot_id}'")
+
+            # --- Tray prefix cross-validation ---
+            expected_prefix = _get_expected_tray_prefix_for_lot(lot_id)
+            is_new_or_delinked = _is_tray_new_or_delinked(tray_id)
+
+            if expected_prefix and not is_new_or_delinked:
+                tray_prefix = tray_id.split('-')[0].upper() if '-' in tray_id else ''
+                if tray_prefix and tray_prefix != expected_prefix:
+                    return JsonResponse({
+                        'success': True, 'exists': False, 'tray_info': {},
+                        'tray_source': 'prefix_validation',
+                        'error': f'Tray prefix "{tray_prefix}" does not match expected "{expected_prefix}" for this lot'
+                    })
+
+            # --- Occupancy check ---
+            if not is_new_or_delinked:
+                occupied, occupied_lot = _is_tray_occupied_by_other_lot(tray_id, lot_id)
+                if occupied:
+                    return JsonResponse({
+                        'success': True, 'exists': False, 'tray_info': {},
+                        'tray_source': 'occupancy_validation',
+                        'error': f'Tray "{tray_id}" is already occupied by lot {occupied_lot}'
+                    })
 
             # Try Nickel_AuditTrayId first
             tray = Nickel_AuditTrayId.objects.filter(
@@ -4421,4 +4487,35 @@ class NAValidateTrayIdAPIView(APIView):
             'exists': exists,
             'valid_for_lot': exists
         })
+
+
+@require_GET
+def na_get_lot_id_for_tray(request):
+    """Get lot_id for a scanned tray_id for Nickel Audit barcode scanner."""
+    tray_id = request.GET.get('tray_id', '').strip()
+    if not tray_id:
+        return JsonResponse({'success': False, 'error': 'Missing tray_id'}, status=400)
+    try:
+        lot_id = None
+        na_tray = Nickel_AuditTrayId.objects.filter(tray_id=tray_id).first()
+        if na_tray and na_tray.lot_id:
+            lot_id = str(na_tray.lot_id)
+        if not lot_id:
+            nq_tray = NickelQcTrayId.objects.filter(tray_id=tray_id).first()
+            if nq_tray and nq_tray.lot_id:
+                lot_id = str(nq_tray.lot_id)
+        if not lot_id:
+            ju_tray = JigUnload_TrayId.objects.filter(tray_id=tray_id).first()
+            if ju_tray and ju_tray.lot_id:
+                lot_id = str(ju_tray.lot_id)
+        if not lot_id:
+            master = TrayId.objects.filter(tray_id=tray_id).first()
+            if master and master.lot_id:
+                lot_id = str(master.lot_id)
+        if lot_id:
+            return JsonResponse({'success': True, 'lot_id': lot_id, 'tray_id': tray_id})
+        else:
+            return JsonResponse({'success': False, 'error': 'Tray not found', 'tray_id': tray_id})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e), 'tray_id': tray_id}, status=500)
 

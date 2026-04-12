@@ -59,4 +59,6 @@ urlpatterns = [
     path('nq_autosave/<str:lot_id>/', load_autosave_nickel_qc, name='load_autosave_nickel_qc'),
     path('nq_autosave/<str:lot_id>/clear/', clear_autosave_nickel_qc, name='clear_autosave_nickel_qc'),
 
+    path('na_zone_get_lot_id_for_tray/', na_zone_get_lot_id_for_tray, name='na_zone_get_lot_id_for_tray'),
+
 ]

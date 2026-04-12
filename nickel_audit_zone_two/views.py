@@ -53,7 +53,7 @@ from IQF.models import *
 from BrassAudit.models import *
 from Nickel_Inspection.models import *
 from Jig_Unloading.models import *
-from Jig_Unloading.tray_utils import get_upstream_tray_distribution
+from Jig_Unloading.tray_utils import get_upstream_tray_distribution, get_model_master_tray_info
 from Inprocess_Inspection.models import InprocessInspectionTrayCapacity
 from django.contrib.auth.decorators import login_required
 
@@ -311,9 +311,9 @@ class NQ_PickTableView(APIView):
 
                 'location__location_name': _get_input_source(jig_unload_obj),
 
-                'tray_type': jig_unload_obj.tray_type or '',
+                'tray_type': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0],
 
-                'tray_capacity': self.get_dynamic_tray_capacity(jig_unload_obj.tray_type) if jig_unload_obj.tray_type else 0,
+                'tray_capacity': self.get_dynamic_tray_capacity(get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0]) if jig_unload_obj.plating_stk_no or jig_unload_obj.tray_type else 0,
 
                 'wiping_required': False,  # Default value, can be enhanced later
 
@@ -8431,7 +8431,7 @@ class NQCompletedView(APIView):
 
                 'location__location_name': _get_input_source(jig_unload_obj),
 
-                'tray_type': jig_unload_obj.tray_type or '',
+                'tray_type': get_model_master_tray_info(jig_unload_obj.plating_stk_no, jig_unload_obj.tray_type or '')[0],
 
                 # ✅ FIXED: Apply tray capacity correction (16 → 20 for Normal trays)
 
@@ -9256,7 +9256,58 @@ class NickelClearDraftAPIView(APIView):
             return Response({'success': False, 'error': str(e)}, status=500)
 
 
+# ---------- Pick-table tray-prefix helpers (NA Zone 2) ----------
 
+def _get_expected_tray_prefix_for_lot(lot_id):
+    """Return the expected tray-code prefix (e.g. 'NB', 'JR') for a lot."""
+    try:
+        ju = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
+        if ju and ju.tray_type:
+            return ju.tray_type.strip().upper()
+        for rec in JigUnloadAfterTable.objects.filter(combine_lot_ids__isnull=False):
+            if rec.combine_lot_ids and isinstance(rec.combine_lot_ids, list):
+                if lot_id in rec.combine_lot_ids and rec.tray_type:
+                    return rec.tray_type.strip().upper()
+        psn = None
+        if ju:
+            psn = ju.plating_stk_no
+        if not psn:
+            for rec in JigUnloadAfterTable.objects.filter(combine_lot_ids__isnull=False):
+                if rec.combine_lot_ids and isinstance(rec.combine_lot_ids, list):
+                    if lot_id in rec.combine_lot_ids:
+                        psn = rec.plating_stk_no
+                        break
+        if psn:
+            mm = ModelMaster.objects.filter(plating_stk_no=psn).first()
+            if mm and mm.tray_type:
+                return mm.tray_type.tray_type.strip().upper()
+    except Exception:
+        pass
+    return None
+
+
+def _is_tray_new_or_delinked(tray_id):
+    """Return True when the tray doesn't exist in TrayId master or is delinked/unassigned."""
+    master = TrayId.objects.filter(tray_id=tray_id).first()
+    if master is None:
+        return True
+    if getattr(master, 'delink_tray', False):
+        return True
+    if not master.lot_id:
+        return True
+    return False
+
+
+def _is_tray_occupied_by_other_lot(tray_id, lot_id):
+    """Return True when the tray is actively assigned to a different lot."""
+    master = TrayId.objects.filter(tray_id=tray_id).first()
+    if master and master.lot_id and str(master.lot_id) != str(lot_id):
+        if not getattr(master, 'delink_tray', False):
+            return True
+    nq_tray = NickelQcTrayId.objects.filter(tray_id=tray_id).first()
+    if nq_tray and nq_tray.lot_id and str(nq_tray.lot_id) != str(lot_id):
+        return True
+    return False
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -9287,7 +9338,25 @@ class PickTrayValidate_Complete_APIView(APIView):
 
             print(f"[PickTrayValidate_Complete_APIView] Checking tray_id '{tray_id}' for lot_id '{lot_id}'")
 
+            # ── Tray prefix cross-validation ──
+            expected_prefix = _get_expected_tray_prefix_for_lot(lot_id)
+            if expected_prefix and '-' in tray_id:
+                scanned_prefix = tray_id.split('-')[0].strip().upper()
+                if scanned_prefix != expected_prefix:
+                    if not _is_tray_new_or_delinked(tray_id):
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Tray prefix mismatch: expected {expected_prefix} but scanned {scanned_prefix}',
+                            'exists': False
+                        })
 
+            # ── Occupancy check ──
+            if _is_tray_occupied_by_other_lot(tray_id, lot_id):
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Tray {tray_id} is already occupied by another lot',
+                    'exists': False
+                })
 
             # Try NickelQcTrayId first
 
@@ -9715,3 +9784,30 @@ def clear_autosave_nickel_qc(request, lot_id):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Error: {str(e)}'})
+
+
+@require_GET
+def na_zone_get_lot_id_for_tray(request):
+    """Get lot_id for a scanned tray_id for Nickel Audit Zone 2 barcode scanner."""
+    tray_id = request.GET.get('tray_id', '').strip()
+    if not tray_id:
+        return JsonResponse({'success': False, 'error': 'Missing tray_id'}, status=400)
+    try:
+        lot_id = None
+        nq_tray = NickelQcTrayId.objects.filter(tray_id=tray_id).first()
+        if nq_tray and nq_tray.lot_id:
+            lot_id = str(nq_tray.lot_id)
+        if not lot_id:
+            ju_tray = JigUnload_TrayId.objects.filter(tray_id=tray_id).first()
+            if ju_tray and ju_tray.lot_id:
+                lot_id = str(ju_tray.lot_id)
+        if not lot_id:
+            master = TrayId.objects.filter(tray_id=tray_id).first()
+            if master and master.lot_id:
+                lot_id = str(master.lot_id)
+        if lot_id:
+            return JsonResponse({'success': True, 'lot_id': lot_id, 'tray_id': tray_id})
+        else:
+            return JsonResponse({'success': False, 'error': 'Tray not found', 'tray_id': tray_id})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e), 'tray_id': tray_id}, status=500)

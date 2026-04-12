@@ -5940,6 +5940,17 @@ document.addEventListener('DOMContentLoaded', function () {
           // Use max of DOM-computed and backend value (backend may be ahead during init)
           const loaded = Math.max(domLoaded, parseInt(window.BACKEND_LOADED_CASES || 0));
           const cap = parseInt(window.BACKEND_EFFECTIVE_CAPACITY || 0);
+
+          // Sync BACKEND globals when DOM reflects higher (correct) state.
+          // This handles race conditions from parallel scan API responses where
+          // each response has stale loaded_cases_qty from before the batch.
+          // Submit will enable only when BACKEND_LOADED_CASES >= BACKEND_EFFECTIVE_CAPACITY
+          // and empty_hooks is correctly derived from actual scanned state.
+          if (domLoaded > parseInt(window.BACKEND_LOADED_CASES || 0)) {
+            window.BACKEND_LOADED_CASES = domLoaded;
+            window.BACKEND_EMPTY_HOOKS = Math.max(0, cap - domLoaded);
+          }
+
           const text = `${loaded}/${cap}`;
           if (el.tagName === 'SPAN' || el.tagName === 'DIV') el.innerText = text;
           else el.value = text;
@@ -5948,9 +5959,10 @@ document.addEventListener('DOMContentLoaded', function () {
           if (loaded >= cap && cap > 0) el.classList.add('metric-success');
           else if (loaded > 0) el.classList.add('metric-warning');
           else el.classList.add('metric-neutral');
-          // ✅ Error 3: Empty hooks visual indicator
+          // ✅ Error 3: Empty hooks visual indicator + value update
           var emptyEl = document.getElementById('emptyHooksInput');
           if (emptyEl) {
+            emptyEl.value = window.BACKEND_EMPTY_HOOKS;
             var emptyVal = parseInt(window.BACKEND_EMPTY_HOOKS || 0);
             emptyEl.classList.remove('empty-hooks-success', 'empty-hooks-warning');
             if (emptyVal === 0) emptyEl.classList.add('empty-hooks-success');
@@ -9534,11 +9546,21 @@ if (window.jQuery) {
   window._collectTrayData = collectTrayDataSnapshot;
 
   // ============================================================
-  // SUBMIT BUTTON GATING — enable only when ALL fields are valid
+  // SUBMIT BUTTON GATING — enable only when ALL conditions pass:
+  //   1. Jig ID: non-empty, valid format (9 chars, J###-####)
+  //   2. Lot ID and Batch ID must exist
+  //   3. All active delink tray scan inputs filled (skip disabled)
+  //   4. Top tray scanned if excess section is visible
+  //   5. All active excess panel inputs filled (skip disabled)
+  //   6. At least one tray scanned
+  //   7. Loaded cases qty >= effective capacity (jig fully loaded)
   // ============================================================
   function _checkSubmitReadiness() {
     var btn = document.getElementById('submitJigBtn');
     if (!btn) return;
+
+    // Sync BACKEND globals from DOM before checking (handles parallel scan race conditions)
+    if (typeof window.updateLoadedDisplay === 'function') window.updateLoadedDisplay();
 
     var ready = true;
 
