@@ -472,6 +472,17 @@ class TotalStockModel(models.Model):
     send_brass_audit_to_qc=models.BooleanField(default=False, help_text="Send to Brass Audit QC")
     send_brass_audit_to_iqf=models.BooleanField(default=False, help_text="Send to IQF")
     
+    jig_lot_status = models.CharField(
+        max_length=50,
+        choices=[
+            ('READY', 'Ready for Jig Loading'),
+            ('PARTIAL_DRAFT', 'Partial Draft - Model 2+ in Progress'),
+            ('FULL_DRAFT', 'Full Draft - Awaiting Submit'),
+            ('SUBMITTED', 'Submitted to IP Inspection'),
+        ],
+        default='READY',
+        help_text='Jig Loading lot status - controls Add Mode eligibility',
+    )
     jig_draft=models.BooleanField(default=False, help_text="Jig Draft Save")
     Jig_Load_completed =models.BooleanField(default=False, help_text="Jig Load Completed")
     jig_holding_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Jig Reason for holding the batch")

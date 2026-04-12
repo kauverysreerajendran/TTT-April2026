@@ -1424,6 +1424,16 @@ class JU_Zone_MainTable(TemplateView):
                 _bn_sp = _dd_sp.get('bath_number') or _dd_sp.get('nickel_bath_number') or _dd_sp.get('bath_no')
                 jig_detail.bath_number = str(_bn_sp) if _bn_sp else None
 
+            # Fallback: if bath_number still None, try to find from another JigCompleted with same jig_id
+            if not getattr(jig_detail, 'bath_number', None) or jig_detail.bath_number == 'N/A':
+                _jig_id_sp = getattr(jig_detail, 'jig_id', None)
+                if _jig_id_sp:
+                    _sibling_jc_sp = JigCompleted.objects.filter(
+                        jig_id=_jig_id_sp, bath_numbers__isnull=False
+                    ).values('bath_numbers__bath_number').first()
+                    if _sibling_jc_sp:
+                        jig_detail.bath_number = _sibling_jc_sp['bath_numbers__bath_number']
+
             # Ensure list fields exist
             for _fld in ['all_versions', 'all_vendors', 'all_locations', 'all_plating_stk_nos', 'all_polishing_stk_nos', 'all_plating_colors']:
                 if not hasattr(jig_detail, _fld) or getattr(jig_detail, _fld) is None:
@@ -3604,6 +3614,47 @@ class JU_Zone_Completedtable(TemplateView):
         
         return None, False, None
 
+    def _resolve_bath_number_for_completed(self, unload, jig_qr_id):
+        """Fetch bath number dynamically from JigCompleted for completed table entries."""
+        try:
+            # 1. Try via jig_qr_id (jig_id on JigCompleted)
+            if jig_qr_id:
+                jc = JigCompleted.objects.filter(
+                    jig_id=jig_qr_id, bath_numbers__isnull=False
+                ).values('bath_numbers__bath_number').first()
+                if jc:
+                    return jc['bath_numbers__bath_number']
+
+            # 2. Try via combine_lot_ids
+            if unload.combine_lot_ids:
+                for cid in unload.combine_lot_ids:
+                    lid = cid.lstrip('-')
+                    if lid.startswith('JLOT-') and '-' in lid[5:]:
+                        lid = lid.rsplit('-', 1)[1]
+                    jc = JigCompleted.objects.filter(
+                        draft_data__lot_id_quantities__has_key=lid, bath_numbers__isnull=False
+                    ).values('bath_numbers__bath_number').first()
+                    if jc:
+                        return jc['bath_numbers__bath_number']
+                    jc = JigCompleted.objects.filter(
+                        lot_id=lid, bath_numbers__isnull=False
+                    ).values('bath_numbers__bath_number').first()
+                    if jc:
+                        return jc['bath_numbers__bath_number']
+
+            # 3. Try via draft_data keys from JigCompleted
+            if jig_qr_id:
+                jc = JigCompleted.objects.filter(jig_id=jig_qr_id).values('draft_data').first()
+                if jc and jc.get('draft_data'):
+                    dd = jc['draft_data'] if isinstance(jc['draft_data'], dict) else {}
+                    bn = dd.get('bath_number') or dd.get('nickel_bath_number') or dd.get('bath_no')
+                    if bn:
+                        return str(bn)
+        except Exception as e:
+            print(f"[BATH FIX] Error resolving bath number: {e}")
+
+        return 'N/A'
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -4085,7 +4136,7 @@ class JU_Zone_Completedtable(TemplateView):
                 'lot_id_quantities': lot_id_quantities,
                 'lot_id_model_map': {},
                 'unloading_remarks': unloading_remarks,
-                'bath_numbers': {'bath_number': 'N/A'},
+                'bath_numbers': {'bath_number': self._resolve_bath_number_for_completed(unload, jig_qr_id)},
             }
 
             print(f"[DEBUG] ✅ Created table entry for {unload.lot_id}")

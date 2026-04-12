@@ -682,8 +682,18 @@ class Jig_Unloading_MainTable(TemplateView):
                 jig_detail.bath_number = _bn_row_z1['bath_number'] if _bn_row_z1 else None
             else:
                 _dd1 = getattr(jig_detail, 'draft_data', {}) or {}
-                _bn_str1 = _dd1.get('bath_number') or _dd1.get('bath_numbers') or _dd1.get('nickel_bath_number')
+                _bn_str1 = _dd1.get('bath_number') or _dd1.get('bath_numbers') or _dd1.get('nickel_bath_number') or _dd1.get('bath_no')
                 jig_detail.bath_number = str(_bn_str1) if _bn_str1 else None
+
+            # Fallback: if bath_number still None, try to find from another JigCompleted with same jig_id
+            if not jig_detail.bath_number:
+                _jig_id_z1 = getattr(jig_detail, 'jig_id', None)
+                if _jig_id_z1:
+                    _sibling_jc = JigCompleted.objects.filter(
+                        jig_id=_jig_id_z1, bath_numbers__isnull=False
+                    ).values('bath_numbers__bath_number').first()
+                    if _sibling_jc:
+                        jig_detail.bath_number = _sibling_jc['bath_numbers__bath_number']
             
             # *** NEW: Add helper properties for lot_id_quantities values ***
             if hasattr(jig_detail, 'lot_id_quantities') and jig_detail.lot_id_quantities:
@@ -1614,6 +1624,49 @@ class JigUnloading_Completedtable(TemplateView):
         
         return None, False, None
 
+    def _resolve_bath_number_for_completed(self, unload, jig_qr_id):
+        """Fetch bath number dynamically from JigCompleted for completed table entries."""
+        try:
+            # 1. Try via jig_qr_id (jig_id on JigCompleted)
+            if jig_qr_id:
+                jc = JigCompleted.objects.filter(
+                    jig_id=jig_qr_id, bath_numbers__isnull=False
+                ).values('bath_numbers__bath_number').first()
+                if jc:
+                    return jc['bath_numbers__bath_number']
+
+            # 2. Try via combine_lot_ids
+            if unload.combine_lot_ids:
+                for cid in unload.combine_lot_ids:
+                    # Extract plain lot_id
+                    lid = cid.lstrip('-')
+                    if lid.startswith('JLOT-') and '-' in lid[5:]:
+                        lid = lid.rsplit('-', 1)[1]
+                    jc = JigCompleted.objects.filter(
+                        draft_data__lot_id_quantities__has_key=lid, bath_numbers__isnull=False
+                    ).values('bath_numbers__bath_number').first()
+                    if jc:
+                        return jc['bath_numbers__bath_number']
+                    # Also try direct lot_id match
+                    jc = JigCompleted.objects.filter(
+                        lot_id=lid, bath_numbers__isnull=False
+                    ).values('bath_numbers__bath_number').first()
+                    if jc:
+                        return jc['bath_numbers__bath_number']
+
+            # 3. Try via draft_data keys from JigCompleted
+            if jig_qr_id:
+                jc = JigCompleted.objects.filter(jig_id=jig_qr_id).values('draft_data').first()
+                if jc and jc.get('draft_data'):
+                    dd = jc['draft_data'] if isinstance(jc['draft_data'], dict) else {}
+                    bn = dd.get('bath_number') or dd.get('nickel_bath_number') or dd.get('bath_no')
+                    if bn:
+                        return str(bn)
+        except Exception as e:
+            print(f"[BATH FIX] Error resolving bath number: {e}")
+
+        return 'N/A'
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -2111,8 +2164,8 @@ class JigUnloading_Completedtable(TemplateView):
                 # Remarks
                 'unloading_remarks': unloading_remarks,
                 
-                # Bath numbers
-                'bath_numbers': {'bath_number': 'N/A'},
+                # Bath numbers - fetch dynamically from JigCompleted
+                'bath_numbers': {'bath_number': self._resolve_bath_number_for_completed(unload, jig_qr_id)},
             }
             
             print(f"[DEBUG] ✅ Created table entry for {unload.lot_id}")
@@ -2512,6 +2565,22 @@ class SaveModelUnloadZ1View(APIView):
                                      f'Expected prefix: {expected_prefix}'
                         }, status=400)
 
+                # Tray occupancy validation: reject trays already assigned to another lot
+                existing_tray = TrayId.objects.filter(tray_id=tray_id).first()
+                if existing_tray:
+                    # Already scanned and not delinked → occupied
+                    if existing_tray.scanned and not existing_tray.delink_tray:
+                        return Response({
+                            'error': f'Tray "{tray_id}" is already scanned and occupied by lot {existing_tray.lot_id}. '
+                                     f'Please use a free tray or delink this one first.'
+                        }, status=400)
+                    # Has a lot_id, not delinked, and belongs to a different lot → occupied
+                    if existing_tray.lot_id and not existing_tray.delink_tray and existing_tray.lot_id != lot_id:
+                        return Response({
+                            'error': f'Tray "{tray_id}" is assigned to another lot ({existing_tray.lot_id}). '
+                                     f'Please use a free tray or delink this one first.'
+                        }, status=400)
+
         # Top tray remark validation (only if qty was edited, only on final save)
         if not is_draft:
             for tray in tray_data:
@@ -2881,6 +2950,50 @@ class GetJigForTrayZ1View(APIView):
 
         except Exception as e:
             return Response({'success': False, 'error': f'System error: {str(e)}'}, status=500)
+
+
+@require_GET
+def validate_tray_occupancy_z1(request):
+    """
+    GET /api/validate_tray_occupancy_z1/?tray_id=XX&lot_id=YY
+    Real-time tray occupancy check for Jig Unloading Z1/Z2 tray scan.
+    Returns success=True if tray is free/delinked/belongs to current lot.
+    Returns success=False with error message if tray is occupied by another lot.
+    """
+    tray_id = request.GET.get('tray_id', '').strip()
+    lot_id = request.GET.get('lot_id', '').strip()
+
+    if not tray_id:
+        return JsonResponse({'success': False, 'error': 'Tray ID is required'}, status=400)
+
+    try:
+        existing_tray = TrayId.objects.filter(tray_id=tray_id).first()
+        if not existing_tray:
+            # Tray not in system — accept it (will be created on save)
+            return JsonResponse({'success': True, 'message': 'Tray ID not in system — new tray'})
+
+        # Already scanned and not delinked → occupied
+        if existing_tray.scanned and not existing_tray.delink_tray:
+            return JsonResponse({
+                'success': False,
+                'error': f'Tray "{tray_id}" is already scanned and occupied by lot {existing_tray.lot_id}. '
+                         f'Please use a free tray or delink this one first.'
+            })
+
+        # Has a lot_id, not delinked, and belongs to a different lot → occupied
+        if existing_tray.lot_id and not existing_tray.delink_tray:
+            if lot_id and existing_tray.lot_id != lot_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Tray "{tray_id}" is assigned to another lot ({existing_tray.lot_id}). '
+                             f'Please use a free tray or delink this one first.'
+                })
+
+        # Tray is free or delinked or belongs to current lot
+        return JsonResponse({'success': True, 'message': 'Tray is available'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Validation error: {str(e)}'}, status=500)
 
 
 @require_GET

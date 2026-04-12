@@ -2415,10 +2415,35 @@ document.addEventListener('DOMContentLoaded', function() {
             this.focus();
             return;
           }
-          this.style.borderColor = '#66bb6a';
-          this.style.boxShadow = '0 0 0 2px rgba(102,187,106,0.15)';
-          showTrayError('\u2705 Tray ' + currentVal + ' accepted', 'success');
-          if (i + 1 < inputs.length) { inputs[i + 1].focus(); inputs[i + 1].select(); }
+          // Backend occupancy check: verify tray is free and not assigned to another lot
+          const trayInput = this;
+          const currentLotId = (currentModelsData && currentModelsData.models && currentModelsData.models[currentModelIndex])
+            ? (currentModelsData.models[currentModelIndex].lot_id || '') : '';
+          fetch('/jig_unloading/api/validate_tray_occupancy_z1/?tray_id=' + encodeURIComponent(currentVal) + '&lot_id=' + encodeURIComponent(currentLotId))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (!data.success) {
+                trayInput.style.borderColor = '#ef5350';
+                trayInput.style.boxShadow = '0 0 0 2px rgba(239,83,80,0.15)';
+                showTrayError(data.error || 'Tray is not available');
+                trayInput.value = '';
+                trayInput.style.borderColor = '#cfd8dc';
+                trayInput.style.boxShadow = '';
+                trayInput.focus();
+              } else {
+                trayInput.style.borderColor = '#66bb6a';
+                trayInput.style.boxShadow = '0 0 0 2px rgba(102,187,106,0.15)';
+                showTrayError('\u2705 Tray ' + currentVal + ' accepted', 'success');
+                if (i + 1 < inputs.length) { inputs[i + 1].focus(); inputs[i + 1].select(); }
+              }
+            })
+            .catch(function(err) {
+              console.error('Tray validation error:', err);
+              trayInput.style.borderColor = '#66bb6a';
+              trayInput.style.boxShadow = '0 0 0 2px rgba(102,187,106,0.15)';
+              showTrayError('\u2705 Tray ' + currentVal + ' accepted', 'success');
+              if (i + 1 < inputs.length) { inputs[i + 1].focus(); inputs[i + 1].select(); }
+            });
         } else if (val.length > 0) {
           this.style.borderColor = '#80cbc4';
           this.style.boxShadow = '';
@@ -2689,7 +2714,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('z1BackToModels').addEventListener('click', function() { showLayer(layerModelList); });
   document.getElementById('z1ViewBackBtn').addEventListener('click', function() { showLayer(layerModelList); });
   document.getElementById('z1ViewCloseBtn').addEventListener('click', function() { modal.style.display = 'none'; });
-  modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+  // Prevent modal from closing when clicking outside (backdrop click disabled)
 
   // Add Model — show checkboxes on pick table, "Exit" returns to modal
   const addModelBtn = document.getElementById('z1AddModelBtn');
