@@ -677,8 +677,8 @@ class BatchRejectionAPIView(APIView):
             print(f"   - ID: {rejection_record.id}")
             print(f"   - lot_rejected_comment: {rejection_record.lot_rejected_comment}")
             
-            # ✅ Mark all trays for this lot as rejected
-            IPTrayId.objects.filter(lot_id=lot_id).update(rejected_tray=True)
+            # ✅ Mark all trays for this lot as rejected (and clear delink flag)
+            IPTrayId.objects.filter(lot_id=lot_id).update(rejected_tray=True, delink_tray=False)
 
             return Response({
                 'success': True, 
@@ -827,7 +827,8 @@ class TrayRejectionAPIView(APIView):
                 if rejected_qty:
                     existing_ip_tray.tray_quantity = rejected_qty
                 existing_ip_tray.rejected_tray = True
-                existing_ip_tray.save(update_fields=['tray_quantity', 'rejected_tray'])
+                existing_ip_tray.delink_tray = False  # ✅ FIX: Rejected takes priority over delink
+                existing_ip_tray.save(update_fields=['tray_quantity', 'rejected_tray', 'delink_tray'])
                 print(f"✅ Updated existing IPTrayId for tray_id: {tray_obj.tray_id} with qty: {rejected_qty}")
                 return existing_ip_tray
     
@@ -855,7 +856,8 @@ class TrayRejectionAPIView(APIView):
                 tray_type=tray_obj.tray_type,  # Copy from TrayId
                 tray_capacity=tray_obj.tray_capacity,  # Copy from TrayId
                 new_tray=True,  # These are processed trays, not new
-                rejected_tray=True  # Mark as rejected in IPTrayId table
+                rejected_tray=True,  # Mark as rejected in IPTrayId table
+                delink_tray=False  # ✅ FIX: Rejected trays must not be delink
             )
             
             ip_tray.save()
@@ -1096,7 +1098,8 @@ class TrayRejectionAPIView(APIView):
                             # Update the tray_quantity with the rejected quantity
                             ip_tray_obj.tray_quantity = tray_qty
                             ip_tray_obj.rejected_tray = True
-                            ip_tray_obj.save(update_fields=['tray_quantity', 'rejected_tray'])
+                            ip_tray_obj.delink_tray = False  # ✅ FIX: Rejected takes priority over delink
+                            ip_tray_obj.save(update_fields=['tray_quantity', 'rejected_tray', 'delink_tray'])
                             print(f"✅ Updated IPTrayId {tray_id}: tray_quantity = {tray_qty}, rejected_tray = True")
                         else:
                             print(f"⚠️ IPTrayId not found for tray_id: {tray_id}")
@@ -4165,14 +4168,18 @@ class TrayIdList_Complete_APIView(APIView):
                         'user': scan.user.username if scan.user else None
                     })
             
+            # ✅ FIX: If tray is rejected, force delink_tray=False to prevent wrong classification
+            is_rejected = tray_obj.rejected_tray
+            is_delink = getattr(tray_obj, 'delink_tray', False) and not is_rejected
+
             return {
                 's_no': row_counter,
                 'tray_id': tray_obj.tray_id,
                 'tray_quantity': tray_obj.tray_quantity,
                 'position': row_counter - 1,
                 'is_top_tray': is_top,
-                'rejected_tray': tray_obj.rejected_tray,
-                'delink_tray': getattr(tray_obj, 'delink_tray', False),
+                'rejected_tray': is_rejected,
+                'delink_tray': is_delink,
                 'rejection_details': rejection_details,
                 'top_tray': getattr(tray_obj, 'top_tray', False),
                 'tray_quantity': getattr(tray_obj, 'tray_quantity', None),
@@ -4257,7 +4264,7 @@ class TrayIdList_Complete_APIView(APIView):
                             'position': row_counter - 1,
                             'is_top_tray': False,
                             'rejected_tray': True,
-                            'delink_tray': getattr(tray_obj, 'delink_tray', False) if tray_obj else True,
+                            'delink_tray': False,  # ✅ FIX: Rejected trays must NEVER appear as delink
                             'rejection_details': rejection_details,
                             'top_tray': False,
                         })

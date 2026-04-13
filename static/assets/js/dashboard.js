@@ -161,7 +161,8 @@ $.fn.dataTable.ext.errMode = 'none';
                   </li>
                 `;
               }
-              return document.getElementById(legendId).appendChild(ul);
+              var legendEl = document.getElementById(legendId);
+              if (legendEl) return legendEl.appendChild(ul);
             }
         }]
       });
@@ -210,7 +211,8 @@ $.fn.dataTable.ext.errMode = 'none';
                   </li>
                 `;
               }
-              return document.getElementById(legendId).appendChild(ul);
+              var legendEl2 = document.getElementById(legendId);
+              if (legendEl2) return legendEl2.appendChild(ul);
             }
         }]
       });
@@ -258,42 +260,57 @@ $.fn.dataTable.ext.errMode = 'none';
                   </li>
                 `;
               }
-              return document.getElementById(legendId).appendChild(ul);
+              var legendEl3 = document.getElementById(legendId);
+              if (legendEl3) return legendEl3.appendChild(ul);
             }
         }]
       });
     }
 
     if ($.cookie('skydash-pro-banner')!="true") {
-      document.querySelector('#proBanner').classList.add('d-flex');
-      document.querySelector('.navbar').classList.remove('fixed-top');
+      var proBanner = document.querySelector('#proBanner');
+      var navbar = document.querySelector('.navbar');
+      if (proBanner) proBanner.classList.add('d-flex');
+      if (navbar) navbar.classList.remove('fixed-top');
     }
     else {
-      document.querySelector('#proBanner').classList.add('d-none');
-      document.querySelector('.navbar').classList.add('fixed-top');
+      var proBanner = document.querySelector('#proBanner');
+      var navbar = document.querySelector('.navbar');
+      if (proBanner) proBanner.classList.add('d-none');
+      if (navbar) navbar.classList.add('fixed-top');
     }
     
     if ($( ".navbar" ).hasClass( "fixed-top" )) {
-      document.querySelector('.page-body-wrapper').classList.remove('pt-0');
-      document.querySelector('.navbar').classList.remove('pt-5');
+      var pageBody = document.querySelector('.page-body-wrapper');
+      var navbar = document.querySelector('.navbar');
+      if (pageBody) pageBody.classList.remove('pt-0');
+      if (navbar) navbar.classList.remove('pt-5');
     }
     else {
-      document.querySelector('.page-body-wrapper').classList.add('pt-0');
-      document.querySelector('.navbar').classList.add('pt-5');
-      document.querySelector('.navbar').classList.add('mt-3');
+      var pageBody = document.querySelector('.page-body-wrapper');
+      var navbar = document.querySelector('.navbar');
+      if (pageBody) pageBody.classList.add('pt-0');
+      if (navbar) navbar.classList.add('pt-5');
+      if (navbar) navbar.classList.add('mt-3');
       
     }
-    document.querySelector('#bannerClose').addEventListener('click',function() {
-      document.querySelector('#proBanner').classList.add('d-none');
-      document.querySelector('#proBanner').classList.remove('d-flex');
-      document.querySelector('.navbar').classList.remove('pt-5');
-      document.querySelector('.navbar').classList.add('fixed-top');
-      document.querySelector('.page-body-wrapper').classList.add('pt-5');
-      document.querySelector('.navbar').classList.remove('mt-3');
+    var bannerClose = document.querySelector('#bannerClose');
+    if (bannerClose) {
+    bannerClose.addEventListener('click',function() {
+      var proBanner = document.querySelector('#proBanner');
+      var navbar = document.querySelector('.navbar');
+      var pageBody = document.querySelector('.page-body-wrapper');
+      if (proBanner) proBanner.classList.add('d-none');
+      if (proBanner) proBanner.classList.remove('d-flex');
+      if (navbar) navbar.classList.remove('pt-5');
+      if (navbar) navbar.classList.add('fixed-top');
+      if (pageBody) pageBody.classList.add('pt-5');
+      if (navbar) navbar.classList.remove('mt-3');
       var date = new Date();
       date.setTime(date.getTime() + 24 * 60 * 60 * 1000); 
       $.cookie('skydash-pro-banner', "true", { expires: date });
     });
+    }
 
     function format ( d ) {
       // `d` is the original data object for the row

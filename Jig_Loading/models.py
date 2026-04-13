@@ -213,7 +213,7 @@ class JigCompleted(models.Model):
     broken_hooks = models.IntegerField(default=0, blank=True, null=True)
     loaded_cases_qty = models.IntegerField(default=0, blank=True, null=True)
     plating_stock_num = models.CharField(max_length=100, blank=True, null=True)
-    draft_status = models.CharField(max_length=20, choices=[('active', 'Active'), ('submitted', 'Submitted'), ('draft', 'Draft')], default='active')
+    draft_status = models.CharField(max_length=20, choices=[('active', 'Active'), ('submitted', 'Submitted'), ('draft', 'Draft')], default='active', db_index=True)
     hold_status = models.CharField(max_length=20, default='normal', blank=True, null=True)
     is_multi_model = models.BooleanField(default=False)
     jig_position = models.CharField(max_length=100, blank=True, null=True)

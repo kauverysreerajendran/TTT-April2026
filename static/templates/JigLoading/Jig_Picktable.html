@@ -6847,8 +6847,9 @@ document.addEventListener('DOMContentLoaded', function () {
       window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity || 12) || 12;
       window.currentBrokenHooks = window.BACKEND_BROKEN_HOOKS;
 
-      if (typeof renderModelCardStrip === 'function') renderModelCardStrip(data);
-      if (typeof renderUnifiedTrayTable === 'function') renderUnifiedTrayTable(data);
+      // Isolate each render step so one failure doesn't block the rest
+      try { if (typeof renderModelCardStrip === 'function') renderModelCardStrip(data); } catch (e) { console.warn('[applyResponseToUI] renderModelCardStrip failed:', e); }
+      try { if (typeof renderUnifiedTrayTable === 'function') renderUnifiedTrayTable(data); } catch (e) { console.warn('[applyResponseToUI] renderUnifiedTrayTable failed:', e); }
 
       window._lastInitData = Object.assign({}, data, {
         half_filled: data.half_filled || data.half_filled_tray_info,
@@ -8471,6 +8472,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // Fallback: open modal and call init API directly (jig capacity unknown)
         const modal = document.getElementById('jigAddModal');
         if (modal) modal.classList.add('open');
+
+        // Set global state so downstream code (updateLoadedDisplay, etc.) works
+        window.CURRENT_LOT_ID = primaryLot;
+        window.CURRENT_BATCH_ID = primaryBatch;
+        window.currentJigLotId = primaryLot;
+        window.currentJigBatchId = primaryBatch;
+
         if (window.callInitAPI) {
           const fallbackPayload = { lot_id: primaryLot, batch_id: primaryBatch };
           if (window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0) {
@@ -8502,7 +8510,57 @@ document.addEventListener('DOMContentLoaded', function () {
             }];
             window._pendingSecondaryLot = null;
           }
-          window.callInitAPI(fallbackPayload);
+          // FIX: Use returned promise to render UI from backend response
+          window.callInitAPI(fallbackPayload).then(function(data) {
+            if (!data) {
+              console.error('[MERGE_FLOW_FALLBACK] Init API returned no data');
+              return;
+            }
+            console.log('[MERGE_FLOW_FALLBACK] Init data received, rendering UI');
+
+            // Fill form fields from backend response
+            try {
+              var lotQtyEl = document.getElementById('reallotQty') || document.getElementById('lotQtyInput');
+              var jigCapEl = document.getElementById('jigCapacityInput');
+              var emptyHEl = document.getElementById('emptyHooksInput');
+              var nickelEl = document.getElementById('nickelBathTypeInput');
+              var trayTypeEl = document.getElementById('trayTypeInput');
+
+              if (lotQtyEl && data.lot_qty) lotQtyEl.value = data.lot_qty;
+              if (jigCapEl && data.jig_capacity) jigCapEl.value = data.jig_capacity;
+              if (emptyHEl) emptyHEl.value = data.empty_hooks || 0;
+              if (nickelEl) nickelEl.value = data.nickel_bath_type || '';
+              if (trayTypeEl) trayTypeEl.value = data.tray_type || '';
+
+              window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty || 0) || 0;
+              window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity || 0) || 0;
+              window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.original_capacity || data.jig_capacity || 0) || 0;
+              window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks || 0) || 0;
+              window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks || 0) || 0;
+              window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity || 12) || 12;
+              window.currentBrokenHooks = window.BACKEND_BROKEN_HOOKS;
+
+              // Persist secondary lots
+              if (data.secondary_lots && data.secondary_lots.length > 0) {
+                window._currentSecondaryLots = data.secondary_lots;
+              }
+              window._lastMultiModelAllocation = data.multi_model_allocation || [];
+              window._lastHalfFilledTrayInfo = data.half_filled || data.half_filled_tray_info || {};
+              window._lastInitData = data;
+            } catch (e) { console.warn('[MERGE_FLOW_FALLBACK] Field populate failed', e); }
+
+            // Render UI using the unified render path
+            if (typeof window.applyResponseToUI === 'function') {
+              window.applyResponseToUI(data);
+            }
+
+            // Restore draft (jig_id etc.) after render
+            setTimeout(function() {
+              if (typeof window.checkAndRestoreDraft === 'function') {
+                window.checkAndRestoreDraft(data.lot_id, data.batch_id);
+              }
+            }, 500);
+          });
         }
       }
     } catch (err) { console.warn('[MERGE_FLOW] failed', err); }
@@ -9357,6 +9415,12 @@ if (window.jQuery) {
   window.checkAndRestoreDraft = function(lotId, batchId) {
     if (!lotId || !batchId) return;
 
+    // GUARD: If we're in a multi-model merge flow (secondary lots active),
+    // only restore Jig ID and scanned trays — do NOT overwrite BACKEND_ globals
+    // with stale single-model draft values.
+    var isMultiModelActive = !!(window._currentSecondaryLots && window._currentSecondaryLots.length > 0) ||
+                             !!(window._lastMultiModelAllocation && window._lastMultiModelAllocation.length > 1);
+
     fetch('/jig_loading/api/jig/save/?lot_id=' + encodeURIComponent(lotId) + '&batch_id=' + encodeURIComponent(batchId), {
       method: 'GET',
       credentials: 'same-origin',
@@ -9380,42 +9444,50 @@ if (window.jQuery) {
       }
 
       // ===== Restore form fields from draft snapshot =====
-      var fieldsToRestore = {
-        'nickelBathTypeInput': data.nickel_bath_type || '',
-        'trayTypeInput': data.tray_type || '',
-        'reallotQty': data.lot_qty || '',
-        'jigCapacityInput': data.jig_capacity || '',
-        'emptyHooksInput': data.empty_hooks || '',
-      };
-      for (var fieldId in fieldsToRestore) {
-        var el = document.getElementById(fieldId);
-        if (el && !el.value && fieldsToRestore[fieldId]) {
-          el.value = fieldsToRestore[fieldId];
+      // GUARD: When multi-model is active and draft is single-model, skip field overwrite
+      if (!isMultiModelActive || data.is_multi_model) {
+        var fieldsToRestore = {
+          'nickelBathTypeInput': data.nickel_bath_type || '',
+          'trayTypeInput': data.tray_type || '',
+          'reallotQty': data.lot_qty || '',
+          'jigCapacityInput': data.jig_capacity || '',
+          'emptyHooksInput': data.empty_hooks || '',
+        };
+        for (var fieldId in fieldsToRestore) {
+          var el = document.getElementById(fieldId);
+          if (el && !el.value && fieldsToRestore[fieldId]) {
+            el.value = fieldsToRestore[fieldId];
+          }
         }
       }
 
       // Restore global BACKEND_ variables from draft
-      if (data.loaded_cases_qty) window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty) || 0;
-      if (data.effective_capacity) window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity) || 0;
-      if (data.jig_capacity) window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.jig_capacity) || 0;
-      if (data.broken_hooks) window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks) || 0;
-      if (data.empty_hooks) window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks) || 0;
-      if (data.tray_capacity) window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity) || 12;
-      if (data.plating_stock_num) window.CURRENT_MODEL_NO = data.plating_stock_num;
+      // GUARD: Skip when multi-model is active but draft is single-model (stale values)
+      if (!isMultiModelActive || data.is_multi_model) {
+        if (data.loaded_cases_qty) window.BACKEND_LOADED_CASES = parseInt(data.loaded_cases_qty) || 0;
+        if (data.effective_capacity) window.BACKEND_EFFECTIVE_CAPACITY = parseInt(data.effective_capacity) || 0;
+        if (data.jig_capacity) window.BACKEND_ORIGINAL_CAPACITY = parseInt(data.jig_capacity) || 0;
+        if (data.broken_hooks) window.BACKEND_BROKEN_HOOKS = parseInt(data.broken_hooks) || 0;
+        if (data.empty_hooks) window.BACKEND_EMPTY_HOOKS = parseInt(data.empty_hooks) || 0;
+        if (data.tray_capacity) window.BACKEND_TRAY_CAPACITY = parseInt(data.tray_capacity) || 12;
+        if (data.plating_stock_num) window.CURRENT_MODEL_NO = data.plating_stock_num;
 
-      // Restore loaded cases display
-      var lcDisplay = document.getElementById('loadedCasesQtyDisplay');
-      if (lcDisplay && data.loaded_cases_qty) {
-        lcDisplay.innerText = data.loaded_cases_qty;
-      }
-
-      // Restore broken hooks select
-      if (data.broken_hooks) {
-        var bhSelect = document.getElementById('brokenBuildupHooksInput');
-        if (bhSelect) {
-          bhSelect.value = String(data.broken_hooks);
-          window.currentBrokenHooks = parseInt(data.broken_hooks) || 0;
+        // Restore loaded cases display
+        var lcDisplay = document.getElementById('loadedCasesQtyDisplay');
+        if (lcDisplay && data.loaded_cases_qty) {
+          lcDisplay.innerText = data.loaded_cases_qty;
         }
+
+        // Restore broken hooks select
+        if (data.broken_hooks) {
+          var bhSelect = document.getElementById('brokenBuildupHooksInput');
+          if (bhSelect) {
+            bhSelect.value = String(data.broken_hooks);
+            window.currentBrokenHooks = parseInt(data.broken_hooks) || 0;
+          }
+        }
+      } else {
+        console.log('[DRAFT_RESTORE] Skipping BACKEND_ overwrite — multi-model active, draft is single-model');
       }
 
       // Restore multi-model allocation

@@ -1,4 +1,9 @@
+from django.core.cache import cache
 from adminportal.models import UserModuleProvision, Module
+
+# Cache key and TTL for module list (same for all authenticated users)
+_MODULE_CACHE_KEY = 'all_module_names'
+_MODULE_CACHE_TTL = 300  # 5 minutes
 
 
 def user_permissions(request):
@@ -11,8 +16,11 @@ def user_permissions(request):
     if request.user.is_authenticated:
         is_admin = request.user.is_superuser
         try:
-            # Return all module names so authenticated users see full menu
-            allowed_modules = list(Module.objects.values_list('name', flat=True))
+            # Use cached module list to avoid DB hit on every request
+            allowed_modules = cache.get(_MODULE_CACHE_KEY)
+            if allowed_modules is None:
+                allowed_modules = list(Module.objects.values_list('name', flat=True))
+                cache.set(_MODULE_CACHE_KEY, allowed_modules, _MODULE_CACHE_TTL)
         except Exception:
             # Fallback: if Module table missing or error, try per-user provisions
             try:

@@ -1686,7 +1686,8 @@ document.addEventListener("DOMContentLoaded", function () {
           }
 
           // ✅ SECTION 3: DELINKED TRAYS (separate from rejected)
-          const delinkedTrays = traysData.filter(tray => tray.delink_tray);
+          // ✅ FIX: Exclude rejected trays from delink section — rejected takes priority
+          const delinkedTrays = traysData.filter(tray => tray.delink_tray && !tray.rejected_tray);
           const hasShortage = rejectionSummary.shortage_rejections > 0;
           
           if (delinkedTrays.length > 0) {

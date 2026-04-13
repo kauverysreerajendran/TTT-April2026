@@ -190,13 +190,24 @@ def fetch_model_image_metadata(lot_id, batch_id):
 		logging.exception(f"[MULTI_MODEL] Error fetching image metadata for {lot_id}: {e}")
 	return result
 
-
 @method_decorator(login_required, name='dispatch')
 class JigView(TemplateView):
 	"""Minimal Jig view to render the pick table template."""
 	template_name = "JigLoading/Jig_Picktable.html"
 
+	def get(self, request, *args, **kwargs):
+		import time as _time
+		_full_start = _time.time()
+		response = super().get(request, *args, **kwargs)
+		# Force template rendering so we can measure it
+		if hasattr(response, 'render') and callable(response.render):
+			response.render()
+		print(f"[JIG PERF] FULL REQUEST (context + template render): {_time.time() - _full_start:.3f}s")
+		return response
+
 	def get_context_data(self, **kwargs):
+		import time as _time
+		_t0 = _time.time()
 		context = super().get_context_data(**kwargs)
 		# Populate master_data with Brass Audit accepted lots so Jig Pick shows them
 		try:
@@ -213,41 +224,41 @@ class JigView(TemplateView):
 			exclude_lot_raw = self.request.GET.get('exclude_lot_id', '')
 			primary_lot = self.request.GET.get('primary_lot_id') or self.request.GET.get('primary_lot')
 			exclude_list = [x.strip() for x in exclude_lot_raw.split(',') if x.strip()]
-			try:
-				total_before = base_qs.count()
-				logging.info(f"[JIG PICK] Total before exclude: {total_before}")
-			except Exception:
-				logging.info("[JIG PICK] Unable to count base_qs before exclude")
 			if exclude_list:
 				base_qs = base_qs.exclude(lot_id__in=exclude_list)
+			_t1 = _time.time()
+			print(f"[JIG PERF] base_qs built: {_t1 - _t0:.3f}s")
 			# Exclude lots already SUBMITTED in JigCompleted (they move to Completed table).
 			# Drafted lots stay visible in pick table with "Draft" / "Partial Draft" status.
-			# For Add Model popup (primary_lot_id present), also exclude drafted lots.
+			# For Add Model popup (exclude_lot_id present, NOT merge_model), also exclude drafted lots.
+			# When merge_model=1, the primary lot MUST stay visible so its button can be clicked.
 			try:
-				is_add_model_popup = bool(primary_lot)
+				is_merge_return = bool(self.request.GET.get('merge_model'))
+				is_add_model_popup = bool(exclude_lot_raw) and not is_merge_return
 				exclude_statuses = ['submitted', 'draft'] if is_add_model_popup else ['submitted']
-				active_records = JigCompleted.objects.filter(
-					draft_status__in=exclude_statuses
-				).only('lot_id', 'is_multi_model', 'multi_model_allocation')
-				exclude_lot_ids = set()
-				for rec in active_records:
-					exclude_lot_ids.add(rec.lot_id)
-					# For multi-model, also exclude secondary lot IDs
-					if rec.is_multi_model and rec.multi_model_allocation:
+				# Get all lot_ids in one DB-level query (no Python loop)
+				exclude_lot_ids = set(
+					JigCompleted.objects.filter(
+						draft_status__in=exclude_statuses
+					).values_list('lot_id', flat=True)
+				)
+				# For multi-model, also exclude secondary lot IDs (JSON field — must iterate, limited)
+				for rec in JigCompleted.objects.filter(
+					draft_status__in=exclude_statuses,
+					is_multi_model=True,
+					multi_model_allocation__isnull=False
+				).only('multi_model_allocation')[:100]:
+					if rec.multi_model_allocation:
 						for m in rec.multi_model_allocation:
 							mlot = m.get('lot_id', '') if isinstance(m, dict) else ''
 							if mlot:
 								exclude_lot_ids.add(mlot)
 				if exclude_lot_ids:
 					base_qs = base_qs.exclude(lot_id__in=list(exclude_lot_ids))
-					logging.info(f"[JIG PICK] Excluded {len(exclude_lot_ids)} lots (statuses={exclude_statuses}) from pick table")
 			except Exception:
 				logging.exception("[JIG PICK] Failed to exclude submitted/draft lots")
-			try:
-				final_count = base_qs.count()
-				logging.info(f"[JIG PICK] Excluding lots: {exclude_list} (primary: {primary_lot}) -> Final count: {final_count}")
-			except Exception:
-				logging.info("[JIG PICK] Unable to count base_qs after exclude")
+			_t2 = _time.time()
+			print(f"[JIG PERF] exclude lots: {_t2 - _t1:.3f}s")
 			# Apply ordering and slicing last
 			qs = base_qs.order_by('-brass_audit_last_process_date_time')[:200]
 
@@ -276,6 +287,8 @@ class JigView(TemplateView):
 				}
 			except Exception:
 				master_capacity_map = {}
+			_t3 = _time.time()
+			print(f"[JIG PERF] bulk prefetch: {_t3 - _t2:.3f}s")
 
 			for stock in qs:
 				batch = getattr(stock, 'batch_id', None)
@@ -295,7 +308,7 @@ class JigView(TemplateView):
 					'brass_audit_last_process_date_time': getattr(stock, 'brass_audit_last_process_date_time', None),
 					'model_stock_no': getattr(batch, 'model_stock_no', None) if batch else None,
 					# model images: prefer batch images, else model master images
-					'model_images': (getattr(batch, 'images', []) if batch and getattr(batch, 'images', None) else (getattr(batch, 'model_stock_no', None).images if batch and getattr(batch, 'model_stock_no', None) and getattr(batch.model_stock_no, 'images', None) else [])),
+					'model_images': [],  # images resolved lazily in template via data-attribute only
 					'jig_hold_lot': getattr(stock, 'jig_hold_lot', False),
 					'jig_holding_reason': getattr(stock, 'jig_holding_reason', ''),
 				}
@@ -308,19 +321,34 @@ class JigView(TemplateView):
 						data['jig_capacity'] = cap
 				master_data.append(data)
 
+			_t4 = _time.time()
+			print(f"[JIG PERF] stock loop ({len(master_data)} rows): {_t4 - _t3:.3f}s")
+
 			# ===== ADD HALF-FILLED / EXCESS LOT RECORDS BACK TO PICK TABLE =====
 			# When a jig is submitted with excess qty, those trays (stored in half_filled_tray_info)
 			# need to appear in the pick table as available for the next cycle.
 			try:
-				submitted_with_excess = JigCompleted.objects.filter(
+				submitted_with_excess = list(JigCompleted.objects.filter(
 					draft_status='submitted',
 					half_filled_tray_qty__gt=0
 				).only(
 					'lot_id', 'batch_id', 'plating_stock_num', 'half_filled_tray_qty',
 					'half_filled_tray_info', 'delink_tray_info', 'draft_data', 'tray_type', 'tray_capacity',
 					'is_multi_model', 'multi_model_allocation', 'jig_id',
-					'nickel_bath_type', 'excess_qty'
-				)
+					'nickel_bath_type', 'excess_qty', 'updated_at'
+				)[:50])
+
+				# Bulk prefetch TotalStockModel for all excess source lots (eliminates N+1)
+				excess_lot_ids = set()
+				for jc in submitted_with_excess:
+					excess_lot_ids.add(jc.lot_id)
+				excess_stock_map = {}
+				if excess_lot_ids:
+					for s in TotalStockModel.objects.filter(
+						lot_id__in=list(excess_lot_ids)
+					).select_related('batch_id', 'batch_id__model_stock_no'):
+						excess_stock_map[s.lot_id] = s
+
 				for jc in submitted_with_excess:
 					# For multi-model, find which source lot the excess trays belong to
 					# by cross-referencing half_filled_tray_info tray_ids with all tray data
@@ -349,15 +377,8 @@ class JigView(TemplateView):
 										excess_model_name = mc.split(' [')[0]  # strip lot ref
 									break
 					
-					# Look up stock model for the excess source lot
-					stock = None
-					try:
-						stock = TotalStockModel.objects.get(lot_id=excess_source_lot)
-					except TotalStockModel.DoesNotExist:
-						try:
-							stock = TotalStockModel.objects.get(lot_id=jc.lot_id)
-						except TotalStockModel.DoesNotExist:
-							pass
+					# Look up stock model from bulk-prefetched map (no per-row DB query)
+					stock = excess_stock_map.get(excess_source_lot) or excess_stock_map.get(jc.lot_id)
 					batch = getattr(stock, 'batch_id', None) if stock else None
 					excess_data = {
 						'batch_id': jc.batch_id,
@@ -385,9 +406,12 @@ class JigView(TemplateView):
 						if cap:
 							excess_data['jig_capacity'] = cap
 					master_data.append(excess_data)
-				logging.info(f"[JIG PICK] Added {submitted_with_excess.count()} excess lot entries to pick table")
+
 			except Exception:
 				logging.exception("[JIG PICK] Failed to add excess lot records to pick table")
+
+			_t5 = _time.time()
+			print(f"[JIG PERF] excess lot loop: {_t5 - _t4:.3f}s")
 
 			# ===== MARK LOTS WITH ACTIVE DRAFT STATUS =====
 			# Supports per-model status for multi-model drafts:
@@ -396,15 +420,20 @@ class JigView(TemplateView):
 			try:
 				all_lot_ids = [d.get('stock_lot_id', '') for d in master_data if d.get('stock_lot_id')]
 				if all_lot_ids:
-					draft_records = JigCompleted.objects.filter(
-						draft_status='draft'
-					).only('lot_id', 'is_multi_model', 'multi_model_allocation')
-
-					draft_lot_ids = set()
+					# Non-multi-model drafts: get lot_ids directly via DB (no Python loop)
+					draft_lot_ids = set(
+						JigCompleted.objects.filter(
+							draft_status='draft', is_multi_model=False
+						).values_list('lot_id', flat=True)
+					)
 					partial_draft_lot_ids = set()
 
-					for rec in draft_records:
-						if rec.is_multi_model and rec.multi_model_allocation:
+					# Multi-model drafts: need to inspect JSON field (limited)
+					for rec in JigCompleted.objects.filter(
+						draft_status='draft', is_multi_model=True,
+						multi_model_allocation__isnull=False
+					).only('multi_model_allocation')[:100]:
+						if rec.multi_model_allocation:
 							for m in rec.multi_model_allocation:
 								mlot = m.get('lot_id', '') if isinstance(m, dict) else ''
 								mstatus = m.get('status', '') if isinstance(m, dict) else ''
@@ -413,8 +442,6 @@ class JigView(TemplateView):
 										partial_draft_lot_ids.add(mlot)
 									else:
 										draft_lot_ids.add(mlot)
-						else:
-							draft_lot_ids.add(rec.lot_id)
 
 					for d in master_data:
 						# Excess lots are always fresh — never inherit draft status
@@ -433,6 +460,9 @@ class JigView(TemplateView):
 			except Exception:
 				logging.exception('[JIG PICK] Failed to compute lot draft statuses')
 
+			_t6 = _time.time()
+			print(f"[JIG PERF] draft status: {_t6 - _t5:.3f}s")
+
 			# ===== PAGINATE — MUST be LAST, after excess lots + status marking =====
 			from django.core.paginator import Paginator
 			page_number = self.request.GET.get('page', 1)
@@ -440,12 +470,12 @@ class JigView(TemplateView):
 			page_obj = paginator.get_page(page_number)
 			context['master_data'] = page_obj
 			context['page_obj'] = page_obj
-			context['master_data_full'] = master_data
+
+			print(f"[JIG PERF] TOTAL JigView: {_time.time() - _t0:.3f}s ({len(master_data)} records)")
 
 		except Exception:
 			logging.exception('Failed to populate master_data for Jig pick')
 		return context
-
 
 
 class TrayInfoView(APIView):
@@ -1076,7 +1106,6 @@ class InitJigLoad(APIView):
 		})
 
 
-
 class ScanTray(APIView):
 	"""Handle scanning (delinking) a tray for Jig Loading.
 
@@ -1112,7 +1141,6 @@ class ScanTray(APIView):
 # =============================================================================
 # CORE COMPUTATION ENGINE (SINGLE SOURCE OF TRUTH)
 # =============================================================================
-
 def compute_jig_loading(trays, jig_capacity, broken_hooks, tray_capacity=12):
 	"""
 	Core computation engine for Jig Loading. Single source of truth.
@@ -1384,16 +1412,6 @@ def compute_jig_loading(trays, jig_capacity, broken_hooks, tray_capacity=12):
 		'half_filled_tray_qty': half_filled_tray_qty,
 		'validation': {'is_overloaded': total_lot_qty > effective_capacity, 'errors': validation_errors}
 	}
-
-	logging.info(json.dumps({
-		'event': 'JIG_LOAD_COMPUTE',
-		'input': {'jig_capacity': jig_capacity, 'broken_hooks': broken_hooks, 'tray_count': len(trays), 'total_lot_qty': total_lot_qty},
-		'effective_capacity': effective_capacity,
-		'loaded_cases': loaded_cases_qty,
-		'empty_hooks': empty_hooks,
-		'tray_count_output': len(delink_tray_info),
-		'bh_integrity': f'{total_before_bh}-{total_after_bh}={total_before_bh - total_after_bh} (expected {broken_hooks})'
-	}))
 
 	return result
 
@@ -2220,7 +2238,6 @@ def validate_tray_for_scan(tray_id, lot_id, already_scanned_ids=None, allow_reus
 # =============================================================================
 # NEW CONSOLIDATED APIs — ONE API PER ACTION
 # =============================================================================
-
 class JigLoadInitAPI(APIView):
 	"""POST /api/jig/load/init/ — Unified initialization for Jig Loading.
 	Merges init-jig-load + tray-info. Single source of truth."""
@@ -2435,6 +2452,7 @@ class JigLoadInitAPI(APIView):
 			'validation': computed['validation'],
 			'planned_empty_hooks': planned_empty_hooks,
 			'bh_editable': True,
+			'can_submit': loaded_cases_qty > 0 and loaded_cases_qty >= computed['effective_capacity'],
 			'unified_tray_table': unified_tray_table,
 			'split_panel': split_panel,
 			# Legacy 'draft' key for frontend backward compatibility
@@ -2628,7 +2646,6 @@ class JigLoadInitAPI(APIView):
 			'tray_distribution': tray_distribution,
 			'models': models_summary,
 		}
-
 
 class JigLoadUpdateAPI(APIView):
 	"""POST /api/jig/load/update/ — Unified update API.
@@ -2912,8 +2929,6 @@ class JigLoadUpdateAPI(APIView):
 
 # JigLoadSubmitAPI REMOVED — all submit logic consolidated into JigSaveAPI (POST /api/jig/save/)
 # JigSaveAPI handles both draft (action="draft") and submit (action="submit") in a single endpoint.
-
-
 # Jig Loading - Complete Table View
 @method_decorator(login_required, name='dispatch')
 class JigCompletedTable(TemplateView):
@@ -2921,30 +2936,42 @@ class JigCompletedTable(TemplateView):
 	template_name = "JigLoading/Jig_CompletedTable.html"
 
 	def get_context_data(self, **kwargs):
+		import time as _time
+		_t0 = _time.time()
 		context = super().get_context_data(**kwargs)
 		
 		# Fetch all JigCompleted records with draft_status='submitted'
-		jig_completed_records = JigCompleted.objects.filter(
+		jig_completed_records = list(JigCompleted.objects.filter(
 			draft_status='submitted'
-		).select_related('user').order_by('-updated_at')
+		).select_related('user').order_by('-updated_at')[:200])
+
+		_t1 = _time.time()
+		print(f"[JIG COMPLETED PERF] query: {_t1 - _t0:.3f}s ({len(jig_completed_records)} rows)")
+
+		# Bulk prefetch TotalStockModel and ModelMasterCreation to eliminate N+1 queries
+		all_lot_ids = list({rec.lot_id for rec in jig_completed_records if rec.lot_id})
+		all_batch_ids = list({rec.batch_id for rec in jig_completed_records if rec.batch_id})
+
+		stock_map = {}
+		if all_lot_ids:
+			for s in TotalStockModel.objects.filter(lot_id__in=all_lot_ids):
+				stock_map[s.lot_id] = s
+
+		batch_map = {}
+		if all_batch_ids:
+			for b in ModelMasterCreation.objects.filter(batch_id__in=all_batch_ids).select_related('location'):
+				batch_map[b.batch_id] = b
+
+		_t2 = _time.time()
+		print(f"[JIG COMPLETED PERF] bulk prefetch: {_t2 - _t1:.3f}s")
 		
-		# Process each record and enrich with ModelMasterCreation + TotalStockModel data
+		# Process each record and enrich with pre-fetched data
 		jig_details = []
 		for jig_rec in jig_completed_records:
 			try:
-				# Fetch stock model data for enrichment (plating color, polish finish, etc.)
-				stock_model = None
-				try:
-					stock_model = TotalStockModel.objects.get(lot_id=jig_rec.lot_id)
-				except TotalStockModel.DoesNotExist:
-					pass
-				
-				# Fetch ModelMasterCreation for polishing_stk_no, plating_color, polish_finish, location
-				batch_obj = None
-				try:
-					batch_obj = ModelMasterCreation.objects.filter(batch_id=jig_rec.batch_id).select_related('location').first()
-				except Exception:
-					pass
+				# Use bulk-prefetched data (no per-row DB query)
+				stock_model = stock_map.get(jig_rec.lot_id)
+				batch_obj = batch_map.get(jig_rec.batch_id)
 				
 				# Build multi-model allocation string as comma-separated model_name:qty
 				# Template expects: "model1:qty1,model2:qty2,model3:qty3" for split(",") and get_model_name/get_model_qty filters
@@ -3042,7 +3069,7 @@ class JigCompletedTable(TemplateView):
 		context['page_obj'] = page_obj
 		context['completed_list'] = jig_details  # Keep for backwards compatibility
 		
-		logging.info(f"[JIG COMPLETED] Loaded {len(jig_details)} submitted jigs for display")
+		print(f"[JIG COMPLETED PERF] TOTAL: {_time.time() - _t0:.3f}s ({len(jig_details)} records)")
 		
 		return context
 
@@ -3050,7 +3077,6 @@ class JigCompletedTable(TemplateView):
 # =============================================================================
 # MODEL COMBINATION VALIDATION API
 # =============================================================================
-
 class ModelCombinationValidateAPI(APIView):
 	"""POST /api/model-combination/validate/
 	Validate which models can be added alongside the already-selected models.
@@ -3096,7 +3122,6 @@ class ModelCombinationValidateAPI(APIView):
 # =============================================================================
 # SINGLE UNIFIED API — DRAFT + SUBMIT (SINGLE SOURCE OF TRUTH: JigCompleted)
 # =============================================================================
-
 class JigSaveAPI(APIView):
 	"""POST /api/jig/save/ — Unified API for Draft + Submit.
 
@@ -3199,6 +3224,10 @@ class JigSaveAPI(APIView):
 			jig_obj = Jig.objects.filter(jig_qr_id=jig_id).first()
 			if jig_obj and jig_obj.is_locked_by_other_user(user):
 				return Response({'status': 'error', 'message': f'Jig {jig_id} is locked by another user.'}, status=status.HTTP_409_CONFLICT)
+
+			# Loaded cases must be > 0 for submit (cannot submit an empty jig)
+			if loaded_cases_qty <= 0:
+				return Response({'status': 'error', 'message': 'Cannot submit: no cases loaded on jig.'}, status=status.HTTP_400_BAD_REQUEST)
 
 			# Sum validation (strict for submit)
 			validation_errors = []
@@ -3519,7 +3548,6 @@ class JigSaveAPI(APIView):
 # =============================================================================
 # JIG ID VALIDATION API — lightweight existence check
 # =============================================================================
-
 class JigValidateAPI(APIView):
 	"""GET /api/jig/validate/?jig_id=J098-0001
 	Returns {exists: true/false} for real-time frontend validation.
@@ -3538,7 +3566,6 @@ class JigValidateAPI(APIView):
 # =============================================================================
 # JIG LOADING HOLD/UNHOLD API
 # =============================================================================
-
 class JigHoldToggleAPI(APIView):
 	"""
 	POST /api/hold-toggle/ — Save hold/unhold reason for jig loading
@@ -3639,7 +3666,6 @@ class JigHoldToggleAPI(APIView):
 # =============================================================================
 # DELETE JIG PICK RECORD API
 # =============================================================================
-
 class DeleteJigPickRecordAPI(APIView):
 	"""POST /jig_loading/api/delete-pick-record/ — Delete a draft jig loading record.
 	
@@ -3760,7 +3786,6 @@ class DeleteJigPickRecordAPI(APIView):
 # =============================================================================
 # UPDATE REMARK API
 # =============================================================================
-
 class UpdateRemarkAPI(APIView):
 	"""POST /jig_loading/api/update-remark/ — Update/save remark for a pick table record.
 	
@@ -4115,5 +4140,3 @@ def jig_get_lot_id_for_tray(request):
 	except Exception as e:
 		logging.exception(f'jig_get_lot_id_for_tray error: {str(e)}')
 		return JsonResponse({'success': False, 'error': f'Database error: {str(e)}'})
-
-
