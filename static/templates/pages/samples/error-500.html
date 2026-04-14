@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 Server Error</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .error-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px 40px;
+            max-width: 600px;
+            text-align: center;
+        }
+        .error-image {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 30px;
+            max-height: 300px;
+        }
+        h1 {
+            font-size: 48px;
+            color: #d9534f;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+        p {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+        .error-details {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 30px;
+            padding: 16px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #d9534f;
+        }
+        a {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.3s ease, transform 0.2s ease;
+            margin-top: 10px;
+        }
+        a:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        @media (max-width: 600px) {
+            .error-container {
+                padding: 40px 20px;
+            }
+            h1 {
+                font-size: 36px;
+            }
+            p {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <img src="/static/assets/images/500_error.jpg" alt="500 Server Error" class="error-image" />
+        <h1>500 Server Error</h1>
+        <p>Something went wrong on our end.</p>
+        <div class="error-details">
+            The server encountered an unexpected condition that prevented it from fulfilling the request.
+        </div>
+        <a href="/">← Return to Home</a>
+    </div>
+</body>
+</html>

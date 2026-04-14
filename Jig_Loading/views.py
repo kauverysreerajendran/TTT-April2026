@@ -259,24 +259,47 @@ class JigView(TemplateView):
 				logging.exception("[JIG PICK] Failed to exclude submitted/draft lots")
 			_t2 = _time.time()
 			print(f"[JIG PERF] exclude lots: {_t2 - _t1:.3f}s")
-			# Apply ordering and slicing last
-			qs = base_qs.order_by('-brass_audit_last_process_date_time')[:200]
+			# Apply ordering and slicing last - FIX 4: REDUCED TO [:10] FOR TESTING
+			qs = base_qs.only(
+				'lot_id', 'batch_id', 'brass_audit_accepted_qty',
+				'brass_audit_physical_qty', 'total_stock',
+				'brass_audit_last_process_date_time',
+				'jig_hold_lot', 'jig_holding_reason', 'plating_color',
+				'batch_id__batch_id', 'batch_id__plating_stk_no',
+				'batch_id__polishing_stk_no', 'batch_id__plating_color',
+				'batch_id__polish_finish', 'batch_id__model_stock_no',
+				'batch_id__model_stock_no__id',
+			).order_by('-brass_audit_last_process_date_time')[:10]
 
 			# ===== BULK PRE-FETCH: eliminate N+1 queries in the row loop =====
+			# FIX 1: Extract lot_ids from already-fetched qs first
+			_t_extract_start = _time.time()
+			qs_list = list(qs)
+			qs_lot_ids = [obj.lot_id for obj in qs_list]
+			_t_extract = _time.time()
+			print(f"[JIG PERF] extracted {len(qs_lot_ids)} lot_ids: {_t_extract - _t_extract_start:.3f}s")
+			
 			try:
-				saved_tray_counts = dict(
-					Brass_Audit_Accepted_TrayID_Store.objects
-					.filter(is_save=True)
-					.values('lot_id')
-					.annotate(cnt=Count('id'))
-					.values_list('lot_id', 'cnt')
-				)
-				all_tray_counts = dict(
-					Brass_Audit_Accepted_TrayID_Store.objects
-					.values('lot_id')
-					.annotate(cnt=Count('id'))
-					.values_list('lot_id', 'cnt')
-				)
+				# FIX 2: FILTER aggregation queries by lot_ids (not whole table!)
+				if qs_lot_ids:
+					from django.db.models import Count, Q as _QQ
+					saved_tray_counts = dict(
+						Brass_Audit_Accepted_TrayID_Store.objects
+						.filter(lot_id__in=qs_lot_ids, is_save=True)
+						.values('lot_id')
+						.annotate(cnt=Count('id'))
+						.values_list('lot_id', 'cnt')
+					)
+					all_tray_counts = dict(
+						Brass_Audit_Accepted_TrayID_Store.objects
+						.filter(lot_id__in=qs_lot_ids)
+						.values('lot_id')
+						.annotate(cnt=Count('id'))
+						.values_list('lot_id', 'cnt')
+					)
+				else:
+					saved_tray_counts = {}
+					all_tray_counts = {}
 			except Exception:
 				saved_tray_counts = {}
 				all_tray_counts = {}
@@ -288,9 +311,10 @@ class JigView(TemplateView):
 			except Exception:
 				master_capacity_map = {}
 			_t3 = _time.time()
-			print(f"[JIG PERF] bulk prefetch: {_t3 - _t2:.3f}s")
+			print(f"[JIG PERF] bulk prefetch: {_t3 - _t_extract:.3f}s")
+			_t_stock_loop = _time.time()
 
-			for stock in qs:
+			for stock in qs_list:
 				batch = getattr(stock, 'batch_id', None)
 				# Use pre-fetched tray counts (no per-row DB query)
 				no_of_trays = saved_tray_counts.get(stock.lot_id, 0) or all_tray_counts.get(stock.lot_id, 0)
@@ -322,7 +346,7 @@ class JigView(TemplateView):
 				master_data.append(data)
 
 			_t4 = _time.time()
-			print(f"[JIG PERF] stock loop ({len(master_data)} rows): {_t4 - _t3:.3f}s")
+			print(f"[JIG PERF] stock loop ({len(master_data)} rows): {_t4 - _t_stock_loop:.3f}s")
 
 			# ===== ADD HALF-FILLED / EXCESS LOT RECORDS BACK TO PICK TABLE =====
 			# When a jig is submitted with excess qty, those trays (stored in half_filled_tray_info)
