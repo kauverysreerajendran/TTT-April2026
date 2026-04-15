@@ -2395,7 +2395,6 @@
     </div>
 </div>
 
-
 <!-- Hold Remark Modal -->
 <div id="holdRemarkModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.18); z-index:20000; align-items:center; justify-content:center;">
   <div style="background:#fff; border-radius:10px; padding:28px 32px 18px 32px; min-width:320px; max-width:90vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); position:relative;">
@@ -2586,6 +2585,7 @@
 </div>
 
 {% block script %}
+
 
 <!-- Fetches and displays audit data.
      All business logic, validation, and saves are implemented in IQF/views.py.
@@ -4372,5 +4372,230 @@ document.addEventListener('click', function(evt) {
   }
 });
 </script>
+
+<!-- IQF Row Hold / Unhold Toggle — same logic as Brass QC -->
+<script nonce="{{ csp_nonce }}">
+window.holdToggleState = {
+  currentHoldCell: null,
+  intendedState: null,
+  currentBatchId: null,
+  currentLotId: null
+};
+
+function attachHoldToggleListeners() {
+  console.log('Attaching hold toggle listeners...');
+
+  // Attach batch_id to each row for easy access
+  document.querySelectorAll("tbody tr").forEach(function (row) {
+    var trayScanBtn = row.querySelector('.tray-scan-btn, .tray-scan-btn-Jig');
+    if (trayScanBtn) {
+      row.setAttribute('data-batch-id', trayScanBtn.getAttribute('data-batch-id'));
+    }
+  });
+
+  // Remove existing listeners and attach new ones
+  document.querySelectorAll('.hold-toggle-btn').forEach(function (btn) {
+    var newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      var childOpen = document.querySelector(
+        '.tray-scan-modal.open, .tray-scan-modal-DayPlanning.open, .new-popup-modal.open, .image-slider-modal.open'
+      );
+      if (childOpen) {
+        var label = newBtn.closest('label.hold-toggle-switch') || newBtn.closest('label');
+        var slider = label ? label.querySelector('.hold-slider') : null;
+        if (label) {
+          label.style.pointerEvents = 'none';
+          label.style.cursor = 'not-allowed';
+          label.setAttribute('title', 'Unavailable while child screen is open');
+          label.setAttribute('aria-disabled', 'true');
+        }
+        newBtn.style.pointerEvents = 'none';
+        newBtn.style.cursor = 'not-allowed';
+        newBtn.setAttribute('title', 'Unavailable while child screen is open');
+        try { newBtn.tabIndex = -1; } catch (ex) {}
+
+        var restore = function() {
+          if (label) {
+            label.style.pointerEvents = '';
+            label.style.cursor = '';
+            label.removeAttribute('title');
+            label.removeAttribute('aria-disabled');
+          }
+          newBtn.style.pointerEvents = '';
+          newBtn.style.cursor = '';
+          newBtn.removeAttribute('title');
+          try { newBtn.tabIndex = 0; } catch (ex) {}
+        };
+
+        var mo = new MutationObserver(function() {
+          var anyOpen = document.querySelector(
+            '.tray-scan-modal.open, .tray-scan-modal-DayPlanning.open, .new-popup-modal.open, .image-slider-modal.open'
+          );
+          if (!anyOpen) { restore(); mo.disconnect(); }
+        });
+        mo.observe(document.body, { attributes: true, subtree: true, childList: true });
+        setTimeout(function() { restore(); mo.disconnect(); }, 5000);
+        return;
+      }
+
+      var holdCell = newBtn.closest('td');
+      var row = holdCell.closest('tr');
+
+      window.holdToggleState = {
+        currentHoldCell: holdCell,
+        intendedState: newBtn.checked,
+        currentBatchId: row.getAttribute('data-batch-id'),
+        currentLotId: row.getAttribute('data-stock-lot-id'),
+        rowIdentifier: row.getAttribute('data-stock-lot-id') || row.getAttribute('data-batch-id')
+      };
+
+      console.log('Hold toggle clicked, state:', window.holdToggleState);
+
+      document.getElementById('holdRemarkModal').querySelector('h5').textContent =
+        window.holdToggleState.intendedState ? 'Unholding Reason' : 'Holding Reason';
+      document.getElementById('holdRemarkInput').value = '';
+      document.getElementById('holdRemarkError').textContent = '';
+      document.getElementById('holdRemarkModal').style.display = 'flex';
+      document.getElementById('holdRemarkInput').focus();
+    });
+  });
+
+  // Attach save button handler (only once globally)
+  var saveBtn = document.getElementById('saveHoldRemarkBtn');
+  if (saveBtn && !window.holdSaveHandlerAttached) {
+    window.holdSaveHandlerAttached = true;
+
+    saveBtn.onclick = function () {
+      console.log('Save button clicked, current state:', window.holdToggleState);
+
+      var remark = document.getElementById('holdRemarkInput').value.trim();
+      if (!remark) {
+        document.getElementById('holdRemarkError').textContent = 'Remark required!';
+        return;
+      }
+
+      if (!window.holdToggleState.currentLotId) {
+        document.getElementById('holdRemarkError').textContent = 'Lot ID not found!';
+        return;
+      }
+
+      var action = window.holdToggleState.intendedState ? 'unhold' : 'hold';
+
+      console.log('Sending request:', {
+        lot_id: window.holdToggleState.currentLotId,
+        remark: remark,
+        action: action
+      });
+
+      fetch('/iqf/iqf_save_hold_unhold_reason/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+          lot_id: window.holdToggleState.currentLotId,
+          remark: remark,
+          action: action
+        })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        console.log('Server response:', data);
+
+        if (data.success) {
+          document.getElementById('holdRemarkModal').style.display = 'none';
+
+          var currentRow = document.querySelector('tr[data-stock-lot-id="' + window.holdToggleState.currentLotId + '"]');
+          if (currentRow) {
+            var toggle = currentRow.querySelector('.hold-toggle-btn');
+            var icon = currentRow.querySelector('.hold-remark-icon');
+
+            if (action === 'hold') {
+              if (toggle) toggle.checked = false;
+              currentRow.classList.add('row-inactive');
+              currentRow.querySelectorAll('td').forEach(function(td, idx) {
+                if (idx > 0) {
+                  td.classList.add('row-inactive-blur');
+                } else {
+                  td.classList.remove('row-inactive-blur');
+                }
+              });
+              if (icon) {
+                icon.style.display = 'inline-block';
+                icon.innerHTML = '<img src="{% static "assets/icons/view2.png" %}" alt="Remark" style="width:18px; height:18px;" />';
+                icon.setAttribute('title', 'Holding Reason: ' + remark);
+              }
+            } else {
+              if (toggle) toggle.checked = true;
+              currentRow.classList.remove('row-inactive');
+              currentRow.querySelectorAll('td').forEach(function(td) {
+                td.classList.remove('row-inactive-blur');
+              });
+              if (icon) {
+                icon.style.display = 'none';
+              }
+            }
+          }
+
+          setTimeout(function() {
+            if (typeof refreshTableData === 'function') {
+              refreshTableData();
+            } else {
+              location.reload();
+            }
+          }, 500);
+
+        } else {
+          document.getElementById('holdRemarkError').textContent = data.error || 'Failed to save reason!';
+        }
+      })
+      .catch(function(error) {
+        console.error('Request failed:', error);
+        document.getElementById('holdRemarkError').textContent = 'Network error!';
+      });
+    };
+  }
+
+  // Attach close button handler (only once globally)
+  var closeBtn = document.getElementById('closeHoldRemarkModal');
+  if (closeBtn && !window.holdCloseHandlerAttached) {
+    window.holdCloseHandlerAttached = true;
+    closeBtn.onclick = function () {
+      document.getElementById('holdRemarkModal').style.display = 'none';
+      window.holdToggleState = {
+        currentHoldCell: null,
+        intendedState: null,
+        currentBatchId: null,
+        currentLotId: null
+      };
+    };
+  }
+
+  function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      var cookies = document.cookie.split(';');
+      for (var i = 0; i < cookies.length; i++) {
+        var cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  attachHoldToggleListeners();
+});
+</script>
+
 
 {% endblock %} {% endblock content %}

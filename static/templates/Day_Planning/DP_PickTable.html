@@ -3622,7 +3622,7 @@ function rebuildTrayScanTable(currentData, newRowCount, trayCapacity, topTrayQty
         html += `
             <div style="min-height:32px;">${sNo}</div>
             <div style="min-height:32px;">
-                <input type="text" class="form-control tray-id-input" value="${existingTrayId}" data-draft-id="${existingDraftId}" data-position="${i+1}" style="width: 100%;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                <input type="text" class="form-control tray-id-input" value="${existingTrayId}" data-draft-id="${existingDraftId}" data-position="${i+1}" placeholder="Scan Tray ID" style="width: 100%;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
             </div>
             <div style="min-height:32px;">
                 ${
@@ -4112,10 +4112,9 @@ trayScanLinks.forEach((link) => {
         // 🚀 ENHANCED: Initialize UI validation with enhanced event listeners
         setTimeout(() => {
             attachEnhancedEventListeners();
+            // Auto-focus the first empty Tray ID input when modal opens (or none if all filled)
+            autoFocusFirstTrayInput();
         }, 100);
-
-        // Auto-focus the first empty Tray ID input when modal opens (or none if all filled)
-        autoFocusFirstTrayInput();
 
         const isReleased = event.target.getAttribute("data-moved-to-d-picker") === "True";
         

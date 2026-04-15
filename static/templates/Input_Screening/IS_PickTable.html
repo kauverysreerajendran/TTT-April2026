@@ -104,8 +104,8 @@
   #order-listing td:nth-child(1) {
     position: sticky;
     left: 0 !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
     background: #f7fafd;
     z-index: 30;
   }
@@ -114,7 +114,7 @@
   #order-listing th:nth-child(2),
   #order-listing td:nth-child(2) {
     position: sticky;
-    left: 90px !important;   /* = width of col1 */
+    left: 120px !important;   /* = width of col1 */
     min-width: 125px !important;
     max-width: 125px !important;
     background: #f7fafd;
@@ -125,7 +125,7 @@
   #order-listing th:nth-child(3),
   #order-listing td:nth-child(3) {
     position: sticky;
-    left: 215px !important;  /* 75 (col1) + 100 (col2 min) */
+    left: 245px !important;  /* 120 (col1) + 125 (col2) */
     min-width: 140px !important;
     max-width: 140px !important;
     background: #f7fafd;
@@ -418,15 +418,16 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
   left: 0 !important;
   z-index: 12; /* Above header */
   background: #f7fafd;
-  min-width: 75px;
-  max-width: 75px;
+  min-width: 105px;
+  max-width: 105px;
+  overflow: visible !important;
 }
 
 /* Freeze 2nd column - Last Updated*/
 #order-listing th:nth-child(2),
 #order-listing td:nth-child(2) {
   position: sticky;
-  left: 75px; /* Match min-width of 1st col */
+  left: 105px; /* Match min-width of 1st col */
   z-index: 12;
   background: #f7fafd;
   min-width: 100px; /* Increased width */
@@ -437,7 +438,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 #order-listing th:nth-child(3),
 #order-listing td:nth-child(3) {
   position: sticky;
-  left: 175px; /* 100px (1st) + 90px (2nd) */
+  left: 205px; /* 105px (1st) + 100px (2nd) */
   z-index: 12;
   background: #f7fafd;
   min-width: 130px; /* Increased width 100 - old value*/
@@ -837,12 +838,16 @@ input:checked + .hold-slider:before {
   justify-content: center;
   cursor: pointer;
   transition: transform 0.2s ease;
+  flex-shrink: 0;
+  min-width: 18px;
+  min-height: 18px;
+  z-index: 2;
+  position: relative;
 }
 
 .hold-remark-icon:hover {
-  transform: scale(1.1);
-    cursor: pointer;
-
+  transform: scale(1.15);
+  cursor: pointer;
 }
 
 .row-inactive {
@@ -1564,7 +1569,7 @@ input:checked + .hold-slider:before {
     <span class="hold-remark-icon" 
       data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="{% if data.ip_holding_reason %}Holding Reason: {{ data.ip_holding_reason }}{% endif %}{% if data.ip_holding_reason and data.ip_release_reason %}&#10;{% endif %}{% if data.ip_release_reason %}Release Reason: {{ data.ip_release_reason }}{% endif %}">
       {% if data.ip_hold_lot or data.ip_release_lot or data.ip_holding_reason or data.ip_release_reason %}
-      <img src="{% static 'assets/icons/view2.png' %}" alt="Remark" style="width:12px; height:12px;" />
+      <img src="{% static 'assets/icons/view2.png' %}" alt="Remark" style="width:18px; height:18px;" />
       {% endif %}
     </span>
     {% else %}
@@ -2212,6 +2217,18 @@ document.addEventListener("DOMContentLoaded", function () {
           if (data.success && data.lot_id) {
             console.log("Scanned Tray ID:", trayId, "Lot ID:", data.lot_id);
 
+            // Check hold status from backend (works across pagination)
+            if (data.is_on_hold) {
+              console.log('⛔ [SCANNER] Lot is on hold (from API):', data.lot_id);
+              scanStatus.style.display = 'inline-block';
+              scanStatus.style.color = '#dc3545';
+              scanStatus.textContent = 'Scanned Tray ID is on Hold';
+              scanInput.value = '';
+              scanInput.focus();
+              setTimeout(() => { scanStatus.style.display = 'none'; }, 4000);
+              return;
+            }
+
             // Find the row with this lot_id and trigger the View button
             const row = document.querySelector(`tr[data-stock-lot-id="${data.lot_id}"]`);
             if (row) {
@@ -2264,7 +2281,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     console.log('⛔ [SCANNER] Target row is on hold; blocking modal open for lot', data.lot_id);
                     scanStatus.style.display = 'inline-block';
                     scanStatus.style.color = '#dc3545';
-                    scanStatus.textContent = 'Row on hold — access denied';
+                    scanStatus.textContent = 'Scanned Tray ID is on Hold';
                     scanInput.value = '';
                     setTimeout(() => { scanStatus.style.display = 'none'; }, 4000);
                   } else {

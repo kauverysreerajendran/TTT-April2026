@@ -3010,8 +3010,30 @@ def brass_reject_check_tray_id_simple(request):
         })
 
     # -----------------------------------------------------------------
+    # STEP 2b: Cross-module occupancy check
+    # A tray that has been reused as a rejection tray in Input Screening
+    # (IPTrayId: rejected_tray=True, delink_tray=False) is physically
+    # occupied and must NOT be allowed in Brass QC, even if TrayId
+    # master still shows delink_tray=True.
+    # -----------------------------------------------------------------
+    is_occupied_in_is = IPTrayId.objects.filter(
+        tray_id=tray_id,
+        rejected_tray=True,
+        delink_tray=False
+    ).exists()
+
+    if is_occupied_in_is:
+        print(f"[BRASS_REUSE] ❌ Tray {tray_id} is occupied (rejected_tray=True, delink_tray=False)")
+        return JsonResponse({
+            'exists': True,
+            'valid_for_rejection': False,
+            'error': 'Tray is already in use',
+            'status_message': 'Already occupied'
+        })
+
+    # -----------------------------------------------------------------
     # STEP 3: New / delinked trays → allow immediately
-    # They never consume reuse capacity.
+    # They never consume reuse capacity
     # Cross-reason isolation does NOT apply to new/delinked trays.
     # -----------------------------------------------------------------
     if is_delinked:

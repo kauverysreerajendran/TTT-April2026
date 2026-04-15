@@ -6,28 +6,53 @@
 
 
         /* Reduce rejection modal table width and header padding */
+    /* Rejection Modal - Responsive sizing */
     .new-popup-modal,
     #rejectionPopupModal {
-      max-width: 340px !important;
-      min-width: 180px !important;
-      width: 98vw !important;
+      max-width: 600px !important;
+      min-width: 320px !important;
+      width: 90vw !important;
     }
     
     .rejection-modal-header {
-      padding: 10px 16px 6px 16px !important;
+      padding: 12px 16px 8px 16px !important;
       font-size: 16px !important;
-      min-height: 32px !important;
+      min-height: 40px !important;
     }
     
     .rejection-content {
-      padding: 10px 16px 16px 16px !important;
+      padding: 12px 16px 16px 16px !important;
     }
     
     .rejection-table,
     .rejection-remarks-table {
       width: 100% !important;
-      max-width: 320px !important;
       margin: 0 auto !important;
+      font-size: 13px !important;
+    }
+    
+    /* Small screen adaptation */
+    @media (max-width: 480px) {
+      .new-popup-modal,
+      #rejectionPopupModal {
+        max-width: 95vw !important;
+        min-width: 280px !important;
+        width: 95vw !important;
+      }
+      
+      .rejection-modal-header {
+        padding: 10px 12px 6px 12px !important;
+        font-size: 14px !important;
+      }
+      
+      .rejection-content {
+        padding: 10px 12px 12px 12px !important;
+      }
+      
+      .rejection-table,
+      .rejection-remarks-table {
+        font-size: 12px !important;
+      }
     }
 
 .remark-circle {
@@ -48,6 +73,28 @@
 }
 .remark-circle:active { transform: scale(0.98); }
 .remark-circle:hover { transform: scale(1.08); }
+
+/* Rejection Table Cell Styling */
+.rejection-table th,
+.rejection-table td {
+  padding: 10px 12px !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  text-align: left !important;
+  vertical-align: middle !important;
+  word-wrap: break-word !important;
+}
+
+.rejection-table th {
+  background-color: #f5f5f5 !important;
+  font-weight: 600 !important;
+  color: #333 !important;
+  font-size: 13px !important;
+}
+
+.rejection-table td {
+  font-size: 13px !important;
+  color: #555 !important;
+}
 .rejection-remarks-modal {
   display: none;
   position: fixed;
@@ -741,7 +788,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                      <td>{{ page_obj.start_index|add:forloop.counter0 }}
 
                     </td>                 
-<td>{{ data.last_process_date_time|date:"Y-m-d" }}<br>
+                    <td>{{ data.last_process_date_time|date:"Y-m-d" }}<br>
                         <span style="display:inline-block; margin-top:4px;">{{ data.last_process_date_time|date:"h:i A" }}</span>
                     <!-- Plating Stk No - Mouse Hover Image -->
                       <td>
@@ -893,7 +940,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
      tabindex="-1"
      aria-modal="true"
      role="dialog"
-     style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);max-height:240px !important;min-width:70px !important;width:auto;overflow-y:auto;background:#fff;border-radius:16px;box-shadow: 0 8px 32px rgb(0 0 0 / 76%);z-index:10001;">
+     style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);min-width:320px !important;max-width:500px;width:90%;background:#fff;border-radius:16px;box-shadow: 0 8px 32px rgb(0 0 0 / 76%);z-index:10001;">
   <div class="rejection-modal-header">
     <h3 class="modal-title"> <i class="fa fa-exclamation-triangle" style="color:#e74c3c; margin-right:6px;"></i>Rejection Details</h3>
 

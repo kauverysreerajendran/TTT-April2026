@@ -9,10 +9,14 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone  # Added timezone import
 import json
+import re
+import logging
 from .serializers import *
 import datetime
 from InputScreening import *
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 from django.db.models import Sum, Q
 from django.db.models.functions import Cast
 from django.db.models import IntegerField
@@ -1702,6 +1706,307 @@ class TrayIdAPIView(APIView):
                 'success': False,
                 'message': f'Error updating tray id: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ── Consolidated Tray Management API ─────────────────────────────────────────
+TRAY_FORMAT_PATTERN = re.compile(r'^(JB-A|JR-A|JD-A|JL-A|NB-A|NR-A|ND-A|NL-A)\d{5}$')
+
+@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(login_required(login_url='login-api'), name='dispatch')
+class TrayManageAPIView(APIView):
+    """
+    Single consolidated API for all Tray ID management operations.
+    POST /api/tray/manage/
+    Actions: add, delete, delete_all, list
+    """
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request):
+        action = request.data.get('action', '').strip().lower()
+        tray_ids = request.data.get('tray_ids', [])
+        force_delete = request.data.get('force_delete', False)
+
+        logger.info(f"[TrayManage] action={action}, tray_ids={tray_ids}, force_delete={force_delete}, user={request.user}")
+
+        if action == 'list':
+            return self._list_trays(request)
+        elif action == 'add':
+            return self._add_trays(request, tray_ids)
+        elif action == 'delete':
+            return self._delete_trays(request, tray_ids, force_delete)
+        elif action == 'delete_all':
+            return self._delete_all_trays(request, force_delete)
+        elif action == 'restore':
+            return self._restore_trays(request, tray_ids)
+        else:
+            return Response({
+                'status': 'error',
+                'message': f'Invalid action: "{action}". Valid actions: add, delete, delete_all, list, restore',
+                'data': [],
+                'conflicts': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def _list_trays(self, request):
+        """List all tray IDs with their status."""
+        trays = TrayId.objects.all().order_by('tray_id')
+        data = []
+        for t in trays:
+            is_occupied = bool(t.batch_id_id) or bool(t.lot_id)
+            data.append({
+                'id': t.pk,
+                'tray_id': t.tray_id,
+                'tray_type': t.tray_type or '',
+                'tray_capacity': t.tray_capacity,
+                'is_occupied': is_occupied,
+                'lot_id': t.lot_id or '',
+                'created': t.date.strftime('%Y-%m-%d %H:%M') if t.date else '',
+            })
+        logger.info(f"[TrayManage] Listed {len(data)} trays")
+        return Response({
+            'status': 'success',
+            'message': f'{len(data)} tray(s) found',
+            'data': data,
+            'conflicts': []
+        })
+
+    def _add_trays(self, request, tray_ids):
+        """Add one or more tray IDs with full backend validation."""
+        if not tray_ids or not isinstance(tray_ids, list):
+            return Response({
+                'status': 'error',
+                'message': 'tray_ids must be a non-empty list.',
+                'data': [],
+                'conflicts': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate all tray IDs first
+        errors = []
+        valid_trays = []
+        duplicates_in_request = set()
+
+        for idx, raw_id in enumerate(tray_ids):
+            tid = str(raw_id).strip().upper()
+
+            # Format validation
+            if not TRAY_FORMAT_PATTERN.match(tid):
+                errors.append(f'"{raw_id}" has invalid format. Expected prefix (JB-A, JR-A, JD-A, JL-A, NB-A, NR-A, ND-A, NL-A) + 5 digits.')
+                continue
+
+            # Duplicate within same request
+            if tid in duplicates_in_request:
+                errors.append(f'"{tid}" is duplicated in this request.')
+                continue
+            duplicates_in_request.add(tid)
+
+            # Duplicate in database
+            if TrayId.objects.filter(tray_id__iexact=tid).exists():
+                errors.append(f'Tray ID "{tid}" already exists.')
+                continue
+
+            valid_trays.append(tid)
+
+        if errors and not valid_trays:
+            logger.warning(f"[TrayManage] All trays rejected: {errors}")
+            return Response({
+                'status': 'error',
+                'message': 'All tray IDs failed validation.',
+                'data': [],
+                'conflicts': errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Determine tray_type and capacity from prefix
+        created = []
+        with transaction.atomic():
+            for tid in valid_trays:
+                prefix = tid[0]  # J or N
+                if prefix == 'J':
+                    tray_type_name = 'Jumbo'
+                else:
+                    tray_type_name = 'Normal'
+
+                # Look up TrayType for capacity
+                tray_type_obj = TrayType.objects.filter(tray_type__icontains=tray_type_name).first()
+                capacity = tray_type_obj.tray_capacity if tray_type_obj else None
+
+                tray_obj = TrayId.objects.create(
+                    tray_id=tid,
+                    tray_type=tray_type_name,
+                    tray_capacity=capacity,
+                    date=timezone.now(),
+                    user=request.user,
+                    new_tray=True,
+                )
+                created.append({
+                    'id': tray_obj.pk,
+                    'tray_id': tray_obj.tray_id,
+                    'tray_type': tray_obj.tray_type or '',
+                    'tray_capacity': tray_obj.tray_capacity,
+                })
+
+        msg_parts = [f'{len(created)} tray(s) added successfully.']
+        if errors:
+            msg_parts.append(f'{len(errors)} tray(s) had issues.')
+
+        resp_status = 'success' if not errors else 'warning'
+        logger.info(f"[TrayManage] Added {len(created)} trays, {len(errors)} rejected")
+        return Response({
+            'status': resp_status,
+            'message': ' '.join(msg_parts),
+            'data': created,
+            'conflicts': errors
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
+
+    def _delete_trays(self, request, tray_ids, force_delete):
+        """Delete specific tray IDs with allocation check. Returns deleted tray data for undo."""
+        if not tray_ids or not isinstance(tray_ids, list):
+            return Response({
+                'status': 'error',
+                'message': 'tray_ids must be a non-empty list.',
+                'data': [],
+                'conflicts': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        not_found = []
+        occupied = []
+        deleted = []
+
+        for raw_id in tray_ids:
+            tid = str(raw_id).strip().upper()
+            tray_obj = TrayId.objects.filter(tray_id__iexact=tid).first()
+
+            if not tray_obj:
+                not_found.append(tid)
+                continue
+
+            is_occupied = bool(tray_obj.batch_id_id) or bool(tray_obj.lot_id)
+
+            if is_occupied and not force_delete:
+                occupied.append({
+                    'tray_id': tray_obj.tray_id,
+                    'lot_id': tray_obj.lot_id or '',
+                    'message': f'Tray "{tray_obj.tray_id}" is already occupied (Lot: {tray_obj.lot_id}). Confirm to delete.'
+                })
+                continue
+
+            # Capture tray details before deletion for undo
+            deleted.append({
+                'tray_id': tray_obj.tray_id,
+                'tray_type': tray_obj.tray_type or '',
+                'tray_capacity': tray_obj.tray_capacity,
+            })
+            logger.info(f"[TrayManage] Deleting tray {tray_obj.tray_id} (occupied={is_occupied}, force={force_delete})")
+            tray_obj.delete()
+
+        if occupied and not deleted:
+            return Response({
+                'status': 'warning',
+                'message': f'{len(occupied)} tray(s) are occupied. Confirm to proceed with deletion.',
+                'data': [],
+                'conflicts': occupied
+            })
+
+        msg_parts = []
+        if deleted:
+            msg_parts.append(f'{len(deleted)} tray(s) deleted.')
+        if not_found:
+            msg_parts.append(f'{len(not_found)} tray(s) not found: {", ".join(not_found)}.')
+        if occupied:
+            msg_parts.append(f'{len(occupied)} occupied tray(s) skipped (not force-deleted).')
+
+        logger.info(f"[TrayManage] Deleted={len(deleted)}, NotFound={len(not_found)}, Occupied={len(occupied)}")
+        return Response({
+            'status': 'success' if deleted else 'error',
+            'message': ' '.join(msg_parts) or 'No trays deleted.',
+            'data': deleted,
+            'conflicts': occupied + [{'tray_id': t, 'message': 'Not found'} for t in not_found]
+        })
+
+    def _delete_all_trays(self, request, force_delete):
+        """Delete all tray IDs with allocation check."""
+        all_trays = TrayId.objects.all()
+        total = all_trays.count()
+
+        if total == 0:
+            return Response({
+                'status': 'error',
+                'message': 'No tray IDs exist to delete.',
+                'data': [],
+                'conflicts': []
+            })
+
+        occupied_trays = all_trays.filter(
+            Q(batch_id__isnull=False) | ~Q(lot_id__isnull=True) & ~Q(lot_id='')
+        )
+        occupied_count = occupied_trays.count()
+
+        if occupied_count > 0 and not force_delete:
+            occupied_list = list(occupied_trays.values_list('tray_id', flat=True)[:20])
+            return Response({
+                'status': 'warning',
+                'message': f'{occupied_count} of {total} tray(s) are occupied. Confirm to proceed with deletion of all trays.',
+                'data': [],
+                'conflicts': [{'tray_id': t, 'message': 'Occupied'} for t in occupied_list]
+            })
+
+        logger.info(f"[TrayManage] Deleting ALL {total} trays (force={force_delete})")
+        deleted_data = list(all_trays.values('tray_id', 'tray_type', 'tray_capacity'))
+        all_trays.delete()
+        return Response({
+            'status': 'success',
+            'message': f'All {total} tray(s) deleted successfully.',
+            'data': deleted_data,
+            'conflicts': []
+        })
+
+    def _restore_trays(self, request, tray_ids):
+        """Re-create previously deleted tray IDs (undo operation)."""
+        if not tray_ids or not isinstance(tray_ids, list):
+            return Response({
+                'status': 'error',
+                'message': 'tray_ids must be a non-empty list of tray objects to restore.',
+                'data': [],
+                'conflicts': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        restored = []
+        skipped = []
+
+        with transaction.atomic():
+            for item in tray_ids:
+                tid = str(item.get('tray_id', '')).strip().upper() if isinstance(item, dict) else str(item).strip().upper()
+                tray_type = item.get('tray_type', '') if isinstance(item, dict) else ''
+                tray_capacity = item.get('tray_capacity') if isinstance(item, dict) else None
+
+                # Skip if already re-created
+                if TrayId.objects.filter(tray_id__iexact=tid).exists():
+                    skipped.append(tid)
+                    continue
+
+                TrayId.objects.create(
+                    tray_id=tid,
+                    tray_type=tray_type,
+                    tray_capacity=tray_capacity,
+                    date=timezone.now(),
+                    user=request.user,
+                    new_tray=True,
+                )
+                restored.append(tid)
+
+        msg_parts = []
+        if restored:
+            msg_parts.append(f'{len(restored)} tray(s) restored successfully.')
+        if skipped:
+            msg_parts.append(f'{len(skipped)} tray(s) already exist (skipped).')
+
+        logger.info(f"[TrayManage] Restored={len(restored)}, Skipped={len(skipped)}")
+        return Response({
+            'status': 'success' if restored else 'error',
+            'message': ' '.join(msg_parts) or 'No trays restored.',
+            'data': [{'tray_id': t} for t in restored],
+            'conflicts': [{'tray_id': t, 'message': 'Already exists'} for t in skipped]
+        })
+# ── End Consolidated Tray Management API ─────────────────────────────────────
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required(login_url='login-api'), name='dispatch')

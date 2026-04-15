@@ -969,42 +969,109 @@
           <div class="tab-content-frame">
             <!-- TrayId message area -->
             <div id="trayid-message-area" class="message-area"></div>
-            <form class="row g-3 form-section-elegant" id="trayid-form">
-              {% csrf_token %}
-              <div class="col-md-6">
-                <label for="trayid_tray_id" class="form-label">Tray ID</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  id="trayid_tray_id"
-                  name="tray_id"
-                  placeholder="Enter tray id"
-                  required
-                />
-              </div>
-              <div class="col-md-6">
-                <label for="trayid_tray_type" class="form-label">Tray Type</label>
-                <select class="form-select" id="trayid_tray_type" name="tray_type" required>
-                  <option value="">Select Tray Type</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label for="trayid_tray_capacity" class="form-label">Tray Capacity</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="trayid_tray_capacity"
-                  name="tray_capacity"
-                  placeholder="Auto-filled from Tray Type"
-                  readonly
-                />
-              </div>
-              <div class="col-12">
-                <div class="submit-section">
-                  <button type="submit" class="btn btn-elegant-primary">Save Tray ID</button>
+
+            <!-- Add Tray IDs Section -->
+            <div class="form-section-elegant" style="margin-bottom:14px;">
+              <h5 style="font-weight:700;color:#028084;margin-bottom:10px;">Add Tray IDs</h5>
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+                <div style="min-width:140px;">
+                  <label for="trayid_tray_type_select" class="form-label" style="margin-bottom:4px;font-size:0.85rem;">Tray Type</label>
+                  <select class="form-select" id="trayid_tray_type_select" style="padding:6px 10px;font-size:0.85rem;" required>
+                    <option value="">Select</option>
+                    <option value="JB-A">JB-A (Jumbo)</option>
+                    <option value="JR-A">JR-A (Jumbo R)</option>
+                    <option value="JD-A">JD-A (Jumbo D)</option>
+                    <option value="JL-A">JL-A (Jumbo L)</option>
+                    <option value="NB-A">NB-A (Normal)</option>
+                    <option value="NR-A">NR-A (Normal R)</option>
+                    <option value="ND-A">ND-A (Normal D)</option>
+                    <option value="NL-A">NL-A (Normal L)</option>
+                  </select>
                 </div>
+                <div style="min-width:100px;">
+                  <label for="trayid_start_number" class="form-label" style="margin-bottom:4px;font-size:0.85rem;">Start No</label>
+                  <input type="number" class="form-control" id="trayid_start_number"
+                    placeholder="e.g. 1" min="0" style="padding:6px 10px;font-size:0.85rem;" required />
+                </div>
+                <div style="min-width:100px;">
+                  <label for="trayid_end_number" class="form-label" style="margin-bottom:4px;font-size:0.85rem;">End No</label>
+                  <input type="number" class="form-control" id="trayid_end_number"
+                    placeholder="e.g. 50" min="0" style="padding:6px 10px;font-size:0.85rem;" required />
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="trayid-preview-btn"
+                  style="border-radius:8px;font-weight:600;padding:11px 14px;font-size:0.85rem;height:fit-content;">
+                  Generate Preview
+                </button>
+                <button type="button" class="btn btn-elegant-primary btn-sm" id="trayid-add-btn"
+                  style="border-radius:8px;font-weight:600;padding:11px 18px;font-size:0.85rem;height:fit-content;">
+                  Add Trays
+                </button>
               </div>
-            </form>
+
+              <!-- Preview area -->
+              <div id="trayid-preview-area" style="margin-top:10px;display:none;">
+                <label class="form-label" style="font-weight:600;font-size:0.85rem;">Preview (editable):</label>
+                <textarea class="form-control" id="trayid_preview_text" rows="3"
+                  style="font-family:monospace;font-size:12px;"
+                  placeholder="Tray IDs will appear here..."></textarea>
+                <small class="text-muted">One tray ID per line. You can edit, add, or remove IDs before saving.</small>
+              </div>
+            </div>
+
+            <hr style="border-color:#e2e8f0;">
+
+            <!-- Tray ID List Section -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h5 style="font-weight:700;color:#028084;margin:0;">
+                Existing Tray IDs
+                <span id="trayid-total-badge" class="badge bg-secondary" style="font-size:0.8rem;vertical-align:middle;margin-left:6px;">0</span>
+              </h5>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" class="form-control" id="trayid-search-input"
+                  placeholder="Search tray ID..." style="width:220px;font-size:0.85rem;padding:6px 12px;border-radius:8px;" />
+                <button type="button" class="btn btn-outline-info btn-sm" id="trayid-refresh-btn"
+                  style="border-radius:8px;font-weight:600;">
+                  Refresh
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="trayid-delete-all-btn"
+                  style="border-radius:8px;font-weight:600;">
+                  Delete All
+                </button>
+              </div>
+            </div>
+
+            <div id="trayid-table-container" style="max-height:350px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:12px;">
+              <table class="table table-hover table-sm mb-0" style="font-size:0.85rem;">
+                <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+                  <tr>
+                    <th style="padding:10px 14px;">S.No</th>
+                    <th style="padding:10px 14px;">Tray ID</th>
+                    <th style="padding:10px 14px;">Type</th>
+                    <th style="padding:10px 14px;">Capacity</th>
+                    <th style="padding:10px 14px;">Status</th>
+                    <th style="padding:10px 14px;">Created</th>
+                    <th style="padding:10px 14px;text-align:center;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="trayid-table-body">
+                  <tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af;">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Undo bar (hidden by default) -->
+            <div id="trayid-undo-bar" style="display:none;margin-top:12px;padding:12px 18px;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;
+              align-items:center;justify-content:space-between;">
+              <span id="trayid-undo-msg" style="font-weight:600;color:#856404;font-size:0.9rem;"></span>
+              <div style="display:flex;gap:8px;">
+                <button type="button" class="btn btn-warning btn-sm" id="trayid-undo-btn"
+                  style="border-radius:8px;font-weight:600;font-size:0.82rem;">
+                  Undo
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="trayid-undo-dismiss"
+                  style="border-radius:8px;font-size:0.82rem;">Dismiss</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1447,49 +1514,30 @@ const LocationAPI = {
     }
 };
 
-// TrayId API Functions
+// TrayId API Functions — Consolidated via /adminportal/api/tray/manage/
 const TrayIdAPI = {
-    create: async function(formData) {
+    manage: async function(payload) {
         try {
-            const response = await fetch('/adminportal/tray-id/', {
+            const response = await fetch('/adminportal/api/tray/manage/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCSRFToken()
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
-            const result = await response.json();
-            if (result.success) {
-                showInlineMessage('trayid-message-area', result.message || 'Tray ID created successfully!', true);
-                document.getElementById('trayid_tray_id').value = '';
-                document.getElementById('trayid_tray_type').value = '';
-                document.getElementById('trayid_tray_capacity').value = '';
-                this.refreshDropdown();
-            } else {
-                const errorMsg = result.errors ? formatValidationErrors(result.errors) : (result.message || 'Error creating tray id');
-                showInlineMessage('trayid-message-area', errorMsg, false);
-                console.error('Validation errors:', result.errors);
-            }
-            return result;
-        } catch (error) {
-            showInlineMessage('trayid-message-area', 'Error creating tray id: ' + error.message, false);
-            console.error('Error:', error);
-        }
-    },
-    getAll: async function() {
-        try {
-            const response = await fetch('/adminportal/tray-id/');
             return await response.json();
         } catch (error) {
-            console.error('Error fetching tray ids:', error);
+            console.error('[TrayManage] Error:', error);
+            return { status: 'error', message: 'Network error: ' + error.message, data: [], conflicts: [] };
         }
     },
-    refreshDropdown: async function() {
-        const data = await this.getAll();
-        if (data && data.success) {
-            // Populate dropdown if needed
-        }
+    list: async function() {
+        return await this.manage({ action: 'list' });
+    },
+    refreshTable: async function() {
+        const result = await this.list();
+        renderTrayTable(result);
     }
 };
 
@@ -1664,42 +1712,7 @@ const CategoryAPI = {
     }
 };
 
-// TrayId Tab: Populate tray_type dropdown and auto-fill tray_capacity
-async function populateTrayIdTrayTypeDropdown() {
-    try {
-        const response = await fetch('/adminportal/tray-type/');
-        const result = await response.json();
-        if (result.success) {
-            const select = document.getElementById('trayid_tray_type');
-            select.innerHTML = '<option value="">Select Tray Type</option>';
-            result.data.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item.id;
-                option.textContent = item.tray_type;
-                option.setAttribute('data-capacity', item.tray_capacity);
-                select.appendChild(option);
-            });
-        }
-    } catch (error) {
-        console.error('Error populating trayid tray_type dropdown:', error);
-    }
-}
-
-// Auto-fill tray_capacity when tray_type changes in TrayId form
-function setupTrayIdTrayTypeAutoFill() {
-    const trayTypeSelect = document.getElementById('trayid_tray_type');
-    const trayCapacityInput = document.getElementById('trayid_tray_capacity');
-    if (trayTypeSelect && trayCapacityInput) {
-        trayTypeSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption && selectedOption.getAttribute('data-capacity')) {
-                trayCapacityInput.value = selectedOption.getAttribute('data-capacity');
-            } else {
-                trayCapacityInput.value = '';
-            }
-        });
-    }
-}
+// (TrayId dropdown setup removed — now handled by consolidated TrayManage UI)
 
 // Auto-fill tray_capacity when tray_type changes in Model Master form
 function setupTrayCapacityAutoFill() {
@@ -1730,11 +1743,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up tray capacity auto-fill
     setupTrayCapacityAutoFill();
     
-    // Populate TrayId tray_type dropdown
-    populateTrayIdTrayTypeDropdown();
-    
-    // Set up TrayId tray_type auto-fill
-    setupTrayIdTrayTypeAutoFill();
+    // Initialize Tray ID management UI
+    initTrayManageUI();
     
     console.log('Initialization complete!');
 });
@@ -1911,19 +1921,7 @@ function setupFormHandlers() {
         await LocationAPI.create(formData);
     });
 
-    // TrayId Form
-    document.getElementById('trayid-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const tray_id = document.getElementById('trayid_tray_id').value.trim();
-        const tray_type = document.getElementById('trayid_tray_type').value;
-        const tray_capacity = parseInt(document.getElementById('trayid_tray_capacity').value) || null;
-        const formData = {
-            tray_id: tray_id,
-            tray_type: tray_type,
-            tray_capacity: tray_capacity
-        };
-        await TrayIdAPI.create(formData);
-    });
+    // TrayId — handled by dedicated event listeners below (not a form submit)
 
     // Category Form AJAX submit
     document.getElementById('category-form').addEventListener('submit', async function(e) {
@@ -1985,6 +1983,324 @@ function setupFormHandlers() {
         }
     });
 }
+
+// ── Tray ID Management UI ────────────────────────────────────────────────────
+
+let _trayListCache = []; // local cache for search/filter
+let _trayUndoPayload = null; // stores deleted tray data for undo
+let _trayUndoTimer = null;
+
+function initTrayManageUI() {
+    // Preview button
+    document.getElementById('trayid-preview-btn').addEventListener('click', function() {
+        const prefix = document.getElementById('trayid_tray_type_select').value;
+        const startNum = parseInt(document.getElementById('trayid_start_number').value);
+        const endNum = parseInt(document.getElementById('trayid_end_number').value);
+
+        if (!prefix) { showInlineMessage('trayid-message-area', 'Please select a Tray Type.', false); return; }
+        if (isNaN(startNum) || startNum < 0) { showInlineMessage('trayid-message-area', 'Please enter a valid start number.', false); return; }
+        if (isNaN(endNum) || endNum < 0) { showInlineMessage('trayid-message-area', 'Please enter a valid end number.', false); return; }
+        if (endNum < startNum) { showInlineMessage('trayid-message-area', 'End number must be >= start number.', false); return; }
+
+        const ids = [];
+        for (let i = startNum; i <= endNum; i++) {
+            ids.push(prefix + String(i).padStart(5, '0'));
+        }
+        document.getElementById('trayid_preview_text').value = ids.join('\n');
+        document.getElementById('trayid-preview-area').style.display = 'block';
+        showInlineMessage('trayid-message-area', '', true); // clear
+    });
+
+    // Add button
+    document.getElementById('trayid-add-btn').addEventListener('click', async function() {
+        const previewArea = document.getElementById('trayid-preview-area');
+        const textVal = document.getElementById('trayid_preview_text').value.trim();
+
+        if (!textVal) {
+            showInlineMessage('trayid-message-area', 'Generate preview first or enter tray IDs manually.', false);
+            return;
+        }
+
+        const trayIds = textVal.split('\n').map(s => s.trim()).filter(Boolean);
+        if (trayIds.length === 0) {
+            showInlineMessage('trayid-message-area', 'No valid tray IDs entered.', false);
+            return;
+        }
+
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+
+        const result = await TrayIdAPI.manage({ action: 'add', tray_ids: trayIds });
+        this.disabled = false;
+        this.innerHTML = 'Add Trays';
+
+        if (result.status === 'success') {
+            showInlineMessage('trayid-message-area', result.message, true);
+            document.getElementById('trayid_preview_text').value = '';
+            previewArea.style.display = 'none';
+            document.getElementById('trayid_start_number').value = '';
+            document.getElementById('trayid_end_number').value = '';
+        } else if (result.status === 'warning') {
+            let msg = result.message;
+            if (result.conflicts && result.conflicts.length) {
+                msg += '<br><small>' + result.conflicts.join('<br>') + '</small>';
+            }
+            showInlineMessage('trayid-message-area', msg, true);
+        } else {
+            let msg = result.message;
+            if (result.conflicts && result.conflicts.length) {
+                msg += '<br><small>' + result.conflicts.join('<br>') + '</small>';
+            }
+            showInlineMessage('trayid-message-area', msg, false);
+        }
+        TrayIdAPI.refreshTable();
+    });
+
+    // Refresh button
+    document.getElementById('trayid-refresh-btn').addEventListener('click', function() {
+        TrayIdAPI.refreshTable();
+    });
+
+    // Search input
+    document.getElementById('trayid-search-input').addEventListener('input', function() {
+        const q = this.value.trim().toLowerCase();
+        renderTrayTableFiltered(q);
+    });
+
+    // Delete All button
+    document.getElementById('trayid-delete-all-btn').addEventListener('click', async function() {
+        const btn = this;
+        Swal.fire({
+            title: 'Delete All Tray IDs?',
+            text: 'This will delete every tray ID in the system.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Delete All',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true
+        }).then(async (swalResult) => {
+            if (!swalResult.isConfirmed) return;
+
+            btn.disabled = true;
+            const result = await TrayIdAPI.manage({ action: 'delete_all', force_delete: false });
+            btn.disabled = false;
+
+            if (result.status === 'warning') {
+                Swal.fire({
+                    title: 'Occupied Trays Found',
+                    html: result.message,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Delete Anyway',
+                    cancelButtonText: 'Cancel',
+                    reverseButtons: true
+                }).then(async (forceResult) => {
+                    if (!forceResult.isConfirmed) return;
+                    btn.disabled = true;
+                    const finalResult = await TrayIdAPI.manage({ action: 'delete_all', force_delete: true });
+                    btn.disabled = false;
+                    showInlineMessage('trayid-message-area', finalResult.message, finalResult.status === 'success');
+                    if (finalResult.status === 'success' && finalResult.data && finalResult.data.length) {
+                        showUndoBar(finalResult.data, finalResult.message);
+                    }
+                    TrayIdAPI.refreshTable();
+                });
+            } else {
+                showInlineMessage('trayid-message-area', result.message, result.status === 'success');
+                if (result.status === 'success' && result.data && result.data.length) {
+                    showUndoBar(result.data, result.message);
+                }
+                TrayIdAPI.refreshTable();
+            }
+        });
+    });
+
+    // Undo button
+    document.getElementById('trayid-undo-btn').addEventListener('click', async function() {
+        if (!_trayUndoPayload || !_trayUndoPayload.length) return;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Restoring...';
+
+        const result = await TrayIdAPI.manage({ action: 'restore', tray_ids: _trayUndoPayload });
+
+        this.disabled = false;
+        this.innerHTML = 'Undo';
+
+        if (result.status === 'success') {
+            showInlineMessage('trayid-message-area', result.message, true);
+        } else {
+            showInlineMessage('trayid-message-area', result.message, false);
+        }
+        hideUndoBar();
+        TrayIdAPI.refreshTable();
+    });
+
+    // Dismiss undo
+    document.getElementById('trayid-undo-dismiss').addEventListener('click', function() {
+        hideUndoBar();
+    });
+
+    // Initial load
+    TrayIdAPI.refreshTable();
+}
+
+// ── Undo Bar Helpers ──
+
+function showUndoBar(deletedData, message) {
+    _trayUndoPayload = deletedData;
+    const bar = document.getElementById('trayid-undo-bar');
+    const msg = document.getElementById('trayid-undo-msg');
+    const count = Array.isArray(deletedData) ? deletedData.length : 0;
+    msg.textContent = `${count} tray(s) deleted. Click Undo to restore.`;
+    bar.style.display = 'flex';
+
+    // Auto-hide after 30 seconds
+    if (_trayUndoTimer) clearTimeout(_trayUndoTimer);
+    _trayUndoTimer = setTimeout(() => { hideUndoBar(); }, 30000);
+}
+
+function hideUndoBar() {
+    document.getElementById('trayid-undo-bar').style.display = 'none';
+    _trayUndoPayload = null;
+    if (_trayUndoTimer) { clearTimeout(_trayUndoTimer); _trayUndoTimer = null; }
+}
+
+// ── Table Rendering ──
+
+function renderTrayTable(result) {
+    const tbody = document.getElementById('trayid-table-body');
+    const badge = document.getElementById('trayid-total-badge');
+
+    if (!result || result.status === 'error') {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#ef4444;">Error loading tray IDs.</td></tr>';
+        badge.textContent = '0';
+        _trayListCache = [];
+        return;
+    }
+
+    _trayListCache = result.data || [];
+    badge.textContent = _trayListCache.length;
+    renderTrayRows(_trayListCache);
+}
+
+function renderTrayTableFiltered(query) {
+    if (!query) {
+        renderTrayRows(_trayListCache);
+        return;
+    }
+    const filtered = _trayListCache.filter(t =>
+        t.tray_id.toLowerCase().includes(query) ||
+        (t.tray_type || '').toLowerCase().includes(query) ||
+        (t.lot_id || '').toLowerCase().includes(query)
+    );
+    renderTrayRows(filtered);
+}
+
+function renderTrayRows(data) {
+    const tbody = document.getElementById('trayid-table-body');
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af;">No tray IDs found.</td></tr>';
+        return;
+    }
+
+    let html = '';
+    data.forEach((t, idx) => {
+        const statusBadge = t.is_occupied
+            ? '<span class="badge bg-warning text-dark">Occupied</span>'
+            : '<span class="badge bg-success">Available</span>';
+        html += `<tr>
+            <td style="padding:8px 14px;">${idx + 1}</td>
+            <td style="padding:8px 14px;font-weight:600;font-family:monospace;">${escapeHtml(t.tray_id)}</td>
+            <td style="padding:8px 14px;">${escapeHtml(t.tray_type)}</td>
+            <td style="padding:8px 14px;">${t.tray_capacity || '-'}</td>
+            <td style="padding:8px 14px;">${statusBadge}</td>
+            <td style="padding:8px 14px;">${escapeHtml(t.created)}</td>
+            <td style="padding:8px 14px;text-align:center;">
+                <button type="button" class="btn btn-outline-danger btn-sm trayid-delete-single"
+                    data-trayid="${escapeHtml(t.tray_id)}" data-occupied="${t.is_occupied}"
+                    data-type="${escapeHtml(t.tray_type)}" data-capacity="${t.tray_capacity || ''}"
+                    style="border-radius:6px;font-size:0.78rem;">
+                    Delete
+                </button>
+            </td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+
+    // Attach delete handlers
+    tbody.querySelectorAll('.trayid-delete-single').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const tid = this.getAttribute('data-trayid');
+            const occupied = this.getAttribute('data-occupied') === 'true';
+            const trayType = this.getAttribute('data-type');
+            const trayCapacity = parseInt(this.getAttribute('data-capacity')) || null;
+
+            if (occupied) {
+                // First check for occupied warning from backend
+                const checkResult = await TrayIdAPI.manage({ action: 'delete', tray_ids: [tid], force_delete: false });
+                if (checkResult.status === 'warning') {
+                    Swal.fire({
+                        title: 'Tray is Occupied',
+                        html: checkResult.message,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#dc3545',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Delete Anyway',
+                        cancelButtonText: 'Cancel',
+                        reverseButtons: true
+                    }).then(async (swalResult) => {
+                        if (!swalResult.isConfirmed) return;
+                        const forceResult = await TrayIdAPI.manage({ action: 'delete', tray_ids: [tid], force_delete: true });
+                        showInlineMessage('trayid-message-area', forceResult.message, forceResult.status === 'success');
+                        if (forceResult.status === 'success' && forceResult.data && forceResult.data.length) {
+                            showUndoBar(forceResult.data, forceResult.message);
+                        }
+                        TrayIdAPI.refreshTable();
+                    });
+                } else {
+                    showInlineMessage('trayid-message-area', checkResult.message, checkResult.status === 'success');
+                    if (checkResult.status === 'success' && checkResult.data && checkResult.data.length) {
+                        showUndoBar(checkResult.data, checkResult.message);
+                    }
+                    TrayIdAPI.refreshTable();
+                }
+            } else {
+                Swal.fire({
+                    title: 'Delete Tray?',
+                    text: `Are you sure you want to delete tray "${tid}"?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, Delete',
+                    cancelButtonText: 'Cancel',
+                    reverseButtons: true
+                }).then(async (swalResult) => {
+                    if (!swalResult.isConfirmed) return;
+                    const result = await TrayIdAPI.manage({ action: 'delete', tray_ids: [tid], force_delete: false });
+                    showInlineMessage('trayid-message-area', result.message, result.status === 'success');
+                    if (result.status === 'success' && result.data && result.data.length) {
+                        showUndoBar(result.data, result.message);
+                    }
+                    TrayIdAPI.refreshTable();
+                });
+            }
+        });
+    });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+// ── End Tray ID Management UI ────────────────────────────────────────────────
 </script>
 
 {% endblock %}

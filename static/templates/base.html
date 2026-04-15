@@ -1937,7 +1937,13 @@
                      <tr>
                         <th style="padding:6px 8px;">Type of Input</th>
                         <td style="padding:6px 8px;">
-                           <input type="text" class="form-control" id="inputType" placeholder="Type of Input" required style="padding:4px 8px;height:28px;font-size:0.93rem;" />
+                           <input type="text" class="form-control" id="inputType" placeholder="Type of Input" readonly style="padding:4px 8px;height:28px;font-size:0.93rem;" />
+                        </td>
+                     </tr>
+                     <tr>
+                        <th style="padding:6px 8px;">Lot Qty</th>
+                        <td style="padding:6px 8px;">
+                           <input type="text" class="form-control" id="lotQty" placeholder="Lot Qty" readonly style="padding:4px 8px;height:28px;font-size:0.93rem;" />
                         </td>
                      </tr>
                      <tr>
@@ -2168,26 +2174,28 @@
                    document.getElementById("polishFinish").value = data.model_master_details?.polish_finish || "";
                    document.getElementById("platingColor").value = data.model_master_details?.plating_color || "";
                    document.getElementById("source").value = data.model_master_details?.vendor_internal || "";
-                   document.getElementById("inputType").value = data.total_stock_details?.total_stock || "";
+                   document.getElementById("inputType").value = data.total_stock_details?.input_type || "Fresh";
+                   document.getElementById("lotQty").value = data.total_stock_details?.lot_qty || "";
                    document.getElementById("lastProcessDate").value = data.total_stock_details?.last_process_date_time || "";   
                    document.getElementById("lastProcessModule").innerText = data.total_stock_details?.last_process_module || "";
                    document.getElementById("nextProcessModule").innerText = data.total_stock_details?.next_process_module || "";
                    
                    // Update image section with model images
                    const imageSection = document.querySelector('.barcode-image-section');
-                   imageSection.innerHTML = ''; // Clear previous images
-         
-                   const images = data.model_master_details?.model_images || [];
-                   images.forEach(url => {
-                     const img = document.createElement('img');
-                     img.src = url;
-                     img.alt = "Model Image";
-                     img.className = "barcode-img-preview mx-2";
-                     img.style.maxWidth = "80px";
-                     img.style.maxHeight = "80px";
-                     img.style.borderRadius = "8px";
-                     imageSection.appendChild(img);
-                   });
+                   if (imageSection) {
+                     imageSection.innerHTML = ''; // Clear previous images
+                     const images = data.model_master_details?.model_images || [];
+                     images.forEach(url => {
+                       const img = document.createElement('img');
+                       img.src = url;
+                       img.alt = "Model Image";
+                       img.className = "barcode-img-preview mx-2";
+                       img.style.maxWidth = "80px";
+                       img.style.maxHeight = "80px";
+                       img.style.borderRadius = "8px";
+                       imageSection.appendChild(img);
+                     });
+                   }
                    
                  } else {
                    // ✅ UPDATED: Clear fields and show banner error
@@ -2197,13 +2205,14 @@
                    document.getElementById("platingColor").value = "";
                    document.getElementById("source").value = "";
                    document.getElementById("inputType").value = "";
+                   document.getElementById("lotQty").value = "";
                    document.getElementById("lastProcessDate").value = "";
                    document.getElementById("lastProcessModule").innerText = "";
                    document.getElementById("nextProcessModule").innerText = "";
                    
                    // Clear images
                    const imageSection = document.querySelector('.barcode-image-section');
-                   imageSection.innerHTML = '';
+                   if (imageSection) imageSection.innerHTML = '';
          
                    // ✅ REPLACED: alert() with banner error (like your image)
                    const errorMessage = `Tray ID '${trayId}' not found in table.`;
@@ -2731,26 +2740,28 @@
                    document.getElementById("polishFinish").value = data.model_master_details?.polish_finish || "";
                    document.getElementById("platingColor").value = data.model_master_details?.plating_color || "";
                    document.getElementById("source").value = data.model_master_details?.vendor_internal || "";
-                   document.getElementById("inputType").value = data.total_stock_details?.total_stock || "";
+                   document.getElementById("inputType").value = data.total_stock_details?.input_type || "Fresh";
+                   document.getElementById("lotQty").value = data.total_stock_details?.lot_qty || "";
                    document.getElementById("lastProcessDate").value = data.total_stock_details?.last_process_date_time || "";   
                    document.getElementById("lastProcessModule").innerText = data.total_stock_details?.last_process_module || "";
                    document.getElementById("nextProcessModule").innerText = data.total_stock_details?.next_process_module || "";
                    
                    // Update image section with model images
                    const imageSection = document.querySelector('.barcode-image-section');
-                   imageSection.innerHTML = ''; // Clear previous images
-         
-                   const images = data.model_master_details?.model_images || [];
-                   images.forEach(url => {
-                     const img = document.createElement('img');
-                     img.src = url;
-                     img.alt = "Model Image";
-                     img.className = "barcode-img-preview mx-2";
-                     img.style.maxWidth = "80px";
-                     img.style.maxHeight = "80px";
-                     img.style.borderRadius = "8px";
-                     imageSection.appendChild(img);
-                   });
+                   if (imageSection) {
+                     imageSection.innerHTML = ''; // Clear previous images
+                     const images = data.model_master_details?.model_images || [];
+                     images.forEach(url => {
+                       const img = document.createElement('img');
+                       img.src = url;
+                       img.alt = "Model Image";
+                       img.className = "barcode-img-preview mx-2";
+                       img.style.maxWidth = "80px";
+                       img.style.maxHeight = "80px";
+                       img.style.borderRadius = "8px";
+                       imageSection.appendChild(img);
+                     });
+                   }
                    
                  } else {
                    // ✅ UPDATED: Clear fields and show banner error
@@ -2760,13 +2771,14 @@
                    document.getElementById("platingColor").value = "";
                    document.getElementById("source").value = "";
                    document.getElementById("inputType").value = "";
+                   document.getElementById("lotQty").value = "";
                    document.getElementById("lastProcessDate").value = "";
                    document.getElementById("lastProcessModule").innerText = "";
                    document.getElementById("nextProcessModule").innerText = "";
                    
                    // Clear images
                    const imageSection = document.querySelector('.barcode-image-section');
-                   imageSection.innerHTML = '';
+                   if (imageSection) imageSection.innerHTML = '';
          
                    // ✅ REPLACED: alert() with banner error (like your image)
                    const errorMessage = `Tray ID '${trayId}' not found in table.`;

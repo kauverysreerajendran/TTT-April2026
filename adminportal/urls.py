@@ -47,6 +47,9 @@ urlpatterns = [
     # TrayId APIs
     path('tray-id/', TrayIdAPIView.as_view(), name='tray-id-api'),
     path('tray-id/<int:pk>/', TrayIdAPIView.as_view(), name='tray-id-detail-api'),
+
+    # Consolidated Tray Management API
+    path('api/tray/manage/', TrayManageAPIView.as_view(), name='tray-manage-api'),
  
     # Category APIs
     path('category/', CategoryAPIView.as_view(), name='category-api'),

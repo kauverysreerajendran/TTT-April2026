@@ -4573,7 +4573,15 @@ def get_lot_id_for_tray(request):
         from modelmasterapp.models import TrayId
         tray = TrayId.objects.filter(tray_id=tray_id).first()
         if tray and tray.lot_id:
-            return JsonResponse({'success': True, 'lot_id': tray.lot_id, 'tray_id': tray.tray_id})
+            # Check hold status from TotalStockModel
+            is_on_hold = False
+            try:
+                stock = TotalStockModel.objects.filter(lot_id=tray.lot_id).first()
+                if stock:
+                    is_on_hold = bool(stock.ip_hold_lot)
+            except Exception:
+                pass
+            return JsonResponse({'success': True, 'lot_id': tray.lot_id, 'tray_id': tray.tray_id, 'is_on_hold': is_on_hold})
         else:
             return JsonResponse({'success': False, 'error': f'No lot found for tray ID: {tray_id}', 'tray_id': tray_id})
     except Exception as e:

@@ -196,11 +196,43 @@ class GetLotByModelAPIView(APIView):
             try:
                 total_stock = TotalStockModel.objects.filter(lot_id=tray.lot_id).first()
                 if total_stock:
+                    # Format last_process_date_time to human-readable string
+                    formatted_date = ''
+                    if total_stock.last_process_date_time:
+                        formatted_date = total_stock.last_process_date_time.strftime('%d %b %Y, %I:%M %p')
+
+                    # Determine input_type: "Recovery" only if lot came from a Recovery module
+                    input_type = 'Fresh'
+                    last_mod = (total_stock.last_process_module or '').lower()
+                    next_mod = (total_stock.next_process_module or '').lower()
+                    if 'recovery' in last_mod or 'recovery' in next_mod:
+                        input_type = 'Recovery'
+
+                    # Compute current stage lot qty based on last_process_module
+                    current_qty = total_stock.total_stock  # default: original DP qty
+                    if 'jig unloading' in last_mod or 'inprocess' in last_mod:
+                        current_qty = total_stock.jig_physical_qty or total_stock.total_stock
+                    elif 'jig' in last_mod:
+                        current_qty = total_stock.jig_physical_qty or total_stock.total_stock
+                    elif 'iqf' in last_mod:
+                        current_qty = total_stock.iqf_accepted_qty or total_stock.total_stock
+                    elif 'brass audit' in last_mod:
+                        current_qty = total_stock.brass_audit_accepted_qty or total_stock.total_stock
+                    elif 'brass' in last_mod:
+                        current_qty = total_stock.brass_qc_accepted_qty or total_stock.total_stock
+                    elif 'input' in last_mod or 'screening' in last_mod:
+                        current_qty = total_stock.total_IP_accpeted_quantity or total_stock.total_stock
+                    elif 'day' in last_mod or 'planning' in last_mod:
+                        if total_stock.dp_physical_qty_edited and total_stock.dp_physical_qty:
+                            current_qty = total_stock.dp_physical_qty
+
                     context['total_stock_details'] = {
-                        'last_process_date_time': total_stock.last_process_date_time,
+                        'last_process_date_time': formatted_date,
                         'last_process_module': total_stock.last_process_module,
                         'next_process_module': total_stock.next_process_module,
                         'total_stock': total_stock.total_stock,
+                        'input_type': input_type,
+                        'lot_qty': current_qty,
                     }
                 else:
                     context['total_stock_details'] = "TotalStockModel not found for this lot"

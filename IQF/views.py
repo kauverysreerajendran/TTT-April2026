@@ -3190,3 +3190,46 @@ def iqf_lot_details(request):
         print(f"[IQF LOT DETAILS ERROR] {e}")
         traceback.print_exc()
         return Response({'success': False, 'error': 'Server error'}, status=500)
+
+
+# ── IQF Row Hold / Unhold — Same pattern as Brass QC ──
+@method_decorator(login_required, name='dispatch')
+@method_decorator(csrf_exempt, name='dispatch')
+class IQFSaveHoldUnholdReasonAPIView(APIView):
+    """
+    POST with:
+    {
+        "lot_id": "LID...",
+        "remark": "Reason text",
+        "action": "hold"  # or "unhold"
+    }
+    """
+    def post(self, request):
+        try:
+            data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+            lot_id = data.get('lot_id')
+            remark = data.get('remark', '').strip()
+            action = data.get('action', '').strip().lower()
+
+            if not lot_id or not remark or action not in ['hold', 'unhold']:
+                return JsonResponse({'success': False, 'error': 'Missing or invalid parameters.'}, status=400)
+
+            obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if not obj:
+                return JsonResponse({'success': False, 'error': 'LOT not found.'}, status=404)
+
+            if action == 'hold':
+                obj.iqf_holding_reason = remark
+                obj.iqf_hold_lot = True
+                obj.iqf_release_reason = ''
+                obj.iqf_release_lot = False
+            elif action == 'unhold':
+                obj.iqf_release_reason = remark
+                obj.iqf_hold_lot = False
+                obj.iqf_release_lot = True
+
+            obj.save(update_fields=['iqf_holding_reason', 'iqf_release_reason', 'iqf_hold_lot', 'iqf_release_lot'])
+            return JsonResponse({'success': True, 'message': 'Reason saved.'})
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
