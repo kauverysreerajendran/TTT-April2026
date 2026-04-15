@@ -175,9 +175,13 @@ class GetLotByModelAPIView(APIView):
                         if mm and getattr(mm, 'vendor_internal', None):
                             # mm.vendor_internal is a FK to Vendor; prefer its vendor_internal field
                             try:
-                                vendor_internal_value = mm.vendor_internal.vendor_internal
+                                vendor_internal_value = mm.vendor_internal.vendor_internal or mm.vendor_internal.vendor_name
                             except Exception:
                                 vendor_internal_value = str(mm.vendor_internal)
+
+                    # Also fall back to location name if vendor_internal is still empty
+                    if not vendor_internal_value and batch.location:
+                        vendor_internal_value = batch.location.location_name
 
                     context['model_master_details'] = {
                         'model_stock_no': getattr(batch.model_stock_no, 'model_no', None),
@@ -197,9 +201,11 @@ class GetLotByModelAPIView(APIView):
                 total_stock = TotalStockModel.objects.filter(lot_id=tray.lot_id).first()
                 if total_stock:
                     # Format last_process_date_time to human-readable string
+                    # Fall back to created_at if last_process_date_time is not set (e.g. Day Planning stage)
+                    date_value = total_stock.last_process_date_time or total_stock.created_at
                     formatted_date = ''
-                    if total_stock.last_process_date_time:
-                        formatted_date = total_stock.last_process_date_time.strftime('%d %b %Y, %I:%M %p')
+                    if date_value:
+                        formatted_date = date_value.strftime('%d %b %Y, %I:%M %p')
 
                     # Determine input_type: "Recovery" only if lot came from a Recovery module
                     input_type = 'Fresh'
@@ -228,8 +234,8 @@ class GetLotByModelAPIView(APIView):
 
                     context['total_stock_details'] = {
                         'last_process_date_time': formatted_date,
-                        'last_process_module': total_stock.last_process_module,
-                        'next_process_module': total_stock.next_process_module,
+                        'last_process_module': total_stock.last_process_module or 'Day Planning',
+                        'next_process_module': total_stock.next_process_module or 'Input Screening',
                         'total_stock': total_stock.total_stock,
                         'input_type': input_type,
                         'lot_qty': current_qty,
