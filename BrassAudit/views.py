@@ -31,9 +31,6 @@ from Jig_Loading.models import *
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
 
-# Import the reverse transfer function from Brass QC
-from Brass_QC.views import send_brass_audit_back_to_brass_qc
-
  
 
 
@@ -1280,31 +1277,14 @@ class BAuditBatchRejectionAPIView(APIView):
             updated_trays_count = BrassAuditTrayId.objects.filter(lot_id=lot_id).update(rejected_tray=True)
 
             # Transfer batch-level audit rejection to Brass QC for pick/tray-scan visibility
-            # NOTE: Brass_Audit_Rejection_ReasonStore is created AFTER reverse transfer because
-            # send_brass_audit_back_to_brass_qc deletes all BA records including rejection store.
             try:
-                # ✅ IMPROVED: Use the new reverse transfer function that reuses existing trays
-                # Call the new reverse transfer function that prevents duplication
-                reverse_transfer_success = send_brass_audit_back_to_brass_qc(lot_id, request.user)
-                
-                if reverse_transfer_success:
-                    print(f"✅ [BAuditBatchRejectionAPIView] Successfully sent lot {lot_id} back to Brass QC using reverse transfer")
-                    
-                    # ✅ FIX: Don't set flags to appear in Brass QC - rejected lot goes to Jig Loading
-                    print(f"✅ [BAuditBatchRejectionAPIView] Rejected lot {lot_id} will proceed to Jig Loading")
-                else:
-                    print(f"⚠️ [BAuditBatchRejectionAPIView] Reverse transfer failed, falling back to original transfer method")
-                    # Fallback to the original transfer method if needed
-                    transfer_brass_audit_rejections_to_brass_qc(lot_id, request.user, batch_rejection=True, lot_comment=lot_rejected_comment)
-                    
+                transfer_brass_audit_rejections_to_brass_qc(lot_id, request.user, batch_rejection=True, lot_comment=lot_rejected_comment)
+                print(f"✅ [BAuditBatchRejectionAPIView] Rejected lot {lot_id} will proceed to Jig Loading")
             except Exception as e:
                 print(f"⚠️ [BAuditBatchRejectionAPIView] Failed to transfer batch rejection to Brass QC: {e}")
                 traceback.print_exc()
-                # Fallback to original method
-                transfer_brass_audit_rejections_to_brass_qc(lot_id, request.user, batch_rejection=True, lot_comment=lot_rejected_comment)
 
-            # ✅ Create Brass_Audit_Rejection_ReasonStore AFTER reverse transfer so it is NOT
-            # deleted by send_brass_audit_back_to_brass_qc (which clears all BA data first).
+            # Create Brass_Audit_Rejection_ReasonStore
             Brass_Audit_Rejection_ReasonStore.objects.update_or_create(
                 lot_id=lot_id,
                 defaults={

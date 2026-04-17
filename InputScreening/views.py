@@ -1290,22 +1290,52 @@ def reject_check_tray_id_simple(request):
         # ✅ FIXED: Check if it's a new tray from TrayId table
         is_new_tray = getattr(tray_id_obj, 'new_tray', False)
 
-        # ✅ FIX: Cross-lot tray = NEW tray. If TrayId.lot_id ≠ current_lot → treat as new.
+        # ✅ FIX: Cross-lot tray check — only allow if tray is actually FREE in TrayId table
         if not is_new_tray and tray_id_obj.lot_id:
             if str(tray_id_obj.lot_id).strip() != str(current_lot_id).strip():
-                print(f"[Simple Validation] Cross-lot tray {tray_id} (belongs to {tray_id_obj.lot_id}) → treating as NEW for lot {current_lot_id}")
-                is_new_tray = True
+                # Tray belongs to another lot — check if it's actually free (delinked)
+                if getattr(tray_id_obj, 'delink_tray', False):
+                    print(f"[Simple Validation] Cross-lot tray {tray_id} (lot {tray_id_obj.lot_id}) is DELINKED → treating as NEW for lot {current_lot_id}")
+                    is_new_tray = True
+                else:
+                    # Tray is actively in use by another lot — REJECT
+                    print(f"[Simple Validation] Cross-lot tray {tray_id} is IN USE by lot {tray_id_obj.lot_id} → NOT allowed")
+                    return JsonResponse({
+                        'exists': False,
+                        'valid_for_rejection': False,
+                        'error': f'Tray {tray_id} is currently in use by lot {tray_id_obj.lot_id}',
+                        'status_message': f'In use by another lot ({tray_id_obj.lot_id})'
+                    })
 
-        # ✅ UPDATED: Handle new trays (genuinely new OR cross-lot)
+        # ✅ UPDATED: Handle new trays (genuinely new OR delinked cross-lot)
         if is_new_tray:
             if tray_id_obj.lot_id and str(tray_id_obj.lot_id).strip() == str(current_lot_id).strip():
                 # Already in current lot → treat as existing tray
                 print(f"[Simple Validation] NEW tray already assigned to current lot {current_lot_id}")
                 is_new_tray = False
             else:
-                # TRUE NEW TRAY (no lot_id) OR CROSS-LOT TRAY → treat as new
+                # ✅ DYNAMIC CHECK: Verify tray is actually free in TrayId table before allowing
+                tray_is_free = False
+                if not tray_id_obj.lot_id:
+                    # No lot assigned → genuinely free
+                    tray_is_free = True
+                elif getattr(tray_id_obj, 'delink_tray', False):
+                    # Delinked → free for reuse
+                    tray_is_free = True
+                
+                if not tray_is_free:
+                    # Tray has lot_id and is not delinked → in use by another lot
+                    print(f"[Simple Validation] Tray {tray_id} is NOT free (lot: {tray_id_obj.lot_id}, delink: {getattr(tray_id_obj, 'delink_tray', False)}) → REJECTED")
+                    return JsonResponse({
+                        'exists': False,
+                        'valid_for_rejection': False,
+                        'error': f'Tray {tray_id} is currently in use by lot {tray_id_obj.lot_id}',
+                        'status_message': f'In use by another lot ({tray_id_obj.lot_id})'
+                    })
+
+                # TRUE NEW TRAY (no lot_id) OR DELINKED CROSS-LOT TRAY → treat as new
                 if tray_id_obj.lot_id:
-                    print(f"[Simple Validation] Cross-lot tray {tray_id}: {tray_id_obj.lot_id} → NEW for lot {current_lot_id}")
+                    print(f"[Simple Validation] Delinked cross-lot tray {tray_id}: {tray_id_obj.lot_id} → FREE for lot {current_lot_id}")
                 else:
                     print(f"[Simple Validation] TRUE NEW tray - new_tray=True and lot_id is empty")
 
@@ -1493,6 +1523,42 @@ def reject_check_tray_id_simple(request):
                         can_use_existing_tray = True
                         valid_tray_info.append(f"Tray{i+1}({tray_qty})")
                         
+            # ✅ FALLBACK: Global capacity check — after ALL rejections, do remaining
+            # good pieces need fewer trays than the lot originally had?
+            # This handles the case where per-tray free-space check fails because
+            # other trays are full, but total rejection frees up entire trays.
+            if not can_use_existing_tray:
+                try:
+                    original_dist = get_original_tray_distribution(current_lot_id)
+                    original_total = sum(original_dist)
+                    original_tray_count = len(original_dist)
+                    tray_cap = get_tray_capacity_for_lot(current_lot_id)
+
+                    # Sum saved rejections
+                    saved_rej_total = 0
+                    for r in IP_Rejected_TrayScan.objects.filter(lot_id=current_lot_id):
+                        saved_rej_total += int(r.rejected_tray_quantity or 0)
+
+                    # Sum ALL current session allocations (including same-reason)
+                    session_rej_total = sum(int(a.get('qty', 0)) for a in current_session_allocations)
+
+                    total_all_rejections = saved_rej_total + session_rej_total + rejection_qty
+                    remaining_good = original_total - total_all_rejections
+
+                    trays_needed = ceil(remaining_good / tray_cap) if remaining_good > 0 else 0
+
+                    print(f"[Simple Validation] GLOBAL FALLBACK: original_total={original_total}, "
+                          f"total_rej={total_all_rejections}, remaining_good={remaining_good}, "
+                          f"trays_needed={trays_needed}, original_trays={original_tray_count}")
+
+                    if remaining_good >= 0 and trays_needed < original_tray_count:
+                        can_use_existing_tray = True
+                        valid_tray_info.append(
+                            f"GlobalCapacity(good:{remaining_good}, needed:{trays_needed}, original:{original_tray_count})"
+                        )
+                except Exception as fallback_err:
+                    print(f"[Simple Validation] Global fallback error: {fallback_err}")
+
             if can_use_existing_tray:
                 return JsonResponse({
                     'exists': True,
