@@ -885,6 +885,12 @@
     color: #1976d2;
   }
 
+  .lot-status-released {
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    border-color: #43a047;
+    color: #2e7d32;
+  }
+
   .lot-status-partial-draft {
     background: linear-gradient(135deg, #e8e8e8, #d5d5d5);
     border-color: #555;

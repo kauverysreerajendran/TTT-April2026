@@ -1018,12 +1018,12 @@
                               <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
                               <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th data-column-index="11" class="sortable">
+                           <!-- <th data-column-index="11" class="sortable">
                               Physical <br> Qty
                               <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
                               <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
                               <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
-                           </th>
+                           </th> -->
                            <th data-column-index="12" class="sortable">
                               Accept Qty
                               <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
@@ -1138,14 +1138,9 @@
                               data-lot-id="{{ data.stock_lot_id }}"
                               style="width: 15px; height: 15px"
                               {% if data.brass_qc_accepted_qty_verified %}checked disabled{% endif %} />
-                              <input type="text"
-                              class="missing-qty-input"
-                              value="{{ data.brass_missing_qty|default_if_none:'' }}"
-                              style="width: 36px; padding: 1px 3px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px;"
-                              {% if data.brass_qc_accepted_qty_verified %}disabled{% endif %} />
                               </span>
                            </td>
-                           <td>{{ data.brass_physical_qty }}</td>
+                           <!-- <td>{{ data.brass_physical_qty }}</td> -->
                            <td >
                               {{ data.brass_qc_accepted_qty|default:0 }}    
                            </td>
@@ -1209,6 +1204,21 @@
                                  ">
                               <i class="fa fa-check-circle"></i>Accepted
                               </span>
+                              {% elif data.brass_qc_few_cases_accptance %}
+                              <!-- Show "Partially Accepted" status — check before brass_qc_rejection (PARTIAL sets both) -->
+                              <span class="status-badge partial-accepted" style="
+                                 background-color: #fb9393; 
+                                 color: white; 
+                                 padding: 6px 12px; 
+                                 border-radius: 20px; 
+                                 font-size: 12px; 
+                                 font-weight: 600;
+                                 display: inline-flex;
+                                 align-items: center;
+                                 gap: 4px;
+                                 ">
+                              <i class="fa fa-adjust"></i>Partially Accepted
+                              </span>
                               {% elif data.brass_qc_rejection %}
                               <!-- Show "Rejected" status -->
                               <span class="status-badge rejected" style="
@@ -1223,21 +1233,6 @@
                                  gap: 4px;
                                  ">
                               <i class="fa fa-times-circle"></i>Rejected
-                              </span>
-                              {% elif data.brass_qc_few_cases_accptance %}
-                              <!-- Show "Partial Reject" status -->
-                              <span class="status-badge partial-rejected" style="
-                                 background-color: #fb9393; 
-                                 color: white; 
-                                 padding: 6px 12px; 
-                                 border-radius: 20px; 
-                                 font-size: 12px; 
-                                 font-weight: 600;
-                                 display: inline-flex;
-                                 align-items: center;
-                                 gap: 4px;
-                                 ">
-                              <i class="fa fa-adjust"></i>Partial Rejected
                               </span>
                               {% endif %}
                               <!-- Eye icon to view submitted "Tray Scan Table" -->
@@ -1403,9 +1398,9 @@
                                     </div>
                                   </div>
                                   <p style="margin: 0 0 0 2px;">
-                                    Lot Qty: <span id="modalLotQty_DayPlanning" style="font-weight:bold; color:#e67e22;"></span> /
-                                    Missing Qty: <span id="modalMissingQty_DayPlanning" style="font-weight:bold; color:#d32f2f;"></span> /
-                                    Physical Qty: <span id="modalPhysicalQty_DayPlanning" style="font-weight:bold; color:#388e3c;"></span>
+                                    Lot Qty: <span id="modalLotQty_DayPlanning" style="font-weight:bold; color:#e67e22;"></span> 
+                                    <!-- Missing Qty: <span id="modalMissingQty_DayPlanning" style="font-weight:bold; color:#d32f2f;"></span> /
+                                    Physical Qty: <span id="modalPhysicalQty_DayPlanning" style="font-weight:bold; color:#388e3c;"></span> -->
                                   </p>
                                 </div>
                             </div>
@@ -2374,27 +2369,24 @@
            modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
          }
    
-         // ✅ UPDATED: Fetch tray data with rejection information using correct endpoint
+         // ✅ FIXED: Use unified action API (GET_SUBMISSION_TRAYS) — reads from Brass_QC_Submission
          let traysData = [];
          let rejectionSummary = {};
          try {
-           const params = new URLSearchParams({
-             batch_id: batchId,
-             stock_lot_id: stockLotId,
-             lot_id: stockLotId,
-             brass_qc_accptance: brassQcAccptance,
-             brass_qc_rejection: brassQcRejection,
-             brass_qc_few_cases_accptance: brassQcFewCasesAccptance
+           const resp = await fetch('/brass_qc/api/action/', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+             body: JSON.stringify({ action: 'GET_SUBMISSION_TRAYS', lot_id: stockLotId }),
            });
-           
-           // ✅ UPDATED: Use correct endpoint name
-           const resp = await fetch(`/brass_qc/AfterCheck_pick_CompleteTable_tray_id_list/?${params}`);
            const result = await resp.json();
            if (result.success) {
              traysData = result.trays || [];
-             rejectionSummary = result.rejection_summary || {};
-             console.log('✅ Fetched trays with rejection data:', traysData);
-             console.log('📊 Rejection summary:', rejectionSummary);
+             // Update modal header with submission data
+             if (modalLotQty && result.total_lot_qty !== undefined) modalLotQty.textContent = result.total_lot_qty;
+             if (modalMissingQty && result.rejected_qty !== undefined) modalMissingQty.textContent = result.rejected_qty;
+             if (modalPhysicalQty && result.accepted_qty !== undefined) modalPhysicalQty.textContent = result.accepted_qty;
+             rejectionSummary = { accepted_qty: result.accepted_qty, rejected_qty: result.rejected_qty };
+             console.log('✅ Fetched submission trays:', traysData);
            }
          } catch (e) {
            console.error('❌ Error fetching tray data:', e);
@@ -3815,14 +3807,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-        // ✅ Use correct API endpoint with batch_id and lot_id for accurate rejection data
-        const apiUrl = batchId 
-            ? `/brass_qc/AfterCheck_pick_CompleteTable_tray_id_list/?batch_id=${encodeURIComponent(batchId)}&lot_id=${encodeURIComponent(lotId)}`
-            : `/brass_qc/AfterCheck_pick_CompleteTable_tray_id_list/?lot_id=${encodeURIComponent(lotId)}`;
-        
-        console.log('📍 API Endpoint:', apiUrl);
+        // ✅ FIXED: Use unified action API (GET_SUBMISSION_TRAYS) — reads from Brass_QC_Submission
+        // The old AfterCheck_pick_CompleteTable_tray_id_list endpoint is not registered in active urls.py
+        console.log('📍 API: POST /brass_qc/api/action/ action=GET_SUBMISSION_TRAYS lot_id=' + lotId);
 
-        fetch(apiUrl, {
+        fetch('/brass_qc/api/action/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: JSON.stringify({ action: 'GET_SUBMISSION_TRAYS', lot_id: lotId }),
             signal: controller.signal
         })
             .then(response => {
@@ -3833,13 +3828,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
-                console.log('✅ Tray details fetched:', data);
+                console.log('✅ Submission trays fetched:', data);
                 
                 // Check if data is valid
                 if (!data || typeof data !== 'object') {
                     throw new Error('Invalid response format');
                 }
-                
+
+                // Update modal header with actual submission values
+                const lotQtyEl = document.getElementById('modalLotQty_DayPlanning');
+                const missingQtyEl = document.getElementById('modalMissingQty_DayPlanning');
+                const physicalQtyEl = document.getElementById('modalPhysicalQty_DayPlanning');
+                if (lotQtyEl && data.total_lot_qty !== undefined) lotQtyEl.textContent = data.total_lot_qty;
+                if (missingQtyEl && data.rejected_qty !== undefined) missingQtyEl.textContent = data.rejected_qty;
+                if (physicalQtyEl && data.accepted_qty !== undefined) physicalQtyEl.textContent = data.accepted_qty;
+
                 // Check if we got an empty array when we expected data
                 // For completed lots, empty trays is normal - don't retry
                 if (data.success && (!data.trays || data.trays.length === 0)) {
@@ -4082,6 +4085,56 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     console.log('✅ Brass QC Completed Tray View functionality initialized');
+});
+</script>
+
+<!-- ✅ NEW: Real-time Process Status Q Green Fill on Checkbox Click -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  const checkboxes = document.querySelectorAll('.brass-checkbox');
+  console.log(`[BrassQC Completed] Found ${checkboxes.length} qty verification checkboxes`);
+
+  checkboxes.forEach(function(cb) {
+    cb.addEventListener('change', async function() {
+      const lotId = cb.dataset.lotId;
+      const verified = cb.checked;
+      const row = cb.closest('tr');
+
+      try {
+        const resp = await fetch('/brass_qc/api/toggle-verified/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}',
+          },
+          body: JSON.stringify({ lot_id: lotId, verified: verified }),
+        });
+        const result = await resp.json();
+
+        if (result.success && row) {
+          // Find the Q circle in this row's Process Status column (column 14)
+          const qCircle = row.querySelector('[data-bs-original-title="Quantity"]');
+          if (qCircle) {
+            // Instantly update Q circle color to green
+            if (verified) {
+              qCircle.style.backgroundColor = '#0c8249'; // Green
+            } else {
+              qCircle.style.backgroundColor = '#bdbdbd'; // Gray
+            }
+            console.log(`✅ [BrassQC Completed] Updated Q circle for lot ${lotId} to ${verified ? 'green' : 'gray'}`);
+          }
+        } else if (!result.success) {
+          cb.checked = !verified; // Revert on failure
+          alert('Failed to save: ' + (result.error || 'Unknown error'));
+          console.error(`❌ [BrassQC Completed] Failed to toggle verified for lot ${lotId}`);
+        }
+      } catch (err) {
+        cb.checked = !verified; // Revert on network error
+        console.error('[BrassQC Completed] Toggle verified error:', err);
+        alert('Network error saving checkbox.');
+      }
+    });
+  });
 });
 </script>
 

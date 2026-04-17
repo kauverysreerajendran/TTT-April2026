@@ -26,7 +26,7 @@ from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from rest_framework import exceptions
 from BrassAudit.models import Brass_Audit_Accepted_TrayID_Store
-from BrassAudit.views import brass_audit_get_accepted_tray_scan_data
+# from BrassAudit.views import brass_audit_get_accepted_tray_scan_data
 from modelmasterapp.models import TotalStockModel
 from modelmasterapp.models import ModelMasterCreation
 
@@ -54,18 +54,18 @@ def allocate_trays_for_model(lot_id, model_lot_qty, effective_capacity_remaining
 		tray_info = []
 		total_allocated = 0
 		
-		# Fetch trays for this specific lot_id
-		qs = JigLoadTrayId.objects.filter(lot_id=lot_id).order_by('id')
+		# Fetch trays for this specific lot_id — unified resolver (JigLoadTrayId → BrassAuditTrayId → BrassTrayId)
+		tray_list = fetch_trays_for_lot(lot_id)
 		
-		for tray_obj in qs:
-			tray_id = getattr(tray_obj, 'tray_id', '')
+		for tray_item in tray_list:
+			tray_id = tray_item.get('tray_id', '')
 			
 			# Skip if already used by another model
 			if tray_id in used_tray_ids:
 				logging.warning(f"[MULTI_MODEL] Tray {tray_id} skipped (already allocated)")
 				continue
 			
-			tray_qty = int(getattr(tray_obj, 'tray_quantity', 0) or 0)
+			tray_qty = int(tray_item.get('qty', 0) or 0)
 			
 			# Stop if we've met this model's quota
 			if total_allocated >= model_lot_qty:
@@ -280,29 +280,16 @@ class JigView(TemplateView):
 			print(f"[JIG PERF] extracted {len(qs_lot_ids)} lot_ids: {_t_extract - _t_extract_start:.3f}s")
 			
 			try:
-				# FIX 2: FILTER aggregation queries by lot_ids (not whole table!)
+				# FIX 2: DYNAMICALLY fetch tray counts using unified resolver (not hardcoded table)
 				if qs_lot_ids:
-					from django.db.models import Count, Q as _QQ
-					saved_tray_counts = dict(
-						Brass_Audit_Accepted_TrayID_Store.objects
-						.filter(lot_id__in=qs_lot_ids, is_save=True)
-						.values('lot_id')
-						.annotate(cnt=Count('id'))
-						.values_list('lot_id', 'cnt')
-					)
-					all_tray_counts = dict(
-						Brass_Audit_Accepted_TrayID_Store.objects
-						.filter(lot_id__in=qs_lot_ids)
-						.values('lot_id')
-						.annotate(cnt=Count('id'))
-						.values_list('lot_id', 'cnt')
-					)
+					tray_counts = {}
+					for lot_id in qs_lot_ids:
+						tray_counts[lot_id] = count_trays_for_lot(lot_id)
 				else:
-					saved_tray_counts = {}
-					all_tray_counts = {}
-			except Exception:
-				saved_tray_counts = {}
-				all_tray_counts = {}
+					tray_counts = {}
+			except Exception as e:
+				logging.exception(f'[JIG PICK] Failed to count trays dynamically: {e}')
+				tray_counts = {}
 			try:
 				master_capacity_map = {
 					m.model_stock_no_id: int(m.jig_capacity)
@@ -316,8 +303,8 @@ class JigView(TemplateView):
 
 			for stock in qs_list:
 				batch = getattr(stock, 'batch_id', None)
-				# Use pre-fetched tray counts (no per-row DB query)
-				no_of_trays = saved_tray_counts.get(stock.lot_id, 0) or all_tray_counts.get(stock.lot_id, 0)
+				# Use dynamically fetched tray counts (unified resolver: JigLoadTrayId → BrassAuditTrayId → BrassTrayId)
+				no_of_trays = tray_counts.get(stock.lot_id, 0)
 				data = {
 					'batch_id': getattr(batch, 'batch_id', '') if batch else '',
 					'stock_lot_id': getattr(stock, 'lot_id', ''),
@@ -373,6 +360,37 @@ class JigView(TemplateView):
 					).select_related('batch_id', 'batch_id__model_stock_no'):
 						excess_stock_map[s.lot_id] = s
 
+				# Bulk prefetch ExcessLotRecord to get real excess lot IDs (EX-*)
+				excess_lot_record_map = {}  # key: (parent_lot_id, batch_id, jig_id) → ExcessLotRecord
+				if excess_lot_ids:
+					for elr in ExcessLotRecord.objects.filter(parent_lot_id__in=list(excess_lot_ids)).order_by('-created_at'):
+						key = (elr.parent_lot_id, elr.parent_batch_id, elr.jig_id)
+						if key not in excess_lot_record_map:
+							excess_lot_record_map[key] = elr
+
+				# Bulk prefetch submitted EX-* lot_ids to skip excess lots already submitted
+				submitted_excess_lot_ids = set()
+				all_excess_new_lot_ids = set(elr.new_lot_id for elr in excess_lot_record_map.values() if elr.new_lot_id)
+				if all_excess_new_lot_ids:
+					# Check both direct submissions and secondary lot references in multi-model submissions
+					submitted_excess_lot_ids = set(
+						JigCompleted.objects.filter(
+							lot_id__in=list(all_excess_new_lot_ids),
+							draft_status='submitted'
+						).values_list('lot_id', flat=True)
+					)
+					# Also check if any EX-* lot appears as a secondary in a submitted multi-model
+					for rec in JigCompleted.objects.filter(
+						draft_status='submitted',
+						is_multi_model=True,
+						multi_model_allocation__isnull=False
+					).only('multi_model_allocation')[:100]:
+						if rec.multi_model_allocation:
+							for m in rec.multi_model_allocation:
+								mlot = m.get('lot_id', '') if isinstance(m, dict) else ''
+								if mlot in all_excess_new_lot_ids:
+									submitted_excess_lot_ids.add(mlot)
+
 				for jc in submitted_with_excess:
 					# For multi-model, find which source lot the excess trays belong to
 					# by cross-referencing half_filled_tray_info tray_ids with all tray data
@@ -404,9 +422,20 @@ class JigView(TemplateView):
 					# Look up stock model from bulk-prefetched map (no per-row DB query)
 					stock = excess_stock_map.get(excess_source_lot) or excess_stock_map.get(jc.lot_id)
 					batch = getattr(stock, 'batch_id', None) if stock else None
+
+					# Resolve real excess lot ID (EX-*) from ExcessLotRecord
+					elr_key = (jc.lot_id, jc.batch_id, jc.jig_id)
+					excess_lot_record = excess_lot_record_map.get(elr_key)
+					real_excess_lot_id = excess_lot_record.new_lot_id if excess_lot_record else excess_source_lot
+
+					# Skip excess lots that have already been submitted
+					if real_excess_lot_id in submitted_excess_lot_ids:
+						logging.info(f'[JIG PICK] Skipping excess lot {real_excess_lot_id} — already submitted')
+						continue
+
 					excess_data = {
 						'batch_id': jc.batch_id,
-						'stock_lot_id': excess_source_lot,
+						'stock_lot_id': real_excess_lot_id,
 						'plating_stk_no': excess_model_name if excess_model_name else (jc.plating_stock_num or ''),
 						'polishing_stk_no': getattr(batch, 'polishing_stk_no', '') if batch else '',
 						'plating_color': getattr(batch, 'plating_color', '') if batch else '',
@@ -468,10 +497,18 @@ class JigView(TemplateView):
 										draft_lot_ids.add(mlot)
 
 					for d in master_data:
-						# Excess lots are always fresh — never inherit draft status
+						# Excess lots: check if they have an active draft
 						if d.get('is_excess_lot'):
-							d['lot_status'] = 'Yet to Start'
-							d['lot_status_class'] = 'lot-status-yet'
+							excess_lot_id_val = d.get('stock_lot_id', '')
+							if excess_lot_id_val in draft_lot_ids:
+								d['lot_status'] = 'Draft'
+								d['lot_status_class'] = 'lot-status-draft'
+							elif excess_lot_id_val in partial_draft_lot_ids:
+								d['lot_status'] = 'Partial Draft'
+								d['lot_status_class'] = 'lot-status-partial-draft'
+							else:
+								d['lot_status'] = 'Released'
+								d['lot_status_class'] = 'lot-status-released'
 						elif d.get('stock_lot_id') in draft_lot_ids:
 							d['lot_status'] = 'Draft'
 							d['lot_status_class'] = 'lot-status-draft'
@@ -514,16 +551,7 @@ class TrayInfoView(APIView):
 			return Response({'trays': []})
 
 		try:
-			qs = JigLoadTrayId.objects.filter(lot_id=lot_id).order_by('id')
-			trays = []
-			for t in qs:
-				trays.append({
-					'tray_id': getattr(t, 'tray_id', ''),
-					'qty': int(getattr(t, 'tray_quantity', 0) or 0),
-					'top_tray': bool(getattr(t, 'top_tray', False) or False),
-					'rejected': bool(getattr(t, 'rejected_tray', False) or False),
-					'delinked': bool(getattr(t, 'delink_tray', False) or False),
-				})
+			trays = fetch_trays_for_lot(lot_id)
 			return Response({'trays': trays})
 		except Exception:
 			logging.exception('TrayInfoView failed')
@@ -580,21 +608,9 @@ class InitJigLoad(APIView):
 		# Try to fetch an existing draft if present, but do not create one.
 		draft = JigCompleted.objects.filter(batch_id=batch_id, lot_id=lot_id, user=request.user, draft_status__in=['draft', 'active']).first()
 
-		# Fetch trays directly from DB (single source of truth)
+		# Fetch trays directly from DB — unified resolver (JigLoadTrayId → BrassAuditTrayId → BrassTrayId)
 		try:
-			trays = []
-			try:
-				qs = JigLoadTrayId.objects.filter(lot_id=lot_id).order_by('id')
-				for t in qs:
-					trays.append({
-						'tray_id': getattr(t, 'tray_id', ''),
-						'qty': int(getattr(t, 'tray_quantity', 0) or 0),
-						'top_tray': bool(getattr(t, 'top_tray', False) or False),
-						'rejected': bool(getattr(t, 'rejected_tray', False) or False),
-						'delinked': bool(getattr(t, 'delink_tray', False) or False),
-					})
-			except Exception:
-				trays = []
+			trays = fetch_trays_for_lot(lot_id)
 		except Exception:
 			trays = []
 
@@ -885,11 +901,12 @@ class InitJigLoad(APIView):
 					partial_tray_id = None
 					if secondary_result['tray_info']:
 						last_alloc = secondary_result['tray_info'][-1]
-						# Find original tray qty to detect partial usage
+						# Find original tray qty to detect partial usage — unified resolver
 						try:
-							orig_tray = JigLoadTrayId.objects.filter(lot_id=sec_lot_id, tray_id=last_alloc['tray_id']).first()
-							if orig_tray:
-								orig_qty = int(getattr(orig_tray, 'tray_quantity', 0) or 0)
+							_all_sec_trays = fetch_trays_for_lot(sec_lot_id)
+							_orig = next((t for t in _all_sec_trays if t.get('tray_id') == last_alloc['tray_id']), None)
+							if _orig:
+								orig_qty = int(_orig.get('qty', 0) or 0)
 								if last_alloc['qty'] < orig_qty:
 									partial_remainder = orig_qty - last_alloc['qty']
 									partial_tray_id = last_alloc['tray_id']
@@ -934,15 +951,15 @@ class InitJigLoad(APIView):
 						# 2) Continue with unallocated trays from same lot for remaining excess
 						if excess_remaining > 0:
 							try:
-								excess_qs = JigLoadTrayId.objects.filter(lot_id=sec_lot_id).order_by('id')
-								for tray_obj in excess_qs:
+								excess_tray_list = fetch_trays_for_lot(sec_lot_id)
+								for tray_item in excess_tray_list:
 									if excess_remaining <= 0:
 										break
-									tid = getattr(tray_obj, 'tray_id', '')
+									tid = tray_item.get('tray_id', '')
 									# Skip already allocated trays
 									if tid in used_tray_ids:
 										continue
-									tq = int(getattr(tray_obj, 'tray_quantity', 0) or 0)
+									tq = int(tray_item.get('qty', 0) or 0)
 									hf_qty = min(tq, excess_remaining)
 									mm_half_filled_tray_info.append({
 										'tray_id': tid,
@@ -2108,6 +2125,12 @@ def fetch_lot_data(lot_id, batch_id, jig_capacity_override=None):
 				or getattr(stock, 'brass_audit_physical_qty', None)
 				or getattr(stock, 'total_stock', 0) or 0
 			)
+		else:
+			# Fallback: check if this is an excess lot (EX-* prefix)
+			excess_rec = ExcessLotRecord.objects.filter(new_lot_id=lot_id).first()
+			if excess_rec:
+				lot_qty = int(excess_rec.lot_qty or 0)
+				logging.info(f'[FETCH_LOT_DATA] Excess lot {lot_id} resolved via ExcessLotRecord — qty={lot_qty}')
 	except Exception:
 		logging.exception('fetch_lot_data: lot qty fetch failed')
 
@@ -2192,21 +2215,97 @@ def fetch_lot_data(lot_id, batch_id, jig_capacity_override=None):
 
 
 def fetch_trays_for_lot(lot_id):
-	"""Fetch tray records for a lot from JigLoadTrayId."""
+	"""Unified tray resolver — single source of truth for Jig Loading.
+
+	Priority chain:
+	  0. ExcessLotTray  — excess lot's own trays (highest priority for EX-* lots)
+	  1. JigLoadTrayId  — Jig's own table (most authoritative)
+	  2. BrassAuditTrayId — trays synced after Brass Audit acceptance
+	  3. BrassTrayId (Brass QC) — upstream fallback
+
+	Logs the source so tray origin is always traceable.
+	"""
 	trays = []
+	source = 'none'
+
+	# Priority 0: ExcessLotTray — excess lot trays (for EX-* lots)
+	try:
+		excess_trays_qs = ExcessLotTray.objects.filter(lot_id=lot_id).order_by('id')
+		if excess_trays_qs.exists():
+			source = 'ExcessLotTray'
+			for t in excess_trays_qs:
+				trays.append({
+					'tray_id': t.tray_id or '',
+					'qty': int(t.qty or 0),
+					'top_tray': False,
+					'rejected': False,
+					'delinked': False,
+				})
+			logging.info(f'[TRAY SOURCE] lot_id={lot_id}, source={source}, count={len(trays)}')
+			return trays
+	except Exception:
+		logging.exception('fetch_trays_for_lot ExcessLotTray query failed')
+
 	try:
 		qs = JigLoadTrayId.objects.filter(lot_id=lot_id).order_by('id')
-		for t in qs:
-			trays.append({
-				'tray_id': getattr(t, 'tray_id', ''),
-				'qty': int(getattr(t, 'tray_quantity', 0) or 0),
-				'top_tray': bool(getattr(t, 'top_tray', False) or False),
-				'rejected': bool(getattr(t, 'rejected_tray', False) or False),
-				'delinked': bool(getattr(t, 'delink_tray', False) or False),
-			})
+		if qs.exists():
+			source = 'JigLoadTrayId'
+			for t in qs:
+				trays.append({
+					'tray_id': getattr(t, 'tray_id', ''),
+					'qty': int(getattr(t, 'tray_quantity', 0) or 0),
+					'top_tray': bool(getattr(t, 'top_tray', False) or False),
+					'rejected': bool(getattr(t, 'rejected_tray', False) or False),
+					'delinked': bool(getattr(t, 'delink_tray', False) or False),
+				})
 	except Exception:
-		logging.exception('fetch_trays_for_lot failed')
+		logging.exception('fetch_trays_for_lot JigLoadTrayId query failed')
+
+	if not trays:
+		try:
+			from BrassAudit.models import BrassAuditTrayId as _BATrayId
+			ba_qs = _BATrayId.objects.filter(
+				lot_id=lot_id, delink_tray=False, rejected_tray=False
+			).order_by('id')
+			if ba_qs.exists():
+				source = 'BrassAuditTrayId'
+				for t in ba_qs:
+					trays.append({
+						'tray_id': getattr(t, 'tray_id', ''),
+						'qty': int(getattr(t, 'tray_quantity', 0) or 0),
+						'top_tray': bool(getattr(t, 'top_tray', False) or False),
+						'rejected': False,
+						'delinked': False,
+					})
+		except Exception:
+			logging.exception('fetch_trays_for_lot BrassAuditTrayId query failed')
+
+	if not trays:
+		try:
+			from Brass_QC.models import BrassTrayId as _BQTrayId
+			bq_qs = _BQTrayId.objects.filter(
+				lot_id=lot_id, delink_tray=False
+			).order_by('id')
+			if bq_qs.exists():
+				source = 'BrassTrayId'
+				for t in bq_qs:
+					trays.append({
+						'tray_id': getattr(t, 'tray_id', ''),
+						'qty': int(getattr(t, 'tray_quantity', 0) or 0),
+						'top_tray': bool(getattr(t, 'top_tray', False) or False),
+						'rejected': False,
+						'delinked': False,
+					})
+		except Exception:
+			logging.exception('fetch_trays_for_lot BrassTrayId query failed')
+
+	logging.info(f'[TRAY SOURCE] lot_id={lot_id}, source={source}, count={len(trays)}')
 	return trays
+
+
+def count_trays_for_lot(lot_id):
+	"""Count trays for a lot using the unified resolver. Returns count only (no details)."""
+	return len(fetch_trays_for_lot(lot_id))
 
 
 def aggregate_multi_model_trays(primary_lot_id, secondary_lots):
@@ -2241,19 +2340,56 @@ def aggregate_multi_model_trays(primary_lot_id, secondary_lots):
 
 def validate_tray_for_scan(tray_id, lot_id, already_scanned_ids=None, allow_reuse_delink=False, allow_new_half_filled=False):
 	"""Validate a tray ID for scanning.
-	Returns: (is_valid, tray_qty, validation_status, message)"""
+	Returns: (is_valid, tray_qty, validation_status, message)
+	Falls back to BrassAuditTrayId and BrassTrayId if not found in JigLoadTrayId.
+	"""
 	if not tray_id or not lot_id:
 		return False, 0, 'error', 'tray_id and lot_id are required'
 	if already_scanned_ids and tray_id in already_scanned_ids and not allow_reuse_delink:
 		return False, 0, 'duplicate', 'Tray already scanned'
 	try:
+		# Priority 0: ExcessLotTray (for EX-* excess lots)
+		if lot_id and lot_id.startswith('EX-'):
+			try:
+				excess_tray = ExcessLotTray.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
+				if excess_tray:
+					tray_qty = int(excess_tray.qty or 0)
+					logging.info(f'[VALIDATE TRAY] tray_id={tray_id} resolved via ExcessLotTray for excess lot {lot_id}')
+					return True, tray_qty, 'success', 'Tray validated'
+			except Exception:
+				pass
+
+		# Priority 1: JigLoadTrayId
 		tray = JigLoadTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
-		if not tray:
-			if allow_new_half_filled:
-				return True, 0, 'success', 'New tray accepted'
-			return False, 0, 'invalid_tray', 'Invalid tray or wrong lot'
-		tray_qty = int(tray.tray_quantity or 0)
-		return True, tray_qty, 'success', 'Tray validated'
+		if tray:
+			tray_qty = int(tray.tray_quantity or 0)
+			return True, tray_qty, 'success', 'Tray validated'
+
+		# Priority 2: BrassAuditTrayId
+		try:
+			from BrassAudit.models import BrassAuditTrayId as _BATrayId
+			ba_tray = _BATrayId.objects.filter(tray_id=tray_id, lot_id=lot_id, delink_tray=False, rejected_tray=False).first()
+			if ba_tray:
+				tray_qty = int(ba_tray.tray_quantity or 0)
+				logging.info(f'[VALIDATE TRAY] tray_id={tray_id} resolved via BrassAuditTrayId')
+				return True, tray_qty, 'success', 'Tray validated'
+		except Exception:
+			pass
+
+		# Priority 3: BrassTrayId
+		try:
+			from Brass_QC.models import BrassTrayId as _BQTrayId
+			bq_tray = _BQTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id, delink_tray=False).first()
+			if bq_tray:
+				tray_qty = int(bq_tray.tray_quantity or 0)
+				logging.info(f'[VALIDATE TRAY] tray_id={tray_id} resolved via BrassTrayId')
+				return True, tray_qty, 'success', 'Tray validated'
+		except Exception:
+			pass
+
+		if allow_new_half_filled:
+			return True, 0, 'success', 'New tray accepted'
+		return False, 0, 'invalid_tray', 'Invalid tray or wrong lot'
 	except Exception as e:
 		logging.exception(f'validate_tray_for_scan error: {e}')
 		return False, 0, 'error', 'Server error during tray validation'
@@ -2290,16 +2426,69 @@ class JigLoadInitAPI(APIView):
 		lot_qty = lot_data['lot_qty']
 		jig_capacity = lot_data['jig_capacity']
 		tray_capacity = lot_data['tray_capacity']
+
+		# ===== EXCESS LOT DETECTION (early — applies to BOTH single and multi-model) =====
+		# Two paths: (A) EX-* lot_id → fetch_trays_for_lot resolves from ExcessLotTray automatically
+		#             (B) is_excess_lot flag with parent lot_id → resolve from JigCompleted.half_filled_tray_info
+		is_excess_lot = payload.get('is_excess_lot', False)
+		excess_primary_trays = None
+
+		# Path A: lot_id is already an EX-* excess lot → fetch_trays_for_lot handles it
+		is_excess_by_lot_id = ExcessLotRecord.objects.filter(new_lot_id=lot_id).exists()
+
+		# Path B: Frontend signals is_excess_lot but lot_id is parent → resolve from JigCompleted
+		if is_excess_lot and not is_excess_by_lot_id:
+			try:
+				submitted_jig = JigCompleted.objects.filter(
+					batch_id=batch_id,
+					draft_status='submitted',
+					half_filled_tray_qty__gt=0
+				).first()
+				if submitted_jig:
+					hf_info = submitted_jig.half_filled_tray_info or []
+					if hf_info:
+						excess_primary_trays = [
+							{
+								'tray_id': t['tray_id'],
+								'qty': int(t.get('qty') or 0),
+								'top_tray': bool(t.get('is_top_half_filled', False)),
+							}
+							for t in hf_info if isinstance(t, dict) and t.get('tray_id')
+						]
+						lot_qty = submitted_jig.half_filled_tray_qty or submitted_jig.excess_qty or 0
+						logging.info(f'[INIT_EXCESS_LOT] Batch {batch_id} — excess primary trays: {len(excess_primary_trays)}, lot_qty={lot_qty}')
+			except Exception:
+				logging.exception('[INIT_EXCESS_LOT] Failed to resolve excess trays — falling back to normal flow')
+
 		# For multi-model, aggregate ALL model trays so excess_qty is computed globally
 		if multi_model_flag and secondary_lots:
-			trays = aggregate_multi_model_trays(lot_id, secondary_lots)
+			if excess_primary_trays:
+				# Excess lot + multi-model: use excess trays for primary, fetch normally for secondary
+				trays = list(excess_primary_trays)
+				seen_lot_ids = {lot_id}
+				for t in trays:
+					t['source_lot_id'] = lot_id
+				for sec in secondary_lots:
+					sec_lot_id = sec.get('lot_id')
+					if sec_lot_id and sec_lot_id not in seen_lot_ids:
+						sec_trays = fetch_trays_for_lot(sec_lot_id)
+						for t in sec_trays:
+							t['source_lot_id'] = sec_lot_id
+						trays.extend(sec_trays)
+						seen_lot_ids.add(sec_lot_id)
+				logging.info(f'[AGGREGATE_EXCESS] Excess primary + {len(seen_lot_ids)-1} secondary lot(s), total {len(trays)} trays, lot_qty={lot_qty}')
+			else:
+				trays = aggregate_multi_model_trays(lot_id, secondary_lots)
 		else:
-			trays = fetch_trays_for_lot(lot_id)
+			if excess_primary_trays:
+				trays = excess_primary_trays
+				logging.info(f'[INIT_EXCESS_LOT] Single-model excess — using {len(trays)} half_filled tray(s), qty={lot_qty}')
+			else:
+				trays = fetch_trays_for_lot(lot_id)
 
-		# ===== EXCESS LOT DETECTION: If batch already submitted with half_filled_tray_qty > 0,
-		# use half_filled_tray_info as the tray list and half_filled_tray_qty as lot_qty.
-		# This handles excess lots appearing in the pick table after a jig is submitted.
-		if not (multi_model_flag and secondary_lots):
+		# ===== EXCESS LOT DETECTION FALLBACK (auto-detect for single-model without frontend flag) =====
+		# Skip if lot_id is already an EX-* excess lot (trays already resolved from ExcessLotTray)
+		if not (multi_model_flag and secondary_lots) and not excess_primary_trays and not is_excess_by_lot_id:
 			try:
 				submitted_jig = JigCompleted.objects.filter(
 					batch_id=batch_id,
@@ -2318,7 +2507,7 @@ class JigLoadInitAPI(APIView):
 							for t in hf_info if isinstance(t, dict) and t.get('tray_id')
 						]
 						lot_qty = submitted_jig.half_filled_tray_qty or submitted_jig.excess_qty or 0
-						logging.info(f'[INIT_EXCESS_LOT] Batch {batch_id} already submitted — using half_filled tray info: {len(trays)} tray(s), qty={lot_qty}')
+						logging.info(f'[INIT_EXCESS_LOT] Batch {batch_id} auto-detected — using half_filled tray info: {len(trays)} tray(s), qty={lot_qty}')
 			except Exception:
 				logging.exception('[INIT_EXCESS_LOT] Failed to check submitted JigCompleted — continuing with normal flow')
 
@@ -2578,9 +2767,10 @@ class JigLoadInitAPI(APIView):
 					if secondary_result['tray_info']:
 						last_alloc = secondary_result['tray_info'][-1]
 						try:
-							orig_tray = JigLoadTrayId.objects.filter(lot_id=sec_lot_id, tray_id=last_alloc['tray_id']).first()
+							_all_sec_trays2 = fetch_trays_for_lot(sec_lot_id)
+							orig_tray = next((t for t in _all_sec_trays2 if t.get('tray_id') == last_alloc['tray_id']), None)
 							if orig_tray:
-								orig_qty = int(getattr(orig_tray, 'tray_quantity', 0) or 0)
+								orig_qty = int(orig_tray.get('qty', 0) or 0)
 								if last_alloc['qty'] < orig_qty:
 									partial_rem = orig_qty - last_alloc['qty']
 									hf_qty = min(partial_rem, excess_remaining)
@@ -2591,13 +2781,13 @@ class JigLoadInitAPI(APIView):
 							pass
 					if excess_remaining > 0:
 						try:
-							for tray_obj in JigLoadTrayId.objects.filter(lot_id=sec_lot_id).order_by('id'):
+							for tray_item in fetch_trays_for_lot(sec_lot_id):
 								if excess_remaining <= 0:
 									break
-								tid = getattr(tray_obj, 'tray_id', '')
+								tid = tray_item.get('tray_id', '')
 								if tid in used_tray_ids:
 									continue
-								tq = int(getattr(tray_obj, 'tray_quantity', 0) or 0)
+								tq = int(tray_item.get('qty', 0) or 0)
 								hf_qty = min(tq, excess_remaining)
 								half_filled_tray_info.append({'tray_id': tid, 'qty': hf_qty, 'model': sec_model_name})
 								excess_remaining -= hf_qty
@@ -3454,6 +3644,32 @@ class JigSaveAPI(APIView):
 							model_code=tray.get('model_code', '') or effective_plating_stock_num,
 						)
 						excess_trays_created += 1
+
+					# ===== CREATE TotalStockModel for excess lot (makes it a REAL lot) =====
+					try:
+						parent_stock = TotalStockModel.objects.filter(lot_id=lot_id).select_related('batch_id', 'model_stock_no', 'version', 'polish_finish', 'plating_color').first()
+						if parent_stock:
+							TotalStockModel.objects.create(
+								lot_id=excess_lot_id,
+								batch_id=parent_stock.batch_id,
+								model_stock_no=parent_stock.model_stock_no,
+								version=parent_stock.version,
+								total_stock=total_excess_qty,
+								brass_audit_accepted_qty=total_excess_qty,
+								brass_audit_physical_qty=total_excess_qty,
+								brass_audit_accptance=True,
+								polish_finish=parent_stock.polish_finish,
+								plating_color=parent_stock.plating_color,
+								brass_audit_last_process_date_time=timezone.now(),
+								last_process_module='Jig Loading (Excess)',
+							)
+							logging.info(f'[EXCESS_LOT_STOCK] Created TotalStockModel for {excess_lot_id} (qty={total_excess_qty}) from parent {lot_id}')
+						else:
+							logging.warning(f'[EXCESS_LOT_STOCK] Parent TotalStockModel not found for {lot_id} — excess lot {excess_lot_id} will use ExcessLotRecord fallback')
+					except Exception as e:
+						logging.exception(f'[EXCESS_LOT_STOCK] TotalStockModel creation failed for {excess_lot_id}: {e}')
+						# Non-fatal — ExcessLotRecord is the primary source, TotalStockModel is for broader integration
+
 					logging.info(json.dumps({'event': 'JIG_EXCESS_LOT_CREATED', 'new_lot_id': excess_lot_id, 'qty': total_excess_qty}))
 				except Exception as e:
 					logging.exception(f'JigSaveAPI: excess lot creation failed: {e}')
@@ -3472,6 +3688,32 @@ class JigSaveAPI(APIView):
 					jig_obj.save()
 			except Exception:
 				logging.exception('JigSaveAPI: jig lock failed')
+
+			# Clear parent's excess row from pick table when submitting an excess lot
+			# Also clear parent excess row for all secondary EX-* lots in multi-model
+			try:
+				excess_lot_ids_to_clear = set()
+				# Primary lot
+				if lot_id and lot_id.startswith('EX-'):
+					excess_lot_ids_to_clear.add(lot_id)
+				# Secondary lots in multi-model
+				if is_multi_model and multi_model_allocation:
+					for m in multi_model_allocation:
+						mlot = m.get('lot_id', '') if isinstance(m, dict) else ''
+						if mlot and mlot.startswith('EX-'):
+							excess_lot_ids_to_clear.add(mlot)
+				for ex_lot in excess_lot_ids_to_clear:
+					elr = ExcessLotRecord.objects.filter(new_lot_id=ex_lot).first()
+					if elr:
+						updated = JigCompleted.objects.filter(
+							lot_id=elr.parent_lot_id,
+							draft_status='submitted',
+							half_filled_tray_qty__gt=0
+						).update(half_filled_tray_qty=0, excess_qty=0)
+						if updated:
+							logging.info(f'[EXCESS_SUBMIT_CLEANUP] Cleared parent {elr.parent_lot_id} half_filled_tray_qty (excess lot {ex_lot} submitted)')
+			except Exception:
+				logging.exception('JigSaveAPI: excess lot parent cleanup failed')
 
 		elif action == 'draft' and jig_id:
 			# Draft: mark jig as drafted (not fully loaded)
@@ -4091,6 +4333,80 @@ class LotFetchAPI(APIView):
 				'status': 'error',
 				'message': str(e),
 			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ExcessTrayInfoAPI(APIView):
+	"""GET /api/excess-tray-info/?batch_id=<batch_id>
+	Returns half_filled_tray_info and half_filled_tray_qty from the most recent
+	submitted JigCompleted record for the given batch_id.
+	Used by the view icon on excess-flagged rows in the Jig Loading pick table.
+	"""
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request):
+		batch_id = request.GET.get('batch_id', '').strip()
+		if not batch_id:
+			return JsonResponse({'success': False, 'error': 'batch_id is required'}, status=400)
+
+		try:
+			from django.db.models import Q
+			jc = JigCompleted.objects.filter(
+				batch_id=batch_id,
+				draft_status='submitted',
+			).filter(
+				Q(half_filled_tray_qty__gt=0) | Q(excess_qty__gt=0)
+			).order_by('-id').first()
+
+			if not jc:
+				return JsonResponse({
+					'success': True, 'batch_id': batch_id,
+					'trays': [], 'total_qty': 0,
+					'message': 'No excess tray data found for this batch',
+				})
+
+			hf_info = jc.half_filled_tray_info or []
+			total_qty = int(jc.half_filled_tray_qty or jc.excess_qty or 0)
+
+			# Normalise: ensure each entry has expected keys
+			trays = []
+			for t in hf_info:
+				if not isinstance(t, dict):
+					continue
+				trays.append({
+					'tray_id': t.get('tray_id', ''),
+					'qty': int(t.get('qty') or 0),
+					'is_top_half_filled': bool(t.get('is_top_half_filled', False) or t.get('top_tray', False)),
+					'model': t.get('model', ''),
+				})
+
+			# Fallback: if half_filled_tray_info is empty but excess data exists,
+			# reconstruct from ExcessLotTray records (created during submit)
+			if not trays and total_qty > 0:
+				try:
+					excess_lot_trays = ExcessLotTray.objects.filter(
+						excess_lot__parent_batch_id=batch_id
+					).order_by('id')
+					for et in excess_lot_trays:
+						trays.append({
+							'tray_id': et.tray_id or '',
+							'qty': int(et.qty or 0),
+							'is_top_half_filled': bool(getattr(et, 'is_top_half_filled', False)),
+							'model': getattr(et, 'model_code', '') or '',
+						})
+				except Exception:
+					logging.exception('[EXCESS_TRAY_INFO] Fallback ExcessLotTray lookup failed')
+
+			logging.info(f'[EXCESS_TRAY_INFO] batch_id={batch_id}, trays={len(trays)}, total_qty={total_qty}')
+			return JsonResponse({
+				'success': True,
+				'batch_id': batch_id,
+				'lot_id': jc.lot_id or '',
+				'trays': trays,
+				'total_qty': total_qty,
+			})
+		except Exception as e:
+			logging.exception(f'[EXCESS_TRAY_INFO] Error for batch_id={batch_id}: {e}')
+			return JsonResponse({'success': False, 'error': 'Server error'}, status=500)
 
 
 def jig_get_lot_id_for_tray(request):

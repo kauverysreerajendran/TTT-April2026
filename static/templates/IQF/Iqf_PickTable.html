@@ -1664,10 +1664,10 @@
                       RW Qty
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <!-- <th>
                       Physical Qty
                       <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
+                    </th> -->
                     <th>
                       Accept Qty
                       <i class="fa fa-filter" aria-hidden="true"></i>
@@ -1825,9 +1825,9 @@
                           {% if data.ui.qty_verified %}disabled{% endif %} />
                       </span>
                     </td>
-                      <td class="{{ data.ui.row_blur }}">
+                      <!-- <td class="{{ data.ui.row_blur }}">
                       {{data.iqf_physical_qty}}
-                    </td>
+                    </td> -->
 
                     <td class="{{ data.ui.row_blur }}">
                         {{data.iqf_accepted_qty|default:0}}
@@ -3427,17 +3427,30 @@ document.addEventListener('click', function(evt){
           var typeBadge = slot.is_top_tray
             ? '<span class="top-tray-badge">\u2B50 Top Tray</span>'
             : '<span class="full-tray-badge">Full Tray</span>';
+          var statusText = 'Scan Required';
           tr.innerHTML =
             '<td style="text-align:center;">' + slot.slot_no + '</td>' +
-            '<td><input type="text" class="tray-scan-input" data-slot-no="' + slot.slot_no + '" data-expected-qty="' + slot.qty + '" data-is-top-tray="' + (slot.is_top_tray ? 'true' : 'false') + '" placeholder="Scan tray barcode..." autocomplete="off" maxlength="9" /></td>' +
+            '<td><input type="text" class="tray-scan-input" data-slot-no="' + slot.slot_no + '" data-expected-qty="' + slot.qty + '" data-is-top-tray="' + (slot.is_top_tray ? 'true' : 'false') + '" value="" placeholder="Scan tray barcode..." autocomplete="off" maxlength="9" /></td>' +
             '<td style="text-align:right; font-weight:600;">' + slot.qty + '</td>' +
             '<td style="text-align:center;">' + typeBadge + '</td>' +
-            '<td style="text-align:center;"><span class="tray-scan-status" data-slot-no="' + slot.slot_no + '"></span></td>';
+            '<td style="text-align:center;"><span class="tray-scan-status" data-slot-no="' + slot.slot_no + '">' + statusText + '</span></td>';
           tbody.appendChild(tr);
 
-          // Attach validation listener on the input just created
+          // Attach validation listener + paste handler on the input just created
           var newInput = tr.querySelector('.tray-scan-input');
-          if(newInput) newInput.addEventListener('input', window._iqfTrayScanValidate);
+          if(newInput){
+            newInput.addEventListener('input', window._iqfTrayScanValidate);
+            // ── Paste fix: always paste from position 0, then trigger validation ──
+            newInput.addEventListener('paste', function(pe){
+              pe.preventDefault();
+              var pasted = (pe.clipboardData || window.clipboardData).getData('text') || '';
+              pasted = pasted.trim().toUpperCase().replace(/[^A-Z0-9\-]/g, '').substring(0, 9);
+              this.value = pasted;
+              if(pasted.length === 9){
+                this.dispatchEvent(new Event('input', {bubbles: true}));
+              }
+            });
+          }
         });
 
         // Show reuse hint based on backend-computed max_reuse_limit
@@ -3546,19 +3559,28 @@ document.addEventListener('click', function(evt){
         if(st === 'valid_lot'){
           inp.classList.add('scan-valid');
           if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-valid'; }
+          // Auto-move cursor to next empty scan input
+          var _allScanInputs = document.querySelectorAll('#iqf-accepted-tray-slots-body .tray-scan-input');
+          for(var _k = 0; _k < _allScanInputs.length; _k++){
+            if(!_allScanInputs[_k].value.trim()){ try{ _allScanInputs[_k].focus(); }catch(e){} break; }
+          }
         } else if(st === 'no_reuse'){
           inp.classList.add('scan-invalid');
           if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-invalid'; }
-          try{ inp.select(); }catch(e){}
+          try{ inp.value = ''; inp.focus(); }catch(e){}
         } else if(st === 'delink'){
           inp.classList.add('scan-delink');
           if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-delink'; }
+          // Auto-move cursor to next empty scan input (new tray is valid)
+          var _allScanInputs2 = document.querySelectorAll('#iqf-accepted-tray-slots-body .tray-scan-input');
+          for(var _k2 = 0; _k2 < _allScanInputs2.length; _k2++){
+            if(!_allScanInputs2[_k2].value.trim()){ try{ _allScanInputs2[_k2].focus(); }catch(e){} break; }
+          }
         } else {
-          // invalid_format or any other
+          // invalid_format or any other — clear input and stay for re-entry
           inp.classList.add('scan-invalid');
           if(statusEl){ statusEl.textContent = msg; statusEl.className = 'tray-scan-status status-invalid'; }
-          // Auto-select for re-entry
-          try{ inp.select(); }catch(e){}
+          try{ inp.value = ''; inp.focus(); }catch(e){}
         }
 
         // (Delink modal now opens from PARTIAL response after Proceed click — no auto-open)

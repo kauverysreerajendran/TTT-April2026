@@ -98,6 +98,7 @@ class Brass_Audit_Draft_Store(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     draft_type = models.CharField(max_length=50)  # 'batch_rejection' or 'tray_rejection'
     draft_data = models.JSONField()  # Store all draft data as JSON
+    draft_transition_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition lot_id generated on draft save")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -187,3 +188,72 @@ class AQLSamplingPlan(models.Model):
     
     def __str__(self):
         return f"Lot {self.lot_qty_from}-{self.lot_qty_to}, AQL {self.aql_limit}, Sample {self.sample_qty}"
+
+
+class Brass_Audit_Submission(models.Model):
+    SUBMISSION_TYPES = [
+        ('FULL_ACCEPT', 'Full Accept'),
+        ('FULL_REJECT', 'Full Reject'),
+        ('PARTIAL', 'Partial'),
+    ]
+
+    lot_id = models.CharField(max_length=50, db_index=True)
+    batch_id = models.CharField(max_length=50)
+    submission_type = models.CharField(max_length=20, choices=SUBMISSION_TYPES)
+    total_lot_qty = models.IntegerField()
+    accepted_qty = models.IntegerField(default=0)
+    rejected_qty = models.IntegerField(default=0)
+    full_accept_data = models.JSONField(null=True, blank=True, help_text="Full accept: all trays with qty and top flag")
+    full_reject_data = models.JSONField(null=True, blank=True, help_text="Full reject: all trays with qty and top flag")
+    partial_accept_data = models.JSONField(null=True, blank=True, help_text="Partial accept: accepted trays only")
+    partial_reject_data = models.JSONField(null=True, blank=True, help_text="Partial reject: rejected trays only")
+    snapshot_data = models.JSONField(null=True, blank=True, help_text="Legacy combined snapshot")
+    is_completed = models.BooleanField(default=True, help_text="Submission completed flag")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # ═══ Transition Lot ID Fields ═══
+    transition_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="New lot_id for FULL_ACCEPT/FULL_REJECT transition")
+    transition_accept_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="New lot_id for accepted portion (PARTIAL)")
+    transition_reject_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="New lot_id for rejected portion (PARTIAL)")
+    transition_label = models.CharField(max_length=200, null=True, blank=True, help_text="Human-readable transition label")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['lot_id']),
+            models.Index(fields=['submission_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.lot_id} - {self.submission_type} - A:{self.accepted_qty}/R:{self.rejected_qty}"
+
+
+class Brass_Audit_RawSubmission(models.Model):
+    SUBMISSION_STATE_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('SUBMIT', 'Submitted'),
+    ]
+
+    lot_id = models.CharField(max_length=50, db_index=True)
+    batch_id = models.CharField(max_length=50, blank=True, null=True)
+    plating_stk_no = models.CharField(max_length=50, blank=True, null=True)
+    payload = models.JSONField(help_text="Complete UI payload stored exactly as received")
+    submission_type = models.CharField(max_length=10, choices=SUBMISSION_STATE_CHOICES)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['lot_id']),
+            models.Index(fields=['submission_type']),
+            models.Index(fields=['created_at']),
+        ]
+        verbose_name = "Brass Audit Raw Submission"
+        verbose_name_plural = "Brass Audit Raw Submissions"
+
+    def __str__(self):
+        total_qty = self.payload.get('total_lot_qty', 0)
+        accepted = self.payload.get('summary', {}).get('accepted', 0)
+        rejected = self.payload.get('summary', {}).get('rejected', 0)
+        return f"{self.lot_id} [{self.submission_type}] A:{accepted}/R:{rejected}/T:{total_qty}"

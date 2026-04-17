@@ -4145,7 +4145,7 @@ background: linear-gradient(135deg, #e0f7fa, #e8f5e9) !important;
 
   /* Tray ID inputs */
   .tray-id-input {
-    background: #f0fffe !important;
+    background: #fdfdfd !important;
     border: 1.5px solid #b2dfdb !important;
     border-radius: 8px !important;
   }
@@ -4357,6 +4357,12 @@ background: linear-gradient(135deg, #e0f7fa, #e8f5e9) !important;
     background: linear-gradient(135deg, #e3f2fd, #e1f5fe);
     border-color: #1976d2;
     color: #1976d2;
+  }
+
+  .lot-status-released {
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    border-color: #43a047;
+    color: #2e7d32;
   }
 
   .lot-status-partial-draft {

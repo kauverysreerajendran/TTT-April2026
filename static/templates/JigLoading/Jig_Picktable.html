@@ -254,6 +254,7 @@
                   data-batch-id="{{ data.batch_id }}"
                   data-stock-lot-id="{{ data.stock_lot_id }}"
                   data-jig-qr-id="{{ data.jig_id|default:'' }}"
+                  {% if data.is_excess_lot %}data-is-excess-lot="true"{% endif %}
                 >
                   <i class="fa fa-plus"></i>Add Jig
                 </button>
@@ -306,7 +307,7 @@
                     padding: 5px;
                   "
                 >
-                  {% if data.lot_status == "Draft" or data.jig_hold_lot %}
+                  {% if data.lot_status == "Draft" or data.jig_hold_lot or data.is_excess_lot %}
                     Jig Loading
                   {% else %}
                     Brass Audit
@@ -885,7 +886,7 @@
           <span id="excessTopTrayOriginal" style="float:right; font-size:10px; color:#64748b;"></span>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <input type="checkbox" id="excessTopTrayCheckbox" class="excess-row-checkbox" style="width:16px;height:16px;accent-color:#028084;cursor:pointer;" title="Select top tray" />
+          <!-- <input type="checkbox" id="excessTopTrayCheckbox" class="excess-row-checkbox" style="width:16px;height:16px;accent-color:#028084;cursor:pointer;" title="Select top tray" /> -->
           <input type="text" id="excessTopTrayScanInput" class="excess-scan-input" maxlength="9" placeholder="Scan Top Tray ID" style="flex:1; padding:7px 10px; border:1.5px solid #fff; border-radius:8px; font-size:13px; font-weight:500; background:#fff;" />
           <span id="excessTopTrayQty" style="font-size:13px; font-weight:500; color:#028084; white-space:nowrap;"></span>
         </div>
@@ -898,7 +899,6 @@
           <thead style="position:sticky; top:0; z-index:2;">
             <tr style="background:linear-gradient(135deg, #e6f7f8, #d0f0f2); color:#1e293b;">
               <th style="width:36px; text-align:center;">S.No</th>
-              <th style="width:36px; text-align:center;"></th>
               <th style="min-width:70px;">Model</th>
               <th style="width:45px; text-align:center;">Qty</th>
               <th style="min-width:120px;">Scan Tray ID</th>
@@ -1167,7 +1167,7 @@ document.addEventListener('DOMContentLoaded', function () {
           content.innerHTML = '<div style="padding:40px;text-align:center;color:#666;">Loading excess tray data...</div>';
           modal.classList.add('open');
         }
-        fetch('/Jig_Loading/api/excess-tray-info/?batch_id=' + encodeURIComponent(excessBatchId), {
+        fetch('/jig_loading/api/excess-tray-info/?batch_id=' + encodeURIComponent(excessBatchId), {
           method: 'GET',
           headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
@@ -2128,21 +2128,6 @@ document.addEventListener('DOMContentLoaded', function () {
             td1.innerText = row.sno || '';
             tr.appendChild(td1);
 
-            // Checkbox — auto-fill scan input from backend-provided scan_tray_id
-            var tdCb = document.createElement('td');
-            tdCb.style.textAlign = 'center';
-            if (row.is_checkbox_enabled) {
-              var ecb = document.createElement('input');
-              ecb.type = 'checkbox';
-              ecb.className = 'excess-row-checkbox';
-              ecb.style.cssText = 'width:14px;height:14px;accent-color:#e67e22;cursor:pointer;';
-              ecb.dataset.rowIndex = idx;
-              ecb.dataset.autoTrayId = row.scan_tray_id || '';
-              ecb.title = 'Auto-fill tray ID';
-              tdCb.appendChild(ecb);
-            }
-            tr.appendChild(tdCb);
-
             // Model
             var tdModel = document.createElement('td');
             tdModel.style.cssText = 'font-weight:500;font-size:12px;';
@@ -3039,6 +3024,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const lotId = btn.dataset.stockLotId || btn.dataset.lotId || btn.getAttribute('data-stock-lot-id') || btn.getAttribute('data-lot-id');
   const batchId = btn.dataset.batchId || btn.getAttribute('data-batch-id') || btn.getAttribute('data-batch_id');
   const jigCapacity = btn.dataset.jigCapacity || btn.getAttribute('data-jig-capacity') || btn.dataset.jigQrId || btn.getAttribute('data-jig-qr-id') || '';
+  const isExcessLot = btn.dataset.isExcessLot === 'true' || btn.getAttribute('data-is-excess-lot') === 'true';
 
   // Preserve merge flow data BEFORE resetting state (Add Model sets these before triggering click)
   const _savedPendingSecondaryLots = window._pendingSecondaryLots;
@@ -3104,6 +3090,10 @@ document.addEventListener('DOMContentLoaded', function () {
         batch_id: batchId,
         jig_capacity: parseInt(jigCapacity) || 0
       };
+      if (isExcessLot) {
+        initPayload.is_excess_lot = true;
+        console.log('[INIT] Excess lot detected — will use half_filled trays instead of parent lot trays');
+      }
       if (window._pendingSecondaryLots && window._pendingSecondaryLots.length > 0) {
         initPayload.multi_model = true;
         initPayload.secondary_lots = window._pendingSecondaryLots.map(function(s) {
@@ -4248,13 +4238,8 @@ document.addEventListener('DOMContentLoaded', function () {
     
     console.log('[RECALC PAYLOAD]', recalcPayload);
 
-    // ✅ BUG FIX #4/#5: For BH changes, send scanned_trays so backend preserves
-    //    delink_completed status and loaded_cases_qty (prevents excess section reset)
-    if (options.bhUpdate) {
-      var bhScannedTrays = collectValidatedScans();
-      recalcPayload.scanned_trays = bhScannedTrays;
-      console.log('[BH_RECALC] Including', bhScannedTrays.length, 'scanned trays in recalc');
-    }
+    // RULE 2: BH changes do NOT send scanned_trays — hard reset, user must re-scan
+    // No auto-reallocation: backend recomputes counts only, frontend shows clean state
 
     fetch('/jig_loading/api/load/init/', {
       method: 'POST',
@@ -4313,14 +4298,68 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       window._lastSentBH = bh;
       console.log('[BH_CHANGED] Triggering recalc with BH:', bh);
-      // ✅ BUG FIX #5: Uncheck Delink All checkbox when BH changes (trays reset)
+
+      // ===== RULE 1: HARD RESET ON BH CHANGE =====
+      // Clear ALL scan state so user must re-scan everything after BH change.
+      // No auto-reallocation, no carry-over from previous BH value.
       try {
+        // Clear global tray allocation tracker
+        window._trayAllocations = {};
+
+        // Clear all validated scan inputs in delink panel
+        document.querySelectorAll('#delinkPanelTableBody .split-scan-input').forEach(function(inp) {
+          inp.value = '';
+          inp.readOnly = false;
+          inp.disabled = false;
+          inp.style.background = '';
+          inp.style.borderColor = '';
+          inp.style.opacity = '';
+          inp.classList.remove('validated');
+          inp.title = '';
+        });
+        // Reset delink row visual state (scanned/disabled classes, checkboxes, status badges)
+        document.querySelectorAll('#delinkPanelTableBody tr').forEach(function(tr) {
+          tr.classList.remove('delink-row-scanned', 'delink-row-disabled');
+          tr.title = '';
+          var cb = tr.querySelector('.delink-row-checkbox');
+          if (cb) { cb.checked = false; cb.disabled = false; cb.classList.remove('locked'); }
+          var lastCell = tr.cells[tr.cells.length - 1];
+          if (lastCell) lastCell.innerHTML = '';
+        });
+        // Clear top tray input
+        var topInp = document.getElementById('excessTopTrayScanInput');
+        if (topInp) {
+          topInp.value = '';
+          topInp.readOnly = false;
+          topInp.classList.remove('validated');
+          topInp.style.background = '';
+          topInp.style.borderColor = '';
+        }
+        var topStatus = document.getElementById('excessTopTrayStatus');
+        if (topStatus) topStatus.innerHTML = '';
+        // Clear excess panel inputs
+        document.querySelectorAll('#excessPanelTableBody .split-scan-input').forEach(function(inp) {
+          inp.value = '';
+          inp.readOnly = false;
+          inp.disabled = false;
+          inp.style.background = '';
+          inp.style.borderColor = '';
+          inp.style.opacity = '';
+          inp.classList.remove('validated');
+        });
+        // Uncheck Delink All checkbox
         var delinkCb = document.getElementById('delinkAllCheckbox');
         if (delinkCb && delinkCb.checked) {
           delinkCb.checked = false;
-          console.log('[BH_CHANGED] Delink All checkbox unchecked');
         }
-      } catch (e) { /* ignore */ }
+        // Clear select-all checkbox
+        var selectAllCb = document.getElementById('delinkSelectAll');
+        if (selectAllCb && selectAllCb.checked) {
+          selectAllCb.checked = false;
+        }
+        console.log('[BH_CHANGED] HARD RESET: All scan state cleared');
+      } catch (e) { console.warn('[BH_RESET] Error during hard reset:', e); }
+
       refreshTrayCalculation(null, {bhUpdate: true});
     });
   }
@@ -5506,6 +5545,8 @@ document.addEventListener('DOMContentLoaded', function () {
           const eligibleParam = eligibleList.map(function(m){ return encodeURIComponent(m.plating_stk_no); }).join(',');
           const blockedParam = blockedLookalike.map(function(id){ return encodeURIComponent(id); }).join(',');
           const nonEligibleParam = nonEligibleList.map(function(m){ return encodeURIComponent(m.plating_stk_no); }).join(',');
+          // Pass already-selected models so filter can grey them out (covers excess lots where exclude_lot_id=EX-* doesn't match TotalStockModel)
+          const selectedParam = selectedModels.map(function(m){ return encodeURIComponent(m); }).join(',');
 
           // Close the modal
           const modal = document.getElementById('jigAddModal');
@@ -5517,7 +5558,8 @@ document.addEventListener('DOMContentLoaded', function () {
             + '&primary_batch_id=' + encodeURIComponent(batch)
             + (eligibleParam ? '&eligible_models=' + eligibleParam : '')
             + (blockedParam ? '&blocked_lookalike=' + blockedParam : '')
-            + (nonEligibleParam ? '&non_eligible_models=' + nonEligibleParam : '');
+            + (nonEligibleParam ? '&non_eligible_models=' + nonEligibleParam : '')
+            + (selectedParam ? '&selected_models=' + selectedParam : '');
 
           console.log('[ADD_MODEL] Navigating to filter screen with eligibility params');
           window.location.href = url;
@@ -5570,23 +5612,25 @@ document.addEventListener('DOMContentLoaded', function () {
       const eligibleRaw   = params.get('eligible_models') || '';
       const blockedRaw    = params.get('blocked_lookalike') || '';
       const nonEligRaw    = params.get('non_eligible_models') || '';
+      const selectedRaw   = params.get('selected_models') || '';
 
       // No filter params = old flow (show all, no sorting)
-      if (!eligibleRaw && !blockedRaw && !nonEligRaw) return;
+      if (!eligibleRaw && !blockedRaw && !nonEligRaw && !selectedRaw) return;
 
       const eligibleSet   = new Set(eligibleRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
       const blockedSet    = new Set(blockedRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
       const nonEligSet    = new Set(nonEligRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
+      const selectedSet   = new Set(selectedRaw.split(',').map(function(s){ return decodeURIComponent(s.trim()); }).filter(Boolean));
 
-      console.log('[FILTER] eligible=', eligibleSet.size, 'blocked_lookalike=', blockedSet.size, 'non_eligible=', nonEligSet.size);
+      console.log('[FILTER] eligible=', eligibleSet.size, 'blocked_lookalike=', blockedSet.size, 'non_eligible=', nonEligSet.size, 'already_selected=', selectedSet.size);
 
       // Add compact info banner at top of table
       try {
         var infoBanner = document.createElement('div');
-        infoBanner.style.cssText = 'background:linear-gradient(135deg,#e8f5e9,#e3f2fd); border:1px solid #028084; border-radius:8px; padding:8px 16px; margin-bottom:10px; font-size:12px; color:#014d4e; font-weight:600; display:flex; gap:12px; flex-wrap:wrap; align-items:center;';
+/*         infoBanner.style.cssText = 'background:linear-gradient(135deg,#e8f5e9,#e3f2fd); border:1px solid #028084; border-radius:8px; padding:8px 16px; margin-bottom:10px; font-size:12px; color:#014d4e; font-weight:600; display:flex; gap:12px; flex-wrap:wrap; align-items:center;';
         infoBanner.innerHTML = '<span>✅ Eligible: <strong>' + eligibleSet.size + '</strong></span>'
           + (blockedSet.size ? '<span>🚫 Lookalike blocked (hidden): <strong>' + blockedSet.size + '</strong></span>' : '')
-          + (nonEligSet.size ? '<span>❌ Incompatible: <strong>' + nonEligSet.size + '</strong></span>' : '');
+          + (nonEligSet.size ? '<span>❌ Incompatible: <strong>' + nonEligSet.size + '</strong></span>' : ''); */
         var tableWrapper = document.querySelector('#order-listing');
         if (tableWrapper && tableWrapper.parentNode) {
           tableWrapper.parentNode.insertBefore(infoBanner, tableWrapper);
@@ -5609,6 +5653,23 @@ document.addEventListener('DOMContentLoaded', function () {
           // Lookalike — hide completely
           tr.style.display = 'none';
           hiddenRows.push(tr);
+        } else if (selectedSet.has(psn)) {
+          // Already selected (primary or secondary) — grey out, disable, move to bottom
+          tr.style.opacity = '0.35';
+          tr.style.pointerEvents = 'none';
+          tr.style.filter = 'blur(0.5px)';
+          try {
+            var cb = tr.querySelector('.add-model-checkbox');
+            if (cb) { cb.disabled = true; cb.checked = false; }
+            var snoTd = tr.querySelector('td:first-child');
+            if (snoTd) {
+              var badge = document.createElement('span');
+              badge.style.cssText = 'display:block; font-size:9px; color:#555; font-weight:700; background:#e0e0e0; border-radius:4px; padding:1px 5px; margin-top:2px; white-space:nowrap;';
+              badge.textContent = 'Added';
+              snoTd.appendChild(badge);
+            }
+          } catch(e2) {}
+          nonEligRows.push(tr);
         } else if (nonEligSet.has(psn)) {
           // Non-eligible — grey out, add inline reason, move to bottom
           tr.style.opacity = '0.4';
@@ -7359,3 +7420,5 @@ if (window.jQuery) {
 
 {% endblock %}
 {% endblock content %}
+
+

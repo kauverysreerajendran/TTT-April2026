@@ -6,6 +6,7 @@ from django.db.models import OuterRef, Subquery, Exists, F, Count
 from django.core.paginator import Paginator
 from django.templatetags.static import static
 import math
+import uuid
 from modelmasterapp.models import *
 from DayPlanning.models import *
 from InputScreening.models import *
@@ -209,7 +210,15 @@ class BrassPickTableView(APIView):
             lot_id = data.get('stock_lot_id')
             
             if total_IP_accpeted_quantity and total_IP_accpeted_quantity > 0:
-                data['display_accepted_qty'] = total_IP_accpeted_quantity
+                # Bug fix: When IS did partial rejection, subtract IS rejection qty
+                if data.get('few_cases_accepted_Ip_stock'):
+                    is_rejection_qty = 0
+                    is_rejection_store = IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                    if is_rejection_store and is_rejection_store.total_rejection_quantity:
+                        is_rejection_qty = is_rejection_store.total_rejection_quantity
+                    data['display_accepted_qty'] = max(total_IP_accpeted_quantity - is_rejection_qty, 0)
+                else:
+                    data['display_accepted_qty'] = total_IP_accpeted_quantity
             else:
                 total_rejection_qty = 0
                 rejection_store = IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
@@ -287,7 +296,7 @@ class BrassPickTableView(APIView):
                 images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
         
-            data['available_qty'] = data.get('brass_qc_accepted_qty') if data.get('brass_qc_accepted_qty') and data.get('brass_qc_accepted_qty') > 0 else (data.get('brass_physical_qty') if data.get('brass_physical_qty') and data.get('brass_physical_qty') > 0 else data.get('total_IP_accpeted_quantity', 0))
+            data['available_qty'] = data.get('brass_qc_accepted_qty') if data.get('brass_qc_accepted_qty') and data.get('brass_qc_accepted_qty') > 0 else (data.get('brass_physical_qty') if data.get('brass_physical_qty') and data.get('brass_physical_qty') > 0 else data.get('display_accepted_qty', 0))
 
             # ── Backend-computed flags — move ALL decision logic here ──
             # Delete button: only when lot has no acceptance/rejection yet and qty is verified
@@ -530,30 +539,88 @@ def _resolve_lot_trays(lot_id):
     Shared tray resolver — single source of truth for tray data.
     Returns (tray_data_list, source_name, total_qty).
     Used by both get_tray_details and submit_brass_qc.
+    
+    ✅ NEW: Detects IQF-returned lots and prioritizes IQFTrayId over BrassTrayId.
     """
     tray_data = []
     source = "BrassTrayId"
 
-    # Step 1: BrassTrayId (Brass QC's own table)
-    trays = BrassTrayId.objects.filter(lot_id=lot_id).order_by('-top_tray', 'tray_id')
-    if trays.exists():
+    # ✅ NEW: Check if lot is IQF-returned (send_brass_qc=True)
+    # If so, prioritize IQFTrayId to get correct split-lot tray data, not original parent trays
+    is_iqf = False
+    try:
+        stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        is_iqf = bool(stock and stock.send_brass_qc)
+    except Exception:
+        is_iqf = False
+
+    # Step 0: IQFTrayId (for IQF-returned lots) — NEW priority source
+    if is_iqf:
+        from IQF.models import IQFTrayId as _IQFTrayId
+        iqf_trays = _IQFTrayId.objects.filter(
+            lot_id=lot_id, rejected_tray=False, delink_tray=False
+        ).order_by('-top_tray', 'tray_id')
+        if iqf_trays.exists():
+            source = "IQFTrayId"
+            tray_data = [
+                {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
+                 "is_rejected": False, "is_top": t.top_tray,
+                 "is_delinked": False}
+                for t in iqf_trays
+            ]
+            logger.info(f"[_resolve_lot_trays] IQF-returned lot {lot_id}: Using IQFTrayId with {len(tray_data)} trays")
+
+    # Step 1: BrassTrayId (Brass QC's own table) — skip if IQF found trays above
+    if not tray_data:
+        trays = BrassTrayId.objects.filter(lot_id=lot_id).order_by('-top_tray', 'tray_id')
+        if trays.exists():
+            tray_data = [
+                {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
+                 "is_rejected": t.rejected_tray, "is_top": t.top_tray, "is_delinked": t.delink_tray}
+                for t in trays
+            ]
+
+    # Step 1.5: IPTrayId (Input Screening's processed tray data) — has correct post-IS state
+    if not tray_data:
+        ip_trays = IPTrayId.objects.filter(
+            lot_id=lot_id, tray_quantity__gt=0, rejected_tray=False, delink_tray=False
+        ).order_by('-top_tray', 'tray_id')
+        if ip_trays.exists():
+            source = "IPTrayId"
+            tray_data = [
+                {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
+                 "is_rejected": False, "is_top": t.top_tray,
+                 "is_delinked": False}
+                for t in ip_trays
+            ]
+
+    # Step 2: Fallback to TrayId (global table) — exclude IS-rejected and delinked trays
+    if not tray_data:
+        source = "TrayId"
+        trays = TrayId.objects.filter(
+            lot_id=lot_id, tray_quantity__gt=0, rejected_tray=False, delink_tray=False
+        ).order_by('-top_tray', 'tray_id')
         tray_data = [
             {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
-             "is_rejected": t.rejected_tray, "is_top": t.top_tray, "is_delinked": t.delink_tray}
+             "is_rejected": False,
+             "is_top": getattr(t, 'brass_top_tray', False) or t.top_tray,
+             "is_delinked": False}
             for t in trays
         ]
 
-    # Step 2: Fallback to TrayId (global table)
+    # Step 2.5: Fallback to BrassAuditTrayId — for lots returned from Brass Audit
     if not tray_data:
-        source = "TrayId"
-        trays = TrayId.objects.filter(lot_id=lot_id, tray_quantity__gt=0).order_by('-top_tray', 'tray_id')
-        tray_data = [
-            {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
-             "is_rejected": getattr(t, 'brass_rejected_tray', False) or t.rejected_tray,
-             "is_top": getattr(t, 'brass_top_tray', False) or t.top_tray,
-             "is_delinked": t.delink_tray}
-            for t in trays
-        ]
+        source = "BrassAuditTrayId"
+        ba_trays = BrassAuditTrayId.objects.filter(
+            lot_id=lot_id, delink_tray=False, rejected_tray=False
+        ).order_by('id')
+        if ba_trays.exists():
+            tray_data = [
+                {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
+                 "is_rejected": False, "is_top": bool(t.top_tray),
+                 "is_delinked": False}
+                for t in ba_trays
+            ]
 
     # Step 3: Final fallback to Accepted Store
     if not tray_data:
@@ -565,7 +632,7 @@ def _resolve_lot_trays(lot_id):
             for t in accepted
         ]
 
-    total_qty = sum(t['qty'] for t in tray_data)
+    total_qty = sum(t['qty'] for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected'))
 
     # Compute status for each tray (backend-driven)
     for t in tray_data:
@@ -732,18 +799,144 @@ def brass_qc_action(request):
             stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
         except TotalStockModel.DoesNotExist:
             return JsonResponse({"error": "Lot not found"}, status=404)
-        tray_data, source, total_qty = _resolve_lot_trays(lot_id)
+
+        is_iqf = bool(stock.send_brass_qc)
+
+        # IQF lot: use current IQF tray data — do NOT fall back to stale BrassTrayId history
+        if is_iqf:
+            from IQF.models import IQFTrayId as _IQFTrayId
+            iqf_trays = _IQFTrayId.objects.filter(
+                lot_id=lot_id, rejected_tray=False, delink_tray=False
+            ).order_by('-top_tray', 'tray_id')
+            if iqf_trays.exists():
+                tray_data = [
+                    {"tray_id": t.tray_id, "qty": t.tray_quantity or 0,
+                     "is_rejected": False, "is_top": bool(t.top_tray), "is_delinked": False,
+                     "status": "ACCEPT_TOP" if t.top_tray else "ACCEPT"}
+                    for t in iqf_trays
+                ]
+                total_qty = sum(t['qty'] for t in tray_data)
+                source = "IQFTrayId"
+            else:
+                tray_data, source, total_qty = _resolve_lot_trays(lot_id)
+        else:
+            tray_data, source, total_qty = _resolve_lot_trays(lot_id)
+
+        # Adjust total_qty when IS did partial rejection (original tray qtys are not reduced by IS)
+        # Skip when source=IPTrayId — those quantities are already post-IS-rejection adjusted
+        if not is_iqf and source != "IPTrayId" and getattr(stock, 'few_cases_accepted_Ip_stock', False):
+            _is_rej_store = IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+            _is_rej_qty = (_is_rej_store.total_rejection_quantity if _is_rej_store and _is_rej_store.total_rejection_quantity else 0)
+            _ip_acc_qty = stock.total_IP_accpeted_quantity or 0
+            if _ip_acc_qty > 0:
+                total_qty = max(_ip_acc_qty - _is_rej_qty, 0)
+            elif _is_rej_qty > 0:
+                total_qty = max(total_qty - _is_rej_qty, 0)
+
         tray_capacity = 0
         if stock.batch_id:
             tray_capacity = stock.batch_id.tray_capacity or 0
-        logger.info(f"[ACTION:GET_TRAYS] lot_id={lot_id}, source={source}, trays={len(tray_data)}, total_qty={total_qty}")
+
+        # Filter out delinked and rejected trays for view icon display
+        active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
+
+        logger.info(f"[ACTION:GET_TRAYS] lot_id={lot_id}, is_iqf={is_iqf}, source={source}, trays={len(active_trays)}, total_qty={total_qty}")
         return JsonResponse({
             "lot_id": lot_id,
             "batch_id": stock.batch_id.batch_id if stock.batch_id else "",
             "total_qty": total_qty,
             "tray_capacity": tray_capacity,
+            "is_iqf": is_iqf,
             "source": source,
-            "trays": tray_data,
+            "trays": active_trays,
+        })
+
+    elif action == 'GET_SUBMISSION_TRAYS':
+        # Read tray data from Brass_QC_Submission — used by Brass_Completed.html view icon
+        lot_id = request.data.get('lot_id')
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        submission = Brass_QC_Submission.objects.filter(lot_id=lot_id, is_completed=True).order_by('-created_at').first()
+        if not submission:
+            logger.warning(f"[ACTION:GET_SUBMISSION_TRAYS] No completed submission for lot_id={lot_id}")
+            return JsonResponse({"success": True, "lot_id": lot_id, "trays": [],
+                                 "accepted_qty": 0, "rejected_qty": 0, "total_lot_qty": 0, "submission_type": ""})
+        trays = []
+        accept_data = submission.full_accept_data or submission.partial_accept_data or {}
+        reject_data = submission.full_reject_data or submission.partial_reject_data or {}
+
+        # Build per-tray qty maps from submission snapshots
+        # These hold the qty USED per tray_id in each stream
+        accept_qty_map = {}   # tray_id → accepted qty
+        accept_top_map = {}   # tray_id → is_top
+        for t in (accept_data.get('trays') or []):
+            tid = t.get("tray_id", "")
+            if tid:
+                accept_qty_map[tid] = int(t.get("qty") or 0)
+                accept_top_map[tid] = bool(t.get("is_top", False))
+
+        reject_qty_map = {}   # tray_id → rejected qty
+        for t in (reject_data.get('trays') or []):
+            tid = t.get("tray_id", "")
+            if tid:
+                reject_qty_map[tid] = int(t.get("qty") or 0)
+
+        # Build delinked trays: original trays whose full qty was not consumed
+        # Source: BrassTrayId (all, including any previously delinked) → fallback TrayId
+        original_qty_map = {}  # tray_id → original qty
+        for bt in BrassTrayId.objects.filter(lot_id=lot_id):
+            if bt.tray_id:
+                original_qty_map[bt.tray_id] = int(bt.tray_quantity or 0)
+        if not original_qty_map:
+            for ti in TrayId.objects.filter(lot_id=lot_id, tray_quantity__gt=0):
+                original_qty_map[ti.tray_id] = int(ti.tray_quantity or 0)
+
+        delink_trays = []
+        for orig_tid, orig_qty in original_qty_map.items():
+            if orig_qty <= 0:
+                continue
+            # Tray consumed (fully or partially) in accept/reject → NOT delinked
+            if orig_tid in accept_qty_map or orig_tid in reject_qty_map:
+                continue
+            delink_trays.append({
+                "tray_id": orig_tid,
+                "tray_quantity": orig_qty,
+                "rejected_tray": False,
+                "delink_tray": True,
+                "top_tray": False,
+                "is_top_tray": False,
+            })
+
+        for tid, qty in accept_qty_map.items():
+            trays.append({
+                "tray_id": tid,
+                "tray_quantity": qty,
+                "rejected_tray": False,
+                "delink_tray": False,
+                "top_tray": accept_top_map.get(tid, False),
+                "is_top_tray": accept_top_map.get(tid, False),
+            })
+        for tid, qty in reject_qty_map.items():
+            trays.append({
+                "tray_id": tid,
+                "tray_quantity": qty,
+                "rejected_tray": True,
+                "delink_tray": False,
+                "top_tray": False,
+                "is_top_tray": False,
+            })
+        trays.extend(delink_trays)
+
+        logger.info(f"[ACTION:GET_SUBMISSION_TRAYS] lot_id={lot_id}, type={submission.submission_type}, "
+                    f"accepted={len(accept_qty_map)}, rejected={len(reject_qty_map)}, delinked={len(delink_trays)}")
+        return JsonResponse({
+            "success": True,
+            "lot_id": lot_id,
+            "submission_type": submission.submission_type,
+            "accepted_qty": submission.accepted_qty,
+            "rejected_qty": submission.rejected_qty,
+            "total_lot_qty": submission.total_lot_qty,
+            "trays": trays,
         })
 
     elif action == 'ALLOCATE':
@@ -756,7 +949,17 @@ def brass_qc_action(request):
         except TotalStockModel.DoesNotExist:
             return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
         tray_data, source, total_qty = _resolve_lot_trays(lot_id)
-        active_trays = [t for t in tray_data if not t.get('is_delinked')]
+        active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
+        # Adjust total_qty when IS did partial rejection (original tray qtys are not reduced by IS)
+        # Skip when source=IPTrayId — those quantities are already post-IS-rejection adjusted
+        if source != "IPTrayId" and getattr(stock, 'few_cases_accepted_Ip_stock', False):
+            _is_rej_store = IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+            _is_rej_qty = (_is_rej_store.total_rejection_quantity if _is_rej_store and _is_rej_store.total_rejection_quantity else 0)
+            _ip_acc_qty = stock.total_IP_accpeted_quantity or 0
+            if _ip_acc_qty > 0:
+                total_qty = max(_ip_acc_qty - _is_rej_qty, 0)
+            elif _is_rej_qty > 0:
+                total_qty = max(total_qty - _is_rej_qty, 0)
         tray_capacity = 0
         if stock.batch_id:
             tray_capacity = stock.batch_id.tray_capacity or 0
@@ -813,6 +1016,12 @@ def brass_qc_action(request):
             return JsonResponse({"valid": False, "error": "Tray ID not found in system"})
         if tray.lot_id and tray.lot_id != lot_id:
             return JsonResponse({"valid": False, "error": f"Tray belongs to lot {tray.lot_id}"})
+        # Check if tray is currently active in Input Screening for a different lot
+        ip_occupied = IPTrayId.objects.filter(
+            tray_id=tray_id, rejected_tray=False, delink_tray=False, lot_id__isnull=False
+        ).exclude(lot_id=lot_id).exists()
+        if ip_occupied:
+            return JsonResponse({"valid": False, "error": "Tray is currently occupied in Input Screening"})
         return JsonResponse({"valid": True})
 
     elif action == 'GET_REASONS':
@@ -823,12 +1032,77 @@ def brass_qc_action(request):
         ]
         return JsonResponse({"success": True, "reasons": data})
 
+    elif action == 'SAVE_DRAFT':
+        lot_id = request.data.get('lot_id')
+        draft_payload = request.data.get('draft_data', {})
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        if not draft_payload:
+            return JsonResponse({"success": False, "error": "draft_data is required"}, status=400)
+        try:
+            stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
+        except TotalStockModel.DoesNotExist:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        # Prevent draft save if already fully submitted
+        if Brass_QC_Submission.objects.filter(lot_id=lot_id, is_completed=True).exists():
+            return JsonResponse({"success": False, "error": "Lot already submitted — cannot save draft"}, status=409)
+        draft, created = Brass_QC_Draft_Store.objects.update_or_create(
+            lot_id=lot_id,
+            draft_type='rejection_draft',
+            defaults={
+                'batch_id': stock.batch_id.batch_id if stock.batch_id else '',
+                'user': request.user,
+                'draft_data': draft_payload,
+            }
+        )
+        # Generate transition lot_id for draft
+        if not draft.draft_transition_lot_id:
+            draft.draft_transition_lot_id = generate_new_lot_id()
+            draft.save(update_fields=['draft_transition_lot_id'])
+            logger.info(f"[DRAFT TRANSITION] lot_id={lot_id} → draft_transition_lot_id={draft.draft_transition_lot_id}")
+        stock.brass_draft = True
+        stock.brass_onhold_picking = True
+        stock.save(update_fields=['brass_draft', 'brass_onhold_picking'])
+        logger.info(f"[DRAFT] Saved for lot_id={lot_id}, user={request.user}, created={created}")
+        return JsonResponse({
+            "success": True,
+            "lot_id": lot_id,
+            "draft_id": draft.id,
+            "draft_transition_lot_id": draft.draft_transition_lot_id,
+            "message": "Draft saved. Lot marked as Draft.",
+            "lot_status": "Draft",
+            "action_state": "ONHOLD_TOPTRAY",
+        })
+
+    elif action == 'GET_DRAFT':
+        lot_id = request.data.get('lot_id')
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        draft = Brass_QC_Draft_Store.objects.filter(lot_id=lot_id, draft_type='rejection_draft').first()
+        if not draft:
+            return JsonResponse({"success": True, "has_draft": False, "draft_data": None, "lot_id": lot_id})
+        logger.info(f"[DRAFT] Fetched for lot_id={lot_id}, user={request.user}")
+        return JsonResponse({
+            "success": True,
+            "has_draft": True,
+            "draft_data": draft.draft_data,
+            "lot_id": lot_id,
+        })
+
     elif action in ('FULL_ACCEPT', 'FULL_REJECT', 'PARTIAL', 'PROCESS', 'SAVE_REMARK'):
         # Delegate to existing submit logic
         return _handle_submission(request, action)
 
     else:
         return JsonResponse({"success": False, "error": f"Unknown action: {action}"}, status=400)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Transition Lot ID Generator
+# ═══════════════════════════════════════════════════════════════
+def generate_new_lot_id():
+    """Generate unique lot ID using UUID — no duplicates possible."""
+    return f"LID{uuid.uuid4().hex[:12].upper()}"
 
 
 def _handle_submission(request, action):
@@ -861,21 +1135,41 @@ def _handle_submission(request, action):
         logger.info(f"[QC ACTION] [REMARK] lot_id={lot_id}, remark saved by {request.user}")
         return JsonResponse({"success": True, "lot_id": lot_id, "message": "Remark saved successfully", "has_remark": True})
 
+    # ─── Duplicate Submission Check with IQF Reentry Exception ───
+    # IQF-returned lots (send_brass_qc=True) are isolated submissions, NOT duplicates
+    is_iqf_reentry = bool(stock.send_brass_qc)
+    
     existing = Brass_QC_Submission.objects.filter(lot_id=lot_id, is_completed=True).first()
-    if existing:
+    if existing and not is_iqf_reentry:
         logger.warning(f"[QC ACTION] Duplicate blocked: lot_id={lot_id}")
         return JsonResponse({
             "success": False, "error": "This lot has already been submitted",
             "existing_submission_id": existing.id, "existing_type": existing.submission_type,
         }, status=409)
+    
+    # For IQF reentry: clear old submission record to allow fresh submission
+    if existing and is_iqf_reentry:
+        logger.info(f"[QC ACTION] IQF reentry detected for lot_id={lot_id}, clearing old submission record (id={existing.id})")
+        existing.delete()
+        existing = None
 
     tray_data, source, total_qty = _resolve_lot_trays(lot_id)
     if not tray_data:
         return JsonResponse({"success": False, "error": "No tray data found for this lot"}, status=400)
+    # Adjust total_qty when IS did partial rejection (original tray qtys are not reduced by IS)
+    # Skip when source=IPTrayId — those quantities are already post-IS-rejection adjusted
+    if source != "IPTrayId" and getattr(stock, 'few_cases_accepted_Ip_stock', False):
+        _is_rej_store = IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+        _is_rej_qty = (_is_rej_store.total_rejection_quantity if _is_rej_store and _is_rej_store.total_rejection_quantity else 0)
+        _ip_acc_qty = stock.total_IP_accpeted_quantity or 0
+        if _ip_acc_qty > 0:
+            total_qty = max(_ip_acc_qty - _is_rej_qty, 0)
+        elif _is_rej_qty > 0:
+            total_qty = max(total_qty - _is_rej_qty, 0)
     if total_qty <= 0:
         return JsonResponse({"success": False, "error": "Total lot quantity is zero"}, status=400)
 
-    active_trays = [t for t in tray_data if not t["is_delinked"]]
+    active_trays = [t for t in tray_data if not t["is_delinked"] and not t.get("is_rejected")]
 
     if action == "FULL_ACCEPT":
         submission_type = "FULL_ACCEPT"
@@ -953,12 +1247,24 @@ def _handle_submission(request, action):
                 return JsonResponse({"success": False, "error": f"Invalid tray action '{ta_action}' for tray {tid}"}, status=400)
             tray_match = active_tray_map.get(tid)
             if not tray_match:
+                if ta_action == "REJECT":
+                    # New tray (not in this lot) scanned into a reject slot — validate against master
+                    if not TrayId.objects.filter(tray_id=tid).exists():
+                        return JsonResponse({"success": False, "error": f"Reject tray '{tid}' not found in master tray list"}, status=400)
+                    slot_qty = int(ta.get("qty") or 0)
+                    if slot_qty <= 0:
+                        slot_qty = (stock.batch_id.tray_capacity if stock.batch_id else 0) or 0
+                    rejected_trays.append({"tray_id": tid, "qty": slot_qty, "is_top": False})
+                    logger.info(f"[QC ACTION][PROCESS] New reject tray: lot_id={lot_id}, tray_id={tid}, qty={slot_qty}")
+                    continue
                 return JsonResponse({"success": False, "error": f"Tray {tid} not found in lot"}, status=400)
-            tray_entry = {"tray_id": tid, "qty": tray_match["qty"], "is_top": is_top}
             if ta_action == "ACCEPT":
+                tray_entry = {"tray_id": tid, "qty": tray_match["qty"], "is_top": is_top}
                 accepted_trays.append(tray_entry)
             elif ta_action == "REJECT":
-                rejected_trays.append(tray_entry)
+                # Use frontend-provided qty for reused trays (partial qty after split)
+                slot_qty = int(ta.get("qty") or tray_match["qty"])
+                rejected_trays.append({"tray_id": tid, "qty": slot_qty, "is_top": is_top})
             elif ta_action == "DELINK":
                 BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tid).update(delink_tray=True)
                 TrayId.objects.filter(lot_id=lot_id, tray_id=tid).update(delink_tray=True)
@@ -972,6 +1278,15 @@ def _handle_submission(request, action):
         accepted_qty = total_qty - rejected_qty
         if rejected_qty < 0 or rejected_qty > total_qty:
             return JsonResponse({"success": False, "error": "Invalid rejection quantity"}, status=400)
+
+        # ═══ Adjust accept top tray qty so accepted trays sum = accepted_qty ═══
+        if accepted_trays and accepted_qty > 0:
+            non_top_total = sum(t["qty"] for t in accepted_trays if not t["is_top"])
+            for t in accepted_trays:
+                if t["is_top"]:
+                    t["qty"] = accepted_qty - non_top_total
+                    break
+
         if rejected_qty == 0:
             submission_type = "FULL_ACCEPT"
         elif accepted_qty == 0:
@@ -1025,6 +1340,117 @@ def _handle_submission(request, action):
         is_completed=True, created_by=request.user,
     )
 
+    # ═══ TRANSITION LOT ID — Create new lot_id for each transition ═══
+    if submission_type == "FULL_ACCEPT":
+        t_lot_id = generate_new_lot_id()
+        t_label = "full accept from brass qc to brass audit"
+        submission.transition_lot_id = t_lot_id
+        submission.transition_label = t_label
+        submission.save(update_fields=['transition_lot_id', 'transition_label'])
+        stock.brass_qc_transition_lot_id = t_lot_id
+        stock.brass_qc_transition_label = t_label
+        logger.info(f"[QC TRANSITION] FULL_ACCEPT lot_id={lot_id} → transition_lot_id={t_lot_id}")
+    elif submission_type == "FULL_REJECT":
+        t_lot_id = generate_new_lot_id()
+        t_label = "full reject from brass qc to iqf"
+        submission.transition_lot_id = t_lot_id
+        submission.transition_label = t_label
+        submission.save(update_fields=['transition_lot_id', 'transition_label'])
+        stock.brass_qc_transition_lot_id = t_lot_id
+        stock.brass_qc_transition_label = t_label
+        logger.info(f"[QC TRANSITION] FULL_REJECT lot_id={lot_id} → transition_lot_id={t_lot_id}")
+    elif submission_type == "PARTIAL":
+        t_accept_lot_id = generate_new_lot_id()
+        t_reject_lot_id = generate_new_lot_id()
+        t_label = "partial accept from brass qc to brass audit | partial reject from brass qc to iqf"
+        submission.transition_accept_lot_id = t_accept_lot_id
+        submission.transition_reject_lot_id = t_reject_lot_id
+        submission.transition_label = t_label
+        submission.save(update_fields=['transition_accept_lot_id', 'transition_reject_lot_id', 'transition_label'])
+        stock.brass_qc_transition_accept_lot_id = t_accept_lot_id
+        stock.brass_qc_transition_reject_lot_id = t_reject_lot_id
+        stock.brass_qc_transition_label = t_label
+        logger.info(f"[QC TRANSITION] PARTIAL lot_id={lot_id} → accept={t_accept_lot_id}, reject={t_reject_lot_id}")
+
+        # ═══ STRICT LOT SPLIT — create independent child lots in DB ═══
+        try:
+            child_accept = TotalStockModel.objects.create(
+                lot_id=t_accept_lot_id,
+                batch_id=stock.batch_id,
+                model_stock_no=stock.model_stock_no,
+                version=stock.version,
+                total_stock=accepted_qty,
+                total_IP_accpeted_quantity=accepted_qty,
+                brass_physical_qty=accepted_qty,
+                accepted_Ip_stock=True,
+                brass_qc_accepted_qty_verified=True,
+                last_process_module="Brass QC",
+                next_process_module="Brass Audit",
+                last_process_date_time=timezone.now(),
+                bq_last_process_date_time=timezone.now(),
+                brass_qc_accepted_qty=accepted_qty,
+                brass_qc_accptance=True,
+                created_at=timezone.now(),
+            )
+            for tray in accepted_trays:
+                BrassAuditTrayId.objects.create(
+                    lot_id=t_accept_lot_id,
+                    tray_id=tray['tray_id'],
+                    tray_quantity=tray['qty'],
+                    batch_id=stock.batch_id,
+                    top_tray=tray.get('is_top', False),
+                )
+            logger.info(f"[BRASS QC SPLIT] Accept child created: lot={t_accept_lot_id}, qty={accepted_qty}, trays={len(accepted_trays)}")
+        except Exception as e:
+            logger.error(f"[BRASS QC SPLIT] Failed to create accept child lot: {e}")
+            return JsonResponse({"success": False, "error": f"Failed to create accept child lot: {e}"}, status=500)
+
+        try:
+            child_reject = TotalStockModel.objects.create(
+                lot_id=t_reject_lot_id,
+                batch_id=stock.batch_id,
+                model_stock_no=stock.model_stock_no,
+                version=stock.version,
+                total_stock=rejected_qty,
+                total_IP_accpeted_quantity=rejected_qty,
+                brass_physical_qty=rejected_qty,
+                accepted_Ip_stock=True,
+                brass_qc_accepted_qty_verified=True,
+                last_process_module="Brass QC",
+                next_process_module="IQF",
+                last_process_date_time=timezone.now(),
+                bq_last_process_date_time=timezone.now(),
+                brass_qc_after_rejection_qty=rejected_qty,
+                brass_qc_rejection=True,
+                send_brass_audit_to_iqf=True,  # ✅ FIX: gate flag required by IQF pick table queryset
+                created_at=timezone.now(),
+            )
+            for tray in rejected_trays:
+                IQFTrayId.objects.create(
+                    lot_id=t_reject_lot_id,
+                    tray_id=tray['tray_id'],
+                    tray_quantity=tray['qty'],
+                    batch_id=stock.batch_id,
+                    IP_tray_verified=True,
+                    top_tray=tray.get('is_top', False),
+                )
+            # ✅ FIX: Create rejection reason store for child lot so IQF audit API
+            # resolves rw_qty=rejected_qty (not fallback to total_batch_quantity).
+            Brass_QC_Rejection_ReasonStore.objects.create(
+                lot_id=t_reject_lot_id,
+                user=request.user,
+                total_rejection_quantity=rejected_qty,
+                batch_rejection=False,
+            )
+            logger.info(f"[BRASS QC SPLIT] Reject child created: lot={t_reject_lot_id}, qty={rejected_qty}, trays={len(rejected_trays)}")
+        except Exception as e:
+            logger.error(f"[BRASS QC SPLIT] Failed to create reject child lot: {e}")
+            return JsonResponse({"success": False, "error": f"Failed to create reject child lot: {e}"}, status=500)
+
+        # Delink parent trays
+        BrassTrayId.objects.filter(lot_id=lot_id).update(delink_tray=True)
+        logger.info(f"[BRASS QC SPLIT] Parent={lot_id} closed → accept={t_accept_lot_id} (BA), reject={t_reject_lot_id} (IQF)")
+
     # Stage movement
     if submission_type == "FULL_ACCEPT":
         stock.brass_qc_accptance = True
@@ -1034,6 +1460,7 @@ def _handle_submission(request, action):
         stock.brass_qc_accepted_qty = accepted_qty
         stock.next_process_module = 'Brass Audit'
         stock.last_process_module = 'Brass QC'
+        stock.send_brass_audit_to_iqf = False      # ensure no stale IQF routing
     elif submission_type == "FULL_REJECT":
         stock.brass_qc_accptance = False
         stock.brass_qc_rejection = True
@@ -1042,32 +1469,99 @@ def _handle_submission(request, action):
         stock.brass_qc_accepted_qty = 0
         stock.next_process_module = 'IQF'
         stock.last_process_module = 'Brass QC'
+        stock.send_brass_audit_to_iqf = False      # ensure no stale IQF routing
+        
+        # ✅ NEW: If this is an IQF-returned lot, create IQFTrayId for rejected trays to appear in IQF pick
+        is_iqf_reentry = bool(stock.send_brass_qc)
+        if is_iqf_reentry:
+            logger.info(f"[BRASS QC] IQF-returned lot {lot_id} rejected — creating IQFTrayId records for IQF pick table")
+            for tray in rejected_trays:
+                IQFTrayId.objects.update_or_create(
+                    lot_id=lot_id,
+                    tray_id=tray['tray_id'],
+                    defaults={
+                        'tray_quantity': tray['qty'],
+                        'batch_id': stock.batch_id,
+                        'IP_tray_verified': True,
+                        'top_tray': tray.get('is_top', False),
+                        'rejected_tray': False,
+                        'delink_tray': False,
+                    }
+                )
+            logger.info(f"[BRASS QC] IQFTrayId created for {len(rejected_trays)} trays of lot {lot_id}")
+            stock.send_brass_qc = True  # Keep flag so lot remains marked as IQF-returned
+        
     elif submission_type == "PARTIAL":
         stock.brass_qc_few_cases_accptance = True
         stock.brass_qc_rejection = True
         stock.brass_qc_accptance = False
-        stock.brass_physical_qty = accepted_qty
+        stock.brass_physical_qty = 0              # parent is closed/split
         stock.brass_qc_accepted_qty = accepted_qty
-        stock.next_process_module = 'Brass Audit'
+        stock.brass_qc_after_rejection_qty = rejected_qty
+        stock.next_process_module = None           # parent closed — children are independent
         stock.last_process_module = 'Brass QC'
+        stock.is_split = True
+        stock.send_brass_audit_to_iqf = True       # informational flag
+
+    # Clear draft state after successful final submission
+    Brass_QC_Draft_Store.objects.filter(lot_id=lot_id, draft_type='rejection_draft').delete()
+    stock.brass_draft = False
+    stock.brass_onhold_picking = False
+    
+    # ✅ UPDATED: Only clear send_brass_qc if NOT an IQF-returned FULL_REJECT
+    # (IQF-rejected lots need to stay marked as IQF-returned)
+    if submission_type != "FULL_REJECT" or not bool(stock.send_brass_qc):
+        stock.send_brass_qc = False  # Clear IQF reentry flag after processing
 
     stock.last_process_date_time = timezone.now()
     stock.bq_last_process_date_time = timezone.now()
     stock.save(update_fields=[
         'brass_qc_accptance', 'brass_qc_rejection', 'brass_qc_few_cases_accptance',
-        'brass_physical_qty', 'brass_qc_accepted_qty', 'next_process_module', 'last_process_module',
+        'brass_physical_qty', 'brass_qc_accepted_qty', 'brass_qc_after_rejection_qty',
+        'next_process_module', 'last_process_module',
         'last_process_date_time', 'bq_last_process_date_time',
+        'brass_draft', 'brass_onhold_picking', 'send_brass_audit_to_iqf',
+        'brass_qc_transition_lot_id', 'brass_qc_transition_accept_lot_id',
+        'brass_qc_transition_reject_lot_id', 'brass_qc_transition_label',
+        'is_split', 'send_brass_qc',  # ✅ Include flag reset in update
     ])
 
     logger.info(f"[QC ACTION] [DONE] type={submission_type}, lot_id={lot_id}, moved_to={stock.next_process_module}")
 
+    if submission_type == "PARTIAL":
+        print(f"\n{'='*60}")
+        print(f"[BRASS QC PARTIAL SPLIT] Parent Lot: {lot_id}")
+        print(f"  Accept Lot ID: {submission.transition_accept_lot_id} → Brass Audit (qty={accepted_qty})")
+        print(f"  Reject Lot ID: {submission.transition_reject_lot_id} → IQF (qty={rejected_qty})")
+        print(f"  Accept Trays: {[t['tray_id'] + '(' + str(t['qty']) + ')' for t in accepted_trays]}")
+        print(f"  Reject Trays: {[t['tray_id'] + '(' + str(t['qty']) + ')' for t in rejected_trays]}")
+        print(f"{'='*60}\n")
+        return JsonResponse({
+            "success": True,
+            "message": "Lot split completed: accept → Brass Audit, reject → IQF",
+            "lot_id": lot_id, "submission_id": submission.id, "submission_type": submission_type,
+            "accepted_qty": accepted_qty, "rejected_qty": rejected_qty,
+            "status": "LOT_SPLIT_COMPLETED",
+            "accept_lot_id": submission.transition_accept_lot_id,
+            "reject_lot_id": submission.transition_reject_lot_id,
+            "transition_accept_lot_id": submission.transition_accept_lot_id,
+            "transition_reject_lot_id": submission.transition_reject_lot_id,
+            "transition_label": submission.transition_label,
+        })
+
+    next_module = stock.next_process_module or "UNKNOWN"
+    status_value = f"MOVED_TO_{next_module.upper().replace(' ', '_')}"
     return JsonResponse({
         "success": True,
-        "message": f"Lot {submission_type.replace('_', ' ').lower()} and moved to {stock.next_process_module}",
+        "message": f"Lot {submission_type.replace('_', ' ').lower()} and moved to {next_module}",
         "lot_id": lot_id, "submission_id": submission.id, "submission_type": submission_type,
         "accepted_qty": accepted_qty, "rejected_qty": rejected_qty,
-        "status": f"MOVED_TO_{stock.next_process_module.upper().replace(' ', '_')}",
+        "status": status_value,
         "trays": accepted_trays if submission_type != "FULL_REJECT" else rejected_trays,
+        "transition_lot_id": submission.transition_lot_id,
+        "transition_accept_lot_id": submission.transition_accept_lot_id,
+        "transition_reject_lot_id": submission.transition_reject_lot_id,
+        "transition_label": submission.transition_label,
     })
 
 
@@ -1092,7 +1586,10 @@ def get_tray_details(request):
     if stock.batch_id:
         tray_capacity = stock.batch_id.tray_capacity or 0
 
-    logger.info(f"[TRAY DETAILS] lot_id={lot_id}, source={source}, trays={len(tray_data)}, total_qty={total_qty}, tray_capacity={tray_capacity}")
+    # Filter out delinked and rejected trays for display
+    active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
+
+    logger.info(f"[TRAY DETAILS] lot_id={lot_id}, source={source}, trays={len(active_trays)}, total_qty={total_qty}, tray_capacity={tray_capacity}")
 
     return JsonResponse({
         "lot_id": lot_id,
@@ -1100,7 +1597,7 @@ def get_tray_details(request):
         "total_qty": total_qty,
         "tray_capacity": tray_capacity,
         "source": source,
-        "trays": tray_data,
+        "trays": active_trays,
     })
 
 

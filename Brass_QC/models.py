@@ -97,6 +97,7 @@ class Brass_QC_Draft_Store(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     draft_type = models.CharField(max_length=50)  # 'batch_rejection' or 'tray_rejection'
     draft_data = models.JSONField()  # Store all draft data as JSON
+    draft_transition_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition lot_id generated on draft save")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -181,6 +182,12 @@ class Brass_QC_Submission(models.Model):
     is_completed = models.BooleanField(default=True, help_text="Submission completed flag")
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # ═══ Transition Lot ID Fields ═══
+    transition_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="New lot_id for FULL_ACCEPT/FULL_REJECT transition")
+    transition_accept_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="New lot_id for accepted portion (PARTIAL)")
+    transition_reject_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="New lot_id for rejected portion (PARTIAL)")
+    transition_label = models.CharField(max_length=200, null=True, blank=True, help_text="Human-readable transition label")
 
     class Meta:
         indexes = [

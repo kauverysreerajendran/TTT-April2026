@@ -1,7 +1,7 @@
 ﻿from django.urls import path
 from . import views
 from .views import *
-from .views import JigView, TrayInfoView, JigCompletedTable  # ExcessTrayInfoAPI - class not defined
+from .views import JigView, TrayInfoView, JigCompletedTable, ExcessTrayInfoAPI
 from .views import JigLoadInitAPI, JigLoadUpdateAPI
 from .views import JigSaveAPI, JigValidateAPI
 from .views import ModelCombinationValidateAPI, JigHoldToggleAPI
@@ -42,5 +42,5 @@ urlpatterns = [
         path('tray-info/', TrayInfoView.as_view(), name='tray-info'),
 
         # ===== Excess lot half-filled tray info (lazy-loaded on click) =====
-        # path('api/excess-tray-info/', ExcessTrayInfoAPI.as_view(), name='excess-tray-info'),  # Class not defined
+        path('api/excess-tray-info/', ExcessTrayInfoAPI.as_view(), name='excess-tray-info'),
 ]

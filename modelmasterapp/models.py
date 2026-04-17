@@ -471,6 +471,16 @@ class TotalStockModel(models.Model):
     send_brass_qc=models.BooleanField(default=False, help_text="Send to Brass QC")
     send_brass_audit_to_qc=models.BooleanField(default=False, help_text="Send to Brass Audit QC")
     send_brass_audit_to_iqf=models.BooleanField(default=False, help_text="Send to IQF")
+
+    # ═══ Transition Lot ID Tracking ═══
+    brass_qc_transition_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition lot_id from Brass QC (FULL_ACCEPT/FULL_REJECT)")
+    brass_qc_transition_accept_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition accept lot_id from Brass QC (PARTIAL)")
+    brass_qc_transition_reject_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition reject lot_id from Brass QC (PARTIAL)")
+    brass_qc_transition_label = models.CharField(max_length=200, null=True, blank=True, help_text="Brass QC transition label")
+    brass_audit_transition_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition lot_id from Brass Audit (FULL_ACCEPT/FULL_REJECT)")
+    brass_audit_transition_accept_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition accept lot_id from Brass Audit (PARTIAL)")
+    brass_audit_transition_reject_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Transition reject lot_id from Brass Audit (PARTIAL)")
+    brass_audit_transition_label = models.CharField(max_length=200, null=True, blank=True, help_text="Brass Audit transition label")
     
     jig_lot_status = models.CharField(
         max_length=50,
@@ -520,6 +530,7 @@ class TotalStockModel(models.Model):
     ip_verified_tray_qty=models.IntegerField(default=0, help_text="IP-Verified Tray Quantity")
     ip_top_tray_qty_modify=models.IntegerField(default=0, help_text="IP-Top Tray Quantity Modified")
 
+    is_split = models.BooleanField(default=False, help_text="Flag to mark lot as split into accept/reject portions")
     remove_lot=models.BooleanField(default=False, help_text="Indicates if the lot is to be removed")
     createdby= models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 

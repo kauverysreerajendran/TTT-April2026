@@ -1946,12 +1946,16 @@ class TrayIdScanAPIView(APIView):
 
     def generate_new_lot_id(self):
         timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
-        last_lot = TotalStockModel.objects.order_by('-id').first()
-        if last_lot and last_lot.lot_id and last_lot.lot_id.startswith("LID"):
-            last_seq_no = int(last_lot.lot_id[-4:])
-            next_seq_no = last_seq_no + 1
-        else:
-            next_seq_no = 1
+        next_seq_no = 1
+        # Iterate recent lots to find last sequential (non-UUID) lot ID
+        for lot in TotalStockModel.objects.order_by('-id')[:20]:
+            if lot.lot_id and lot.lot_id.startswith("LID"):
+                try:
+                    last_seq_no = int(lot.lot_id[-4:])
+                    next_seq_no = last_seq_no + 1
+                    break
+                except ValueError:
+                    continue
         seq_no = f"{next_seq_no:04d}"
         return f"LID{timestamp}{seq_no}"
 
