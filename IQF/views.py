@@ -274,6 +274,10 @@ class IQFPickTableView(APIView):
             Q(iqf_rejection=True) |
             Q(send_brass_audit_to_iqf=True, brass_audit_onhold_picking=True)|
             Q(iqf_few_cases_acceptance=True, iqf_onhold_picking=False)
+        ).exclude(
+            # ✅ EXCLUDE parent lots that have been split into child lots
+            # Parent lot still marked with brass_qc_rejection=True, but its children now represent the actual work
+            brass_qc_transition_reject_lot_id__isnull=False
         ).order_by('-bq_last_process_date_time', '-lot_id')
 
         print(f"📊 Found {queryset.count()} IQF pick records")
@@ -531,6 +535,16 @@ class IQFPickTableView(APIView):
         for data in master_data:
             data['ui'] = build_ui_state(data)
 
+        # Remove duplicate lot rows (keep first occurrence) — preserves existing master_data order
+        seen = set()
+        unique_master = []
+        for d in master_data:
+            lid = d.get('stock_lot_id') or d.get('lot_id')
+            if lid not in seen:
+                seen.add(lid)
+                unique_master.append(d)
+        master_data = unique_master
+
         context = {
             'master_data': master_data,
             'page_obj': page_obj,
@@ -552,10 +566,24 @@ def iqf_rejection_audit_iqf_reject(request):
     try:
         print(f"[AUDIT API] Input lot_id: {lot_id}")
 
+        # Map split child -> parent/source lot for Brass QC lookups
+        mapped_brass_lot = lot_id
+        try:
+            parent_stock = TotalStockModel.objects.filter(
+                Q(brass_qc_transition_accept_lot_id=lot_id) |
+                Q(brass_qc_transition_reject_lot_id=lot_id) |
+                Q(brass_qc_transition_lot_id=lot_id)
+            ).first()
+            if parent_stock and getattr(parent_stock, 'lot_id', None):
+                mapped_brass_lot = parent_stock.lot_id
+                print(f"[AUDIT API] Mapped child lot {lot_id} -> parent/source lot {mapped_brass_lot} for Brass QC lookups")
+        except Exception:
+            mapped_brass_lot = lot_id
+
         # 1. Get RW Qty — SAME LOGIC AS iqf_lot_details ──
         # Priority order: Brass_Audit_Rejection_ReasonStore → Brass_QC_Rejection_ReasonStore → IQF_Submitted override
-        audit_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-        qc_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+        audit_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=mapped_brass_lot).order_by('-id').first()
+        qc_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=mapped_brass_lot).order_by('-id').first()
         rw_qty = 0
 
         if audit_store and getattr(audit_store, 'total_rejection_quantity', None) is not None:
@@ -568,13 +596,13 @@ def iqf_rejection_audit_iqf_reject(request):
         if rw_qty == 0:
             _tray_qty_map = {}
             # Check Brass_Audit_Rejected_TrayScan
-            for row in Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id):
+            for row in Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=mapped_brass_lot):
                 _tid = getattr(row, 'rejected_tray_id', None) or getattr(row, 'tray_id', None) or ''
                 if _tid:
                     _tray_qty_map[_tid] = _tray_qty_map.get(_tid, 0) + (int(row.rejected_tray_quantity or 0))
             # Check Brass_QC_Rejected_TrayScan if no audit scans
             if not _tray_qty_map:
-                for row in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id):
+                for row in Brass_QC_Rejected_TrayScan.objects.filter(lot_id=mapped_brass_lot):
                     _tid = getattr(row, 'rejected_tray_id', None) or getattr(row, 'tray_id', None) or ''
                     if _tid:
                         _tray_qty_map[_tid] = _tray_qty_map.get(_tid, 0) + (int(row.rejected_tray_quantity or 0))
@@ -586,7 +614,7 @@ def iqf_rejection_audit_iqf_reject(request):
                         _tray_qty_map[row.tray_id] = _tray_qty_map.get(row.tray_id, 0) + _qty
             # Check Brass_QC_Submission rejected trays
             if not _tray_qty_map:
-                _bq_sub = Brass_QC_Submission.objects.filter(lot_id=lot_id, is_completed=True).order_by('-created_at').first()
+                _bq_sub = Brass_QC_Submission.objects.filter(lot_id=mapped_brass_lot, is_completed=True).order_by('-created_at').first()
                 if _bq_sub:
                     _reject_src = _bq_sub.partial_reject_data or _bq_sub.full_reject_data or {}
                     for _rt in (_reject_src.get('trays') or []):
@@ -631,11 +659,11 @@ def iqf_rejection_audit_iqf_reject(request):
         # 2. UNIFIED source aggregation — merge Brass QC + Brass Audit + IQF rejected tray scans
         response_data = []
         try:
-            brass_qc_rows = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason'))
+            brass_qc_rows = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=mapped_brass_lot).select_related('rejection_reason'))
         except Exception:
             brass_qc_rows = []
         try:
-            brass_audit_rows = list(Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason'))
+            brass_audit_rows = list(Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=mapped_brass_lot).select_related('rejection_reason'))
         except Exception:
             brass_audit_rows = []
         try:
@@ -2380,58 +2408,49 @@ def iqf_accepted_tray_slots(request):
         max_reuse_limit = 0
 
         if original_trays:
-            # ── Simulate rejection: consume smallest trays first ──
-            trays_sorted = sorted(original_trays, key=lambda x: x['qty'])
-            remaining_reject = iqf_rejection_total
-            surviving_trays = []
-            for tray in trays_sorted:
-                qty = tray['qty']
-                if qty <= 0:
-                    continue
-                if remaining_reject <= 0:
-                    surviving_trays.append({'tray_id': tray['tray_id'], 'qty': qty})
-                elif qty <= remaining_reject:
-                    remaining_reject -= qty  # fully consumed by rejection
-                else:
-                    surviving_trays.append({'tray_id': tray['tray_id'], 'qty': qty - remaining_reject})
-                    remaining_reject = 0
+            # ── 1. Calculate trays needed for rejected amount ──
+            reject_trays_needed = math.ceil(iqf_rejection_total / tray_capacity) if tray_capacity > 0 else 0
+            
+            # ── 2. Derive reusable slots available for accepted amount ──
+            total_original_trays = len(original_trays)
+            max_reuse_limit = max(0, total_original_trays - reject_trays_needed)
+            
+            # ── 3. Trays needed for accepted quantity ──
+            required_accept_slots = math.ceil(accepted_qty / tray_capacity) if tray_capacity > 0 else 0
+            
+            reusable_slots_to_create = min(max_reuse_limit, required_accept_slots)
+            new_trays_needed = max(0, required_accept_slots - reusable_slots_to_create)
 
-            print(f'[IQF TRAY SLOTS] Surviving trays after rejection: {surviving_trays}')
-            reuse_count = len(surviving_trays)
-            required_slots = math.ceil(accepted_qty / tray_capacity) if accepted_qty > 0 else 0
-            new_trays_needed = max(0, required_slots - reuse_count)
-            max_reuse_limit = reuse_count
+            print(f'[IQF TRAY SLOTS] Reject qty: {iqf_rejection_total} requires {reject_trays_needed} trays.')
+            print(f'[IQF TRAY SLOTS] Total original trays: {total_original_trays}, Reusable limit: {max_reuse_limit}')
+            print(f'[IQF TRAY SLOTS] Accept qty: {accepted_qty}, needs {required_accept_slots} slots ({reusable_slots_to_create} reusable, {new_trays_needed} new).')
 
-            # Sort surviving trays: partial (top tray) first, full trays after
-            partial_trays = [t for t in surviving_trays if t['qty'] < tray_capacity]
-            full_trays_list = [t for t in surviving_trays if t['qty'] >= tray_capacity]
-            sorted_surviving = partial_trays + full_trays_list
+            remaining_acc = accepted_qty
+            
+            # Helper to generate slots
+            slots_to_generate = []
+            if remaining_acc > 0:
+                rem_new = remaining_acc % tray_capacity
+                full_new = remaining_acc // tray_capacity
+                
+                # Top tray (partial) goes first
+                if rem_new > 0:
+                    slots_to_generate.append({'qty': rem_new, 'is_top': True})
+                # Full trays follow
+                for _ in range(full_new):
+                    slots_to_generate.append({'qty': tray_capacity, 'is_top': False})
 
-            for i, st in enumerate(sorted_surviving):
-                is_top = (st['qty'] < tray_capacity)
-                if not partial_trays and i == 0:
-                    is_top = True
+            # Assign statuses based on available reusable slots
+            for i, slot_data in enumerate(slots_to_generate):
+                status = 'scan_required' if i < reusable_slots_to_create else 'new'
                 slots.append({
                     'slot_no': slot_no,
-                    'qty': st['qty'],
-                    'is_top_tray': is_top,
+                    'qty': slot_data['qty'],
+                    'is_top_tray': slot_data['is_top'],
                     'tray_id': '',
-                    'status': 'scan_required',
+                    'status': status,
                 })
                 slot_no += 1
-
-            # Add new tray slots if accepted qty spills beyond reusable trays
-            if new_trays_needed > 0:
-                remaining_acc = accepted_qty - sum(t['qty'] for t in surviving_trays)
-                if remaining_acc > 0:
-                    rem_new = remaining_acc % tray_capacity
-                    full_new = remaining_acc // tray_capacity
-                    if rem_new > 0:
-                        slots.append({'slot_no': slot_no, 'qty': rem_new, 'is_top_tray': True, 'tray_id': '', 'status': 'new'})
-                        slot_no += 1
-                    for _ in range(full_new):
-                        slots.append({'slot_no': slot_no, 'qty': tray_capacity, 'is_top_tray': False, 'tray_id': '', 'status': 'new'})
-                        slot_no += 1
 
         else:
             # Fallback: no original trays found — create abstract slots (new trays)
@@ -2543,7 +2562,7 @@ def iqf_validate_tray_scan(request):
                 _total_trays = IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).count()
                 if _total_trays == 0:
                     _total_trays = BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False).count()
-                _rejection_trays = ceil(iqf_rej / _cap)
+                _rejection_trays = math.ceil(iqf_rej / _cap) if _cap > 0 else 0
                 max_reuse_limit = max(0, _total_trays - _rejection_trays)
                 reuse_count = max(0, int(reuse_count_str))
         except (ValueError, TypeError):
@@ -2745,43 +2764,72 @@ def iqf_accept_delink_modal(request):
         if not ts:
             return Response({'success': False, 'error': 'Lot not found'}, status=404)
 
-        # ── Resolve rw_qty — SINGLE SOURCE OF TRUTH (same as iqf_accepted_tray_slots) ──
-        audit_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
-        qc_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+        # ── Resolve rw_qty — MULTI-SOURCE FALLBACK CHAIN ──
+        # PRIORITY: IQF_Submitted (current truth) > Brass_Audit > Brass_QC > scan data fallback
         rw_qty = 0
-        if audit_store and getattr(audit_store, 'total_rejection_quantity', None) is not None:
-            rw_qty = audit_store.total_rejection_quantity
-        elif qc_store and getattr(qc_store, 'total_rejection_quantity', None) is not None:
-            rw_qty = qc_store.total_rejection_quantity
+        rw_source = 'unknown'
 
-        # Re-flagged lot override from IQF_Submitted
+        # 1. Check IQF_Submitted first (most reliable, set during PARTIAL submit)
         try:
             _iqf_sub = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
-            if _iqf_sub:
-                _override = None
-                # SKIP override for unfinalized PARTIAL — lot is still mid-flow in IQF
-                if _iqf_sub.submission_type == 'PARTIAL' and not _iqf_sub.partial_reject_data:
-                    pass  # Use original rw_qty
-                elif _iqf_sub.submission_type in ('FULL_ACCEPT', 'PARTIAL'):
-                    _src = (_iqf_sub.full_accept_data or {}).get('trays', []) if _iqf_sub.submission_type == 'FULL_ACCEPT' else (_iqf_sub.partial_accept_data or {}).get('trays', [])
-                    _live = sum(int(t.get('qty', 0)) for t in _src if int(t.get('qty', 0)) > 0)
-                    if _live > 0:
-                        _override = _live
-                elif _iqf_sub.submission_type in ('FULL_REJECT', 'LOT_REJECTION'):
-                    _override = _iqf_sub.iqf_incoming_qty
-                if _override and _override > 0:
-                    rw_qty = _override
-        except Exception:
-            pass
+            if _iqf_sub and _iqf_sub.iqf_incoming_qty and _iqf_sub.iqf_incoming_qty > 0:
+                rw_qty = _iqf_sub.iqf_incoming_qty
+                rw_source = 'IQF_Submitted.iqf_incoming_qty'
+                print(f'[DELINK RW_QTY] Source: {rw_source}, value: {rw_qty}')
+        except Exception as e:
+            print(f'[DELINK RW_QTY] IQF_Submitted lookup failed: {e}')
+
+        # 2. Fallback to Brass_Audit_Rejection_ReasonStore
+        if rw_qty <= 0:
+            audit_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+            if audit_store and getattr(audit_store, 'total_rejection_quantity', None) is not None:
+                rw_qty = audit_store.total_rejection_quantity
+                rw_source = 'Brass_Audit_Rejection_ReasonStore'
+                print(f'[DELINK RW_QTY] Source: {rw_source}, value: {rw_qty}')
+
+        # 3. Fallback to Brass_QC_Rejection_ReasonStore
+        if rw_qty <= 0:
+            qc_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+            if qc_store and getattr(qc_store, 'total_rejection_quantity', None) is not None:
+                rw_qty = qc_store.total_rejection_quantity
+                rw_source = 'Brass_QC_Rejection_ReasonStore'
+                print(f'[DELINK RW_QTY] Source: {rw_source}, value: {rw_qty}')
+
+        # 4. Final fallback: calculate from scan data (Brass_QC + Brass_Audit rejected trays)
+        if rw_qty <= 0:
+            try:
+                qc_scan_total = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).aggregate(
+                    total=Sum(F('rejected_tray_quantity'), output_field=IntegerField())
+                )['total'] or 0
+                audit_scan_total = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).aggregate(
+                    total=Sum(F('rejected_tray_quantity'), output_field=IntegerField())
+                )['total'] or 0
+                rw_qty = max(qc_scan_total, audit_scan_total)  # Take the one with more data
+                if rw_qty > 0:
+                    rw_source = f'scan_data (QC:{qc_scan_total}, Audit:{audit_scan_total})'
+                    print(f'[DELINK RW_QTY] Source: {rw_source}, value: {rw_qty}')
+            except Exception as e:
+                print(f'[DELINK RW_QTY] Scan data fallback failed: {e}')
 
         if rw_qty <= 0:
-            return Response({'success': False, 'error': 'No IQF incoming qty — rw_qty is 0'}, status=400)
+            return Response({
+                'success': False,
+                'error': f'Cannot resolve IQF incoming qty — no data from rejection stores or scan data. rw_qty={rw_qty}',
+                'rw_source': rw_source,
+            }, status=400)
 
         accepted_qty = rw_qty - iqf_rejection_total
         rejected_qty = iqf_rejection_total
 
         if accepted_qty < 0:
             return Response({'success': False, 'error': 'Rejection total exceeds RW qty'}, status=400)
+
+        # ── ACCEPT TRAY IDs FLEXIBILITY ──
+        # Do NOT validate that accepted_tray_ids must come from original incoming trays.
+        # Accepted trays can be: reused (from original list), reused (from other lots), or new.
+        # This endpoint only needs accepted_set to mark which ORIGINAL trays are NOT being accepted.
+        print(f'[DELINK MODAL] lot={lot_id}, rw_qty={rw_qty}, accepted_tray_ids_count={len(accepted_tray_ids)}, '
+              f'iqf_rejection_total={iqf_rejection_total}, accepted_qty={accepted_qty}, rejected_qty={rejected_qty}')
 
         # ── Resolve global tray capacity ──
         def _resolve_global_cap():
@@ -2801,6 +2849,11 @@ def iqf_accept_delink_modal(request):
 
         # ── Resolve per-tray capacity (same as iqf_submit_audit) ──
         def _resolve_tray_cap(iqf_tray_obj):
+            # Handle both IQFTrayId objects and dict records from snapshots
+            if isinstance(iqf_tray_obj, dict):
+                # From snapshot: {'tray_id': ..., 'qty': ..., 'capacity': ...}
+                return iqf_tray_obj.get('capacity', tray_capacity)
+            # IQFTrayId object
             cap = getattr(iqf_tray_obj, 'tray_capacity', None)
             if cap and cap > 0:
                 return cap
@@ -2819,19 +2872,87 @@ def iqf_accept_delink_modal(request):
                 pass
             return 16
 
-        # ── Get all original lot trays (non-delinked) ──
+        # ── Get all original lot trays (non-delinked) — MULTI-SOURCE FALLBACK ──
+        # PRIMARY: IQFTrayId (DB source of truth)
         all_trays_qs = list(IQFTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('id'))
+        original_tray_source = 'IQFTrayId'
 
+        # FALLBACK 1: If no IQFTrayId records, load from IQF_Submitted.iqf_data snapshot
+        if not all_trays_qs:
+            try:
+                iqf_sub = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+                if iqf_sub and iqf_sub.iqf_data and iqf_sub.iqf_data.get('trays'):
+                    all_trays_qs = iqf_sub.iqf_data.get('trays', [])
+                    original_tray_source = 'IQF_Submitted.iqf_data'
+                    print(f'[DELINK ORIGINAL TRAYS] Loaded from IQF_Submitted snapshot: {len(all_trays_qs)} trays')
+            except Exception as e:
+                print(f'[DELINK ORIGINAL TRAYS] IQF_Submitted fallback failed: {e}')
+
+        # FALLBACK 2: If still empty, load from original_data snapshot
+        if not all_trays_qs:
+            try:
+                iqf_sub = IQF_Submitted.objects.filter(lot_id=lot_id, is_completed=True).last()
+                if iqf_sub and iqf_sub.original_data and iqf_sub.original_data.get('trays'):
+                    all_trays_qs = iqf_sub.original_data.get('trays', [])
+                    original_tray_source = 'IQF_Submitted.original_data'
+                    print(f'[DELINK ORIGINAL TRAYS] Loaded from IQF_Submitted.original_data snapshot: {len(all_trays_qs)} trays')
+            except Exception as e:
+                print(f'[DELINK ORIGINAL TRAYS] original_data fallback failed: {e}')
+
+        # FALLBACK 3: Load from Brass_QC_Submission if IQF came from Brass QC rejection
+        if not all_trays_qs:
+            try:
+                brass_sub = Brass_QC_Submission.objects.filter(lot_id=lot_id, is_completed=True).last()
+                if brass_sub:
+                    # Get trays from full_reject_data or partial_reject_data
+                    reject_data = brass_sub.full_reject_data or brass_sub.partial_reject_data or {}
+                    if reject_data.get('trays'):
+                        all_trays_qs = reject_data.get('trays', [])
+                        original_tray_source = 'Brass_QC_Submission.reject_data'
+                        print(f'[DELINK ORIGINAL TRAYS] Loaded from Brass_QC_Submission: {len(all_trays_qs)} trays')
+            except Exception as e:
+                print(f'[DELINK ORIGINAL TRAYS] Brass_QC_Submission fallback failed: {e}')
+
+        print(f'[DELINK ORIGINAL TRAYS] Source={original_tray_source}, Count={len(all_trays_qs)}')
+
+        # ── Extract tray IDs from original trays (handle both objects and dicts) ──
+        def _get_tray_id(tray_obj):
+            """Extract tray_id from IQFTrayId object or dict snapshot."""
+            if isinstance(tray_obj, dict):
+                return tray_obj.get('tray_id', '')
+            return getattr(tray_obj, 'tray_id', '') or ''
+
+        def _get_tray_qty(tray_obj):
+            """Extract original qty from IQFTrayId object or dict snapshot."""
+            if isinstance(tray_obj, dict):
+                return int(tray_obj.get('qty', 0) or 0)
+            qty = getattr(tray_obj, 'tray_quantity', 0) or 0
+            return int(qty)
+
+        # ── ACCEPT TRAY IDs FLEXIBILITY: NO STRICT VALIDATION ──
+        # accepted_tray_ids from frontend can include:
+        # - Reused trays from original list (e.g., NB-A00051 scanned with qty > original)
+        # - Reused trays from other lots (e.g., NB-A00151 not in original incoming)
+        # - New trays
+        # We only care which ORIGINAL trays are NOT in the accepted_set → become reject pool.
         accepted_set = set(accepted_tray_ids)
         delinked_set = set(delinked_tray_ids) - accepted_set  # safety: accepted cannot be delinked
 
-        # ── Compute max delink count ──
-        non_accepted = [t for t in all_trays_qs if (t.tray_id or '') not in accepted_set]
+        # Extract tray IDs for logging and analysis
+        original_tray_ids = [_get_tray_id(t) for t in all_trays_qs if _get_tray_id(t)]
+        print(f'[DELINK MODAL] Accepted tray IDs: {accepted_tray_ids} (count={len(accepted_tray_ids)})')
+        print(f'[DELINK MODAL] Delinked tray IDs: {delinked_tray_ids} (count={len(delinked_tray_ids)})')
+        print(f'[DELINK MODAL] Original incoming trays: {original_tray_ids} (count={len(original_tray_ids)})')
+
+        # ── Compute max delink count — based on original tray capacity ──
+        non_accepted = [t for t in all_trays_qs if _get_tray_id(t) not in accepted_set]
         min_reject_trays_needed = ceil(rejected_qty / tray_capacity) if rejected_qty > 0 else 0
         max_delink_count = max(0, len(non_accepted) - min_reject_trays_needed)
 
+        print(f'[DELINK MODAL] non_accepted={len(non_accepted)}, min_reject_trays_needed={min_reject_trays_needed}, max_delink_count={max_delink_count}')
+
         # Enforce delink limit — only valid original tray IDs, up to max
-        all_tray_id_set = set(t.tray_id or '' for t in all_trays_qs)
+        all_tray_id_set = set(_get_tray_id(t) for t in all_trays_qs if _get_tray_id(t))
         valid_delinked = [tid for tid in delinked_tray_ids if tid in all_tray_id_set and tid not in accepted_set]
         if len(valid_delinked) > max_delink_count:
             valid_delinked = valid_delinked[:max_delink_count]
@@ -2844,8 +2965,8 @@ def iqf_accept_delink_modal(request):
         if show_reject:
             # ── Build reject pool = non-accepted, non-delinked ──
             reject_pool = [t for t in all_trays_qs
-                           if (t.tray_id or '') not in accepted_set
-                           and (t.tray_id or '') not in delinked_set]
+                           if _get_tray_id(t) not in accepted_set
+                           and _get_tray_id(t) not in delinked_set]
 
             # ── Allocate rejected_qty in REVERSE order — same algo as iqf_submit_audit ──
             reject_allocation = []
@@ -2854,11 +2975,17 @@ def iqf_accept_delink_modal(request):
                 if remaining_to_reject <= 0:
                     break
                 cap = _resolve_tray_cap(t)
+                tid = _get_tray_id(t)
+                is_top = False
+                if isinstance(t, dict):
+                    is_top = bool(t.get('top_tray', False))
+                else:
+                    is_top = bool(getattr(t, 'top_tray', False))
                 take = min(cap, remaining_to_reject)
                 reject_allocation.append({
-                    'tray_id': t.tray_id or '',
+                    'tray_id': tid,
                     'qty': take,
-                    'top_tray': bool(t.top_tray),
+                    'top_tray': is_top,
                 })
                 remaining_to_reject -= take
             reject_allocation.reverse()
@@ -2868,17 +2995,37 @@ def iqf_accept_delink_modal(request):
             reject_allocation = []
             remaining_to_reject = rejected_qty
 
+        # ── Compute reject pool capacity ──
+        reject_pool_capacity = 0
+        for t in all_trays_qs:
+            tid = _get_tray_id(t)
+            if tid not in accepted_set and tid not in delinked_set:
+                reject_pool_capacity += _resolve_tray_cap(t)
+
+        print(f'[DELINK MODAL] reject_pool={len(reject_pool)}, capacity={reject_pool_capacity} / {rejected_qty} needed')
+
+        # ── Build tray list with status for modal rendering ──
+        original_trays = []
         reject_tray_id_set = set(r['tray_id'] for r in reject_allocation)
         reject_qty_map = {r['tray_id']: r['qty'] for r in reject_allocation}
 
-        # ── Build tray list with status ──
-        original_trays = []
         for t in all_trays_qs:
-            remaining = int(getattr(t, 'remaining_qty', 0) or 0)
-            raw_qty = int(getattr(t, 'tray_quantity', 0) or 0)
-            qty = remaining if remaining > 0 else raw_qty
-            cap = _resolve_tray_cap(t)
-            tid = t.tray_id or ''
+            tid = _get_tray_id(t)
+            if not tid:
+                continue
+
+            # Get quantity (for dicts from snapshot)
+            if isinstance(t, dict):
+                qty = t.get('qty', 0)
+                cap = t.get('capacity', tray_capacity)
+                is_top = bool(t.get('top_tray', False))
+            else:
+                # IQFTrayId object
+                remaining = int(getattr(t, 'remaining_qty', 0) or 0)
+                raw_qty = int(getattr(t, 'tray_quantity', 0) or 0)
+                qty = remaining if remaining > 0 else raw_qty
+                cap = _resolve_tray_cap(t)
+                is_top = bool(getattr(t, 'top_tray', False))
 
             if tid in accepted_set:
                 tray_status = 'ACCEPTED'
@@ -2893,29 +3040,25 @@ def iqf_accept_delink_modal(request):
                 'tray_id': tid,
                 'original_qty': qty,
                 'capacity': cap,
-                'top_tray': bool(t.top_tray),
+                'top_tray': is_top,
                 'status': tray_status,
             }
             if tray_status == 'REJECT':
                 entry['reject_qty'] = reject_qty_map.get(tid, 0)
             original_trays.append(entry)
 
-        print(f'[IQF DELINK MODAL] lot={lot_id}, rw={rw_qty}, acc={accepted_qty}, rej={rejected_qty}, '
-              f'trays={len(all_trays_qs)}, in_accept={len(accepted_set)}, delinked={len(delinked_set)}, '
+        print(f'[IQF DELINK MODAL] lot={lot_id}, source={original_tray_source}, rw={rw_qty}, '
+              f'acc={accepted_qty}, rej={rejected_qty}, orig_trays={len(all_trays_qs)}, '
+              f'in_accept={len(accepted_set)}, delinked={len(delinked_set)}, '
               f'reject_pool={len(reject_pool)}, max_delink={max_delink_count}, '
-              f'reject_fully_allocated={remaining_to_reject == 0}')
-
-        # ── Compute reject pool total capacity for UI capacity bar ──
-        reject_pool_capacity = 0
-        for t in all_trays_qs:
-            tid = t.tray_id or ''
-            if tid not in accepted_set and tid not in delinked_set:
-                reject_pool_capacity += _resolve_tray_cap(t)
+              f'reject_capacity={reject_pool_capacity}/{rejected_qty}, reject_allocated={remaining_to_reject == 0}')
 
         # ── CONFIRM MODE: Update IQF_Submitted and finalize ──
+        # GUARD: Ensure delink/reject allocation is complete before confirming
         if request.method == 'POST' and payload.get('confirm'):
-            # CAPACITY SAFETY GUARD — reject pool must hold all rejected qty
+            # SAFETY CHECK: reject pool must have capacity for all rejected qty
             if reject_pool_capacity < rejected_qty:
+                print(f'[DELINK CONFIRM ERROR] Insufficient capacity: pool={reject_pool_capacity}, needed={rejected_qty}')
                 return Response({
                     'success': False,
                     'error': f'Selected trays cannot fulfill reject quantity. Pool capacity ({reject_pool_capacity}) < reject needed ({rejected_qty}). Please select fewer delinks.',
@@ -2924,63 +3067,78 @@ def iqf_accept_delink_modal(request):
                 }, status=400)
 
             if not show_reject or remaining_to_reject != 0:
+                print(f'[DELINK CONFIRM ERROR] Allocation incomplete: show_reject={show_reject}, remaining={remaining_to_reject}')
                 return Response({'success': False, 'error': 'Cannot confirm: reject allocation incomplete. Select all delink trays first.'}, status=400)
 
-            with transaction.atomic():
-                sub = IQF_Submitted.objects.filter(lot_id=lot_id).first()
-                if not sub:
-                    return Response({'success': False, 'error': 'No IQF submission found'}, status=404)
+            try:
+                with transaction.atomic():
+                    sub = IQF_Submitted.objects.filter(lot_id=lot_id).first()
+                    if not sub:
+                        print(f'[DELINK CONFIRM ERROR] No IQF_Submitted found for lot {lot_id}')
+                        return Response({'success': False, 'error': 'No IQF submission found'}, status=404)
 
-                # Update partial_reject_data with user's delink choices
-                sub.partial_reject_data = {
-                    'label': 'PARTIAL_REJECT',
-                    'qty': rejected_qty,
-                    'total_trays': len(reject_allocation),
-                    'trays': reject_allocation,
-                    'reasons': sub.rejection_details or [],
-                }
-                sub.save(update_fields=['partial_reject_data'])
+                    # Update partial_reject_data with user's delink choices
+                    sub.partial_reject_data = {
+                        'label': 'PARTIAL_REJECT',
+                        'qty': rejected_qty,
+                        'total_trays': len(reject_allocation),
+                        'trays': reject_allocation,
+                        'reasons': sub.rejection_details or [],
+                    }
+                    sub.save(update_fields=['partial_reject_data'])
+                    print(f'[DELINK CONFIRM] Updated IQF_Submitted.partial_reject_data: {len(reject_allocation)} reject trays')
 
-                # Mark delinked trays in IQFTrayId
-                if delinked_set:
-                    IQFTrayId.objects.filter(lot_id=lot_id, tray_id__in=delinked_set).update(
-                        delink_tray=True
-                    )
-                    print(f'[IQF DELINK CONFIRM] Marked {len(delinked_set)} trays as delinked in IQFTrayId')
+                    # Mark delinked trays in IQFTrayId
+                    if delinked_set:
+                        IQFTrayId.objects.filter(lot_id=lot_id, tray_id__in=delinked_set).update(
+                            delink_tray=True
+                        )
+                        print(f'[DELINK CONFIRM] Marked {len(delinked_set)} trays as delinked in IQFTrayId')
 
-                # Finalize TotalStockModel flags (same as iqf_verify_trays_confirm POST)
-                ts.iqf_few_cases_acceptance = True
-                ts.iqf_onhold_picking = False
-                ts.send_brass_qc = True
-                ts.send_brass_audit_to_iqf = False
-                ts.iqf_accepted_qty_verified = False
-                ts.next_process_module = 'Brass QC'
-                # ✅ FIX: Reset Brass QC fields for fresh cycle when lot returns from IQF
-                ts.brass_qc_accepted_qty_verified = False
-                ts.brass_qc_accptance = False
-                ts.brass_qc_rejection = False
-                ts.brass_qc_few_cases_accptance = False
-                ts.brass_draft = False
-                ts.brass_onhold_picking = False
-                ts.brass_accepted_tray_scan_status = False
-                ts.brass_physical_qty = 0
-                ts.brass_missing_qty = 0
-                ts.save(update_fields=[
-                    'iqf_few_cases_acceptance', 'iqf_onhold_picking',
-                    'send_brass_qc', 'send_brass_audit_to_iqf', 'iqf_accepted_qty_verified', 'next_process_module',
-                    'brass_qc_accepted_qty_verified', 'brass_qc_accptance', 'brass_qc_rejection',
-                    'brass_qc_few_cases_accptance', 'brass_draft', 'brass_onhold_picking',
-                    'brass_accepted_tray_scan_status', 'brass_physical_qty', 'brass_missing_qty',
-                ])
+                    # Finalize TotalStockModel flags (same as iqf_verify_trays_confirm POST)
+                    ts.iqf_few_cases_acceptance = True
+                    ts.iqf_onhold_picking = False
+                    ts.send_brass_qc = True
+                    ts.send_brass_audit_to_iqf = False
+                    ts.iqf_accepted_qty_verified = False
+                    ts.next_process_module = 'Brass QC'
+                    # ✅ FIX: Reset Brass QC fields for fresh cycle when lot returns from IQF
+                    ts.brass_qc_accepted_qty_verified = False
+                    ts.brass_qc_accptance = False
+                    ts.brass_qc_rejection = False
+                    ts.brass_qc_few_cases_accptance = False
+                    ts.brass_draft = False
+                    ts.brass_onhold_picking = False
+                    ts.brass_accepted_tray_scan_status = False
+                    ts.brass_physical_qty = 0
+                    ts.brass_missing_qty = 0
+                    ts.save(update_fields=[
+                        'iqf_few_cases_acceptance', 'iqf_onhold_picking',
+                        'send_brass_qc', 'send_brass_audit_to_iqf', 'iqf_accepted_qty_verified', 'next_process_module',
+                        'brass_qc_accepted_qty_verified', 'brass_qc_accptance', 'brass_qc_rejection',
+                        'brass_qc_few_cases_accptance', 'brass_draft', 'brass_onhold_picking',
+                        'brass_accepted_tray_scan_status', 'brass_physical_qty', 'brass_missing_qty',
+                    ])
 
-                print(f'[IQF DELINK CONFIRM] lot={lot_id} finalized: delinked={sorted(delinked_set)}, reject_trays={[r["tray_id"] for r in reject_allocation]}')
+                    print(f'[DELINK CONFIRM] ✅ FINALIZED lot={lot_id}: delinked={sorted(delinked_set)}, rejected_qty={rejected_qty}')
 
-            return Response({
-                'success': True,
-                'confirmed': True,
-                'message': 'IQF verification completed. Lot moved to Brass QC.',
-                'lot_id': lot_id,
-            })
+                return Response({
+                    'success': True,
+                    'confirmed': True,
+                    'message': 'IQF verification completed. Lot moved to Brass QC.',
+                    'lot_id': lot_id,
+                })
+
+            except Exception as e:
+                print(f'[DELINK CONFIRM EXCEPTION] {e}')
+                traceback.print_exc()
+                # CRITICAL: If delink confirm fails, keep IQF_Submitted as-is (PARTIAL draft state)
+                # Lot stays visible in pick table for user retry
+                return Response({
+                    'success': False,
+                    'error': f'Delink confirmation failed: {str(e)}. Lot remains in PARTIAL state for retry.',
+                    'lot_id': lot_id,
+                }, status=500)
 
         return Response({
             'success': True,
@@ -2996,12 +3154,19 @@ def iqf_accept_delink_modal(request):
             'reject_fully_allocated': remaining_to_reject == 0,
             'delink_complete': show_reject,
             'reject_pool_capacity': reject_pool_capacity,
+            'accepted_tray_count': len(accepted_tray_ids),
         })
 
     except Exception as e:
         print(f'[IQF DELINK MODAL ERROR] {e}')
         traceback.print_exc()
-        return Response({'success': False, 'error': 'Server error'}, status=500)
+        # Return informative error with context for debugging
+        return Response({
+            'success': False,
+            'error': f'Delink modal initialization failed: {str(e)}',
+            'lot_id': lot_id,
+            'iqf_rejection_total': iqf_rejection_total,
+        }, status=500)
 
 
 # ── IQF Lot Rejection — One-click full lot rejection ──

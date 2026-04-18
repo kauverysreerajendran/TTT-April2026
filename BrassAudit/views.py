@@ -95,17 +95,19 @@ class BrassAuditPickTableView(APIView):
         )
 
         # Filter: lots from Brass QC (accepted/partial) that are pending in Brass Audit
+        # ✅ FIXED: Include IQF-accepted lots - they should appear in Brass Audit after IQF → Brass QC → Brass Audit flow
         queryset = queryset.filter(
             Q(brass_qc_accptance=True, brass_audit_accptance__isnull=True) |
             Q(brass_qc_accptance=True, brass_audit_accptance=False) |
             Q(brass_qc_few_cases_accptance=True, brass_onhold_picking=False) |
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=True)
         ).exclude(
-            Q(iqf_acceptance=True) | Q(iqf_few_cases_acceptance=True)
-        ).exclude(
             brass_audit_rejection=True
         ).exclude(
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
+        ).exclude(
+            # ✅ EXCLUDE parent lots that have been split - only child lots should appear
+            brass_qc_transition_reject_lot_id__isnull=False
         )
 
         if sort and sort in sort_field_mapping:
@@ -288,7 +290,25 @@ class BrassAuditPickTableView(APIView):
             if not data.get('brass_audit_missing_qty'):
                 data['brass_audit_missing_qty'] = data.get('brass_missing_qty', 0)
 
+        # Remove duplicate lot rows (keep first occurrence) — preserves existing master_data order
+        seen = set()
+        unique_master = []
+        for d in master_data:
+            lid = d.get('stock_lot_id') or d.get('lot_id')
+            if lid not in seen:
+                seen.add(lid)
+                unique_master.append(d)
+        master_data = unique_master
+
+        # Debug: log what records remain after dedupe
+        try:
+            print(f"[BrassAuditPickTable] Total master_data records after dedupe: {len(master_data)}")
+            print("[BrassAuditPickTable] Processed lot_ids:", [d.get('stock_lot_id') or d.get('lot_id') for d in master_data])
+        except Exception:
+            pass
+
         context = {
+            
             'master_data': master_data,
             'page_obj': page_obj,
             'paginator': paginator,
@@ -298,6 +318,8 @@ class BrassAuditPickTableView(APIView):
             'pick_table_count': len(master_data),
         }
         return Response(context, template_name=self.template_name)
+        # Deduplicate rows by lot id (keep first occurrence)
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1252,6 +1274,10 @@ def _handle_audit_submission(request, action):
         stock.next_process_module = 'Brass QC'
         stock.last_process_module = 'Brass Audit'
         stock.send_brass_audit_to_qc = True
+        # ✅ FIX: Reset Brass QC acceptance flags so lot can be reprocessed in Brass QC
+        stock.brass_qc_accptance = False
+        stock.brass_qc_accepted_qty_verified = False
+        stock.brass_qc_rejection = False
     elif submission_type == "PARTIAL":
         stock.brass_audit_few_cases_accptance = True
         stock.brass_audit_rejection = True
@@ -1277,6 +1303,7 @@ def _handle_audit_submission(request, action):
         'send_brass_audit_to_qc', 'send_brass_audit_to_iqf',
         'brass_audit_transition_lot_id', 'brass_audit_transition_accept_lot_id',
         'brass_audit_transition_reject_lot_id', 'brass_audit_transition_label',
+        'brass_qc_accptance', 'brass_qc_accepted_qty_verified', 'brass_qc_rejection',  # ✅ ADDED for full reject reset
     ])
 
     # FIX 4: Sync accepted trays to BrassAuditTrayId so Jig Loading can find them.

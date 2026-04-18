@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from modelmasterapp.models import *
+from modelmasterapp.tray_code_mapping import get_tray_codes_for_plating_stock, validate_tray_code_for_stock
 from django.db.models import OuterRef, Subquery, Exists, F, TextField
 from django.db.models.functions import Cast
 from django.db.models.fields.json import KeyTextTransform
@@ -32,14 +33,16 @@ class JU_Zone_MainTable(TemplateView):
         """
         Get dynamic tray capacity using InprocessInspectionTrayCapacity for overrides
         Rules:
-        - Normal: 20
-        - Jumbo: 12
+        - Normal (or NR/NB/ND/NL): 20
+        - Jumbo  (or JR/JB/JD):    12
         - Others: Use InprocessInspectionTrayCapacity or ModelMaster capacity
         """
         try:
-            if tray_type_name == 'Normal':
+            # Workflow-spec capacity — covers both type names and tray code prefixes
+            _tn = (tray_type_name or '').upper()
+            if _tn in ('NORMAL', 'NR', 'NB', 'ND', 'NL', 'NW'):
                 return 20
-            elif tray_type_name == 'Jumbo':
+            elif _tn in ('JUMBO', 'JR', 'JB', 'JD'):
                 return 12
             else:
                 # First try to get custom capacity for this tray type
@@ -475,7 +478,8 @@ class JU_Zone_MainTable(TemplateView):
             # Try ModelMasterCreation first
             if batch_id in mmc_dict:
                 data = mmc_dict[batch_id]
-                model_name = data.get('model_stock_no__model_no') or ''
+                # Use plating_stk_no as model_name so no_of_model_cases matches the API
+                model_name = data.get('plating_stk_no') or data.get('model_stock_no__model_no') or ''
                 plating_stk_no = data.get('plating_stk_no') or ''
                 polishing_stk_no = data.get('polishing_stk_no') or ''
                 version_name = data.get('version__version_name') or ''
@@ -499,7 +503,8 @@ class JU_Zone_MainTable(TemplateView):
             # Try RecoveryMasterCreation as fallback
             elif batch_id in rmc_dict:
                 data = rmc_dict[batch_id]
-                model_name = data.get('model_stock_no__model_no') or ''
+                # Use plating_stk_no as model_name so no_of_model_cases matches the API
+                model_name = data.get('plating_stk_no') or data.get('model_stock_no__model_no') or ''
                 plating_stk_no = data.get('plating_stk_no') or ''
                 polishing_stk_no = data.get('polishing_stk_no') or ''
                 version_name = data.get('version__version_name') or ''
@@ -882,12 +887,17 @@ class JU_Zone_MainTable(TemplateView):
                 if isinstance(_raw_mc, list):
                     all_model_numbers.update([str(m) for m in _raw_mc])
                 elif isinstance(_raw_mc, str):
-                    for _item in _raw_mc.split(','):
-                        _mn = _item.split(':')[0].strip()
+                    # Handle pipe-separated format: "MODEL1 [LID...]:QTY | MODEL2 [LID...]:QTY"
+                    for _item in _raw_mc.replace('|', ',').split(','):
+                        _mn = _item.split(':')[0].split('[')[0].strip()
                         if _mn:
                             all_model_numbers.add(_mn)
-            elif getattr(jig_detail, 'plating_stock_num', None):
-                all_model_numbers.add(str(jig_detail.plating_stock_num).strip())
+            # Always collect plating_stock_num (handles comma-separated multi-model)
+            if getattr(jig_detail, 'plating_stock_num', None):
+                for _psn in str(jig_detail.plating_stock_num).split(','):
+                    _psn = _psn.strip()
+                    if _psn:
+                        all_model_numbers.add(_psn)
             # 🔥 NEW: Collect all lot_ids for dual-table lookup
             if hasattr(jig_detail, 'lot_id_quantities') and jig_detail.lot_id_quantities:
                 all_lot_ids.update(jig_detail.lot_id_quantities.keys())
@@ -1529,10 +1539,45 @@ class JU_Zone_MainTable(TemplateView):
         # Also check direct unloads
         direct_unloads = set(JigUnload_TrayId.objects.values_list('lot_id', flat=True))
         bare_unloaded_lot_ids |= direct_unloads
-        
+
+        # ✅ SECONDARY MULTI-MODEL LOT FILTER:
+        # When Jig Loading creates a multi-model jig, each additional lot gets its own
+        # JigCompleted record. These secondary records appear in the unloading pick table
+        # as separate rows with N/A model (empty plating_color). They should be hidden
+        # because they are already represented inside the primary multi-model row.
+        # Logic: any lot_id that appears in another JigCompleted's multi_model_allocation
+        # but is NOT that record's own primary lot_id is a secondary/absorbed lot.
+        secondary_lot_ids = set()
+        for _mm_rec in JigCompleted.objects.filter(
+            is_multi_model=True,
+            multi_model_allocation__isnull=False
+        ).only('lot_id', 'multi_model_allocation'):
+            if _mm_rec.multi_model_allocation:
+                for _alloc in _mm_rec.multi_model_allocation:
+                    if isinstance(_alloc, dict):
+                        _alloc_lot = _alloc.get('lot_id', '')
+                        if _alloc_lot and _alloc_lot != _mm_rec.lot_id:
+                            secondary_lot_ids.add(_alloc_lot)
+        print(f"[ZONE2 FILTER] Secondary multi-model lot_ids to hide: {len(secondary_lot_ids)}")
+
         # Filter jigs
         filtered_jigs = []
         for jig in queryset:
+            # ✅ SECONDARY LOT CHECK: hide lots that are secondary models in a
+            # multi-model Jig Loading submission (already shown inside primary row).
+            if jig.lot_id in secondary_lot_ids:
+                print(f"🚫 [ZONE2 SECONDARY LOT FILTER] Hiding secondary multi-model lot: {jig.lot_id}")
+                continue
+
+            # ✅ PRIMARY LOT CHECK (NEW): If primary lot is already unloaded,
+            # hide entire jig from Zone 2 pick table (including any secondary lots from Jig Loading).
+            # This prevents "N?A" lots from appearing when the jig was already unloaded in Zone 1.
+            primary_lot_id = getattr(jig, 'lot_id', None)
+            if primary_lot_id:
+                if primary_lot_id in completed_lot_ids or primary_lot_id in bare_unloaded_lot_ids:
+                    print(f"🚫 [ZONE2 PRIMARY LOT FILTER] Hiding jig with unloaded primary lot: {jig.jig_id} (lot_id: {primary_lot_id})")
+                    continue
+            
             # lot_id_quantities may not be set yet (second-pass loop runs after this filter),
             # so fall back to reading directly from draft_data on the ORM object.
             _jfq = getattr(jig, 'lot_id_quantities', None) or {}
@@ -2947,7 +2992,7 @@ def JU_Zone_save_jig_unload_draft(request):
             'main_lot_id': main_lot_id,
             'total_quantity': total_quantity,
             'tray_data': [],
-            'tray_type_capacity': data.get('tray_type_capacity', 'Normal - 16'),
+            'tray_type_capacity': data.get('tray_type_capacity', 'Normal - 20'),
             'created_timestamp': timezone.now().isoformat(),
             'combined_lot_ids': combined_lot_ids
         }
@@ -3018,6 +3063,71 @@ def JU_Zone_load_jig_unload_draft(request):
             
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+def get_plating_stock_for_lot(lot_id):
+    """
+    Retrieve plating stock number for a given lot_id
+    Searches in: TotalStockModel, RecoveryStockModel, JigCompleted
+    """
+    try:
+        # Try TotalStockModel first
+        tsm = TotalStockModel.objects.select_related('model_stock_no').filter(lot_id=lot_id).first()
+        if tsm and getattr(tsm.model_stock_no, 'plating_stk_no', None):
+            return tsm.model_stock_no.plating_stk_no
+        
+        # Try RecoveryStockModel
+        rsm = RecoveryStockModel.objects.select_related('model_stock_no').filter(lot_id=lot_id).first()
+        if rsm and getattr(rsm.model_stock_no, 'plating_stk_no', None):
+            return rsm.model_stock_no.plating_stk_no
+        
+        # Try JigCompleted (for Jig Loading lot IDs with draft_data)
+        jc = JigCompleted.objects.filter(lot_id=lot_id).first()
+        if jc and hasattr(jc, 'draft_data') and jc.draft_data:
+            draft_data = jc.draft_data or {}
+            return draft_data.get('plating_stock_no', None)
+        
+        return None
+    except Exception as e:
+        print(f"[DEBUG] Error getting plating stock for lot {lot_id}: {e}")
+        return None
+
+
+def validate_tray_code_by_master_data(tray_id, lot_id):
+    """
+    Validate tray code against master data mapping
+    Returns: (is_valid: bool, message: str, allowed_codes: list, zone: str)
+    """
+    import re
+    
+    # Extract tray code prefix from tray_id (e.g., "NR" from "NR-A00001")
+    match = re.match(r'^([A-Z]+)-A\d{5}$', tray_id)
+    if not match:
+        return False, f"Invalid tray format. Expected format: XX-A00001", [], None
+    
+    tray_code_prefix = match.group(1)
+    
+    # Get plating stock number for this lot
+    plating_stock = get_plating_stock_for_lot(lot_id)
+    if not plating_stock:
+        print(f"[DEBUG] Zone 2 - No plating stock found for lot {lot_id}, allowing all non-IPS prefixes")
+        # Fallback: allow all non-IPS prefixes (ND-, JD-, NL-, JL-, NB-, JB-)
+        return True, f"Tray validation skipped (plating stock unknown), allowing {tray_code_prefix}", ['ND', 'JD', 'NL', 'JL', 'NB', 'JB'], 'Zone2'
+    
+    # Validate against master data
+    is_valid, message, tray_info = validate_tray_code_for_stock(tray_code_prefix, plating_stock)
+    
+    if not is_valid:
+        allowed_codes = tray_info.get('tray_codes', []) if tray_info else []
+        zone = tray_info.get('zone', 'Zone2') if tray_info else 'Zone2'
+        return False, message, allowed_codes, zone
+    
+    # Valid - return the allowed codes from master data
+    allowed_codes = tray_info.get('tray_codes', [tray_code_prefix]) if tray_info else [tray_code_prefix]
+    zone = tray_info.get('zone', 'Zone2') if tray_info else 'Zone2'
+    
+    return True, f"Tray code {tray_code_prefix} is valid for plating stock {plating_stock}", allowed_codes, zone
+
     
 @csrf_exempt
 @require_POST
@@ -3315,6 +3425,28 @@ def JU_Zone_validate_tray_id_dynamic(request):
                 'validation_type': 'invalid_format'
             }, status=400)
 
+        # STEP 1.5: ✅ NEW - Validate tray code against master data (Zone 2 specific)
+        try:
+            master_valid, master_message, allowed_codes, zone = validate_tray_code_by_master_data(tray_id, lot_id)
+            
+            if not master_valid:
+                print(f"[DEBUG] Zone 2 master data validation failed: {master_message}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Tray code validation failed',
+                    'message': f'❌ {tray_id} - {master_message}',
+                    'validation_type': 'invalid_tray_code_for_lot',
+                    'details': {
+                        'required_codes': allowed_codes,
+                        'zone': zone
+                    }
+                }, status=400)
+            
+            print(f"[DEBUG] Zone 2 master data validation passed: {master_message}")
+        except Exception as e:
+            print(f"[DEBUG] Zone 2 master data validation skipped due to error: {e}")
+            # Non-fatal error - continue with other validations
+
         try:
             # Step 1: Check if tray exists in system
             existing_tray = TrayId.objects.filter(tray_id=tray_id).first()
@@ -3564,10 +3696,18 @@ class JU_Zone_Completedtable(TemplateView):
         """
         Get dynamic tray capacity using InprocessInspectionTrayCapacity for overrides
         Rules:
-        - Normal: Use custom capacity from InprocessInspectionTrayCapacity (20)
-        - Others: Use ModelMaster capacity
+        - Normal (or NR/NB/ND/NL): 20
+        - Jumbo  (or JR/JB/JD):    12
+        - Others: Use InprocessInspectionTrayCapacity or ModelMaster capacity
         """
         try:
+            # Workflow-spec capacity — covers both type names and tray code prefixes
+            _tn = (tray_type_name or '').upper()
+            if _tn in ('NORMAL', 'NR', 'NB', 'ND', 'NL', 'NW'):
+                return 20
+            elif _tn in ('JUMBO', 'JR', 'JB', 'JD'):
+                return 12
+
             # First try to get custom capacity for this tray type
             custom_capacity = InprocessInspectionTrayCapacity.objects.filter(
                 tray_type__tray_type=tray_type_name,
@@ -4829,7 +4969,7 @@ def JU_Zone_autosave_jig_unload(request):
                 'total_quantity': data.get('total_quantity', 0),
                 'tray_data': data.get('tray_data', []),
                 'combined_lot_ids': data.get('combined_lot_ids', []),
-                'tray_type_capacity': data.get('tray_type_capacity', 'Normal - 16'),
+                'tray_type_capacity': data.get('tray_type_capacity', 'Normal - 20'),
                 'missing_qty': data.get('missing_qty', 0),
                 'jig_id': data.get('jig_id', ''),
             })

@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from modelmasterapp.models import *
+from modelmasterapp.tray_code_mapping import get_tray_codes_for_plating_stock, validate_tray_code_for_stock
 from django.db.models import OuterRef, Subquery, Exists, F, TextField
 from django.db.models.functions import Cast
 from django.db.models.fields.json import KeyTextTransform
@@ -32,15 +33,16 @@ class Jig_Unloading_MainTable(TemplateView):
         """
         Get tray capacity based on tray type name.
         Rules (per workflow spec):
-        - Normal: 20
-        - Jumbo:  12
+        - Normal (or NR/NB/ND/NL): 20
+        - Jumbo  (or JR/JB/JD):    12
         - Others: DB lookup fallback
         """
         try:
-            # Workflow-spec hardcoded values
-            if tray_type_name == 'Normal':
+            # Workflow-spec capacity — covers both type names and tray code prefixes
+            _tn = (tray_type_name or '').upper()
+            if _tn in ('NORMAL', 'NR', 'NB', 'ND', 'NL', 'NW'):
                 return 20
-            elif tray_type_name == 'Jumbo':
+            elif _tn in ('JUMBO', 'JR', 'JB', 'JD'):
                 return 12
 
             # Fallback: try custom capacity override table
@@ -1449,10 +1451,36 @@ class Jig_Unloading_MainTable(TemplateView):
         # Also check direct unloads
         direct_unloads = set(JigUnload_TrayId.objects.values_list('lot_id', flat=True))
         bare_unloaded_lot_ids |= direct_unloads
-        
+
+        # ✅ SECONDARY MULTI-MODEL LOT FILTER:
+        # When Jig Loading creates a multi-model jig, each additional lot gets its own
+        # JigCompleted record. These secondary records appear in the unloading pick table
+        # as separate rows with N/A model (empty plating_color). They should be hidden
+        # because they are already represented inside the primary multi-model row.
+        # Logic: any lot_id that appears in another JigCompleted's multi_model_allocation
+        # but is NOT that record's own primary lot_id is a secondary/absorbed lot.
+        secondary_lot_ids = set()
+        for _mm_rec in JigCompleted.objects.filter(
+            is_multi_model=True,
+            multi_model_allocation__isnull=False
+        ).only('lot_id', 'multi_model_allocation'):
+            if _mm_rec.multi_model_allocation:
+                for _alloc in _mm_rec.multi_model_allocation:
+                    if isinstance(_alloc, dict):
+                        _alloc_lot = _alloc.get('lot_id', '')
+                        if _alloc_lot and _alloc_lot != _mm_rec.lot_id:
+                            secondary_lot_ids.add(_alloc_lot)
+        print(f"[FILTER] Secondary multi-model lot_ids to hide: {len(secondary_lot_ids)}")
+
         # Filter jigs
         filtered_jigs = []
         for jig in queryset:
+            # ✅ SECONDARY LOT CHECK: hide lots that are secondary models in a
+            # multi-model Jig Loading submission (already shown inside primary row).
+            if jig.lot_id in secondary_lot_ids:
+                print(f"🚫 [SECONDARY LOT FILTER] Hiding secondary multi-model lot: {jig.lot_id}")
+                continue
+
             # lot_id_quantities may not be set yet (second-pass loop runs after this filter),
             # so fall back to reading directly from draft_data on the ORM object.
             _jfq = getattr(jig, 'lot_id_quantities', None) or {}
@@ -1567,15 +1595,16 @@ class JigUnloading_Completedtable(TemplateView):
         """
         Get tray capacity based on tray type name.
         Rules (per workflow spec):
-        - Normal: 20
-        - Jumbo:  12
+        - Normal (or NR/NB/ND/NL): 20
+        - Jumbo  (or JR/JB/JD):    12
         - Others: DB lookup fallback
         """
         try:
-            # Workflow-spec hardcoded values
-            if tray_type_name == 'Normal':
+            # Workflow-spec capacity — covers both type names and tray code prefixes
+            _tn = (tray_type_name or '').upper()
+            if _tn in ('NORMAL', 'NR', 'NB', 'ND', 'NL', 'NW'):
                 return 20
-            elif tray_type_name == 'Jumbo':
+            elif _tn in ('JUMBO', 'JR', 'JB', 'JD'):
                 return 12
 
             # Fallback: try custom capacity override table
@@ -2228,18 +2257,25 @@ class GetUnloadModelsZ1View(APIView):
 
     def _get_tray_info_z1(self, model_master):
         """Get tray_type, tray_capacity, tray_code, tray_color from ModelMaster.
-        All values are read directly from the TrayType DB record — no hardcoding.
+        Capacity is determined by Jig Unloading spec (Normal=20, Jumbo=12),
+        overriding the DB value which may be stale (e.g. 16 for Normal trays).
         TrayType.tray_type (e.g. NR, NB, ND, JB, JR) IS the tray_code.
-        TrayType.tray_capacity is the authoritative capacity from DB.
         TrayType.tray_color is the authoritative color from DB.
         """
         if not model_master:
             return '', 20, '', ''
         tray_type_obj = model_master.tray_type
         if tray_type_obj:
-            tray_code     = tray_type_obj.tray_type or ''      # e.g. NR, NB, ND, JB, JR, JD, NL
-            tray_capacity = tray_type_obj.tray_capacity or 20  # from DB — never hardcoded
-            tray_color    = tray_type_obj.tray_color or ''     # e.g. Red, Blue, D.Green, L.Green
+            tray_code  = tray_type_obj.tray_type or ''      # e.g. NR, NB, ND, JB, JR, JD, NL
+            tray_color = tray_type_obj.tray_color or ''     # e.g. Red, Blue, D.Green, L.Green
+            # Jig Unloading spec: Normal tray codes = 20, Jumbo = 12 (override DB)
+            _tc = tray_code.upper()
+            if _tc in ('NORMAL', 'NR', 'NB', 'ND', 'NL', 'NW'):
+                tray_capacity = 20
+            elif _tc in ('JUMBO', 'JR', 'JB', 'JD'):
+                tray_capacity = 12
+            else:
+                tray_capacity = tray_type_obj.tray_capacity or 20
             return tray_code, tray_capacity, tray_code, tray_color
         # Fallback: ModelMaster.tray_capacity (direct field)
         tray_capacity = model_master.tray_capacity or 20
@@ -2327,6 +2363,19 @@ class GetUnloadModelsZ1View(APIView):
                 polishing_stk_no = ''
                 tray_type, tray_capacity, tray_code, tray_color = 'Normal', 20, 'N', ''
                 images = []
+
+            # ---------------------------------------------------------------
+            # STEP 3b: If a final (non-draft) submitted record exists, prefer
+            # its total_qty — this correctly reflects Add-Model merged qty.
+            # Without this, a GET without additional_jig_ids would show the
+            # primary jig's tray_data delink_qty (98) instead of the merged
+            # submitted qty (196).
+            # ---------------------------------------------------------------
+            _final_sub = JUSubmittedZ1.objects.filter(
+                jig_completed_id=jig_completed_id, lot_id=lot_id, is_draft=False
+            ).first()
+            if _final_sub and _final_sub.total_qty:
+                qty = _final_sub.total_qty
 
             # ---------------------------------------------------------------
             # STEP 4: Always recompute tray slots using DB capacity.
@@ -2445,10 +2494,10 @@ class GetUnloadModelsZ1View(APIView):
                 merged = False
                 for m in models_list:
                     if m['model_no'] == a_plating and a_plating:
-                        # MERGE: same plating_stk_no — keep primary qty, note added jig for record
+                        # MERGE: same plating_stk_no — ADD qty and recompute tray slots
                         if add_jig_id and add_jig_id not in m['jig_id']:
                             m['jig_id'] = m['jig_id'] + ', ' + add_jig_id
-                        info = f'similar model added ({add_jig_id} +{a_qty})'
+                        info = f'+{a_qty} from {add_jig_id}'
                         m.setdefault('merged_info', '')
                         m['merged_info'] = (m['merged_info'] + '; ' + info) if m['merged_info'] else info
                         m.setdefault('merged_lots', [])
@@ -2458,7 +2507,33 @@ class GetUnloadModelsZ1View(APIView):
                             'qty': a_qty,
                             'jig_id': add_jig_id,
                         })
-                        # Keep primary qty and tray slots unchanged — scan is for primary jig only
+                        # ADD qty and recompute tray slots for the combined total
+                        m['qty'] += a_qty
+                        _new_total = m['qty']
+                        _cap = m['tray_capacity'] if m['tray_capacity'] > 0 else 20
+                        _num = math.ceil(_new_total / _cap) if _new_total > 0 else 1
+                        _rem = _new_total % _cap if _new_total % _cap != 0 else _cap
+                        m['tray_slots'] = [
+                            {
+                                'slot': i + 1,
+                                'tray_id': '',
+                                'qty': _rem if i == 0 else _cap,
+                                'is_top_tray': i == 0,
+                                'editable_qty': i == 0,
+                            }
+                            for i in range(_num)
+                        ]
+                        m['num_trays'] = len(m['tray_slots'])
+                        # Preserve existing draft tray IDs — reuse for slots already scanned;
+                        # new slots (from merged qty) start empty.
+                        _existing_tray_ids = {}
+                        if m.get('submitted_data') and m['submitted_data'].get('tray_data'):
+                            for _td in m['submitted_data']['tray_data']:
+                                _existing_tray_ids[_td['slot']] = _td.get('tray_id', '')
+                        if _existing_tray_ids:
+                            for _slot in m['tray_slots']:
+                                _slot['tray_id'] = _existing_tray_ids.get(_slot['slot'], '')
+                        # Keep is_draft and submitted_data — openTrayScan will pre-fill from them
                         merged = True
                         break
 
@@ -2506,6 +2581,9 @@ class GetUnloadModelsZ1View(APIView):
                         'jig_id': add_jig_id,
                         'added_jig_completed_id': int(add_id),
                     })
+
+        # Sort: Draft first (0), Pending (1), Done/Unloaded (2) — ensures Add Model selection shows draft models first
+        models_list.sort(key=lambda m: (2 if m['is_unloaded'] else (0 if m['is_draft'] else 1)))
 
         is_multi_model = len(models_list) > 1
         all_unloaded = all(m['is_unloaded'] for m in models_list) if models_list else False
@@ -2728,6 +2806,40 @@ class SubmitAllUnloadZ1View(APIView):
                 lot_id=None,
             )
 
+        # Also check and free merged JigCompleted records whose lots were all submitted
+        # via the merged_lots mechanism (e.g. Add Model across lots).
+        merged_jig_ids = request.data.get('merged_jig_completed_ids', [])
+        for m_jc_id in merged_jig_ids:
+            try:
+                m_jc = JigCompleted.objects.get(id=m_jc_id)
+                if m_jc.last_process_module == 'Jig Unloading':
+                    continue  # Already freed
+                m_dd = m_jc.draft_data or {}
+                m_alloc = m_dd.get('multi_model_allocation', []) if isinstance(m_dd, dict) else []
+                m_liq = m_dd.get('lot_id_quantities', {}) if isinstance(m_dd, dict) else {}
+                if m_alloc:
+                    m_all_lids = set(a['lot_id'] for a in m_alloc if a.get('lot_id'))
+                elif m_liq:
+                    m_all_lids = set(m_liq.keys())
+                else:
+                    m_all_lids = {m_jc.lot_id}
+                m_submitted = set(
+                    JUSubmittedZ1.objects.filter(
+                        jig_completed_id=m_jc_id, is_draft=False
+                    ).values_list('lot_id', flat=True)
+                )
+                if m_all_lids and m_all_lids.issubset(m_submitted):
+                    m_jc.last_process_module = 'Jig Unloading'
+                    m_jc.save(update_fields=['last_process_module'])
+                    m_jig_qr = m_jc.jig_id
+                    if m_jig_qr:
+                        Jig.objects.filter(jig_qr_id=m_jig_qr).update(
+                            is_loaded=False, current_user=None, locked_at=None,
+                            drafted=False, batch_id=None, lot_id=None,
+                        )
+            except JigCompleted.DoesNotExist:
+                pass
+
         # Create ONE JigUnloadAfterTable record per jig (all models combined)
         # This ensures multi-model jigs display ALL models in the completed table
         from django.utils import timezone
@@ -2761,8 +2873,11 @@ class SubmitAllUnloadZ1View(APIView):
             # Ensure combine_lot_ids has ALL lot_ids
             if set(all_combine_lot_ids) != set(existing.combine_lot_ids or []):
                 existing.combine_lot_ids = all_combine_lot_ids
+                changed_fields.append('combine_lot_ids')
+            # Always update total_case_qty if it changed (e.g. Add-Model merge increases qty)
+            if existing.total_case_qty != total_qty:
                 existing.total_case_qty = total_qty
-                changed_fields.extend(['combine_lot_ids', 'total_case_qty'])
+                changed_fields.append('total_case_qty')
             if changed_fields:
                 existing.save(update_fields=list(set(changed_fields)))
         else:
@@ -2956,10 +3071,12 @@ class GetJigForTrayZ1View(APIView):
 def validate_tray_occupancy_z1(request):
     """
     GET /api/validate_tray_occupancy_z1/?tray_id=XX&lot_id=YY
-    Real-time tray occupancy check for Jig Unloading Z1/Z2 tray scan.
-    Returns success=True if tray is free/delinked/belongs to current lot.
-    Returns success=False with error message if tray is occupied by another lot.
+    Zone 1 tray validation — accepts any valid tray code prefix from master data
+    (NR, ND, NB, NL, JR, JB, JD) and checks occupancy.
     """
+    import re
+    from modelmasterapp.tray_code_mapping import TRAY_CODE_MASTER_DATA
+    
     tray_id = request.GET.get('tray_id', '').strip()
     lot_id = request.GET.get('lot_id', '').strip()
 
@@ -2967,32 +3084,123 @@ def validate_tray_occupancy_z1(request):
         return JsonResponse({'success': False, 'error': 'Tray ID is required'}, status=400)
 
     try:
+        # STEP 1: Validate tray code format — must be <PREFIX>-A<5digits>
+        # Allowed prefixes come from the master data: NR, ND, NB, NL, JR, JB, JD
+        all_tray_codes = set()
+        for info in TRAY_CODE_MASTER_DATA.values():
+            for code in info.get('tray_codes', []):
+                all_tray_codes.add(code)
+        # Build regex: (NR|ND|NB|NL|JR|JB|JD)-A\d{5}
+        prefix_pattern = '|'.join(sorted(all_tray_codes))
+        pattern = rf'^({prefix_pattern})-A\d{{5}}$'
+        match = re.match(pattern, tray_id)
+        if not match:
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid tray code format. Expected: <CODE>-A00001 where CODE is one of: {", ".join(sorted(all_tray_codes))}',
+                'message': f'❌ Invalid tray code format: {tray_id}',
+                'validation_type': 'invalid_format',
+                'allowed_codes': sorted(list(all_tray_codes))
+            }, status=400)
+
+        scanned_prefix = match.group(1)
+
+        # STEP 2: If lot_id provided, validate prefix against the lot's plating stock
+        if lot_id:
+            # Try to resolve plating_stk_no from TotalStockModel → ModelMasterCreation
+            plating_stk = None
+            tsm = TotalStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+            if tsm and tsm.batch_id:
+                mmc = ModelMasterCreation.objects.filter(id=tsm.batch_id.id).first()
+                if mmc:
+                    plating_stk = getattr(mmc, 'plating_stk_no', None) or ''
+            # Recovery fallback
+            if not plating_stk:
+                rsm = RecoveryStockModel.objects.filter(lot_id=lot_id).select_related('batch_id').first()
+                if rsm and rsm.batch_id:
+                    try:
+                        from Recovery_DP.models import RecoveryMasterCreation
+                        rmc = RecoveryMasterCreation.objects.filter(id=rsm.batch_id.id).first()
+                        if rmc:
+                            plating_stk = getattr(rmc, 'plating_stk_no', None) or ''
+                    except ImportError:
+                        pass
+            # JigCompleted fallback
+            if not plating_stk:
+                jc = JigCompleted.objects.filter(lot_id=lot_id).first()
+                if jc and jc.batch_id:
+                    mmc = ModelMasterCreation.objects.filter(batch_id=jc.batch_id).first()
+                    if mmc:
+                        plating_stk = getattr(mmc, 'plating_stk_no', None) or ''
+
+            if plating_stk and plating_stk in TRAY_CODE_MASTER_DATA:
+                allowed = TRAY_CODE_MASTER_DATA[plating_stk]
+                allowed_codes = allowed.get('tray_codes', [])
+                if scanned_prefix not in allowed_codes:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Tray code "{scanned_prefix}" is not allowed for plating stock {plating_stk}. '
+                                 f'Expected: {", ".join(allowed_codes)}',
+                        'message': f'❌ Wrong tray code for this model. Expected: {", ".join(allowed_codes)}',
+                        'validation_type': 'wrong_tray_code',
+                        'expected_codes': allowed_codes,
+                        'plating_stock': plating_stk
+                    }, status=400)
+
+        print(f"✅ [Z1] Tray code format valid: {tray_id} (prefix: {scanned_prefix})")
+
+        # STEP 3: Check occupancy in TrayId table
         existing_tray = TrayId.objects.filter(tray_id=tray_id).first()
         if not existing_tray:
             # Tray not in system — accept it (will be created on save)
-            return JsonResponse({'success': True, 'message': 'Tray ID not in system — new tray'})
+            return JsonResponse({
+                'success': True,
+                'message': 'Tray ID not in system — new tray',
+                'validation_type': 'new_tray'
+            })
 
-        # Already scanned and not delinked → occupied
+        # STEP 4: Check if already scanned and not delinked → occupied
         if existing_tray.scanned and not existing_tray.delink_tray:
             return JsonResponse({
                 'success': False,
                 'error': f'Tray "{tray_id}" is already scanned and occupied by lot {existing_tray.lot_id}. '
-                         f'Please use a free tray or delink this one first.'
+                         f'Please use a free tray or delink this one first.',
+                'validation_type': 'already_scanned',
+                'linked_lot': existing_tray.lot_id
             })
 
-        # Has a lot_id, not delinked, and belongs to a different lot → occupied
+        # STEP 5: Check if assigned to different lot and not delinked → occupied
         if existing_tray.lot_id and not existing_tray.delink_tray:
             if lot_id and existing_tray.lot_id != lot_id:
                 return JsonResponse({
                     'success': False,
                     'error': f'Tray "{tray_id}" is assigned to another lot ({existing_tray.lot_id}). '
-                             f'Please use a free tray or delink this one first.'
+                             f'Please use a free tray or delink this one first.',
+                    'validation_type': 'already_assigned',
+                    'linked_lot': existing_tray.lot_id
                 })
 
-        # Tray is free or delinked or belongs to current lot
-        return JsonResponse({'success': True, 'message': 'Tray is available'})
+        # STEP 6: Tray is valid - free, delinked, or belongs to current lot
+        # Determine tray type from prefix
+        is_jumbo = scanned_prefix.startswith('J')
+        tray_type_str = 'Jumbo' if is_jumbo else 'Normal'
+        tray_capacity = 12 if is_jumbo else 20
+
+        print(f"✅ [Z1] Tray validation passed for {tray_id}")
+        return JsonResponse({
+            'success': True,
+            'message': 'Tray is available',
+            'validation_type': 'valid',
+            'tray_details': {
+                'tray_id': tray_id,
+                'tray_type': tray_type_str,
+                'tray_code': scanned_prefix,
+                'capacity': existing_tray.tray_capacity if existing_tray else tray_capacity
+            }
+        })
 
     except Exception as e:
+        print(f"❌ [Z1] Validation error: {str(e)}")
         return JsonResponse({'success': False, 'error': f'Validation error: {str(e)}'}, status=500)
 
 

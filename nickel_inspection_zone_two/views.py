@@ -14,9 +14,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 import traceback
+import uuid
+import logging
 from rest_framework import status
 from django.http import JsonResponse
 import json
+
+logger = logging.getLogger(__name__)
 from rest_framework.permissions import IsAuthenticated
 from django.views.decorators.http import require_GET
 from math import ceil
@@ -15116,3 +15120,400 @@ def nq_zone_get_lot_id_for_tray(request):
             return JsonResponse({'success': False, 'error': 'Tray not found', 'tray_id': tray_id})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e), 'tray_id': tray_id}, status=500)
+
+
+# ═══════════════════════════════════════════════════════════════
+# UNIFIED Nickel QC Zone 2 Reject API — Brass QC style
+# ═══════════════════════════════════════════════════════════════
+
+def _nq_z2_resolve_unload_record(lot_id):
+    record = JigUnloadAfterTable.objects.filter(lot_id=lot_id).first()
+    if record:
+        return record, str(record.lot_id)
+    for rec in JigUnloadAfterTable.objects.filter(combine_lot_ids__isnull=False).exclude(combine_lot_ids__exact=[]):
+        if rec.combine_lot_ids and isinstance(rec.combine_lot_ids, list) and lot_id in rec.combine_lot_ids:
+            return rec, str(rec.lot_id)
+    return None, None
+
+
+def _nq_z2_resolve_lot_trays(unload_lot_id):
+    """Resolve tray data for Nickel QC Zone 2. Falls back to JigUnload_TrayId."""
+    trays = NickelQcTrayId.objects.filter(
+        lot_id=unload_lot_id, rejected_tray=False, delink_tray=False
+    ).order_by('-top_tray', 'tray_id')
+    tray_data = []
+    for t in trays:
+        tray_data.append({
+            "tray_id": t.tray_id, "qty": t.tray_quantity or 0,
+            "is_top": bool(t.top_tray), "is_rejected": bool(t.rejected_tray), "is_delinked": bool(t.delink_tray),
+        })
+    # Fallback: JigUnload_TrayId (uses tray_qty field, not tray_quantity)
+    if not tray_data:
+        jig_trays = JigUnload_TrayId.objects.filter(
+            lot_id=unload_lot_id, rejected_tray=False, delink_tray=False
+        ).order_by('-top_tray', 'tray_id')
+        for t in jig_trays:
+            tray_data.append({
+                "tray_id": t.tray_id, "qty": t.tray_qty or 0,
+                "is_top": bool(t.top_tray), "is_rejected": bool(t.rejected_tray), "is_delinked": bool(t.delink_tray),
+            })
+    # Last-resort fallback: look up real tray IDs from upstream tables (no placeholders)
+    if not tray_data:
+        upstream_data, _ = get_upstream_tray_distribution(unload_lot_id)
+        if upstream_data:
+            for t in upstream_data:
+                if not t.get('delink_tray') and not t.get('rejected_tray'):
+                    tray_data.append({
+                        "tray_id": t['tray_id'],
+                        "qty": t.get('tray_quantity', 0) or 0,
+                        "is_top": bool(t.get('top_tray', False)),
+                        "is_rejected": bool(t.get('rejected_tray', False)),
+                        "is_delinked": bool(t.get('delink_tray', False)),
+                    })
+    total_qty = sum(td['qty'] for td in tray_data)
+    return tray_data, total_qty
+
+
+def _nq_z2_get_tray_capacity(unload_lot_id):
+    nq_tray = NickelQcTrayId.objects.filter(lot_id=unload_lot_id, tray_capacity__isnull=False).first()
+    if nq_tray and nq_tray.tray_capacity:
+        return nq_tray.tray_capacity
+    try:
+        cap = get_nickel_qc_tray_capacity_for_lot(unload_lot_id)
+        if cap and cap > 0:
+            return cap
+    except Exception:
+        pass
+    return 12
+
+
+def _nq_z2_compute_reuse_trays(trays, reject_qty):
+    """Nickel QC Zone 2: No tray reuse. Rejection always uses new JB/NB blue trays."""
+    return []
+
+
+def _nq_z2_compute_accept_slots_from_trays(original_trays, rejected_qty):
+    """Derive accept slots directly from actual original trays, subtracting rejected qty from top.
+    Returns (accept_slots, delinked_trays) where delinked_trays are NR trays fully consumed by rejection.
+    """
+    sorted_trays = sorted(original_trays, key=lambda x: (not x.get('is_top', False), x.get('tray_id', '')))
+    accept_slots = []
+    delinked_trays = []  # NR trays fully consumed by rejection — must be auto-delinked
+    remaining_reject = rejected_qty
+    for tray in sorted_trays:
+        tray_qty = tray['qty']
+        if remaining_reject >= tray_qty:
+            remaining_reject -= tray_qty  # fully rejected — add to auto-delink list
+            delinked_trays.append({'tray_id': tray['tray_id'], 'qty': tray_qty})
+        elif remaining_reject > 0:
+            accept_qty = tray_qty - remaining_reject
+            remaining_reject = 0
+            accept_slots.append({"tray_id": tray['tray_id'], "qty": accept_qty, "is_top": True})
+        else:
+            is_top = bool(tray.get('is_top', False)) and len(accept_slots) == 0
+            accept_slots.append({"tray_id": tray['tray_id'], "qty": tray_qty, "is_top": is_top})
+    return accept_slots, delinked_trays
+
+
+def _nq_z2_compute_reject_slots(rejected_qty, blue_tray_capacity=12):
+    """Compute reject tray slots using JB blue tray capacity (default 12). NB uses 16."""
+    if rejected_qty <= 0:
+        return []
+    full = rejected_qty // blue_tray_capacity
+    rem = rejected_qty % blue_tray_capacity
+    slots = []
+    if rem > 0:
+        slots.append({"qty": rem, "is_top": True, "tray_id": None})
+    for _ in range(full):
+        slots.append({"qty": blue_tray_capacity, "is_top": False, "tray_id": None})
+    return slots
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def nq_zone_nickel_qc_action(request):
+    """
+    UNIFIED Nickel QC Zone 2 Reject API — mirrors Brass QC brass_qc_action.
+    """
+    action = request.data.get('action', '').strip()
+    lot_id = request.data.get('lot_id', '').strip() if request.data.get('lot_id') else ''
+
+    if action == 'GET_REASONS':
+        reasons = Nickel_QC_Rejection_Table.objects.all().order_by('rejection_reason_id')
+        data = [{"id": r.id, "reason_id": r.rejection_reason_id, "reason": r.rejection_reason} for r in reasons]
+        return JsonResponse({"success": True, "reasons": data})
+
+    if action == 'GET_TRAYS':
+        if not lot_id:
+            return JsonResponse({"error": "lot_id is required"}, status=400)
+        jig_rec, unload_lot_id = _nq_z2_resolve_unload_record(lot_id)
+        if not jig_rec:
+            return JsonResponse({"error": "Lot not found in unload records"}, status=404)
+        tray_data, total_qty = _nq_z2_resolve_lot_trays(unload_lot_id)
+        tray_capacity = _nq_z2_get_tray_capacity(unload_lot_id)
+        active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
+        return JsonResponse({
+            "lot_id": lot_id, "unload_lot_id": unload_lot_id, "total_qty": total_qty,
+            "tray_capacity": tray_capacity, "trays": active_trays,
+        })
+
+    if action == 'ALLOCATE':
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        rejected_qty = int(request.data.get('rejected_qty', 0))
+        jig_rec, unload_lot_id = _nq_z2_resolve_unload_record(lot_id)
+        if not jig_rec:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        tray_data, total_qty = _nq_z2_resolve_lot_trays(unload_lot_id)
+        active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
+        tray_capacity = _nq_z2_get_tray_capacity(unload_lot_id)
+        if rejected_qty < 0 or rejected_qty > total_qty:
+            return JsonResponse({"success": False, "error": "Invalid rejected_qty"}, status=400)
+        accepted_qty = total_qty - rejected_qty
+
+        # Nickel QC: accept slots derived from ACTUAL original trays (real IDs + real qtys)
+        # delinked_trays = NR trays fully consumed by rejection (auto-delinked, shown read-only in UI)
+        accept_slots, delinked_trays = _nq_z2_compute_accept_slots_from_trays(active_trays, rejected_qty)
+        # Reject slots use JB blue tray capacity = 12 (most restrictive; NB=16 validated on scan)
+        reject_slots = _nq_z2_compute_reject_slots(rejected_qty) if rejected_qty > 0 else []
+        # Build delink_slots: pre-filled with auto-delinked NR tray IDs (read-only in UI)
+        delink_slots = [{'tray_id': t['tray_id'], 'qty': t['qty'], 'auto': True} for t in delinked_trays]
+        return JsonResponse({
+            "success": True, "lot_id": lot_id, "total_qty": total_qty, "tray_capacity": tray_capacity,
+            "accepted_qty": accepted_qty, "rejected_qty": rejected_qty,
+            "accept_slots": accept_slots, "reject_slots": reject_slots,
+            "delink_slots": delink_slots,
+            "original_trays": [{"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t.get("is_top", False)} for t in active_trays],
+            "reuse_trays": [], "reuse_count": 0, "nickel_qc": True,
+        })
+
+    if action == 'VALIDATE_TRAY':
+        tray_id = request.data.get('tray_id', '').strip()
+        slot_type = request.data.get('slot_type', 'accept').strip()
+        if not tray_id:
+            return JsonResponse({"valid": False, "error": "tray_id is required"}, status=400)
+        if slot_type == 'reject':
+            # Nickel QC rejection: only JB (Jumbo Blue) or NB (Normal Blue) trays allowed
+            if not (tray_id.startswith('JB-') or tray_id.startswith('NB-')):
+                return JsonResponse({"valid": False, "error": "Only JB (Jumbo Blue) or NB (Normal Blue) trays allowed for rejection"})
+            # Capacity validation: JB max=12, NB max=16
+            max_cap = 12 if tray_id.startswith('JB-') else 16
+            slot_qty = int(request.data.get('slot_qty', 0) or 0)
+            if slot_qty > 0 and slot_qty > max_cap:
+                return JsonResponse({"valid": False, "error": f"Qty {slot_qty} exceeds {tray_id[:2]} tray max capacity ({max_cap})"})
+            tray = TrayId.objects.filter(tray_id=tray_id).first()
+            if not tray:
+                return JsonResponse({"valid": False, "error": "Tray ID not found in tray master"})
+            active_use = NickelQcTrayId.objects.filter(tray_id=tray_id, rejected_tray=False).exclude(lot_id=lot_id).first()
+            if active_use:
+                return JsonResponse({"valid": False, "error": f"Tray {tray_id} is currently in use by lot {active_use.lot_id}"})
+            return JsonResponse({"valid": True, "max_capacity": max_cap})
+        else:
+            tray = TrayId.objects.filter(tray_id=tray_id).first()
+            if not tray:
+                nq_tray = NickelQcTrayId.objects.filter(tray_id=tray_id).first()
+                ju_tray = JigUnload_TrayId.objects.filter(tray_id=tray_id).first()
+                if not nq_tray and not ju_tray:
+                    return JsonResponse({"valid": False, "error": "Tray ID not found in system"})
+            return JsonResponse({"valid": True})
+
+    if action == 'SAVE_DRAFT':
+        draft_payload = request.data.get('draft_data', {})
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        if not draft_payload:
+            return JsonResponse({"success": False, "error": "draft_data is required"}, status=400)
+        jig_rec, unload_lot_id = _nq_z2_resolve_unload_record(lot_id)
+        if not jig_rec:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        draft, created = Nickel_QC_Draft_Store.objects.update_or_create(
+            lot_id=unload_lot_id, draft_type='rejection_draft',
+            defaults={'batch_id': str(jig_rec.unload_lot_id) if hasattr(jig_rec, 'unload_lot_id') else '', 'user': request.user, 'draft_data': draft_payload}
+        )
+        jig_rec.nq_draft = True
+        jig_rec.nq_onhold_picking = True
+        jig_rec.save(update_fields=['nq_draft', 'nq_onhold_picking'])
+        return JsonResponse({"success": True, "lot_id": lot_id, "draft_id": draft.id, "message": "Draft saved. Lot marked as Draft."})
+
+    if action == 'GET_DRAFT':
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        jig_rec, unload_lot_id = _nq_z2_resolve_unload_record(lot_id)
+        if not jig_rec:
+            return JsonResponse({"success": True, "has_draft": False, "draft_data": None})
+        draft = Nickel_QC_Draft_Store.objects.filter(lot_id=unload_lot_id, draft_type='rejection_draft').first()
+        if not draft:
+            return JsonResponse({"success": True, "has_draft": False, "draft_data": None})
+        return JsonResponse({"success": True, "has_draft": True, "draft_data": draft.draft_data})
+
+    if action == 'FULL_REJECT':
+        remarks = request.data.get('remarks', '').strip()
+        rejection_reasons = request.data.get('rejection_reasons', [])
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        if not remarks:
+            return JsonResponse({"success": False, "error": "Remarks mandatory for full lot rejection"}, status=400)
+        jig_rec, unload_lot_id = _nq_z2_resolve_unload_record(lot_id)
+        if not jig_rec:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        qty = jig_rec.total_case_qty or 0
+        jig_rec.nq_qc_rejection = True
+        jig_rec.last_process_module = "Nickel QC"
+        jig_rec.next_process_module = "Nickel Audit"
+        jig_rec.nq_last_process_date_time = timezone.now()
+        jig_rec.nq_draft = False
+        jig_rec.nq_onhold_picking = False
+        jig_rec.save(update_fields=['nq_qc_rejection', 'last_process_module', 'next_process_module', 'nq_last_process_date_time', 'nq_draft', 'nq_onhold_picking'])
+        NickelQcTrayId.objects.filter(lot_id=unload_lot_id).update(rejected_tray=True)
+        reason_store = Nickel_QC_Rejection_ReasonStore.objects.create(
+            lot_id=unload_lot_id, user=request.user, total_rejection_quantity=qty, batch_rejection=True, lot_rejected_comment=remarks,
+        )
+        reason_ids = []
+        for r in rejection_reasons:
+            rid = r.get('reason_id')
+            rqty = int(r.get('qty', 0))
+            if rqty > 0 and rid:
+                try:
+                    reason_obj = Nickel_QC_Rejection_Table.objects.get(id=rid)
+                    reason_ids.append(reason_obj.id)
+                    Nickel_QC_Rejected_TrayScan.objects.create(lot_id=unload_lot_id, rejected_tray_quantity=str(rqty), rejected_tray_id=None, rejection_reason=reason_obj, user=request.user)
+                except Nickel_QC_Rejection_Table.DoesNotExist:
+                    pass
+        if reason_ids:
+            reason_store.rejection_reason.set(reason_ids)
+        Nickel_QC_Draft_Store.objects.filter(lot_id=unload_lot_id, draft_type='rejection_draft').delete()
+        logger.info(f"[NQ_Z2_ACTION:FULL_REJECT] lot_id={lot_id}, unload={unload_lot_id}, qty={qty}")
+        return JsonResponse({"success": True, "message": f"Full lot rejected ({qty} pcs). Moved to Nickel Audit.", "lot_id": lot_id})
+
+    if action == 'PROCESS':
+        tray_actions = request.data.get('tray_actions', [])
+        rejection_reasons = request.data.get('rejection_reasons', [])
+        remarks = request.data.get('remarks', '').strip()
+        if not lot_id:
+            return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        if not tray_actions:
+            return JsonResponse({"success": False, "error": "tray_actions required"}, status=400)
+        jig_rec, unload_lot_id = _nq_z2_resolve_unload_record(lot_id)
+        if not jig_rec:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        tray_data, total_qty = _nq_z2_resolve_lot_trays(unload_lot_id)
+        active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
+        active_tray_map = {t['tray_id']: t for t in active_trays}
+        rejected_qty = sum(int(r.get('qty', 0)) for r in rejection_reasons) if rejection_reasons else 0
+        accepted_qty = total_qty - rejected_qty
+        if rejected_qty <= 0:
+            return JsonResponse({"success": False, "error": "Rejection qty must be > 0"}, status=400)
+        if rejected_qty >= total_qty:
+            return JsonResponse({"success": False, "error": "Use Full Lot Rejection for 100% reject"}, status=400)
+        accepted_trays = []
+        rejected_trays = []
+        tray_capacity = _nq_z2_get_tray_capacity(unload_lot_id)
+
+        for ta in tray_actions:
+            tid = ta.get('tray_id')
+            ta_action = ta.get('action')
+            is_top = bool(ta.get('is_top', False))
+            if ta_action not in ('ACCEPT', 'REJECT', 'DELINK'):
+                return JsonResponse({"success": False, "error": f"Invalid action '{ta_action}' for tray {tid}"}, status=400)
+            tray_match = active_tray_map.get(tid)
+            if not tray_match:
+                if ta_action == 'REJECT':
+                    slot_qty = int(ta.get('qty') or 0) or tray_capacity
+                    rejected_trays.append({"tray_id": tid, "qty": slot_qty, "is_top": False})
+                    continue
+                return JsonResponse({"success": False, "error": f"Tray {tid} not found in lot"}, status=400)
+            if ta_action == 'ACCEPT':
+                accepted_trays.append({"tray_id": tid, "qty": tray_match['qty'], "is_top": is_top})
+            elif ta_action == 'REJECT':
+                slot_qty = int(ta.get('qty') or tray_match['qty'])
+                rejected_trays.append({"tray_id": tid, "qty": slot_qty, "is_top": is_top})
+            elif ta_action == 'DELINK':
+                NickelQcTrayId.objects.filter(lot_id=unload_lot_id, tray_id=tid).update(delink_tray=True)
+
+        if accepted_trays and accepted_qty > 0:
+            non_top_total = sum(t['qty'] for t in accepted_trays if not t['is_top'])
+            for t in accepted_trays:
+                if t['is_top']:
+                    t['qty'] = accepted_qty - non_top_total
+                    break
+        if accepted_trays:
+            top_count = sum(1 for t in accepted_trays if t['is_top'])
+            if top_count != 1:
+                return JsonResponse({"success": False, "error": f"Exactly one accepted tray must be top (found {top_count})"}, status=400)
+
+        if rejection_reasons:
+            reason_store = Nickel_QC_Rejection_ReasonStore.objects.create(
+                lot_id=unload_lot_id, user=request.user, total_rejection_quantity=rejected_qty, batch_rejection=False, lot_rejected_comment=remarks or None,
+            )
+            reason_ids = []
+            for r in rejection_reasons:
+                rid = r.get('reason_id')
+                rqty = int(r.get('qty', 0))
+                if rqty > 0 and rid:
+                    try:
+                        reason_obj = Nickel_QC_Rejection_Table.objects.get(id=rid)
+                        reason_ids.append(reason_obj.id)
+                        Nickel_QC_Rejected_TrayScan.objects.create(lot_id=unload_lot_id, rejected_tray_quantity=str(rqty), rejected_tray_id=None, rejection_reason=reason_obj, user=request.user)
+                    except Nickel_QC_Rejection_Table.DoesNotExist:
+                        pass
+            if reason_ids:
+                reason_store.rejection_reason.set(reason_ids)
+
+        # Mark/create rejected trays in NickelQcTrayId (new JB/NB trays must be created)
+        for rt in rejected_trays:
+            rt_id = rt['tray_id']
+            # Set correct tray_capacity: JB=12, NB=16
+            if rt_id.startswith('JB-'):
+                rt_cap = 12
+            elif rt_id.startswith('NB-'):
+                rt_cap = 16
+            else:
+                rt_cap = None
+            defaults = {
+                'tray_quantity': rt['qty'],
+                'top_tray': rt.get('is_top', False),
+                'user': request.user,
+                'new_tray': True,
+                'rejected_tray': True,
+            }
+            if rt_cap:
+                defaults['tray_capacity'] = rt_cap
+            obj, created = NickelQcTrayId.objects.get_or_create(
+                lot_id=unload_lot_id, tray_id=rt_id, defaults=defaults
+            )
+            if not created:
+                obj.rejected_tray = True
+                obj.tray_quantity = rt['qty']
+                update_fields = ['rejected_tray', 'tray_quantity']
+                if rt_cap:
+                    obj.tray_capacity = rt_cap
+                    update_fields.append('tray_capacity')
+                obj.save(update_fields=update_fields)
+        for at in accepted_trays:
+            if not NickelQcTrayId.objects.filter(lot_id=unload_lot_id, tray_id=at['tray_id']).exists():
+                NickelQcTrayId.objects.create(lot_id=unload_lot_id, tray_id=at['tray_id'], tray_quantity=at['qty'], top_tray=at['is_top'], user=request.user, new_tray=True)
+        for at in accepted_trays:
+            NickelQcTrayId.objects.filter(lot_id=unload_lot_id, tray_id=at['tray_id']).update(top_tray=at['is_top'], tray_quantity=at['qty'])
+
+        jig_rec.nq_qc_few_cases_accptance = True
+        jig_rec.nq_qc_rejection = True
+        jig_rec.last_process_module = "Nickel QC"
+        jig_rec.next_process_module = "Nickel Audit"
+        jig_rec.nq_last_process_date_time = timezone.now()
+        jig_rec.nq_draft = False
+        jig_rec.nq_onhold_picking = False
+        jig_rec.nq_qc_after_rejection_qty = rejected_qty
+        jig_rec.nq_qc_accepted_qty = accepted_qty
+        jig_rec.save(update_fields=[
+            'nq_qc_few_cases_accptance', 'nq_qc_rejection', 'last_process_module', 'next_process_module',
+            'nq_last_process_date_time', 'nq_draft', 'nq_onhold_picking', 'nq_qc_after_rejection_qty', 'nq_qc_accepted_qty',
+        ])
+        Nickel_Qc_Accepted_TrayScan.objects.create(lot_id=unload_lot_id, accepted_tray_quantity=str(accepted_qty), user=request.user)
+        for at in accepted_trays:
+            Nickel_Qc_Accepted_TrayID_Store.objects.update_or_create(tray_id=at['tray_id'], defaults={'lot_id': unload_lot_id, 'tray_qty': at['qty'], 'user': request.user})
+        Nickel_QC_Draft_Store.objects.filter(lot_id=unload_lot_id, draft_type='rejection_draft').delete()
+        logger.info(f"[NQ_Z2_ACTION:PROCESS] lot_id={lot_id}, unload={unload_lot_id}, accepted={accepted_qty}, rejected={rejected_qty}")
+        return JsonResponse({"success": True, "message": f"Partial rejection: {accepted_qty} accepted, {rejected_qty} rejected.", "lot_id": lot_id, "accepted_qty": accepted_qty, "rejected_qty": rejected_qty})
+
+    return JsonResponse({"success": False, "error": f"Unknown action: {action}"}, status=400)

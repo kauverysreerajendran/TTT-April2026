@@ -60,4 +60,7 @@ urlpatterns = [
     # Scan button endpoint
     path('nq_zone_get_lot_id_for_tray/', nq_zone_get_lot_id_for_tray, name='nq_zone_get_lot_id_for_tray'),
 
+    # Unified Nickel QC Zone 2 Reject API (Brass QC style)
+    path('nq_zone_action/', nq_zone_nickel_qc_action, name='nq_zone_action'),
+
 ]

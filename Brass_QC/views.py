@@ -1423,6 +1423,7 @@ def _handle_submission(request, action):
                 brass_qc_after_rejection_qty=rejected_qty,
                 brass_qc_rejection=True,
                 send_brass_audit_to_iqf=True,  # ✅ FIX: gate flag required by IQF pick table queryset
+
                 created_at=timezone.now(),
             )
             for tray in rejected_trays:

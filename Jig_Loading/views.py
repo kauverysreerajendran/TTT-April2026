@@ -466,6 +466,25 @@ class JigView(TemplateView):
 			_t5 = _time.time()
 			print(f"[JIG PERF] excess lot loop: {_t5 - _t4:.3f}s")
 
+			# ===== DEDUPLICATE: excess lots appear in both TotalStockModel and excess loop =====
+			# When JigSaveAPI submits a lot with excess, it creates a TotalStockModel entry for
+			# the EX-* lot (brass_audit_accptance=True). This causes the EX-* lot to appear in
+			# base_qs (as "Yet to Start") AND in the excess loop (as "Released").
+			# Rule: keep only the excess-loop entry (is_excess_lot=True) when duplicate exists.
+			try:
+				excess_lot_ids_in_table = {d['stock_lot_id'] for d in master_data if d.get('is_excess_lot')}
+				if excess_lot_ids_in_table:
+					before_dedup = len(master_data)
+					master_data = [
+						d for d in master_data
+						if d.get('is_excess_lot') or d.get('stock_lot_id') not in excess_lot_ids_in_table
+					]
+					removed = before_dedup - len(master_data)
+					if removed:
+						logging.info(f'[JIG PICK] Removed {removed} duplicate TotalStockModel row(s) for excess lots: {excess_lot_ids_in_table}')
+			except Exception:
+				logging.exception('[JIG PICK] Failed to deduplicate excess lots')
+
 			# ===== MARK LOTS WITH ACTIVE DRAFT STATUS =====
 			# Supports per-model status for multi-model drafts:
 			#   Primary model → "Draft", Secondary model(s) → "Partial Draft"

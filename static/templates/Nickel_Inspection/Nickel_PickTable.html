@@ -637,10 +637,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       Lot Qty
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
+                    <!-- Physical Qty column hidden per requirement
                     <th>
                       Physical Qty
                       <i class="fa fa-filter" aria-hidden="true"></i>
                       </th>
+                    -->
                     <th>
                       Accept <br> Qty
                       <i class="fa fa-filter" aria-hidden="true"></i>
@@ -824,16 +826,18 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                             &#10003;
                           </span>
                         {% endif %}
-                        <input type="text"
+                        <!-- <input type="text"
                           class="missing-qty-input"
                           value="{{ data.nq_missing_qty|default_if_none:'' }}"
                           style="width: 36px; padding: 1px 3px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;"
-                          {% if data.nq_qc_accepted_qty_verified %}disabled{% endif %} />
+                          {% if data.nq_qc_accepted_qty_verified %}disabled{% endif %} /> -->
                       </span>
                     </td>
+                    <!-- Physical Qty column hidden per requirement
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
                         {{ data.nq_physical_qty|default:0 }}
                     </td>
+                    -->
 
                     <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
                         {{ data.nq_qc_accepted_qty|default:0 }}    
@@ -1212,6 +1216,93 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                   </div>
                 </div>
               </div>
+              <!-- ══════════ NICKEL QC REJECTION MODAL (Brass QC Style) ══════════ -->
+              <div id="nickelRejectModalOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); z-index:20000; align-items:center; justify-content:center;">
+                <div style="background:#fff; border-radius:12px; width:780px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.22); position:relative;">
+
+                  <!-- Header -->
+                  <div style="padding:18px 24px 12px; border-bottom:1px solid #e8edf2;">
+                    <span id="nickelRejectModalClose" style="position:absolute; top:10px; right:18px; font-size:22px; font-weight:bold; color:#d9534f; cursor:pointer;">&times;</span>
+                    <h5 style="margin:0 0 8px; color:#028084; font-weight:700;">Nickel QC - Rejection Window</h5>
+                    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:13px;">
+                      <span>Plating Stk No: <strong id="nqRejectModalPlatingStk" style="color:#028084;"></strong></span>
+                      <span>Total Lot Qty: <strong id="nqRejectModalTotalQty" style="color:#e67e22;"></strong></span>
+                      <label style="margin-left:auto; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="nqFullLotRejectionCb" />
+                        <span style="font-weight:600; color:#c62828;">Full Lot Rejection</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Rejection Reasons — 2-column layout -->
+                  <div style="padding:14px 24px 0;">
+                    <h6 style="margin:0 0 8px; font-weight:600; color:#444;">Rejection Reasons</h6>
+                    <div id="nqRejectReasonsGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+                    </div>
+                    <div style="margin-top:10px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:8px 14px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+                      <span style="font-size:13px;">Total Reject Qty: <strong id="nqRejectTotalQtyDisplay" style="color:#c62828; font-size:15px;">0</strong></span>
+                      <span style="font-size:13px;">Accept Qty: <strong id="nqRejectRemainingQtyDisplay" style="color:#388e3c; font-size:15px;">0</strong></span>
+                      <span style="font-size:12px; color:#555; margin-left:auto;">Original Trays <span style="font-size:11px; color:#888;">(click to assign)</span></span>
+                      <button type="button" id="nqGlobalClearAllBtn" style="background:#f5f5f5; border:1px solid #ccc; border-radius:4px; padding:3px 12px; font-size:11px; color:#666; cursor:pointer;">Clear All</button>
+                    </div>
+                  </div>
+
+                  <!-- Tray Allocation Section (Accept + Reject side by side) -->
+                  <div id="nqTrayAllocationSection" style="display:none; padding:10px 24px;">
+                    <div style="margin-bottom:10px;">
+                      <div id="nqOriginalTraysContainer" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                      <!-- REJECT Section -->
+                      <div style="border:1px solid #ffcdd2; border-radius:8px; padding:10px; background:#fff8f8;">
+                        <h6 style="margin:0 0 4px; font-weight:600; color:#c62828; font-size:13px;">
+                          <i class="fa fa-times-circle"></i> Reject Trays
+                          <span style="float:right; font-size:12px; color:#b71c1c;">Qty: <strong id="nqRejectTotalQtyLabel">0</strong></span>
+                        </h6>
+                        <p style="margin:0 0 6px; font-size:10px; color:#999; font-style:italic;">Rejected → Nickel Audit</p>
+                        <p id="nqRejectReuseInfo" style="margin:0 0 6px; font-size:11px; color:#e65100; display:none;"></p>
+                        <div id="nqRejectSlotsContainer"></div>
+                      </div>
+                      <!-- ACCEPT Section -->
+                      <div style="border:1px solid #c8e6c9; border-radius:8px; padding:10px; background:#f9fdf9;">
+                        <h6 style="margin:0 0 4px; font-weight:600; color:#388e3c; font-size:13px;">
+                          <i class="fa fa-check-circle"></i> Accept Trays (Scan only Top Tray)
+                          <span style="float:right; font-size:12px; color:#2e7d32;">Qty: <strong id="nqAcceptTotalQtyLabel">0</strong></span>
+                        </h6>
+                        <p style="margin:0 0 6px; font-size:10px; color:#999; font-style:italic;">Accepted → Nickel Audit</p>
+                        <div id="nqAcceptSlotsContainer"></div>
+                      </div>
+                    </div>
+                    <!-- Delink Section -->
+                    <div id="nqDelinkSection" style="display:none; margin-top:10px; border:1px solid #ffe0b2; border-radius:8px; padding:10px; background:#fffaf0;">
+                      <h6 style="margin:0 0 6px; font-weight:600; color:#f57c00; font-size:13px;">
+                        <i class="fa fa-unlink"></i> Delinked Trays
+                      </h6>
+                      <div id="nqDelinkListContainer" style="font-size:12px;"></div>
+                    </div>
+                    <!-- Summary -->
+                    <div style="margin-top:8px; font-size:12px; display:flex; gap:16px; color:#555;">
+                      <span>Accepted: <strong id="nqCombinedAcceptQty" style="color:#388e3c;">0</strong></span>
+                      <span>Rejected: <strong id="nqCombinedRejectQty" style="color:#c62828;">0</strong></span>
+                      <span>Delinked: <strong id="nqCombinedDelinkQty" style="color:#f57c00;">0</strong></span>
+                    </div>
+                  </div>
+
+                  <!-- Footer: Remarks + Buttons -->
+                  <div style="padding:12px 24px 18px; border-top:1px solid #e8edf2;">
+                    <textarea id="nqRejectRemarksInput" maxlength="255" rows="2" placeholder="Enter remarks (optional, mandatory for full lot rejection)" style="width:100%; border:1px solid #ccc; border-radius:6px; padding:8px; font-size:13px; resize:none; margin-bottom:10px;" autocomplete="off"></textarea>
+                    <div id="nqRejectModalError" style="color:#c62828; font-size:13px; min-height:18px; margin-bottom:6px;"></div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px;">
+                      <button id="nqDraftSaveBtn" type="button" style="background:#f0ad4e; color:#fff; border:none; border-radius:20px; padding:8px 22px; font-size:14px; font-weight:600; cursor:pointer;"><i class="fa fa-save"></i> Draft</button>
+                      <button id="nqRejectSubmitBtn" type="button" style="background:#28a745; color:#fff; border:none; border-radius:20px; padding:8px 22px; font-size:14px; font-weight:600; cursor:pointer;">Submit</button>
+                      <button id="nqRejectCancelBtn" type="button" style="background:#6c757d; color:#fff; border:none; border-radius:20px; padding:8px 22px; font-size:14px; cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+              <!-- ══════════ END NICKEL QC REJECTION MODAL ══════════ -->
+
               <!-- New Popup Modal (Right Popup) -->
               <div id="newPopupModal" class="new-popup-modal">
                 <div class="tray-scan-modal-content">
@@ -2414,51 +2505,10 @@ if (isBatchRejection) {
                 alert('Network error loading accepted tray data. Please try again.');
               });
           } else {
-            // Show editable rejection form for normal reject button
-            if (modalHeader) {
-              modalHeader.innerHTML = `Nickel QC / <span id="trayScanModalHeaderModelNo" style="font-weight:bold; color:#028084;"></span> / Rejection Window`;
+            // Open Brass QC-style rejection modal
+            if (typeof window.openNickelRejectModal === 'function') {
+              window.openNickelRejectModal(stockLotId, row);
             }
-            // Extract quantities from the row data
-            const lotQtyCell = row.cells[11]; // Lot Qty column (index 11)
-            const physicalQtyCell = row.cells[12]; // Physical Qty column (index 12)
-            const missingQtyAttr = row.getAttribute('data-brass-missing-qty');
-
-            const lotQty = lotQtyCell ? lotQtyCell.textContent.trim() : '0';
-            const physicalQty = physicalQtyCell ? physicalQtyCell.textContent.trim() : '0'; 
-            const missingQty = missingQtyAttr || '0';
-
-            const modalModelNo = document.getElementById("trayScanModalHeaderModelNo");
-            const modelNo = row.getAttribute('data-model-no') || '';
-            if (modalModelNo && modelNo) {
-              modalModelNo.textContent = modelNo;
-            }
-
-            console.log('📊 Setting quantities:', { lotQty, physicalQty, missingQty });
-
-            // Set quantities in modal header spans
-            setTimeout(() => {
-              const lotQtySpan = document.getElementById('trayScanModalLotQty');
-              const missingQtySpan = document.getElementById('trayScanModalMissingQty');
-              const physicalQtySpan = document.getElementById('trayScanModalPhysicalQty');
-              
-              if (lotQtySpan) {
-                lotQtySpan.textContent = lotQty;
-                console.log('✅ Set Lot Qty:', lotQty);
-              }
-              
-              if (missingQtySpan) {
-                missingQtySpan.textContent = missingQty;
-                console.log('✅ Set Missing Qty:', missingQty);
-              }
-              
-              if (physicalQtySpan) {
-                physicalQtySpan.textContent = physicalQty;
-                console.log('✅ Set Physical Qty:', physicalQty);
-              }
-            }, 150); // Small delay to ensure modal DOM is ready
-
-            showEditableRejectionForm(stockLotId, batchId, detailsDiv, row);
-            trayModal.classList.add("open");
           }
         });
       });
@@ -9430,6 +9480,653 @@ function nqCheckPendingScanAfterPageLoad() {
     }
   }
 }
+</script>
+
+<!-- ══════════ NICKEL QC REJECT FLOW (Brass QC Style) ══════════ -->
+<script nonce="{{ csp_nonce }}">
+(function initNickelRejectFlow() {
+  var overlay = document.getElementById('nickelRejectModalOverlay');
+  if (!overlay) return;
+
+  var API_URL = '/nickle_inspection/nq_action/';
+  var CSRF = '{{ csrf_token }}';
+
+  // DOM refs
+  var closeBtn = document.getElementById('nickelRejectModalClose');
+  var cancelBtn = document.getElementById('nqRejectCancelBtn');
+  var submitBtn = document.getElementById('nqRejectSubmitBtn');
+  var draftSaveBtn = document.getElementById('nqDraftSaveBtn');
+  var fullLotCb = document.getElementById('nqFullLotRejectionCb');
+  var reasonsGrid = document.getElementById('nqRejectReasonsGrid');
+  var totalDisplay = document.getElementById('nqRejectTotalQtyDisplay');
+  var remainDisplay = document.getElementById('nqRejectRemainingQtyDisplay');
+  var remarksInput = document.getElementById('nqRejectRemarksInput');
+  var errorDiv = document.getElementById('nqRejectModalError');
+  var allocationSection = document.getElementById('nqTrayAllocationSection');
+  var originalTraysContainer = document.getElementById('nqOriginalTraysContainer');
+  var acceptSlotsContainer = document.getElementById('nqAcceptSlotsContainer');
+  var rejectSlotsContainer = document.getElementById('nqRejectSlotsContainer');
+  var acceptTotalQtyLabel = document.getElementById('nqAcceptTotalQtyLabel');
+  var rejectTotalQtyLabel = document.getElementById('nqRejectTotalQtyLabel');
+  var delinkSection = document.getElementById('nqDelinkSection');
+  var delinkListContainer = document.getElementById('nqDelinkListContainer');
+  var combinedAcceptQty = document.getElementById('nqCombinedAcceptQty');
+  var combinedRejectQty = document.getElementById('nqCombinedRejectQty');
+  var combinedDelinkQty = document.getElementById('nqCombinedDelinkQty');
+  var globalClearAllBtn = document.getElementById('nqGlobalClearAllBtn');
+
+  // State
+  var _lotId = null;
+  var _totalQty = 0;
+  var _trayCapacity = 0;
+  var _trayData = [];
+  var _reasons = [];
+  var _acceptSlots = [];
+  var _rejectSlots = [];
+  var _allocateTimer = null;
+  var _reuseCount = 0;
+  var _reuseTrayIds = [];
+  var _delinkSlots = [];
+  var _pendingDraftRestore = null;
+
+  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function closeModal() {
+    overlay.style.display = 'none';
+    _lotId = null;
+  }
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+
+  // Expose open function globally
+  window.openNickelRejectModal = function(lotId, row) {
+    _lotId = lotId;
+    var modelNo = row.getAttribute('data-model-no') || '';
+    _totalQty = parseInt(row.getAttribute('data-available-qty') || row.querySelector('.lot-qty')?.textContent?.trim() || '0', 10);
+    _trayCapacity = 0;
+    var actionState = row.getAttribute('data-action-state') || '';
+
+    document.getElementById('nqRejectModalPlatingStk').textContent = modelNo;
+    document.getElementById('nqRejectModalTotalQty').textContent = _totalQty;
+
+    fullLotCb.checked = false;
+    remarksInput.value = '';
+    errorDiv.textContent = '';
+    allocationSection.style.display = 'none';
+    submitBtn.disabled = false;
+    _pendingDraftRestore = null;
+
+    var fetchChain = [
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ action: 'GET_REASONS' }) }).then(function(r) { return r.json(); }),
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ action: 'GET_TRAYS', lot_id: _lotId }) }).then(function(r) { return r.json(); })
+    ];
+    if (actionState === 'ONHOLD_TOPTRAY') {
+      fetchChain.push(
+        fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ action: 'GET_DRAFT', lot_id: _lotId }) }).then(function(r) { return r.json(); })
+      );
+    }
+    Promise.all(fetchChain).then(function(results) {
+      _reasons = results[0].reasons || [];
+      _trayData = (results[1].trays || []).filter(function(t) { return !t.is_delinked; });
+      _totalQty = results[1].total_qty || _totalQty;
+      _trayCapacity = results[1].tray_capacity || _trayCapacity;
+      document.getElementById('nqRejectModalTotalQty').textContent = _totalQty;
+      renderReasonsGrid();
+
+      if (results[2] && results[2].has_draft && results[2].draft_data) {
+        var draftData = results[2].draft_data;
+        if (draftData.remarks) remarksInput.value = draftData.remarks;
+        if (draftData.full_lot_rejection) { fullLotCb.checked = true; fullLotCb.dispatchEvent(new Event('change')); }
+        if (draftData.reasons && draftData.reasons.length > 0) {
+          draftData.reasons.forEach(function(r) {
+            var inp = reasonsGrid.querySelector('.reject-qty-input[data-reason-id="' + r.reason_id + '"]');
+            if (inp) inp.value = r.qty;
+          });
+        }
+        _pendingDraftRestore = draftData;
+      }
+
+      updateTotals();
+      overlay.style.display = 'flex';
+    }).catch(function(err) {
+      console.error('[NickelQC] Reject modal fetch error:', err);
+      Swal.fire('Error', 'Failed to load rejection data', 'error');
+    });
+  };
+
+  function renderReasonsGrid() {
+    reasonsGrid.innerHTML = '';
+    var half = Math.ceil(_reasons.length / 2);
+    var col1 = _reasons.slice(0, half);
+    var col2 = _reasons.slice(half);
+    function buildCol(items, startIdx) {
+      var div = document.createElement('div');
+      items.forEach(function(r, idx) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f0f0f0;';
+        row.innerHTML =
+          '<span style="min-width:22px; text-align:right; color:#888; font-size:12px;">' + (startIdx + idx + 1) + '.</span>' +
+          '<span style="flex:1; font-size:12px; line-height:1.3;">' + escHtml(r.reason) + '</span>' +
+          '<input type="number" class="reject-qty-input" data-reason-id="' + r.id + '" min="0" max="' + _totalQty + '" value="" ' +
+          'style="width:60px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:3px; font-size:12px;" />';
+        div.appendChild(row);
+      });
+      return div;
+    }
+    reasonsGrid.appendChild(buildCol(col1, 0));
+    reasonsGrid.appendChild(buildCol(col2, half));
+    reasonsGrid.querySelectorAll('.reject-qty-input').forEach(function(inp) { inp.addEventListener('input', updateTotals); });
+  }
+
+  function updateTotals() {
+    var totalReject = 0;
+    reasonsGrid.querySelectorAll('.reject-qty-input').forEach(function(inp) { totalReject += parseInt(inp.value || '0', 10); });
+    totalDisplay.textContent = totalReject;
+    remainDisplay.textContent = Math.max(0, _totalQty - totalReject);
+    if (totalReject > 0 && totalReject <= _totalQty) {
+      if (fullLotCb.checked) { allocationSection.style.display = 'none'; }
+      else { if (_allocateTimer) clearTimeout(_allocateTimer); _allocateTimer = setTimeout(function() { fetchAllocation(totalReject); }, 300); }
+    } else { allocationSection.style.display = 'none'; }
+    errorDiv.textContent = '';
+  }
+
+  function fetchAllocation(rejectedQty) {
+    fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ action: 'ALLOCATE', lot_id: _lotId, rejected_qty: rejectedQty }) })
+    .then(function(r) { return r.json(); })
+    .then(function(resp) {
+      if (!resp.success) { errorDiv.textContent = resp.error || 'Allocation failed'; return; }
+      _acceptSlots = (resp.accept_slots || []).map(function(s) { return {qty: s.qty, is_top: s.is_top, tray_id: s.tray_id || null}; });
+      _rejectSlots = (resp.reject_slots || []).map(function(s) { return {qty: s.qty, is_top: s.is_top, tray_id: null}; });
+      _trayData = resp.original_trays || _trayData;
+      _reuseCount = resp.reuse_count || 0;
+      _reuseTrayIds = resp.reuse_trays || [];
+      // Nickel QC: init auto-delink slots from backend (NR trays consumed by rejection)
+      _delinkSlots = (resp.delink_slots || []).map(function(s) { return {tray_id: s.tray_id, qty: s.qty, auto: true}; });
+
+      if (_pendingDraftRestore) {
+        var draft = _pendingDraftRestore; _pendingDraftRestore = null;
+        if (draft.reject_slots) { draft.reject_slots.forEach(function(ds, idx) { if (idx < _rejectSlots.length && ds.tray_id) _rejectSlots[idx].tray_id = ds.tray_id; }); }
+        if (draft.accept_slots) { draft.accept_slots.forEach(function(ds, idx) { if (idx < _acceptSlots.length && ds.tray_id) _acceptSlots[idx].tray_id = ds.tray_id; }); }
+        if (draft.delink_slots && draft.delink_slots.length > 0) { _delinkSlots = draft.delink_slots.map(function(ds) { return {tray_id: ds.tray_id || null}; }); }
+      }
+
+      acceptTotalQtyLabel.textContent = resp.accepted_qty;
+      rejectTotalQtyLabel.textContent = resp.rejected_qty;
+
+      var reuseInfoEl = document.getElementById('nqRejectReuseInfo');
+      // Nickel QC: no reuse, so hide reuse info and show JB/NB hint instead
+      if (reuseInfoEl) { reuseInfoEl.textContent = 'Rejection trays: scan JB (Jumbo Blue) or NB (Normal Blue) trays only'; reuseInfoEl.style.display = 'block'; reuseInfoEl.style.color = '#e65100'; }
+
+      renderOriginalTrays();
+      renderSlots(rejectSlotsContainer, _rejectSlots, 'reject');
+      renderSlots(acceptSlotsContainer, _acceptSlots, 'accept');
+      // Nickel QC: if all accept slots are pre-filled by backend, enable accept section
+      var allAcceptPrefilled = _acceptSlots.length > 0 && _acceptSlots.every(function(s) { return s.tray_id; });
+      if (allAcceptPrefilled) {
+        acceptSlotsContainer.parentElement.style.opacity = '1';
+        acceptSlotsContainer.parentElement.style.pointerEvents = 'auto';
+      } else {
+        acceptSlotsContainer.parentElement.style.opacity = '0.3';
+        acceptSlotsContainer.parentElement.style.pointerEvents = 'none';
+      }
+      // Nickel QC: show auto-delink section immediately if trays were consumed by rejection
+      if (_delinkSlots.length > 0) {
+        renderDelinkSlots(); delinkSection.style.display = '';
+        combinedDelinkQty.textContent = _delinkSlots.reduce(function(sum, s) { return sum + (s.qty || 0); }, 0);
+      } else {
+        delinkSection.style.display = 'none';
+      }
+      updateSummary();
+      allocationSection.style.display = '';
+    }).catch(function(err) { console.error('[NickelQC] Allocate error:', err); });
+  }
+
+  function renderOriginalTrays() {
+    originalTraysContainer.innerHTML = '';
+    _trayData.forEach(function(t) {
+      var chip = document.createElement('span');
+      chip.setAttribute('data-tray-id', t.tray_id);
+      chip.setAttribute('data-qty', t.qty);
+      var assigned = isAssigned(t.tray_id);
+      chip.style.cssText = 'display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:8px; font-size:12px; cursor:pointer; transition:all 0.15s; box-shadow:0 1px 4px rgba(0,0,0,0.10); min-width:100px;' +
+        (assigned ? 'border:1px solid #b2dfdb; background:#e0f7fa; opacity:0.45; pointer-events:none;' : 'border:1px solid #80cbc4; background:#fff;');
+      chip.innerHTML = '<span style="color:#00695c;">' + escHtml(t.tray_id) + '</span> <span style="color:#00897b;">(' + t.qty + ')</span>' +
+        (t.is_top ? ' <span style="color:#e67e22;font-weight:600;font-size:10px;">TOP</span>' : '');
+      chip.addEventListener('click', function() { assignTrayToNextEmptySlot(t.tray_id, t.qty); });
+      originalTraysContainer.appendChild(chip);
+    });
+  }
+
+  function isAssigned(trayId) {
+    var found = false;
+    _acceptSlots.forEach(function(s) { if (s.tray_id === trayId) found = true; });
+    _rejectSlots.forEach(function(s) { if (s.tray_id === trayId) found = true; });
+    _delinkSlots.forEach(function(s) { if (s.tray_id === trayId) found = true; });
+    return found;
+  }
+
+  function assignTrayToNextEmptySlot(trayId, qty) {
+    var originalIds = {}; _trayData.forEach(function(t) { originalIds[t.tray_id] = true; });
+    var isOriginal = !!originalIds[trayId];
+    errorDiv.textContent = '';
+
+    var emptyReject = _rejectSlots.filter(function(s) { return !s.tray_id; });
+    if (emptyReject.length > 0) {
+      if (isOriginal) {
+        var originalsInReject = _rejectSlots.filter(function(s) { return s.tray_id && originalIds[s.tray_id]; }).length;
+        if (originalsInReject >= _reuseCount) { errorDiv.textContent = 'Reuse limit reached (' + _reuseCount + '). Scan a new tray for reject.'; return; }
+      }
+      for (var i = 0; i < _rejectSlots.length; i++) {
+        if (!_rejectSlots[i].tray_id) { _rejectSlots[i].tray_id = trayId; renderSlots(rejectSlotsContainer, _rejectSlots, 'reject'); renderOriginalTrays(); checkPhaseTransition(); return; }
+      }
+    }
+
+    var emptyDelink = _delinkSlots.filter(function(s) { return !s.tray_id; });
+    if (emptyDelink.length > 0) {
+      if (!isOriginal) { errorDiv.textContent = 'Only original trays can be selected for delink.'; return; }
+      for (var j = 0; j < _delinkSlots.length; j++) {
+        if (!_delinkSlots[j].tray_id) { _delinkSlots[j].tray_id = trayId; renderDelinkSlots(); renderOriginalTrays(); checkPhaseTransition(); return; }
+      }
+    }
+
+    for (var k = 0; k < _acceptSlots.length; k++) {
+      if (_acceptSlots[k].is_top && !_acceptSlots[k].tray_id) {
+        _acceptSlots[k].tray_id = trayId; autoFillAcceptNonTop();
+        renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); renderOriginalTrays(); updateSummary(); return;
+      }
+    }
+  }
+
+  function checkPhaseTransition() {
+    var originalIds = {}; _trayData.forEach(function(t) { originalIds[t.tray_id] = true; });
+    var emptyReject = _rejectSlots.filter(function(s) { return !s.tray_id; }).length;
+    var hasAutoDelinks = _delinkSlots.some(function(s) { return s.auto; });
+
+    if (emptyReject > 0) {
+      acceptSlotsContainer.parentElement.style.opacity = '0.3'; acceptSlotsContainer.parentElement.style.pointerEvents = 'none';
+      // Preserve auto-delink slots from backend; only clear manual delinks
+      if (!hasAutoDelinks) { _delinkSlots = []; delinkSection.style.display = 'none'; }
+      else {
+        renderDelinkSlots(); delinkSection.style.display = '';
+        combinedDelinkQty.textContent = _delinkSlots.reduce(function(sum, s) { return sum + (s.qty || 0); }, 0);
+      }
+      _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; });
+      renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); updateSummary(); return;
+    }
+
+    // All reject slots filled — handle auto-delinked trays (Nickel QC mode)
+    if (hasAutoDelinks) {
+      renderDelinkSlots(); delinkSection.style.display = '';
+      combinedDelinkQty.textContent = _delinkSlots.reduce(function(sum, s) { return sum + (s.qty || 0); }, 0);
+      // All auto-delink slots are pre-filled → unlock accept section immediately
+      acceptSlotsContainer.parentElement.style.opacity = '1'; acceptSlotsContainer.parentElement.style.pointerEvents = 'auto';
+      var topFilled = _acceptSlots.some(function(s) { return s.is_top && s.tray_id; });
+      if (topFilled) { autoFillAcceptNonTop(); } else { _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; }); }
+      renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); renderOriginalTrays(); updateSummary(); return;
+    }
+
+    // Standard Brass QC-style delink logic (no auto delinks)
+    var originalsInReject = {}; _rejectSlots.forEach(function(s) { if (s.tray_id && originalIds[s.tray_id]) originalsInReject[s.tray_id] = true; });
+    var remainingOriginals = _trayData.filter(function(t) { return !originalsInReject[t.tray_id]; });
+    var delinkNeeded = (_reuseCount > 0) ? Math.max(0, remainingOriginals.length - _acceptSlots.length) : 0;
+    if (delinkNeeded > 0) {
+      if (_delinkSlots.length !== delinkNeeded) { _delinkSlots = []; for (var i = 0; i < delinkNeeded; i++) { _delinkSlots.push({ tray_id: null }); } }
+      renderDelinkSlots(); delinkSection.style.display = ''; combinedDelinkQty.textContent = delinkNeeded;
+      var emptyDelink = _delinkSlots.filter(function(s) { return !s.tray_id; }).length;
+      if (emptyDelink > 0) {
+        acceptSlotsContainer.parentElement.style.opacity = '0.3'; acceptSlotsContainer.parentElement.style.pointerEvents = 'none';
+        _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; });
+        renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); updateSummary(); return;
+      }
+    } else { _delinkSlots = []; delinkSection.style.display = 'none'; combinedDelinkQty.textContent = 0; }
+    acceptSlotsContainer.parentElement.style.opacity = '1'; acceptSlotsContainer.parentElement.style.pointerEvents = 'auto';
+    var topFilled = _acceptSlots.some(function(s) { return s.is_top && s.tray_id; });
+    if (topFilled) { autoFillAcceptNonTop(); } else { _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; }); }
+    renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); renderOriginalTrays(); updateSummary();
+  }
+
+  function autoFillAcceptNonTop() {
+    var originalIds = {}; _trayData.forEach(function(t) { originalIds[t.tray_id] = true; });
+    var originalsInReject = {}; _rejectSlots.forEach(function(s) { if (s.tray_id && originalIds[s.tray_id]) originalsInReject[s.tray_id] = true; });
+    var delinkedIds = {}; _delinkSlots.forEach(function(s) { if (s.tray_id) delinkedIds[s.tray_id] = true; });
+    var availableForAccept = _trayData.filter(function(t) { return !originalsInReject[t.tray_id] && !delinkedIds[t.tray_id]; });
+    availableForAccept.sort(function(a, b) { if (a.is_top && !b.is_top) return -1; if (!a.is_top && b.is_top) return 1; return a.tray_id.localeCompare(b.tray_id); });
+    var topTrayId = null; _acceptSlots.forEach(function(s) { if (s.is_top && s.tray_id) topTrayId = s.tray_id; });
+    var nonTopAvailable = availableForAccept.filter(function(t) { return t.tray_id !== topTrayId; });
+    var autoIdx = 0;
+    _acceptSlots.forEach(function(s) { if (!s.is_top) { s.tray_id = (autoIdx < nonTopAvailable.length) ? nonTopAvailable[autoIdx].tray_id : null; autoIdx++; } });
+  }
+
+  function renderDelinkSlots() {
+    delinkListContainer.innerHTML = '';
+    if (_delinkSlots.length === 0) return;
+    var hasAutoDelinks = _delinkSlots.some(function(s) { return s.auto; });
+    var headerText = hasAutoDelinks ? 'Auto-delinked tray(s) \u2014 fully consumed by rejection:' : 'Select original tray(s) to delink:';
+    var html = '<p style="font-size:11px; color:#e65100; margin:0 0 6px;">' + headerText + '</p>';
+    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#fff3e0;"><th style="padding:5px 8px; border:1px solid #ffe0b2; text-align:center; width:40px; font-size:11px;">S.No</th>';
+    html += '<th style="padding:5px 8px; border:1px solid #ffe0b2; font-size:11px;">Tray ID</th>';
+    if (hasAutoDelinks) html += '<th style="padding:5px 8px; border:1px solid #ffe0b2; text-align:center; width:50px; font-size:11px;">Qty</th>';
+    html += '</tr></thead><tbody>';
+    _delinkSlots.forEach(function(slot, idx) {
+      html += '<tr><td style="padding:5px 8px; border:1px solid #ffe0b2; text-align:center;">' + (idx + 1) + '</td>';
+      if (slot.auto) {
+        // Auto-delinked: read-only display
+        html += '<td style="padding:5px 8px; border:1px solid #ffe0b2;">' +
+          '<span style="color:#e65100; font-weight:500;"><i class="fa fa-unlink"></i> ' + escHtml(slot.tray_id) + '</span>' +
+          ' <span style="background:#fff3e0; border:1px solid #ffcc80; border-radius:3px; padding:1px 5px; font-size:10px; color:#e65100; font-weight:600;">AUTO</span>' +
+          '</td><td style="padding:5px 8px; border:1px solid #ffe0b2; text-align:center; color:#e65100; font-weight:600;">' + (slot.qty || 0) + '</td>';
+      } else if (slot.tray_id) {
+        html += '<td style="padding:3px 6px; border:1px solid #ffe0b2;"><div style="display:flex; align-items:center; gap:4px;"><span style="color:#e65100;"><i class="fa fa-unlink"></i> ' + escHtml(slot.tray_id) + '</span>' +
+          '<button type="button" class="nq-delink-clear-btn" data-idx="' + idx + '" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:13px; padding:0 3px;" title="Clear">&times;</button></div></td>';
+        if (hasAutoDelinks) html += '<td></td>';
+      } else {
+        html += '<td style="padding:3px 6px; border:1px solid #ffe0b2;"><input type="text" class="nq-delink-scan-input" data-idx="' + idx + '" placeholder="Pick or scan original tray to delink" style="width:100%; padding:3px 6px; border:1px solid #ffe0b2; border-radius:3px; font-size:12px; box-sizing:border-box; background:#fffaf0;" autocomplete="off" /></td>';
+        if (hasAutoDelinks) html += '<td></td>';
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    delinkListContainer.innerHTML = html;
+
+    delinkListContainer.querySelectorAll('.nq-delink-clear-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-idx'), 10);
+        if (_delinkSlots[idx] && _delinkSlots[idx].auto) return;  // Cannot clear auto-delinked trays
+        _delinkSlots[idx].tray_id = null; _acceptSlots.forEach(function(s) { if (!s.is_top) s.tray_id = null; });
+        renderDelinkSlots(); renderOriginalTrays(); checkPhaseTransition();
+      });
+    });
+
+    delinkListContainer.querySelectorAll('.nq-delink-scan-input').forEach(function(inp) {
+      inp.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        var val = this.value.trim(); if (!val) return;
+        var idx = parseInt(this.getAttribute('data-idx'), 10);
+        var oIds = {}; _trayData.forEach(function(t) { oIds[t.tray_id] = true; });
+        if (!oIds[val]) { errorDiv.textContent = 'Only original trays can be delinked.'; this.select(); return; }
+        if (isAssigned(val)) { errorDiv.textContent = 'This tray is already assigned.'; this.select(); return; }
+        errorDiv.textContent = ''; _delinkSlots[idx].tray_id = val;
+        renderDelinkSlots(); renderOriginalTrays(); checkPhaseTransition();
+      });
+      inp.addEventListener('input', function() {
+        var val = this.value.trim(); if (val.length < 9) return;
+        var idx = parseInt(this.getAttribute('data-idx'), 10);
+        var oIds = {}; _trayData.forEach(function(t) { oIds[t.tray_id] = true; });
+        if (!oIds[val]) { errorDiv.textContent = 'Only original trays can be delinked.'; this.select(); return; }
+        if (isAssigned(val)) { errorDiv.textContent = 'This tray is already assigned.'; this.select(); return; }
+        errorDiv.textContent = ''; _delinkSlots[idx].tray_id = val;
+        renderDelinkSlots(); renderOriginalTrays(); checkPhaseTransition();
+      });
+    });
+  }
+
+  function renderSlots(container, slots, type) {
+    container.innerHTML = '';
+    if (slots.length === 0) { container.innerHTML = '<p style="color:#999; font-size:12px; margin:4px 0;">No trays needed</p>'; return; }
+    var originalIds = {}; _trayData.forEach(function(t) { originalIds[t.tray_id] = true; });
+    var borderClr = '#e0e0e0';
+    var headBg = type === 'accept' ? '#e8f5e9' : '#ffebee';
+    var html = '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:' + headBg + ';">';
+    html += '<th style="padding:5px 8px; border:1px solid ' + borderClr + '; text-align:center; width:40px; font-weight:600; font-size:11px;">S.No</th>';
+    html += '<th style="padding:5px 8px; border:1px solid ' + borderClr + '; font-weight:600; font-size:11px;">Tray ID</th>';
+    html += '<th style="padding:5px 8px; border:1px solid ' + borderClr + '; text-align:center; width:50px; font-weight:600; font-size:11px;">Qty</th></tr></thead><tbody>';
+    slots.forEach(function(slot, idx) {
+      var rowBg = idx % 2 === 0 ? '#fff' : '#fafafa';
+      html += '<tr style="background:' + rowBg + ';">';
+      var topTag = slot.is_top ? ' <span style="color:#e67e22; font-size:10px; font-weight:600;">(Top Tray)</span>' : '';
+      html += '<td style="padding:5px 8px; border:1px solid ' + borderClr + '; text-align:center;">' + (idx + 1) + topTag + '</td>';
+      if (slot.tray_id) {
+        if (type === 'accept' && !slot.is_top) {
+          html += '<td style="padding:5px 8px; border:1px solid ' + borderClr + ';"><span style="color:#2e7d32; font-size:12px;">' + escHtml(slot.tray_id) + '</span> <span style="background:#e8f5e9; color:#388e3c; padding:1px 6px; border-radius:8px; font-size:10px;">Auto</span></td>';
+        } else {
+          var newBadge = !originalIds[slot.tray_id] ? ' <span style="background:#e3f2fd; color:#1565c0; padding:1px 6px; border-radius:8px; font-size:10px; flex-shrink:0;">New</span>' : '';
+          var reusedBadge = originalIds[slot.tray_id] ? ' <span style="background:#fff3e0; color:#e65100; padding:1px 6px; border-radius:8px; font-size:10px; flex-shrink:0;">Reused</span>' : '';
+          html += '<td style="padding:3px 6px; border:1px solid ' + borderClr + ';"><div style="display:flex; align-items:center; gap:4px;">' +
+            '<input type="text" class="nq-slot-edit-input" data-idx="' + idx + '" data-type="' + type + '" value="' + escHtml(slot.tray_id) + '" style="flex:1; padding:3px 6px; border:1px solid #aed6c9; border-radius:3px; font-size:12px; background:#f0faf8; box-sizing:border-box; min-width:80px;" autocomplete="off" />' +
+            newBadge + reusedBadge +
+            '<button type="button" class="nq-slot-clear-btn" data-idx="' + idx + '" data-type="' + type + '" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:13px; padding:0 3px; flex-shrink:0;" title="Clear">&times;</button></div>' +
+            '<span class="nq-slot-scan-error" style="font-size:10px; display:none; margin-top:2px; color:#c62828;"></span></td>';
+        }
+      } else {
+        html += '<td style="padding:3px 6px; border:1px solid ' + borderClr + ';"><input type="text" class="nq-slot-scan-input" data-idx="' + idx + '" data-type="' + type + '" placeholder="Scan Tray ID" style="width:100%; padding:3px 6px; border:1px solid #ddd; border-radius:3px; font-size:12px; box-sizing:border-box;" autocomplete="off" />' +
+          '<span class="nq-slot-scan-error" style="font-size:10px; display:none; margin-top:2px;"></span></td>';
+      }
+      html += '<td style="padding:5px 8px; border:1px solid ' + borderClr + '; text-align:center;">' + slot.qty + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    // Clear buttons
+    container.querySelectorAll('.nq-slot-clear-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-idx'), 10);
+        var slotType = this.getAttribute('data-type');
+        var targetSlots = slotType === 'accept' ? _acceptSlots : _rejectSlots;
+        var targetContainer = slotType === 'accept' ? acceptSlotsContainer : rejectSlotsContainer;
+        targetSlots[idx].tray_id = null;
+        if (slotType === 'reject') {
+          // Preserve auto-delinked slots from backend; only clear manual delinks
+          if (!_delinkSlots.some(function(s) { return s.auto; })) { _delinkSlots = []; }
+          _acceptSlots.forEach(function(s) { if (!s.is_top && !getOriginalIds()[s.tray_id]) s.tray_id = null; }); }
+        if (slotType === 'accept' && targetSlots[idx].is_top) { _acceptSlots.forEach(function(s) { if (!s.is_top) s.tray_id = null; }); }
+        renderSlots(targetContainer, targetSlots, slotType); renderOriginalTrays();
+        if (slotType === 'reject') { checkPhaseTransition(); } else { updateSummary(); }
+      });
+    });
+
+    function getOriginalIds() { var m = {}; _trayData.forEach(function(t) { m[t.tray_id] = true; }); return m; }
+    async function validateTrayIdDB(trayId, errSpan, slotType, slotQty) {
+      try {
+        var resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ action: 'VALIDATE_TRAY', tray_id: trayId, lot_id: _lotId, slot_type: slotType || 'accept', slot_qty: slotQty || 0 }) });
+        var result = await resp.json();
+        if (!result.valid) { if (errSpan) { errSpan.textContent = result.error || 'Invalid tray ID'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; } return false; }
+        return true;
+      } catch(err) { if (errSpan) { errSpan.textContent = 'Validation failed'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; } return false; }
+    }
+
+    // Scan inputs
+    container.querySelectorAll('.nq-slot-scan-input').forEach(function(inp) {
+      inp.addEventListener('keydown', async function(e) {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        var scannedId = this.value.trim();
+        var errSpan = this.closest('td').querySelector('.nq-slot-scan-error');
+        if (!scannedId) { if (errSpan) { errSpan.textContent = 'Please scan a tray ID'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; } return; }
+        var idx = parseInt(this.getAttribute('data-idx'), 10);
+        var slotType = this.getAttribute('data-type');
+        var targetSlots = slotType === 'accept' ? _acceptSlots : _rejectSlots;
+        var targetContainer = slotType === 'accept' ? acceptSlotsContainer : rejectSlotsContainer;
+        if (isAssigned(scannedId)) { if (errSpan) { errSpan.textContent = 'Already assigned to another slot'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; } return; }
+        // Nickel QC: reject slots only allow JB/NB tray IDs
+        if (slotType === 'reject' && !(/^(JB|NB)-/.test(scannedId))) {
+          if (errSpan) { errSpan.textContent = 'Only JB (Jumbo Blue) or NB (Normal Blue) trays allowed for rejection'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; }
+          return;
+        }
+        var slotQty = targetSlots[idx] ? targetSlots[idx].qty : 0;
+        var ok = await validateTrayIdDB(scannedId, errSpan, slotType, slotQty); if (!ok) return;
+        if (errSpan) errSpan.style.display = 'none';
+        targetSlots[idx].tray_id = scannedId;
+        if (slotType === 'accept' && targetSlots[idx].is_top) { autoFillAcceptNonTop(); }
+        renderSlots(targetContainer, targetSlots, slotType); renderOriginalTrays();
+        if (slotType === 'reject') { checkPhaseTransition(); } else { updateSummary(); }
+        var nextInput = targetContainer.querySelector('.nq-slot-scan-input') || delinkListContainer.querySelector('.nq-delink-scan-input') || acceptSlotsContainer.querySelector('.nq-slot-scan-input');
+        if (nextInput) nextInput.focus();
+      });
+      inp.addEventListener('input', async function() {
+        var val = this.value.trim(); if (val.length < 9) return;
+        var errSpan = this.closest('td').querySelector('.nq-slot-scan-error');
+        var idx2 = parseInt(this.getAttribute('data-idx'), 10);
+        var slotType2 = this.getAttribute('data-type');
+        var targetSlots2 = slotType2 === 'accept' ? _acceptSlots : _rejectSlots;
+        var targetContainer2 = slotType2 === 'accept' ? acceptSlotsContainer : rejectSlotsContainer;
+        if (isAssigned(val)) { if (errSpan) { errSpan.textContent = 'Already assigned'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; } this.select(); return; }
+        // Nickel QC: reject slots only allow JB/NB tray IDs
+        if (slotType2 === 'reject' && !(/^(JB|NB)-/.test(val))) {
+          if (errSpan) { errSpan.textContent = 'Only JB (Jumbo Blue) or NB (Normal Blue) trays allowed for rejection'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; }
+          this.select(); return;
+        }
+        var slotQty2 = targetSlots2[idx2] ? targetSlots2[idx2].qty : 0;
+        var ok2 = await validateTrayIdDB(val, errSpan, slotType2, slotQty2); if (!ok2) { this.select(); return; }
+        if (errSpan) errSpan.style.display = 'none';
+        targetSlots2[idx2].tray_id = val;
+        if (slotType2 === 'accept' && targetSlots2[idx2].is_top) { autoFillAcceptNonTop(); }
+        renderSlots(targetContainer2, targetSlots2, slotType2); renderOriginalTrays();
+        if (slotType2 === 'reject') { checkPhaseTransition(); } else { updateSummary(); }
+        var nextInput2 = targetContainer2.querySelector('.nq-slot-scan-input') || delinkListContainer.querySelector('.nq-delink-scan-input') || acceptSlotsContainer.querySelector('.nq-slot-scan-input');
+        if (nextInput2) nextInput2.focus();
+      });
+    });
+
+    // Edit inputs
+    container.querySelectorAll('.nq-slot-edit-input').forEach(function(inp) {
+      inp.addEventListener('keydown', async function(e) {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        var newVal = this.value.trim();
+        var idx = parseInt(this.getAttribute('data-idx'), 10);
+        var slotType = this.getAttribute('data-type');
+        var targetSlots = slotType === 'accept' ? _acceptSlots : _rejectSlots;
+        var targetContainer = slotType === 'accept' ? acceptSlotsContainer : rejectSlotsContainer;
+        var errSpan = this.closest('td').querySelector('.nq-slot-scan-error');
+        var originalVal = targetSlots[idx].tray_id;
+        if (!newVal) {
+          targetSlots[idx].tray_id = null;
+          if (slotType === 'reject') {
+            if (!_delinkSlots.some(function(s) { return s.auto; })) { _delinkSlots = []; }
+            _acceptSlots.forEach(function(s) { if (!s.is_top && !getOriginalIds()[s.tray_id]) s.tray_id = null; }); }
+          if (slotType === 'accept' && targetSlots[idx].is_top) { _acceptSlots.forEach(function(s) { if (!s.is_top) s.tray_id = null; }); }
+          renderSlots(targetContainer, targetSlots, slotType); renderOriginalTrays();
+          if (slotType === 'reject') { checkPhaseTransition(); } else { updateSummary(); } return;
+        }
+        if (newVal === originalVal) return;
+        targetSlots[idx].tray_id = null; var isDup = isAssigned(newVal); targetSlots[idx].tray_id = originalVal;
+        if (isDup) { if (errSpan) { errSpan.textContent = 'Already assigned'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; } this.select(); return; }
+        // Nickel QC: reject slots only allow JB/NB tray IDs
+        if (slotType === 'reject' && !(/^(JB|NB)-/.test(newVal))) {
+          if (errSpan) { errSpan.textContent = 'Only JB (Jumbo Blue) or NB (Normal Blue) trays allowed for rejection'; errSpan.style.display = 'block'; errSpan.style.color = '#c62828'; }
+          this.select(); return;
+        }
+        var editSlotQty = targetSlots[idx] ? targetSlots[idx].qty : 0;
+        var ok = await validateTrayIdDB(newVal, errSpan, slotType, editSlotQty); if (!ok) { this.select(); return; }
+        if (errSpan) errSpan.style.display = 'none';
+        targetSlots[idx].tray_id = newVal;
+        if (slotType === 'reject') {
+          if (!_delinkSlots.some(function(s) { return s.auto; })) { _delinkSlots = []; }
+          _acceptSlots.forEach(function(s) { if (!s.is_top && !getOriginalIds()[s.tray_id]) s.tray_id = null; }); }
+        if (slotType === 'accept' && targetSlots[idx].is_top) { autoFillAcceptNonTop(); }
+        renderSlots(targetContainer, targetSlots, slotType); renderOriginalTrays();
+        if (slotType === 'reject') { checkPhaseTransition(); } else { updateSummary(); }
+      });
+    });
+  }
+
+  function updateSummary() {
+    var accQty = 0, rejQty = 0;
+    _acceptSlots.forEach(function(s) { if (s.tray_id) accQty += s.qty; });
+    _rejectSlots.forEach(function(s) { if (s.tray_id) rejQty += s.qty; });
+    combinedAcceptQty.textContent = accQty; combinedRejectQty.textContent = rejQty;
+    combinedDelinkQty.textContent = _delinkSlots.filter(function(s) { return s.tray_id; }).length;
+  }
+
+  // Full Lot Rejection checkbox
+  fullLotCb.addEventListener('change', function() {
+    var inputs = reasonsGrid.querySelectorAll('.reject-qty-input');
+    if (this.checked) { inputs.forEach(function(inp) { inp.value = ''; }); allocationSection.style.display = 'none'; _acceptSlots = []; _rejectSlots = []; _delinkSlots = []; remarksInput.focus(); }
+    else { inputs.forEach(function(inp) { inp.value = ''; }); }
+    updateTotals();
+  });
+
+  // Global Clear All
+  if (globalClearAllBtn) {
+    globalClearAllBtn.addEventListener('click', function() {
+      _acceptSlots.forEach(function(s) { s.tray_id = null; }); _rejectSlots.forEach(function(s) { s.tray_id = null; }); _delinkSlots = [];
+      renderSlots(rejectSlotsContainer, _rejectSlots, 'reject'); renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); renderOriginalTrays();
+      acceptSlotsContainer.parentElement.style.opacity = '0.3'; acceptSlotsContainer.parentElement.style.pointerEvents = 'none'; delinkSection.style.display = 'none';
+      reasonsGrid.querySelectorAll('.reject-qty-input').forEach(function(inp) { inp.value = ''; });
+      updateSummary(); updateTotals();
+    });
+  }
+
+  // Draft Save
+  if (draftSaveBtn) {
+    draftSaveBtn.addEventListener('click', function() {
+      errorDiv.textContent = '';
+      if (!_lotId) { errorDiv.textContent = 'No lot selected.'; return; }
+      var draftReasons = [];
+      reasonsGrid.querySelectorAll('.reject-qty-input').forEach(function(inp) {
+        var qty = parseInt(inp.value || '0', 10);
+        if (qty > 0) draftReasons.push({ reason_id: parseInt(inp.getAttribute('data-reason-id'), 10), qty: qty });
+      });
+      var draftPayload = {
+        reasons: draftReasons,
+        accept_slots: _acceptSlots.map(function(s) { return {qty: s.qty, is_top: s.is_top, tray_id: s.tray_id}; }),
+        reject_slots: _rejectSlots.map(function(s) { return {qty: s.qty, is_top: s.is_top, tray_id: s.tray_id}; }),
+        delink_slots: _delinkSlots.map(function(s) { return {tray_id: s.tray_id}; }),
+        remarks: remarksInput.value.trim(), full_lot_rejection: fullLotCb.checked, total_qty: _totalQty,
+      };
+      draftSaveBtn.disabled = true;
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ action: 'SAVE_DRAFT', lot_id: _lotId, draft_data: draftPayload }) })
+      .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+      .then(function(resp) {
+        draftSaveBtn.disabled = false;
+        if (resp.ok && resp.data.success) { closeModal(); Swal.fire({ icon: 'info', title: 'Draft Saved', text: resp.data.message || 'Draft saved.', timer: 2500, showConfirmButton: false }); setTimeout(function() { location.reload(); }, 2500); }
+        else { errorDiv.textContent = resp.data.error || 'Draft save failed.'; }
+      }).catch(function(err) { draftSaveBtn.disabled = false; errorDiv.textContent = 'Network error.'; });
+    });
+  }
+
+  // Submit
+  submitBtn.addEventListener('click', function() {
+    errorDiv.textContent = '';
+    var totalReject = parseInt(totalDisplay.textContent || '0', 10);
+    if (totalReject <= 0 && !fullLotCb.checked) { errorDiv.textContent = 'Enter at least one rejection quantity.'; return; }
+    if (!fullLotCb.checked && totalReject > _totalQty) { errorDiv.textContent = 'Total reject qty exceeds total lot qty.'; return; }
+
+    var reasons = [];
+    reasonsGrid.querySelectorAll('.reject-qty-input').forEach(function(inp) {
+      var qty = parseInt(inp.value || '0', 10);
+      if (qty > 0) reasons.push({ reason_id: parseInt(inp.getAttribute('data-reason-id'), 10), qty: qty });
+    });
+
+    // Full Lot Rejection
+    if (fullLotCb.checked) {
+      if (!remarksInput.value.trim()) { errorDiv.textContent = 'Remarks mandatory for full lot rejection.'; remarksInput.focus(); return; }
+      submitBtn.disabled = true;
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ lot_id: _lotId, action: 'FULL_REJECT', rejection_reasons: reasons, remarks: remarksInput.value.trim() }) })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, status: r.status, data: d }; }); })
+      .then(function(resp) {
+        submitBtn.disabled = false;
+        if (resp.ok && resp.data.success) { closeModal(); Swal.fire({ icon: 'success', title: 'Full Lot Rejected', text: resp.data.message, timer: 2000, showConfirmButton: false }); setTimeout(function() { location.reload(); }, 2000); }
+        else { errorDiv.textContent = resp.data.error || 'Submission failed.'; }
+      }).catch(function(err) { submitBtn.disabled = false; errorDiv.textContent = 'Network error.'; });
+      return;
+    }
+
+    // Partial rejection — validate all slots filled
+    var emptyAccept = 0, emptyReject = 0;
+    _acceptSlots.forEach(function(s) { if (!s.tray_id) emptyAccept++; });
+    _rejectSlots.forEach(function(s) { if (!s.tray_id) emptyReject++; });
+    if (emptyAccept > 0) { errorDiv.textContent = 'All accept tray slots must have a tray ID (' + emptyAccept + ' empty).'; return; }
+    if (emptyReject > 0) { errorDiv.textContent = 'All reject tray slots must have a tray ID (' + emptyReject + ' empty).'; return; }
+
+    var trayActions = [];
+    var acceptHasTop = false;
+    _acceptSlots.forEach(function(s) { trayActions.push({ tray_id: s.tray_id, action: 'ACCEPT', is_top: s.is_top }); if (s.is_top) acceptHasTop = true; });
+    _rejectSlots.forEach(function(s) { trayActions.push({ tray_id: s.tray_id, action: 'REJECT', is_top: false, qty: s.qty }); });
+    _delinkSlots.forEach(function(s) { if (s.tray_id) trayActions.push({ tray_id: s.tray_id, action: 'DELINK', is_top: false }); });
+    if (_acceptSlots.length > 0 && !acceptHasTop) { errorDiv.textContent = 'Accept section must have a top tray.'; return; }
+
+    submitBtn.disabled = true;
+    fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ lot_id: _lotId, action: 'PROCESS', tray_actions: trayActions, rejection_reasons: reasons, remarks: remarksInput.value.trim() }) })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, status: r.status, data: d }; }); })
+    .then(function(resp) {
+      submitBtn.disabled = false;
+      if (resp.ok && resp.data.success) { closeModal(); Swal.fire({ icon: 'success', title: 'Submission Complete', text: resp.data.message, timer: 2000, showConfirmButton: false }); setTimeout(function() { location.reload(); }, 2000); }
+      else { errorDiv.textContent = resp.data.error || 'Submission failed.'; }
+    }).catch(function(err) { submitBtn.disabled = false; errorDiv.textContent = 'Network error.'; });
+  });
+})();
 </script>
 
 {% endblock %} {% endblock content %}
