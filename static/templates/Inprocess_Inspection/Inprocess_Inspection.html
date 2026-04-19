@@ -1348,7 +1348,8 @@
                         data-multi-model='{{ jig_detail.enriched_multi_model_allocation|json_encode }}'
                         data-images='{{ jig_detail.model_images|json_encode }}'
                         data-model-colors='{{ jig_detail.model_colors|json_encode }}'
-                        data-model-list='{{ jig_detail.no_of_model_cases|json_encode }}'>
+                        data-model-list='{{ jig_detail.no_of_model_cases|json_encode }}'
+                        data-plating-stk-nos='{{ jig_detail.final_plating_stk_nos|default:"" }}'>
                         {% if jig_detail.is_multi_model and jig_detail.no_of_model_cases_str %}
                             <div class="multi-model-circles-container mm-gallery-trigger" data-lot-id="{{ jig_detail.lot_id }}" title="Click to view all models" style="cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:3px;max-width:120px;">
                               {% with models=jig_detail.no_of_model_cases_str|default:""|split:"," %}
@@ -1379,22 +1380,21 @@
                             </div>
                         {% elif jig_detail.no_of_model_cases %}
                             {% with first_model=jig_detail.no_of_model_cases.0 %}
-                            <span class="mm-gallery-trigger" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;max-width:120px;" title="Click to view model">
-                                {% if jig_detail.model_colors %}
-                                    <span class="model-circle" style="background:{{ jig_detail.model_colors|get_item:first_model }};width:16px;height:16px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
-                                {% else %}
-                                    <span class="model-circle" style="background:#ccc;width:16px;height:16px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
-                                {% endif %}
-                                <span style="font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ first_model }}</span>
-                            </span>
+                            <div style="display:flex;flex-direction:column;gap:2px;max-width:140px;">
+                                <span class="mm-gallery-trigger" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Click to view model">
+                                    {% if jig_detail.model_colors %}
+                                        <span class="model-circle" style="background:{{ jig_detail.model_colors|get_item:first_model }};width:16px;height:16px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                                    {% else %}
+                                        <span class="model-circle" style="background:#ccc;width:16px;height:16px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                                    {% endif %}
+                                    <span style="font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ first_model }}</span>
+                                </span>
+                                <span style="font-size:9px;color:#666;font-weight:600;" title="Plating Stock Number">{{ jig_detail.final_plating_stk_nos|default:"N/A" }}</span>
+                            </div>
                             {% endwith %}
                         {% else %}
                             <span style="font-size:10px;color:#999;">N/A</span>
                         {% endif %}
-                        </td>
-                        <!-- Plating Stock No from ModelMasterCreation -->
-                        <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %} style="min-width:130px;max-width:160px;white-space:normal;word-break:break-word;font-size:11px;">
-                           {{ jig_detail.final_plating_stk_nos|default:"N/A" }}
                         </td>
                         <!-- Polishing Stock No from ModelMasterCreation (hidden) -->                     
                         <!-- Plating Color from ModelMasterCreation -->
@@ -2588,37 +2588,16 @@
      const modalContent = document.getElementById('modelRemarkModalContent');
 
      function openGallery(cell) {
+
        try {
-         // Prefer multi_model_allocation (has image URLs + qty for ALL models)
+         // Always normalize to array for unified rendering
          var rawMM = cell.getAttribute('data-multi-model') || '[]';
          var mmAlloc = [];
          try { mmAlloc = JSON.parse(rawMM); } catch(e) { mmAlloc = []; }
 
-         if (Array.isArray(mmAlloc) && mmAlloc.length > 0) {
-           // --- Multi-model: iterate all models from allocation ---
-           var circleColors = ['#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#e65100','#c0226e','#388e3c','#d81b60','#00838f'];
-           var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:16px 12px;justify-items:center;padding:4px 0;">';
-           mmAlloc.forEach(function(m, idx) {
-             var modelName  = m.model_name || m.model || '';
-             var qty        = m.allocated_qty || 0;
-             var imgUrl     = m.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
-             var color      = circleColors[idx % circleColors.length];
-             var roleLabel  = m.model_role === 'primary' ? '<span style="font-size:8px;background:#28a745;color:#fff;border-radius:3px;padding:1px 4px;margin-top:2px;display:inline-block;">Primary</span>' : '';
-             var platingStkNo = m.plating_stk_no || '';
-             html += '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;" onclick="showModelImagesFull(' + JSON.stringify(modelName) + ',' + JSON.stringify([imgUrl]) + ')">'
-                   + '<div style="width:18px;height:18px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;flex-shrink:0;">' + (idx+1) + '</div>'
-                   + '<img src="' + imgUrl + '" alt="' + modelName + '" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;" />'
-                   + '<div style="font-weight:600;color:#023E4DCC;font-size:11px;text-align:center;word-break:break-all;line-height:1.2;">' + modelName + '</div>'
-                   + (platingStkNo ? '<div style="font-size:9px;color:#028084;background:#e6f7f8;border-radius:3px;padding:1px 5px;margin-top:1px;word-break:break-all;text-align:center;">' + platingStkNo + '</div>' : '')
-                   + '<div style="font-size:10px;color:#555;">Qty: ' + qty + '</div>'
-                   + roleLabel
-                   + '</div>';
-           });
-           html += '</div>';
-           modalContent.innerHTML = html;
-           modal.style.display = 'block';
-         } else {
-           // --- Single model fallback ---
+         // If single model, synthesize array with all required fields
+         if (!Array.isArray(mmAlloc) || mmAlloc.length === 0) {
+           // Build single-model card with all fields (image, stock no, qty, badge)
            var modelImages = {};
            var modelColors = {};
            var modelList = [];
@@ -2627,22 +2606,66 @@
            try { modelList   = JSON.parse(cell.getAttribute('data-model-list') || '[]'); } catch(e) {}
            if (!Array.isArray(modelList)) modelList = [];
 
-           var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:16px 12px;justify-items:center;padding:4px 0;">';
-           modelList.forEach(function(modelNo) {
-             var color = modelColors[modelNo] || '#ccc';
-             var imgData = modelImages[modelNo] || {};
-             var firstImage = (Array.isArray(imgData) ? imgData[0] : imgData.first_image) || '/static/assets/images/imagePlaceholder.png';
-             var allImages  = (Array.isArray(imgData) ? imgData : imgData.images) || [firstImage];
-             html += '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;" onclick="showModelImagesFull(' + JSON.stringify(modelNo) + ',' + JSON.stringify(allImages) + ')">'
-                   + '<span class="model-circle" style="background:' + color + ';width:16px;height:16px;border-radius:50%;display:inline-block;"></span>'
-                   + '<img src="' + firstImage + '" alt="' + modelNo + '" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;" />'
-                   + '<div style="font-weight:600;color:#023E4DCC;font-size:11px;text-align:center;word-break:break-all;">' + modelNo + '</div>'
-                   + '</div>';
+           // Get plating stk nos string from data attribute (comma-separated for multi-lot)
+           var platingStkNosRaw = (cell.getAttribute('data-plating-stk-nos') || '').trim();
+           var platingStkNosArr = platingStkNosRaw ? platingStkNosRaw.split(',').map(function(s){return s.trim();}) : [];
+
+           // Compose a synthetic mmAlloc array for unified rendering
+           // modelList entries are in "modelname:qty" format (e.g. "1805NAR02:29")
+           mmAlloc = modelList.map(function(modelEntry, idx) {
+             // Parse "modelname:qty" format
+             var parts = String(modelEntry).split(':');
+             var actualModelName = parts[0].trim();
+             var qty = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+             if (isNaN(qty)) qty = 0;
+
+             // Look up images using just the model name (key in data-images)
+             var imgData = modelImages[actualModelName];
+             var firstImage;
+             if (Array.isArray(imgData) && imgData.length > 0) {
+               firstImage = imgData[0];
+             } else if (imgData && imgData.first_image) {
+               firstImage = imgData.first_image;
+             } else {
+               firstImage = '/static/assets/images/imagePlaceholder.png';
+             }
+
+             // Plating stk no: use matching index from data-plating-stk-nos, fallback to first
+             var platingStkNo = platingStkNosArr[idx] || platingStkNosArr[0] || '';
+
+             return {
+               model_name: actualModelName,
+               model: actualModelName,
+               allocated_qty: qty,
+               model_image_url: firstImage,
+               model_role: 'primary',   // single model is always primary
+               plating_stk_no: platingStkNo
+             };
            });
-           html += '</div>';
-           modalContent.innerHTML = html;
-           modal.style.display = 'block';
          }
+
+         // --- Unified renderer for both single and multi-model ---
+         var circleColors = ['#007bff','#e67e22','#c0a000','#6f42c1','#28a745','#e65100','#c0226e','#388e3c','#d81b60','#00838f'];
+         var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:16px 12px;justify-items:center;padding:4px 0;">';
+         mmAlloc.forEach(function(m, idx) {
+           var modelName  = m.model_name || m.model || '';
+           var qty        = m.allocated_qty || 0;
+           var imgUrl     = m.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
+           var color      = circleColors[idx % circleColors.length];
+           var roleLabel  = m.model_role === 'primary' ? '<span style="font-size:8px;background:#28a745;color:#fff;border-radius:3px;padding:1px 4px;margin-top:2px;display:inline-block;">Primary</span>' : '';
+           var platingStkNo = m.plating_stk_no || '';
+           html += '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;" onclick="showModelImagesFull(' + JSON.stringify(modelName) + ',' + JSON.stringify([imgUrl]) + ')">'
+                 + '<div style="width:18px;height:18px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;flex-shrink:0;">' + (idx+1) + '</div>'
+                 + '<img src="' + imgUrl + '" alt="' + modelName + '" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;" />'
+                 + '<div style="font-weight:600;color:#023E4DCC;font-size:11px;text-align:center;word-break:break-all;line-height:1.2;">' + modelName + '</div>'
+                 + (platingStkNo ? '<div style="font-size:9px;color:#028084;background:#e6f7f8;border-radius:3px;padding:1px 5px;margin-top:1px;word-break:break-all;text-align:center;">' + platingStkNo + '</div>' : '')
+                 + '<div style="font-size:10px;color:#555;">Qty: ' + qty + '</div>'
+                 + roleLabel
+                 + '</div>';
+         });
+         html += '</div>';
+         modalContent.innerHTML = html;
+         modal.style.display = 'block';
        } catch (error) {
          console.error('Error building gallery:', error);
          modalContent.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Error loading model data</div>';

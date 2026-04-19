@@ -30,6 +30,7 @@ from datetime import timedelta
 import datetime
 import pytz
 import logging
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +107,9 @@ class BrassAuditPickTableView(APIView):
         ).exclude(
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
         ).exclude(
-            # ✅ EXCLUDE parent lots that have been split - only child lots should appear
-            brass_qc_transition_reject_lot_id__isnull=False
+            next_process_module="Split Completed"
+        ).exclude(
+            remove_lot=True  # Exclude parent lots split in Brass QC (children are the real lots)
         )
 
         if sort and sort in sort_field_mapping:
@@ -406,6 +408,19 @@ class BrassAuditCompletedView(APIView):
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
         )
 
+        # BUG2 FIX: Exclude child lots from partial splits — only parent summary row
+        _child_accept_ids = Brass_Audit_Submission.objects.filter(
+            submission_type='PARTIAL', is_completed=True,
+            transition_accept_lot_id__isnull=False
+        ).values_list('transition_accept_lot_id', flat=True)
+        _child_reject_ids = Brass_Audit_Submission.objects.filter(
+            submission_type='PARTIAL', is_completed=True,
+            transition_reject_lot_id__isnull=False
+        ).values_list('transition_reject_lot_id', flat=True)
+        queryset = queryset.exclude(
+            Q(lot_id__in=_child_accept_ids) | Q(lot_id__in=_child_reject_ids)
+        )
+
         if sort and sort in sort_field_mapping:
             field = sort_field_mapping[sort]
             if order == 'desc':
@@ -541,6 +556,10 @@ class BrassAuditRejectTableView(APIView):
         from_datetime = timezone.make_aware(datetime.datetime.combine(from_date, datetime.datetime.min.time()))
         to_datetime = timezone.make_aware(datetime.datetime.combine(to_date, datetime.datetime.max.time()))
 
+        brass_audit_rejection_qty_sub = Brass_Audit_Rejection_ReasonStore.objects.filter(
+            lot_id=OuterRef('lot_id')
+        ).values('total_rejection_quantity')[:1]
+
         queryset = TotalStockModel.objects.select_related(
             'batch_id',
             'batch_id__model_stock_no',
@@ -550,6 +569,21 @@ class BrassAuditRejectTableView(APIView):
             batch_id__total_batch_quantity__gt=0,
             brass_audit_rejection=True,
             brass_audit_last_process_date_time__range=(from_datetime, to_datetime)
+        ).annotate(
+            brass_audit_rejection_qty=brass_audit_rejection_qty_sub,
+        )
+
+        # BUG4 FIX: Exclude child lots — only parent summary row in reject table
+        _child_accept_ids = Brass_Audit_Submission.objects.filter(
+            submission_type='PARTIAL', is_completed=True,
+            transition_accept_lot_id__isnull=False
+        ).values_list('transition_accept_lot_id', flat=True)
+        _child_reject_ids = Brass_Audit_Submission.objects.filter(
+            submission_type='PARTIAL', is_completed=True,
+            transition_reject_lot_id__isnull=False
+        ).values_list('transition_reject_lot_id', flat=True)
+        queryset = queryset.exclude(
+            Q(lot_id__in=_child_accept_ids) | Q(lot_id__in=_child_reject_ids)
         )
 
         queryset = queryset.order_by('-brass_audit_last_process_date_time', '-lot_id')
@@ -580,6 +614,12 @@ class BrassAuditRejectTableView(APIView):
                 'brass_audit_last_process_date_time': stock_obj.brass_audit_last_process_date_time,
                 'brass_audit_physical_qty': stock_obj.brass_audit_physical_qty,
                 'brass_qc_accepted_qty': stock_obj.brass_qc_accepted_qty,
+                'brass_audit_rejection_qty': getattr(stock_obj, 'brass_audit_rejection_qty', None) or 0,
+                'brass_audit_accepted_qty': stock_obj.brass_audit_accepted_qty,
+                'brass_audit_few_cases_accptance': stock_obj.brass_audit_few_cases_accptance,
+                'brass_audit_accptance': stock_obj.brass_audit_accptance,
+                'last_process_module': stock_obj.last_process_module,
+                'next_process_module': stock_obj.next_process_module,
                 'BA_pick_remarks': stock_obj.BA_pick_remarks,
             }
             data['vendor_location'] = f"{data.get('vendor_internal', '')}_{data.get('location__location_name', '')}"
@@ -1052,24 +1092,12 @@ def _handle_audit_submission(request, action):
     if not lot_id:
         return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
 
-    try:
-        stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
-    except TotalStockModel.DoesNotExist:
-        # ✅ FIX: Map split child lot back to parent using transition_lot_ids
-        # When Brass Audit receives a child lot from partial Brass QC submission,
-        # the lot_id is actually a transition_*_lot_id that maps to the parent lot
-        parent_stock = TotalStockModel.objects.filter(
-            Q(brass_audit_transition_accept_lot_id=lot_id) |
-            Q(brass_audit_transition_reject_lot_id=lot_id) |
-            Q(brass_audit_transition_lot_id=lot_id)
-        ).first()
-        if parent_stock:
-            stock = parent_stock
-            logger.info(f"[AUDIT ACTION] Mapped child lot_id={lot_id} → parent lot_id={parent_stock.lot_id} for split-lot processing")
-        else:
-            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
-
+    # Handle SAVE_REMARK separately (no locking needed)
     if action == "SAVE_REMARK":
+        try:
+            stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
+        except TotalStockModel.DoesNotExist:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
         remark_text = remarks
         if not remark_text:
             return JsonResponse({"success": False, "error": "Remark text is required"}, status=400)
@@ -1079,12 +1107,25 @@ def _handle_audit_submission(request, action):
         stock.save(update_fields=['BA_pick_remarks'])
         return JsonResponse({"success": True, "lot_id": lot_id, "message": "Remark saved successfully", "has_remark": True})
 
-    existing = Brass_Audit_Submission.objects.filter(lot_id=lot_id, is_completed=True).first()
+    try:
+        stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
+    except TotalStockModel.DoesNotExist:
+        return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+
+    existing = Brass_Audit_Submission.objects.filter(
+        lot_id=lot_id,
+        is_completed=True
+    ).order_by('-id').first()
+
     if existing:
         return JsonResponse({
-            "success": False, "error": "This lot has already been submitted",
-            "existing_submission_id": existing.id, "existing_type": existing.submission_type,
-        }, status=409)
+            "success": True,
+            "message": "Already submitted",
+            "lot_id": lot_id,
+            "accept_lot_id": existing.transition_accept_lot_id,
+            "reject_lot_id": existing.transition_reject_lot_id,
+            "transition_lot_id": existing.transition_lot_id,
+        })
 
     tray_data, source, total_qty = _resolve_lot_trays_audit(lot_id)
     if not tray_data:
@@ -1128,31 +1169,85 @@ def _handle_audit_submission(request, action):
             return JsonResponse({"success": False, "error": "Partial reject qty must be less than total lot qty"}, status=400)
         rejected_qty = total_reject_from_reasons
         accepted_qty = total_qty - rejected_qty
-        rejected_trays = []
-        accepted_trays = []
-        if rejected_tray_ids:
-            active_tray_map = {t["tray_id"]: t for t in active_trays}
-            invalid_reject_ids = [tid for tid in rejected_tray_ids if tid not in active_tray_map]
-            if invalid_reject_ids:
-                return JsonResponse({"success": False, "error": f"Invalid rejected tray IDs: {invalid_reject_ids}"}, status=400)
-            for t in active_trays:
-                if t["tray_id"] in rejected_tray_ids:
-                    rejected_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
-                else:
-                    accepted_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
+
+        # BUG 3 — AQL enforcement: if rejection qty exceeds AQL limit, auto-upgrade to FULL_REJECT
+        _aql_plan = AQLSamplingPlan.objects.filter(
+            lot_qty_from__lte=total_qty,
+            lot_qty_to__gte=total_qty
+        ).first()
+        if _aql_plan and rejected_qty > _aql_plan.aql_limit:
+            logger.warning(
+                f"[AQL AUTO FULL REJECT] lot_id={lot_id}, total_qty={total_qty}, "
+                f"rejected_qty={rejected_qty}, aql_limit={_aql_plan.aql_limit} — upgrading PARTIAL to FULL_REJECT"
+            )
+            submission_type = "FULL_REJECT"
+            accepted_qty = 0
+            rejected_qty = total_qty
+            accepted_trays = []
+            _rich_reject_fr = data.get("rejected_trays", [])
+            if _rich_reject_fr:
+                rejected_trays = [
+                    {"tray_id": str(t.get("tray_id", "")), "qty": int(t.get("qty") or 0),
+                     "is_top": bool(t.get("is_top", False))}
+                    for t in _rich_reject_fr
+                ]
+            elif rejected_tray_ids:
+                _atm = {t["tray_id"]: t for t in active_trays}
+                rejected_trays = [
+                    {"tray_id": tid, "qty": _atm[tid]["qty"], "is_top": _atm[tid]["is_top"]}
+                    for tid in rejected_tray_ids if tid in _atm
+                ] or [{"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]} for t in active_trays]
+            else:
+                rejected_trays = [{"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]} for t in active_trays]
         else:
-            remaining_reject = rejected_qty
-            sorted_trays = sorted(active_trays, key=lambda t: (not t["is_top"]))
-            for t in sorted_trays:
-                if remaining_reject <= 0:
-                    accepted_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
-                elif remaining_reject >= t["qty"]:
-                    rejected_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
-                    remaining_reject -= t["qty"]
-                else:
-                    rejected_trays.append({"tray_id": t["tray_id"], "qty": remaining_reject, "is_top": t["is_top"]})
-                    accepted_trays.append({"tray_id": t["tray_id"], "qty": t["qty"] - remaining_reject, "is_top": False})
-                    remaining_reject = 0
+            rejected_trays = []
+            accepted_trays = []
+            # BUG 1 — rich tray payload: UI sends exact split quantities per tray
+            _rich_accept = data.get("accepted_trays", [])
+            _rich_reject = data.get("rejected_trays", [])
+            if _rich_accept or _rich_reject:
+                # Use exact split quantities from UI payload (handles partial-fill trays)
+                accepted_trays = [
+                    {"tray_id": str(t.get("tray_id", "")), "qty": int(t.get("qty") or 0),
+                     "is_top": bool(t.get("is_top", False))}
+                    for t in _rich_accept
+                ]
+                rejected_trays = [
+                    {"tray_id": str(t.get("tray_id", "")), "qty": int(t.get("qty") or 0),
+                     "is_top": bool(t.get("is_top", False))}
+                    for t in _rich_reject
+                ]
+                _actual_accept = sum(t["qty"] for t in accepted_trays)
+                _actual_reject = sum(t["qty"] for t in rejected_trays)
+                if _actual_accept != accepted_qty or _actual_reject != rejected_qty:
+                    return JsonResponse({
+                        "success": False,
+                        "error": (
+                            f"Tray qty mismatch: accept {_actual_accept}\u2260{accepted_qty} "
+                            f"or reject {_actual_reject}\u2260{rejected_qty}"
+                        )
+                    }, status=400)
+            elif rejected_tray_ids:
+                # ID-only fallback: original tray quantities used (no split-tray support)
+                active_tray_map = {t["tray_id"]: t for t in active_trays}
+                for t in active_trays:
+                    if t["tray_id"] in rejected_tray_ids:
+                        rejected_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
+                    else:
+                        accepted_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
+            else:
+                remaining_reject = rejected_qty
+                sorted_trays = sorted(active_trays, key=lambda t: (not t["is_top"]))
+                for t in sorted_trays:
+                    if remaining_reject <= 0:
+                        accepted_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
+                    elif remaining_reject >= t["qty"]:
+                        rejected_trays.append({"tray_id": t["tray_id"], "qty": t["qty"], "is_top": t["is_top"]})
+                        remaining_reject -= t["qty"]
+                    else:
+                        rejected_trays.append({"tray_id": t["tray_id"], "qty": remaining_reject, "is_top": t["is_top"]})
+                        accepted_trays.append({"tray_id": t["tray_id"], "qty": t["qty"] - remaining_reject, "is_top": False})
+                        remaining_reject = 0
 
     elif action == "PROCESS":
         tray_actions = data.get("tray_actions", [])
@@ -1196,6 +1291,23 @@ def _handle_audit_submission(request, action):
         accepted_qty = total_qty - rejected_qty
         if rejected_qty < 0 or rejected_qty > total_qty:
             return JsonResponse({"success": False, "error": "Invalid rejection quantity"}, status=400)
+
+        # ── FIX: PROCESS ACCEPT tray_actions carry no qty from UI.
+        # When a tray is split (reject portion moved to a new tray), the accepted
+        # portion must equal accepted_qty. Reconcile by adjusting the top tray.
+        if accepted_trays and accepted_qty > 0:
+            _sum_accept = sum(t["qty"] for t in accepted_trays)
+            if _sum_accept != accepted_qty:
+                _excess = _sum_accept - accepted_qty
+                for t in accepted_trays:
+                    if t["is_top"] and t["qty"] > _excess:
+                        t["qty"] -= _excess
+                        logger.info(
+                            f"[AUDIT PROCESS] Reconciled top tray {t['tray_id']} qty: "
+                            f"{t['qty'] + _excess} → {t['qty']} (accepted_qty={accepted_qty})"
+                        )
+                        break
+
         if rejected_qty == 0:
             submission_type = "FULL_ACCEPT"
         elif accepted_qty == 0:
@@ -1269,22 +1381,226 @@ def _handle_audit_submission(request, action):
         stock.brass_audit_transition_label = t_label
         logger.info(f"[AUDIT TRANSITION] FULL_REJECT lot_id={lot_id} → transition_lot_id={t_lot_id}")
     elif submission_type == "PARTIAL":
-        t_accept_lot_id = generate_new_lot_id()
-        t_reject_lot_id = generate_new_lot_id()
-        t_label = "partial accept from brass audit to iqf | partial reject from brass audit to brass qc"
-        submission.transition_accept_lot_id = t_accept_lot_id
-        submission.transition_reject_lot_id = t_reject_lot_id
+        now_key = timezone.now().strftime("%d%m%Y%H%M%S%f")
+        accept_lot_id = f"LID{now_key[:17]}A"
+        reject_lot_id = f"LID{now_key[:17]}R"
+
+        t_label = "partial: accept child -> Jig Loading | reject child -> IQF"
+        submission.transition_accept_lot_id = accept_lot_id
+        submission.transition_reject_lot_id = reject_lot_id
         submission.transition_label = t_label
-        submission.save(update_fields=['transition_accept_lot_id', 'transition_reject_lot_id', 'transition_label'])
-        stock.brass_audit_transition_accept_lot_id = t_accept_lot_id
-        stock.brass_audit_transition_reject_lot_id = t_reject_lot_id
-        stock.brass_audit_transition_label = t_label
-        logger.info(f"[AUDIT TRANSITION] PARTIAL lot_id={lot_id} → accept={t_accept_lot_id}, reject={t_reject_lot_id}")
+        submission.is_completed = True
+        submission.save()
+
+        with transaction.atomic():
+            # ── Accepted child lot → Jig Loading ──
+            accepted_child = TotalStockModel.objects.get(pk=stock.pk)
+            accepted_child.pk = None
+            accepted_child.id = None
+            accepted_child.lot_id = accept_lot_id
+            accepted_child.total_stock = accepted_qty
+            accepted_child.brass_audit_physical_qty = accepted_qty
+            accepted_child.brass_audit_accepted_qty = accepted_qty
+            accepted_child.brass_qc_accepted_qty = accepted_qty
+            accepted_child.brass_physical_qty = accepted_qty
+            accepted_child.brass_qc_accptance = True
+            accepted_child.brass_audit_accptance = True
+            accepted_child.brass_audit_few_cases_accptance = False
+            accepted_child.brass_audit_rejection = False
+            accepted_child.last_process_module = 'Brass Audit'
+            accepted_child.next_process_module = 'Jig Loading'
+            accepted_child.send_brass_audit_to_iqf = False
+            accepted_child.send_brass_audit_to_qc = False
+            accepted_child.brass_audit_draft = False
+            accepted_child.brass_audit_onhold_picking = False
+            accepted_child.brass_audit_last_process_date_time = timezone.now()
+            accepted_child.last_process_date_time = timezone.now()
+            accepted_child.save()
+            accepted_child.location.set(stock.location.all())
+
+            BrassAuditTrayId.objects.bulk_create([
+                BrassAuditTrayId(
+                    lot_id=accept_lot_id,
+                    tray_id=t["tray_id"],
+                    tray_quantity=int(t["qty"]),
+                    batch_id=stock.batch_id,
+                    user=request.user,
+                    top_tray=bool(t.get("is_top", False)),
+                    rejected_tray=False,
+                    delink_tray=False,
+                    new_tray=False
+                )
+                for t in accepted_trays if int(t.get("qty", 0)) > 0
+            ])
+
+            # ── Rejected child lot → IQF ──
+            rejected_child = TotalStockModel.objects.get(pk=stock.pk)
+            rejected_child.pk = None
+            rejected_child.id = None
+            rejected_child.lot_id = reject_lot_id
+            rejected_child.total_stock = rejected_qty
+            rejected_child.brass_audit_physical_qty = 0
+            rejected_child.brass_audit_accepted_qty = 0
+            rejected_child.brass_qc_accepted_qty = rejected_qty
+            rejected_child.brass_physical_qty = rejected_qty
+            rejected_child.iqf_accepted_qty = rejected_qty
+            rejected_child.brass_qc_accptance = True
+            rejected_child.brass_audit_rejection = True
+            rejected_child.brass_audit_accptance = False
+            rejected_child.brass_audit_few_cases_accptance = False
+            rejected_child.last_process_module = 'Brass Audit'
+            rejected_child.next_process_module = 'IQF'
+            rejected_child.send_brass_audit_to_iqf = True
+            rejected_child.send_brass_audit_to_qc = False
+            rejected_child.brass_qc_rejection = False
+            rejected_child.brass_qc_few_cases_accptance = False
+            rejected_child.brass_qc_accepted_qty_verified = False
+            rejected_child.iqf_rejection = False
+            rejected_child.iqf_acceptance = False
+            rejected_child.iqf_few_cases_acceptance = False
+            rejected_child.iqf_onhold_picking = False
+            rejected_child.brass_qc_transition_reject_lot_id = None
+            rejected_child.brass_qc_transition_accept_lot_id = None
+            rejected_child.brass_audit_draft = False
+            rejected_child.brass_audit_onhold_picking = False
+            rejected_child.brass_audit_last_process_date_time = timezone.now()
+            rejected_child.last_process_date_time = timezone.now()
+            rejected_child.save()
+            rejected_child.location.set(stock.location.all())
+
+            BrassTrayId.objects.bulk_create([
+                BrassTrayId(
+                    lot_id=reject_lot_id,
+                    tray_id=t["tray_id"],
+                    tray_quantity=int(t["qty"]),
+                    batch_id=stock.batch_id,
+                    user=request.user,
+                    top_tray=bool(t.get("is_top", False)),
+                    rejected_tray=True,
+                    delink_tray=False,
+                    new_tray=False
+                )
+                for t in rejected_trays if int(t.get("qty", 0)) > 0
+            ])
+
+            # ── IQF tray rows for rejected child (IQF needs its own tray table) ──
+            IQFTrayId.objects.bulk_create([
+                IQFTrayId(
+                    lot_id=reject_lot_id,
+                    tray_id=t["tray_id"],
+                    tray_quantity=int(t["qty"]),
+                    batch_id=stock.batch_id,
+                    user=request.user,
+                    top_tray=bool(t.get("is_top", False)),
+                    rejected_tray=False,
+                    delink_tray=False,
+                )
+                for t in rejected_trays if int(t.get("qty", 0)) > 0
+            ])
+
+            # Rejection reason store for rejected child (IQF reads rw_qty from this)
+            _rej_store = Brass_Audit_Rejection_ReasonStore.objects.create(
+                lot_id=reject_lot_id,
+                user=request.user,
+                total_rejection_quantity=rejected_qty,
+                batch_rejection=False,
+            )
+            _child_reason_ids = []
+            for r in rejection_reasons:
+                _rid = r.get("reason_id")
+                _rqty = int(r.get("qty", 0))
+                if _rqty > 0 and _rid:
+                    try:
+                        _reason_obj = Brass_Audit_Rejection_Table.objects.get(id=_rid)
+                        _child_reason_ids.append(_reason_obj.id)
+                        Brass_Audit_Rejected_TrayScan.objects.create(
+                            lot_id=reject_lot_id,
+                            rejected_tray_quantity=str(_rqty),
+                            rejected_tray_id=None,
+                            rejection_reason=_reason_obj,
+                            user=request.user,
+                        )
+                    except Brass_Audit_Rejection_Table.DoesNotExist:
+                        pass
+            if _child_reason_ids:
+                _rej_store.rejection_reason.set(_child_reason_ids)
+
+            # ── Close parent lot fully ──
+            stock.brass_audit_few_cases_accptance = True
+            stock.brass_audit_onhold_picking = False
+            stock.brass_audit_accptance = False
+            stock.brass_audit_rejection = False
+            stock.total_stock = 0
+            stock.brass_qc_accepted_qty = 0
+            stock.brass_audit_transition_accept_lot_id = accept_lot_id
+            stock.brass_audit_transition_reject_lot_id = reject_lot_id
+            stock.brass_audit_transition_label = t_label
+            stock.last_process_module = 'Brass Audit'
+            stock.next_process_module = 'Split Completed'
+            stock.last_process_date_time = timezone.now()
+            stock.brass_audit_last_process_date_time = timezone.now()
+            stock.brass_audit_draft = False
+            # ==========================================
+            # EXCLUDE PARENT LOT FROM IQF AFTER
+            # BRASS AUDIT PARTIAL SPLIT
+            # ==========================================
+            stock.send_brass_audit_to_iqf = False
+            stock.iqf_onhold_picking = False
+            stock.iqf_acceptance = False
+            stock.iqf_rejection = False
+            stock.iqf_few_cases_acceptance = False
+            stock.remove_lot = True
+            stock.save(update_fields=[
+                "brass_audit_few_cases_accptance",
+                "brass_audit_onhold_picking",
+                "brass_audit_accptance",
+                "brass_audit_rejection",
+                "total_stock",
+                "brass_qc_accepted_qty",
+                "last_process_module",
+                "next_process_module",
+                "brass_audit_last_process_date_time",
+                "last_process_date_time",
+                "brass_audit_transition_accept_lot_id",
+                "brass_audit_transition_reject_lot_id",
+                "brass_audit_transition_label",
+                "brass_audit_draft",
+                "send_brass_audit_to_iqf",
+                "iqf_onhold_picking",
+                "iqf_acceptance",
+                "iqf_rejection",
+                "iqf_few_cases_acceptance",
+                "remove_lot",
+            ])
+
+        _accept_tray_str = [t['tray_id'] + '(' + str(t['qty']) + ')' for t in accepted_trays]
+        _reject_tray_str = [t['tray_id'] + '(' + str(t['qty']) + ')' for t in rejected_trays]
+        print(f"\n{'='*60}")
+        print(f"[BRASS AUDIT PARTIAL SPLIT] Parent Lot: {lot_id}")
+        print(f"  Accept Lot ID: {accept_lot_id} → Jig Loading (qty={accepted_qty})")
+        print(f"  Reject Lot ID: {reject_lot_id} → IQF (qty={rejected_qty})")
+        print(f"  Accept Trays: {_accept_tray_str}")
+        print(f"  Reject Trays: {_reject_tray_str}")
+        print(f"{'='*60}\n")
+
+        return JsonResponse({
+            "success": True,
+            "message": "Partial lot submitted successfully",
+            "lot_id": lot_id,
+            "submission_id": submission.id,
+            "submission_type": submission_type,
+            "accepted_qty": accepted_qty,
+            "rejected_qty": rejected_qty,
+            "accepted_lot_id": accept_lot_id,
+            "rejected_lot_id": reject_lot_id,
+            "transition_accept_lot_id": accept_lot_id,
+            "transition_reject_lot_id": reject_lot_id,
+            "transition_label": t_label,
+        })
 
     # ═══ STAGE MOVEMENT — Brass Audit hierarchy ═══
     # Full Accept → Jig Loading
     # Full Reject → back to Brass QC (as NEW lot context)
-    # Partial → accepted portion to IQF, rejected portion marked
     if submission_type == "FULL_ACCEPT":
         stock.brass_audit_accptance = True
         stock.brass_audit_rejection = False
@@ -1306,17 +1622,6 @@ def _handle_audit_submission(request, action):
         stock.brass_qc_accptance = False
         stock.brass_qc_accepted_qty_verified = False
         stock.brass_qc_rejection = False
-    elif submission_type == "PARTIAL":
-        stock.brass_audit_few_cases_accptance = True
-        stock.brass_audit_rejection = True
-        stock.brass_audit_accptance = False
-        stock.brass_audit_physical_qty = accepted_qty
-        stock.brass_audit_accepted_qty = accepted_qty
-        stock.next_process_module = 'IQF'
-        stock.last_process_module = 'Brass Audit'
-        stock.send_brass_audit_to_iqf = True
-        # ✅ FIX: Ensure parent lot can trigger Brass QC for rejected portion
-        stock.send_brass_audit_to_qc = True
 
     # Clear draft state
     Brass_Audit_Draft_Store.objects.filter(lot_id=lot_id, draft_type='rejection_draft').delete()
@@ -1331,14 +1636,12 @@ def _handle_audit_submission(request, action):
         'last_process_date_time', 'brass_audit_last_process_date_time',
         'brass_audit_draft', 'brass_audit_onhold_picking',
         'send_brass_audit_to_qc', 'send_brass_audit_to_iqf',
-        'brass_audit_transition_lot_id', 'brass_audit_transition_accept_lot_id',
-        'brass_audit_transition_reject_lot_id', 'brass_audit_transition_label',
-        'brass_qc_accptance', 'brass_qc_accepted_qty_verified', 'brass_qc_rejection',  # ✅ ADDED for full reject reset
+        'brass_audit_transition_lot_id', 'brass_audit_transition_label',
+        'brass_qc_accptance', 'brass_qc_accepted_qty_verified', 'brass_qc_rejection',
     ])
 
-    # FIX 4: Sync accepted trays to BrassAuditTrayId so Jig Loading can find them.
-    # Clears existing records for this lot then re-creates from accepted snapshot.
-    if submission_type in ("FULL_ACCEPT", "PARTIAL") and accepted_trays:
+    # Sync accepted trays to BrassAuditTrayId for FULL_ACCEPT only.
+    if submission_type == "FULL_ACCEPT" and accepted_trays:
         try:
             BrassAuditTrayId.objects.filter(lot_id=lot_id).delete()
             for t in accepted_trays:
@@ -1353,63 +1656,6 @@ def _handle_audit_submission(request, action):
             logger.info(f"[AUDIT TRAY SYNC] lot_id={lot_id}, stored {len(accepted_trays)} accepted tray(s) to BrassAuditTrayId")
         except Exception as _e:
             logger.error(f"[AUDIT TRAY SYNC] Failed to sync trays for lot_id={lot_id}: {_e}")
-
-    # ✅ CRITICAL FIX: Create rejected child lot via cloning to ensure schema compatibility
-    if submission_type == "PARTIAL" and submission.transition_reject_lot_id:
-        try:
-            reject_child_lot_id = submission.transition_reject_lot_id
-            if not TotalStockModel.objects.filter(lot_id=reject_child_lot_id).exists():
-                # Clone parent to child
-                child = TotalStockModel.objects.get(pk=stock.pk)
-                child.pk = None  # Force new record
-                child.lot_id = reject_child_lot_id
-                
-                # Update quantities for rejected portion
-                child.total_stock = rejected_qty
-                child.brass_audit_physical_qty = rejected_qty
-                child.brass_audit_accepted_qty = 0
-                child.brass_qc_accepted_qty = rejected_qty  # Inherits as input for next stage
-                
-                # Movement & Process Control
-                child.last_process_module = "Brass Audit"
-                child.next_process_module = "Brass QC"
-                
-                # Reset flags for fresh processing in next stage
-                child.brass_qc_accptance = False
-                child.brass_qc_rejection = False
-                child.brass_qc_few_cases_accptance = False
-                child.brass_qc_accepted_qty_verified = False
-                
-                # Rejection context
-                child.brass_audit_accptance = False
-                child.brass_audit_rejection = True
-                child.brass_audit_few_cases_accptance = False
-                
-                # Route control
-                child.send_brass_audit_to_qc = True
-                child.send_brass_audit_to_iqf = False
-                
-                child.save()
-                logger.info(f"[AUDIT CHILD LOT CREATED] {reject_child_lot_id} qty={rejected_qty}")
-
-                # ✅ Force tray creation for rejected child lot
-                BrassTrayId.objects.filter(lot_id=reject_child_lot_id).delete()
-                for idx, t in enumerate(rejected_trays):
-                    BrassTrayId.objects.create(
-                        lot_id=reject_child_lot_id,
-                        tray_id=t.get("tray_id", ""),
-                        tray_quantity=int(t.get("qty") or 0),
-                        batch_id=stock.batch_id,
-                        user=request.user,
-                        top_tray=(idx == 0),
-                        delink_tray=False,
-                        rejected_tray=False,
-                        new_tray=False,
-                    )
-                logger.info(f"[AUDIT CHILD TRAYS] lot_id={reject_child_lot_id}, created {len(rejected_trays)} tray(s)")
-
-        except Exception as e:
-            logger.error(f"[AUDIT CHILD LOT FAILED] {str(e)}")
 
     logger.info(f"[AUDIT ACTION] [DONE] type={submission_type}, lot_id={lot_id}, moved_to={stock.next_process_module}")
 
@@ -1725,11 +1971,21 @@ def get_brass_audit_tray_details_for_modal(request):
             else:
                 tray['s_no_display'] = str(idx)
 
+        _sub_total_qty = submission.total_lot_qty if submission else total_accepted_qty
+        _sub_accepted_qty = submission.accepted_qty if submission else total_accepted_qty
+        _sub_rejected_qty = submission.rejected_qty if submission else 0
+        _sub_type = submission.submission_type if submission else ''
         return Response({
             'success': True,
             'lot_id': lot_id,
-            'model_no': stock_obj.batch_id.model_no if stock_obj.batch_id else '',
-            'lot_qty': total_accepted_qty,
+            'model_no': (
+                stock_obj.batch_id.model_stock_no.model_no
+                if stock_obj.batch_id and stock_obj.batch_id.model_stock_no else ''
+            ),
+            'lot_qty': _sub_total_qty,
+            'accepted_qty': _sub_accepted_qty,
+            'rejected_qty': _sub_rejected_qty,
+            'submission_type': _sub_type,
             'accepted_trays': accepted_trays,
             'rejected_trays': rejected_trays,
             'total_accepted_qty': total_accepted_qty,

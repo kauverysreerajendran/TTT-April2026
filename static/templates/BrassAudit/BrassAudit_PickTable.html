@@ -1634,7 +1634,7 @@ tr.row-inactive td.action-td {
                 <i class="fa fa-check-circle"></i> Accept Trays
                 <span style="float:right; font-size:12px; color:#2e7d32;">Qty: <strong id="acceptTotalQtyLabel">0</strong></span>
               </h6>
-              <p style="margin:0 0 6px; font-size:10px; color:#999; font-style:italic;">Accepted → Brass Audit</p>
+              <p style="margin:0 0 6px; font-size:10px; color:#999; font-style:italic;">Accepted → Jig Loading</p>
               <div id="acceptSlotsContainer">
                 <!-- Tray slots rendered by JS -->
               </div>
@@ -1987,6 +1987,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }
 
+          // Update Q indicator (process quantity) to green instantly
+          try {
+            const qEl = row ? row.querySelector('[title="Quantity"]') : null;
+            if (qEl) qEl.style.backgroundColor = '#0c8249';
+
+            // Update QC circle according to backend-provided flag (if returned)
+            const qcEl = row ? row.querySelector('[title="Quality Check"]') : null;
+            if (qcEl) {
+              if (result.qc_circle === 'GREEN') {
+                qcEl.style.background = '#0c8249';
+              } else if (result.qc_circle === 'HALF') {
+                qcEl.style.background = 'linear-gradient(to right, #0c8249 50%, #bdbdbd 50%)';
+              } else {
+                qcEl.style.background = '#bdbdbd';
+              }
+            }
+          } catch (uiErr) {
+            console.warn('[BrassAudit] Failed to update Q/QC UI immediately', uiErr);
+          }
+
           console.log(`[BrassAudit] Verified lot ${lotId} ✓`);
         } else {
           cb.checked = !verified; // revert on failure
@@ -2221,6 +2241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let _lotId = null;
     let _totalQty = 0;
     let _trayCapacity = 0;
+    let _aqlLimit = 0;      // AQL limit for current lot — set on modal open
     let _trayData = [];     // original active trays from backend
     let _reasons = [];      // rejection reasons from backend
     let _acceptSlots = [];  // {qty, is_top, tray_id}
@@ -2259,7 +2280,7 @@ document.addEventListener('DOMContentLoaded', function() {
         _totalQty = parseInt(row.getAttribute('data-available-qty') || '0', 10);
         _trayCapacity = 0;  // Backend-provided; set by GET_TRAYS API response (not DOM)
         var actionState = row.getAttribute('data-action-state') || '';
-        var _aqlLimit = parseFloat(row.getAttribute('data-aql-limit') || '0');
+        _aqlLimit = parseFloat(row.getAttribute('data-aql-limit') || '0');
 
         // Populate header
         document.getElementById('rejectModalPlatingStk').textContent = modelNo;
@@ -2314,10 +2335,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('[BrassAudit][DRAFT] Restored draft for lot_id=' + _lotId);
           }
 
-          // AQL: Focus on remarks if aql limit is set, but don't auto-check full lot rejection (let user decide)
-          if (_aqlLimit > 0) {
-            remarksInput.focus();
-          }
+          // AQL hint: no auto-trigger on open — handled dynamically in updateTotals
 
           updateTotals();
           overlay.style.display = 'flex';
@@ -2367,6 +2385,32 @@ document.addEventListener('DOMContentLoaded', function() {
       totalDisplay.textContent = totalReject;
       remainDisplay.textContent = Math.max(0, _totalQty - totalReject);
 
+      // AQL auto-trigger: if rejection qty exceeds AQL limit, force Full Lot Rejection
+      if (_aqlLimit > 0 && totalReject > _aqlLimit && !fullLotCb.checked) {
+        fullLotCb.checked = true;
+        // Clear reason inputs — full lot rejection does not use per-reason qty
+        reasonsGrid.querySelectorAll('.reject-qty-input').forEach(function(inp) { inp.value = ''; });
+        allocationSection.style.display = 'none';
+        _acceptSlots = [];
+        _rejectSlots = [];
+        _delinkSlots = [];
+        // Show banner and focus remarks
+        errorDiv.style.color = '#c62828';
+        errorDiv.textContent =
+          '\u26A0 Rejection qty (' + totalReject + ') exceeds AQL limit (' + _aqlLimit +
+          '). Full Lot Rejection has been auto-selected. Please enter a remark.';
+        remarksInput.style.border = '2px solid #c62828';
+        remarksInput.focus();
+        updateTotals(); // re-run with checkbox now checked to sync display
+        return;
+      }
+
+      // Clear AQL border highlight when user manually unchecks or reduces qty
+      if (totalReject <= _aqlLimit || fullLotCb.checked === false) {
+        remarksInput.style.border = '';
+        if (errorDiv.textContent.includes('AQL limit')) errorDiv.textContent = '';
+      }
+
       if (totalReject > 0 && totalReject <= _totalQty) {
         // ERR8: Skip allocation when Full Lot Rejection is checked
         if (fullLotCb.checked) {
@@ -2379,7 +2423,7 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         allocationSection.style.display = 'none';
       }
-      errorDiv.textContent = '';
+      if (!errorDiv.textContent.includes('AQL limit')) errorDiv.textContent = '';
     }
 
     // ── Fetch allocation from backend ──

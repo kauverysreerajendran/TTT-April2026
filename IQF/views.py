@@ -36,22 +36,25 @@ from django.db import transaction
 from collections import OrderedDict
 
 
-# Generate Lot ID
+# Generate Lot ID (microsecond-based with exists() retry loop)
 def generate_new_lot_id():
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
-        next_seq_no = 1
-        # Iterate recent lots to find last sequential (non-UUID) lot ID
-        for lot in TotalStockModel.objects.order_by('-id')[:20]:
-            if lot.lot_id and lot.lot_id.startswith("LID"):
-                try:
-                    last_seq_no = int(lot.lot_id[-4:])
-                    next_seq_no = last_seq_no + 1
-                    break
-                except ValueError:
-                    continue
-        seq_no = f"{next_seq_no:04d}"
-        return f"LID{timestamp}{seq_no}"
+    from datetime import datetime
+    import time
+
+    max_attempts = 10
+    attempt = 0
+    while True:
+        ts = datetime.now().strftime("%d%m%Y%H%M%S%f")  # includes microseconds
+        lot_id = f"LID{ts}"
+        # Check for collision and retry if necessary
+        if not TotalStockModel.objects.filter(lot_id=lot_id).exists():
+            return lot_id
+
+        attempt += 1
+        if attempt >= max_attempts:
+            # small sleep to allow clock to advance and retry
+            time.sleep(0.001)
+            attempt = 0
 
 
 def build_ui_state(data):
@@ -174,11 +177,34 @@ class IQFPickTableView(APIView):
         )
 
         if iqf_submitted_lot_ids:
+            # ── GUARD: build set of lots that completed a PARTIAL IQF split.
+            # These parent lots are permanently consumed and must NEVER be re-entered.
+            # Criteria (any one sufficient):
+            #   • IQF_Submitted has submission_type=PARTIAL + is_completed=True
+            #   • TotalStockModel.iqf_few_cases_acceptance=True (set by PARTIAL submit)
+            #   • TotalStockModel.is_split=True (parent consumed into children)
+            #   • TotalStockModel.remove_lot=True  (parent marked for removal)
+            completed_partial_ids = set(
+                IQF_Submitted.objects.filter(
+                    submission_type=IQF_Submitted.SUB_PARTIAL,
+                    is_completed=True,
+                ).values_list('lot_id', flat=True)
+            )
+            split_lot_ids = set(
+                TotalStockModel.objects.filter(
+                    Q(is_split=True) | Q(remove_lot=True) | Q(iqf_few_cases_acceptance=True)
+                ).values_list('lot_id', flat=True)
+            )
+            consumed_lot_ids = completed_partial_ids | split_lot_ids
+            print(f"🛡️ [IQF RE-ENTRY GUARD] Consumed/split lot_ids excluded: {consumed_lot_ids}")
+
             # Case 1: Batch rejection from Brass Audit
             batch_reentry = TotalStockModel.objects.filter(
                 brass_audit_rejection=True,
                 send_brass_audit_to_iqf=False,
                 lot_id__in=iqf_submitted_lot_ids,
+            ).exclude(
+                lot_id__in=consumed_lot_ids
             )
             batch_ids = list(batch_reentry.values_list('lot_id', flat=True))
             if batch_ids:
@@ -217,6 +243,8 @@ class IQFPickTableView(APIView):
                     brass_audit_accepted_tray_scan_status=True,
                     send_brass_audit_to_iqf=False,
                     lot_id__in=partial_rej_lot_ids,
+                ).exclude(
+                    lot_id__in=consumed_lot_ids
                 )
                 partial_ids = list(partial_reentry.values_list('lot_id', flat=True))
                 if partial_ids:
@@ -278,6 +306,10 @@ class IQFPickTableView(APIView):
             # ✅ EXCLUDE parent lots that have been split into child lots
             # Parent lot still marked with brass_qc_rejection=True, but its children now represent the actual work
             brass_qc_transition_reject_lot_id__isnull=False
+        ).exclude(
+            # ✅ EXCLUDE IQF PARTIAL-split consumed parents: is_split=True or remove_lot=True
+            # These lots were permanently consumed when PARTIAL submit created child lots.
+            Q(is_split=True) | Q(remove_lot=True)
         ).order_by('-bq_last_process_date_time', '-lot_id')
 
         print(f"📊 Found {queryset.count()} IQF pick records")
@@ -1295,14 +1327,11 @@ def iqf_submit_audit(request):
                 print(f'[FULL_REJECT DISTRIBUTE] rejected={rejected_qty}, distributed to {len(distributed_trays)} trays')
 
             else:
-                # PARTIAL — Accept is USER-DRIVEN (scanned trays), Reject handled by DELINK MODAL
-                #
-                # GOLDEN RULES:
-                # 1. Accept = user-scanned tray data → store as-is
-                # 2. Reject allocation is DEFERRED to delink modal (user picks delink trays first)
-                # 3. IQF_Submitted stores accept data only initially (partial_reject_data = None)
-                # 4. Delink modal confirm fills partial_reject_data and finalizes
-                # 5. Top tray must NEVER be jumbled — preserve original top_tray flag
+                # ── PARTIAL — IMMEDIATE SPLIT (Brass QC architecture) ──
+                # Both child lots created NOW in same atomic transaction.
+                # Accept side: user-scanned trays from frontend payload.
+                # Reject side: computed from remaining tray quantities.
+                # Parent lot is consumed (closed) immediately.
 
                 # ── ACCEPT SIDE: user truth from frontend payload ──
                 accepted_trays_payload = data.get('accepted_trays') or []
@@ -1323,9 +1352,7 @@ def iqf_submit_audit(request):
                         })
 
                 accept_total = sum(t['qty'] for t in accepted_trays)
-                accepted_tray_id_set = set(t['tray_id'] for t in accepted_trays)
                 print(f'[PARTIAL ACCEPT] User-scanned: {len(accepted_trays)} trays, total={accept_total}, expected={accepted_qty}')
-                print(f'[PARTIAL ACCEPT] Accepted tray IDs: {accepted_tray_id_set}')
 
                 if accept_total != accepted_qty:
                     return Response({
@@ -1335,24 +1362,166 @@ def iqf_submit_audit(request):
                         'accepted_qty': accepted_qty,
                     }, status=400)
 
-                # ── Gather original trays for response (needed by delink modal) ──
-                all_orig_trays = list(IQFTrayId.objects.filter(
-                    lot_id=lot_id, delink_tray=False
-                ).order_by('id'))
+                # ── REJECT SIDE: compute from remaining tray quantities ──
+                # Handle new tray IDs, existing tray reuse, and mixed scenarios.
+                # Deduct accepted_qty from parent trays FIFO (by tray_list order).
+                # Whatever remains in parent trays becomes reject child lot.
+                # Accepted child keeps user-scanned tray IDs (can be new or existing).
+                
+                remaining_to_allocate = accepted_qty  # How much to consume from parent trays
+                rejected_trays = []
+                
+                for tray in tray_list:
+                    t_id = tray['tray_id']
+                    total_qty = tray['qty']
+                    
+                    # How much of this parent tray goes to rejected side?
+                    if remaining_to_allocate > 0:
+                        # Still consuming from parent for accepted side
+                        consumed = min(remaining_to_allocate, total_qty)
+                        remaining_to_allocate -= consumed
+                        rej_qty = total_qty - consumed
+                    else:
+                        # Already done consuming, rest of parent goes to reject
+                        rej_qty = total_qty
+                    
+                    if rej_qty > 0:
+                        cap = _resolve_tray_capacity(tray['obj'])
+                        is_top = rej_qty < cap
+                        rejected_trays.append({'tray_id': t_id, 'qty': rej_qty, 'top_tray': is_top})
 
-                # ── REJECT ALLOCATION DEFERRED — handled by delink modal ──
-                # Do NOT allocate reject trays here. The delink modal will compute
-                # reject allocation after user selects which trays to delink.
-                reject_tray_id_set = set()
-                print(f'[PARTIAL] Reject allocation DEFERRED to delink modal. rejected_qty={rejected_qty}')
+                reject_total = sum(t['qty'] for t in rejected_trays)
+                if reject_total != rejected_qty:
+                    return Response({
+                        'success': False,
+                        'error': f'Computed reject tray total ({reject_total}) ≠ rejected qty ({rejected_qty}). Tray data inconsistency.',
+                        'reject_total': reject_total,
+                        'rejected_qty': rejected_qty,
+                    }, status=400)
 
+                # ── Generate child lot IDs ──
+                accepted_lot_id = generate_new_lot_id()
+                rejected_lot_id = generate_new_lot_id()
+                print(f'[PARTIAL SPLIT] accepted_lot={accepted_lot_id}, rejected_lot={rejected_lot_id}')
+
+                # ── Create ACCEPTED child lot → Brass QC ──
+                TotalStockModel.objects.create(
+                    lot_id=accepted_lot_id,
+                    batch_id=ts.batch_id,
+                    model_stock_no=ts.model_stock_no,
+                    version=ts.version,
+                    polish_finish=ts.polish_finish,
+                    plating_color=ts.plating_color,
+                    total_stock=accepted_qty,
+                    total_IP_accpeted_quantity=accepted_qty,
+                    accepted_Ip_stock=True,
+                    iqf_acceptance=True,
+                    iqf_accepted_qty=accepted_qty,
+                    iqf_accepted_qty_verified=True,
+                    send_brass_qc=True,
+                    send_brass_audit_to_iqf=False,
+                    last_process_module='IQF',
+                    next_process_module='Brass QC',
+                    last_process_date_time=timezone.now(),
+                    iqf_last_process_date_time=timezone.now(),
+                )
+                for tray in accepted_trays:
+                    IQFTrayId.objects.create(
+                        lot_id=accepted_lot_id,
+                        tray_id=tray['tray_id'],
+                        tray_quantity=tray['qty'],
+                        batch_id=ts.batch_id,
+                        top_tray=tray['is_top_tray'],
+                        remaining_qty=tray['qty'],
+                        IP_tray_verified=True,
+                        new_tray=False,
+                        user=request.user,
+                    )
+                IQF_Accepted_TrayScan.objects.create(
+                    lot_id=accepted_lot_id,
+                    accepted_tray_quantity=str(accepted_qty),
+                    user=request.user,
+                )
+                for tray in accepted_trays:
+                    IQF_Accepted_TrayID_Store.objects.update_or_create(
+                        tray_id=tray['tray_id'],
+                        defaults={
+                            'lot_id': accepted_lot_id,
+                            'tray_qty': tray['qty'],
+                            'user': request.user,
+                            'is_save': True,
+                            'is_draft': False,
+                        }
+                    )
+                print(f'[PARTIAL SPLIT] Accept child created: lot={accepted_lot_id}, qty={accepted_qty}, trays={len(accepted_trays)}')
+
+                # ── Create REJECTED child lot → IQF Reject tracking ──
+                TotalStockModel.objects.create(
+                    lot_id=rejected_lot_id,
+                    batch_id=ts.batch_id,
+                    model_stock_no=ts.model_stock_no,
+                    version=ts.version,
+                    polish_finish=ts.polish_finish,
+                    plating_color=ts.plating_color,
+                    total_stock=rejected_qty,
+                    total_IP_accpeted_quantity=rejected_qty,
+                    accepted_Ip_stock=True,
+                    iqf_rejection=True,
+                    iqf_after_rejection_qty=rejected_qty,
+                    iqf_accepted_qty=0,
+                    send_brass_audit_to_iqf=False,
+                    send_brass_qc=False,
+                    last_process_module='IQF',
+                    next_process_module='IQF Reject',
+                    last_process_date_time=timezone.now(),
+                    iqf_last_process_date_time=timezone.now(),
+                )
+                for tray in rejected_trays:
+                    IQFTrayId.objects.create(
+                        lot_id=rejected_lot_id,
+                        tray_id=tray['tray_id'],
+                        tray_quantity=tray['qty'],
+                        batch_id=ts.batch_id,
+                        top_tray=tray['top_tray'],
+                        remaining_qty=tray['qty'],
+                        rejected_tray=True,
+                        IP_tray_verified=True,
+                        new_tray=False,
+                        user=request.user,
+                    )
+                # Rejection reason store for rejected child lot
+                rej_child_reason_ids = [p['reason_id'] for p in parsed_items if p['reason_id'] and p.get('iqf_qty', 0) > 0]
+                rej_child_store = IQF_Rejection_ReasonStore.objects.create(
+                    lot_id=rejected_lot_id,
+                    user=request.user,
+                    total_rejection_quantity=rejected_qty,
+                    batch_rejection=False,
+                )
+                if rej_child_reason_ids:
+                    rej_child_store.rejection_reason.set(
+                        IQF_Rejection_Table.objects.filter(id__in=rej_child_reason_ids)
+                    )
+                print(f'[PARTIAL SPLIT] Reject child created: lot={rejected_lot_id}, qty={rejected_qty}, trays={len(rejected_trays)}')
+
+                # ── Mark parent trays as delinked — parent is consumed ──
+                IQFTrayId.objects.filter(lot_id=lot_id).update(delink_tray=True)
+
+                # ── Build flow snapshots (both filled immediately — no deferral) ──
                 partial_accept_data = {
                     'label': 'PARTIAL_ACCEPT',
                     'qty': accepted_qty,
                     'total_trays': len(accepted_trays),
                     'trays': accepted_trays,
+                    'accepted_lot_id': accepted_lot_id,
                 }
-                # partial_reject_data left None — filled by delink modal confirm
+                partial_reject_data = {
+                    'label': 'PARTIAL_REJECT',
+                    'qty': rejected_qty,
+                    'total_trays': len(rejected_trays),
+                    'trays': rejected_trays,
+                    'reasons': rejection_details,
+                    'rejected_lot_id': rejected_lot_id,
+                }
 
             # ─── 11. CREATE REJECTION REASON STORE (only when rejected_qty > 0) ───
             if rejected_qty > 0:
@@ -1431,20 +1600,23 @@ def iqf_submit_audit(request):
                 ts.iqf_acceptance = False
                 ts.iqf_few_cases_acceptance = False
                 ts.send_brass_qc = False  # nothing to send
-            else:  # PARTIAL — Step 1: save data, set onhold for verification
-                ts.iqf_onhold_picking = True  # Shows "Verify Trays" button
-                ts.iqf_few_cases_acceptance = False  # Finalized on verify step
+            else:  # PARTIAL — parent consumed, children created immediately
+                ts.iqf_few_cases_acceptance = True
+                ts.iqf_onhold_picking = False
                 ts.iqf_acceptance = False
                 ts.iqf_rejection = False
-                ts.send_brass_qc = False  # Don't move to Brass QC yet — pending verification
+                ts.send_brass_qc = False
+                ts.next_process_module = None  # parent has no downstream — children carry it
+                ts.is_split = True
+                ts.remove_lot = True
+                # ✅ FIX: Clear brass_audit_rejection so parent NEVER satisfies re-entry filter
+                ts.brass_audit_rejection = False
 
             ts.iqf_accepted_qty = accepted_qty
             ts.iqf_after_rejection_qty = rejected_qty
             ts.iqf_accepted_qty_verified = False  # Reset for fresh cycle on re-entry
             ts.last_process_module = 'IQF'
-            # PARTIAL keeps send_brass_audit_to_iqf=True so lot stays in IQF pick table
-            if submission_type != IQF_Submitted.SUB_PARTIAL:
-                ts.send_brass_audit_to_iqf = False
+            ts.send_brass_audit_to_iqf = False  # Always remove parent from IQF pick table after submit
             ts.iqf_last_process_date_time = timezone.now()
 
             ts.save(update_fields=[
@@ -1458,6 +1630,7 @@ def iqf_submit_audit(request):
                 'brass_qc_accepted_qty_verified', 'brass_qc_accptance', 'brass_qc_rejection',
                 'brass_qc_few_cases_accptance', 'brass_draft', 'brass_onhold_picking',
                 'brass_accepted_tray_scan_status', 'brass_physical_qty', 'brass_missing_qty',
+                'is_split', 'remove_lot', 'brass_audit_rejection',
             ])
 
             print(f'[MOVEMENT] iqf_acceptance={ts.iqf_acceptance}, '
@@ -1480,12 +1653,10 @@ def iqf_submit_audit(request):
             }
 
             if submission_type == IQF_Submitted.SUB_PARTIAL:
-                # PARTIAL: Always open delink modal — user controls delink/reject tray selection
-                resp_data['open_delink_modal'] = True
-                resp_data['reject_required'] = rejected_qty > 0
-                resp_data['lot_id'] = lot_id
-
-                print(f'[PARTIAL RESPONSE] open_delink_modal=True, accepted={accepted_qty}, rejected={rejected_qty}')
+                resp_data['accepted_lot_id'] = accepted_lot_id
+                resp_data['rejected_lot_id'] = rejected_lot_id
+                resp_data['message'] = 'IQF partial lots created successfully'
+                print(f'[PARTIAL RESPONSE] accepted_lot={accepted_lot_id}(qty={accepted_qty}), rejected_lot={rejected_lot_id}(qty={rejected_qty})')
 
             return Response(resp_data)
 

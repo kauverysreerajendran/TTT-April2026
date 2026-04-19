@@ -133,14 +133,14 @@ class IS_PickTable(APIView):
             ),
      
         ).filter(
-            (Q(accepted_Ip_stock=False) | Q(accepted_Ip_stock__isnull=True)) &
-            (Q(rejected_ip_stock=False) | Q(rejected_ip_stock__isnull=True)) &
-            (Q(accepted_tray_scan_status=False) | Q(accepted_tray_scan_status__isnull=True)),
             tray_scan_exists=True,
             Moved_to_D_Picker=True,  # Only show lots fully submitted from Day Planning (excludes drafts)
-
         ).exclude(
-            totalstockmodel__remove_lot=True    
+            # ✅ CRITICAL: Exclude ANY lot that has been submitted from Input Screening
+            Q(totalstockmodel__accepted_Ip_stock=True) |          # Fully accepted from IP
+            Q(totalstockmodel__accepted_tray_scan_status=True) |  # Tray scan accepted
+            Q(totalstockmodel__rejected_ip_stock=True) |          # Rejected from IP
+            Q(totalstockmodel__remove_lot=True)                   # Removed lots
         ).order_by('-created_at')
 
         # Pagination

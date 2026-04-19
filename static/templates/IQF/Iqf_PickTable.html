@@ -3003,6 +3003,9 @@
     }).finally(function(){ if(draftBtn) draftBtn.disabled = false; if(proceedBtn) proceedBtn.disabled = false; });
   }
 
+  // ── Expose submitAudit globally so delink modal confirm can call it in PARTIAL mode ──
+  window._iqfSubmitAuditFn = submitAudit;
+
   // Click handlers
   document.addEventListener('click', function(e){
     var btn = e.target.closest('.tray-scan-btn');
@@ -3077,6 +3080,34 @@
           console.error('[LOT REJECTION] fetch error', err);
           if(typeof Swal !== 'undefined'){ Swal.fire({ icon: 'error', title: 'Error', text: 'Network error' }); }
         });
+        return;
+      }
+
+      // ── PARTIAL FLOW GUARD: open delink+reject modal for confirmation before submitting ──
+      var _rwQtyEl = document.getElementById('modalRwQty');
+      var _totalIqfEl = document.getElementById('modalIqfTotal');
+      var _rwQty = _rwQtyEl ? parseInt(_rwQtyEl.textContent || '0', 10) : 0;
+      var _totalIqf = _totalIqfEl ? parseInt(_totalIqfEl.textContent || '0', 10) : 0;
+      if(_totalIqf > 0 && _totalIqf < _rwQty){
+        // PARTIAL: collect accepted tray IDs from scan slots
+        var _partialAccIds = [];
+        var _pSlotInputs = document.querySelectorAll('#iqf-accepted-tray-slots-body .tray-scan-input');
+        _pSlotInputs.forEach(function(inp){
+          var tid = (inp.value || '').trim().toUpperCase();
+          if(tid && (inp.classList.contains('scan-valid') || inp.classList.contains('scan-delink'))){
+            _partialAccIds.push(tid);
+          }
+        });
+        if(_partialAccIds.length === 0){
+          if(typeof Swal !== 'undefined'){
+            Swal.fire({ icon: 'warning', title: 'Scan Required', text: 'Please scan all accepted trays before proceeding.' });
+          }
+          return;
+        }
+        // Set flag so delink modal confirm calls submitAudit instead of iqf_accept_delink_modal
+        window._iqfPartialProceedMode = true;
+        console.log('[IQF PARTIAL] Opening delink/reject modal: lot=' + _currentAuditLotId + ', rej=' + _totalIqf + ', accepted=' + _partialAccIds.length);
+        window._iqfOpenDelinkModal(_currentAuditLotId, _totalIqf, _partialAccIds);
         return;
       }
 
@@ -3985,6 +4016,19 @@ document.addEventListener('click', function(evt){
       e.target.disabled = true;
       e.target.style.opacity = '0.5';
       e.target.textContent = 'Processing...';
+
+      // ── PARTIAL PROCEED MODE: submit via iqf_submit_audit instead of iqf_accept_delink_modal ──
+      if(window._iqfPartialProceedMode){
+        window._iqfPartialProceedMode = false;
+        var _lotIdForSubmit = _delinkLotId; // Capture before close resets it
+        _closeDelinkModal();
+        if(typeof window._iqfSubmitAuditFn === 'function'){
+          window._iqfSubmitAuditFn(_lotIdForSubmit, 'proceed');
+        } else {
+          console.error('[DELINK CONFIRM] _iqfSubmitAuditFn not available');
+        }
+        return;
+      }
 
       // Collect final delink selections
       var checkboxes = document.querySelectorAll('#iqfDelinkTrayTableBody .iqf-delink-checkbox');

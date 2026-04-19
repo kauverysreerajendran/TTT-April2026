@@ -21,6 +21,7 @@ import json
 from rest_framework.permissions import IsAuthenticated
 from django.views.decorators.http import require_GET
 from math import ceil
+from django.db import transaction
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -120,6 +121,8 @@ class BrassPickTableView(APIView):
             Q(send_brass_audit_to_qc=True)
             |
             Q(next_process_module='Brass QC')
+            ).exclude(
+            Q(iqf_rejection=True)
             ).exclude(
             Q(brass_audit_rejection=True) & ~Q(send_brass_audit_to_qc=True)
             ).exclude(
@@ -413,6 +416,13 @@ class BrassCompletedView(APIView):
             lot_id=OuterRef('lot_id')
         ).values('total_rejection_quantity')[:1]
 
+        # Exclude child lots created by PARTIAL splits: those appear as
+        # transition_accept_lot_id / transition_reject_lot_id on a parent Brass_QC_Submission
+        child_split_subquery = Brass_QC_Submission.objects.filter(
+            Q(transition_accept_lot_id=OuterRef('lot_id')) | Q(transition_reject_lot_id=OuterRef('lot_id'))
+        )
+        child_exists = Exists(child_split_subquery)
+
         queryset = TotalStockModel.objects.select_related(
             'batch_id',
             'batch_id__model_stock_no',
@@ -423,11 +433,12 @@ class BrassCompletedView(APIView):
             bq_last_process_date_time__range=(from_datetime, to_datetime)
         ).annotate(
             brass_rejection_qty=brass_rejection_qty_subquery,
+            child_split=child_exists,
         ).filter(
             Q(brass_qc_accptance=True) |
             Q(brass_qc_rejection=True) |
             Q(brass_qc_few_cases_accptance=True, brass_onhold_picking=False)
-        )
+        ).filter(child_split=False)
 
         if sort and sort in sort_field_mapping:
             field = sort_field_mapping[sort]
@@ -1392,12 +1403,14 @@ def _handle_submission(request, action):
         logger.info(f"[QC TRANSITION] PARTIAL lot_id={lot_id} → accept={t_accept_lot_id}, reject={t_reject_lot_id}")
 
         # ═══ STRICT LOT SPLIT — create independent child lots in DB ═══
-        try:
+        with transaction.atomic():
             child_accept = TotalStockModel.objects.create(
                 lot_id=t_accept_lot_id,
                 batch_id=stock.batch_id,
                 model_stock_no=stock.model_stock_no,
                 version=stock.version,
+                polish_finish=stock.polish_finish,
+                plating_color=stock.plating_color,
                 total_stock=accepted_qty,
                 total_IP_accpeted_quantity=accepted_qty,
                 brass_physical_qty=accepted_qty,
@@ -1409,7 +1422,6 @@ def _handle_submission(request, action):
                 bq_last_process_date_time=timezone.now(),
                 brass_qc_accepted_qty=accepted_qty,
                 brass_qc_accptance=True,
-                created_at=timezone.now(),
             )
             for tray in accepted_trays:
                 BrassAuditTrayId.objects.create(
@@ -1419,17 +1431,36 @@ def _handle_submission(request, action):
                     batch_id=stock.batch_id,
                     top_tray=tray.get('is_top', False),
                 )
+                BrassTrayId.objects.create(
+                    lot_id=t_accept_lot_id,
+                    tray_id=tray['tray_id'],
+                    tray_quantity=tray['qty'],
+                    batch_id=stock.batch_id,
+                    top_tray=tray.get('is_top', False),
+                )
+                Brass_Qc_Accepted_TrayID_Store.objects.update_or_create(
+                    tray_id=tray['tray_id'],
+                    defaults={
+                        'lot_id': t_accept_lot_id,
+                        'tray_qty': tray['qty'],
+                        'user': request.user,
+                        'is_save': True,
+                        'is_draft': False,
+                    }
+                )
+            Brass_Qc_Accepted_TrayScan.objects.create(
+                lot_id=t_accept_lot_id,
+                accepted_tray_quantity=str(accepted_qty),
+                user=request.user,
+            )
             logger.info(f"[BRASS QC SPLIT] Accept child created: lot={t_accept_lot_id}, qty={accepted_qty}, trays={len(accepted_trays)}")
-        except Exception as e:
-            logger.error(f"[BRASS QC SPLIT] Failed to create accept child lot: {e}")
-            return JsonResponse({"success": False, "error": f"Failed to create accept child lot: {e}"}, status=500)
-
-        try:
             child_reject = TotalStockModel.objects.create(
                 lot_id=t_reject_lot_id,
                 batch_id=stock.batch_id,
                 model_stock_no=stock.model_stock_no,
                 version=stock.version,
+                polish_finish=stock.polish_finish,
+                plating_color=stock.plating_color,
                 total_stock=rejected_qty,
                 total_IP_accpeted_quantity=rejected_qty,
                 brass_physical_qty=rejected_qty,
@@ -1441,9 +1472,7 @@ def _handle_submission(request, action):
                 bq_last_process_date_time=timezone.now(),
                 brass_qc_after_rejection_qty=rejected_qty,
                 brass_qc_rejection=True,
-                send_brass_audit_to_iqf=True,  # ✅ FIX: gate flag required by IQF pick table queryset
-
-                created_at=timezone.now(),
+                send_brass_audit_to_iqf=True,
             )
             for tray in rejected_trays:
                 IQFTrayId.objects.create(
@@ -1454,8 +1483,13 @@ def _handle_submission(request, action):
                     IP_tray_verified=True,
                     top_tray=tray.get('is_top', False),
                 )
-            # ✅ FIX: Create rejection reason store for child lot so IQF audit API
-            # resolves rw_qty=rejected_qty (not fallback to total_batch_quantity).
+                BrassTrayId.objects.create(
+                    lot_id=t_reject_lot_id,
+                    tray_id=tray['tray_id'],
+                    tray_quantity=tray['qty'],
+                    batch_id=stock.batch_id,
+                    top_tray=tray.get('is_top', False),
+                )
             Brass_QC_Rejection_ReasonStore.objects.create(
                 lot_id=t_reject_lot_id,
                 user=request.user,
@@ -1463,13 +1497,9 @@ def _handle_submission(request, action):
                 batch_rejection=False,
             )
             logger.info(f"[BRASS QC SPLIT] Reject child created: lot={t_reject_lot_id}, qty={rejected_qty}, trays={len(rejected_trays)}")
-        except Exception as e:
-            logger.error(f"[BRASS QC SPLIT] Failed to create reject child lot: {e}")
-            return JsonResponse({"success": False, "error": f"Failed to create reject child lot: {e}"}, status=500)
-
-        # Delink parent trays
-        BrassTrayId.objects.filter(lot_id=lot_id).update(delink_tray=True)
-        logger.info(f"[BRASS QC SPLIT] Parent={lot_id} closed → accept={t_accept_lot_id} (BA), reject={t_reject_lot_id} (IQF)")
+            # Delink parent trays — parent is now consumed
+            BrassTrayId.objects.filter(lot_id=lot_id).update(delink_tray=True)
+            logger.info(f"[BRASS QC SPLIT] Parent={lot_id} closed → accept={t_accept_lot_id} (BA), reject={t_reject_lot_id} (IQF)")
 
     # Stage movement
     if submission_type == "FULL_ACCEPT":
@@ -1521,6 +1551,7 @@ def _handle_submission(request, action):
         stock.next_process_module = None           # parent closed — children are independent
         stock.last_process_module = 'Brass QC'
         stock.is_split = True
+        stock.remove_lot = True
         stock.send_brass_audit_to_iqf = True       # informational flag
 
     # Clear draft state after successful final submission
@@ -1543,7 +1574,7 @@ def _handle_submission(request, action):
         'brass_draft', 'brass_onhold_picking', 'send_brass_audit_to_iqf',
         'brass_qc_transition_lot_id', 'brass_qc_transition_accept_lot_id',
         'brass_qc_transition_reject_lot_id', 'brass_qc_transition_label',
-        'is_split', 'send_brass_qc',  # ✅ Include flag reset in update
+        'is_split', 'remove_lot', 'send_brass_qc',  # ✅ Include flag reset in update
     ])
 
     logger.info(f"[QC ACTION] [DONE] type={submission_type}, lot_id={lot_id}, moved_to={stock.next_process_module}")
@@ -1558,10 +1589,12 @@ def _handle_submission(request, action):
         print(f"{'='*60}\n")
         return JsonResponse({
             "success": True,
-            "message": "Lot split completed: accept → Brass Audit, reject → IQF",
+            "message": "Partial lots created successfully",
             "lot_id": lot_id, "submission_id": submission.id, "submission_type": submission_type,
             "accepted_qty": accepted_qty, "rejected_qty": rejected_qty,
             "status": "LOT_SPLIT_COMPLETED",
+            "accepted_lot_id": submission.transition_accept_lot_id,
+            "rejected_lot_id": submission.transition_reject_lot_id,
             "accept_lot_id": submission.transition_accept_lot_id,
             "reject_lot_id": submission.transition_reject_lot_id,
             "transition_accept_lot_id": submission.transition_accept_lot_id,

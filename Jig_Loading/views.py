@@ -485,6 +485,13 @@ class JigView(TemplateView):
 			except Exception:
 				logging.exception('[JIG PICK] Failed to deduplicate excess lots')
 
+			# Exclude lots with 0 display qty — prevents split parent lots or empty records appearing
+			before_zero_filter = len(master_data)
+			master_data = [d for d in master_data if (d.get('display_qty') or 0) > 0]
+			zero_removed = before_zero_filter - len(master_data)
+			if zero_removed:
+				logging.info(f'[JIG PICK] Removed {zero_removed} lot(s) with display_qty=0')
+
 			# ===== MARK LOTS WITH ACTIVE DRAFT STATUS =====
 			# Supports per-model status for multi-model drafts:
 			#   Primary model → "Draft", Secondary model(s) → "Partial Draft"
@@ -499,8 +506,6 @@ class JigView(TemplateView):
 						).values_list('lot_id', flat=True)
 					)
 					partial_draft_lot_ids = set()
-
-					# Multi-model drafts: need to inspect JSON field (limited)
 					for rec in JigCompleted.objects.filter(
 						draft_status='draft', is_multi_model=True,
 						multi_model_allocation__isnull=False
