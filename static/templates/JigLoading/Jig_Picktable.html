@@ -760,9 +760,9 @@
         <span id="modalPlatingStockNo" style="display: none"></span>
       </h3>
       <div style="display: flex; gap: 8px; align-items: center">
-        <button type="button" class="btn-action" id="jigCompositionBtn" style="background:rgba(230,230,230,0.85);border:1px solid rgba(200,200,200,0.4);color:#403f3f;">
+<!--         <button type="button" class="btn-action" id="jigCompositionBtn" style="background:rgba(230,230,230,0.85);border:1px solid rgba(200,200,200,0.4);color:#403f3f;">
           <i class="fa fa-cogs"></i> Jig Composition
-        </button>
+        </button> -->
         <span class="cycle-status">No of Cycle: <span id="modalNoOfCycle"></span></span>
         <span class="close-btn">&times;</span>
       </div>
@@ -4565,6 +4565,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Clear inputs
     $('#brokenBuildupHooksInput').val(0);
     $('#jigIdInput').val('');
+    // Clear cycle count display
+    var cycleEl = document.getElementById('modalNoOfCycle');
+    if (cycleEl) cycleEl.textContent = '1';
     // Clear unified table rows only (keep table structure)
     $('#unifiedTrayTableBody').html('');
     $('#delinkTrayCount').text(0);
@@ -4592,6 +4595,9 @@ function clearJigUserInputs() {
   // 1. Jig ID (user types this)
   var jigIdInput = document.getElementById('jigIdInput');
   if (jigIdInput) { jigIdInput.value = ''; jigIdInput.classList.remove('jig-id-error', 'jig-id-valid'); }
+  // Reset cycle count display
+  var cycleEl = document.getElementById('modalNoOfCycle');
+  if (cycleEl) cycleEl.textContent = '1';
   // Clear jig-id validation alerts
   var jigIdError = document.getElementById('jigIdError');
   if (jigIdError) { jigIdError.textContent = ''; jigIdError.style.display = 'none'; }
@@ -4759,6 +4765,9 @@ function resetJigModalState() {
   if (jigIdInput) { jigIdInput.value = ''; jigIdInput.classList.remove('jig-id-error', 'jig-id-valid'); }
   const jigIdError = document.getElementById('jigIdError');
   if (jigIdError) { jigIdError.textContent = ''; jigIdError.style.display = 'none'; }
+  // Reset cycle count display
+  const cycleEl = document.getElementById('modalNoOfCycle');
+  if (cycleEl) cycleEl.textContent = '1';
 
   // 2. Clear read-only / API-populated display fields (values only, not DOM)
   const loadedDisplay = document.getElementById('loadedCasesQtyDisplay');
@@ -6459,7 +6468,100 @@ if (window.jQuery) {
       this.value = (this.value || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
     });
 
-    // Validate against Jig master on blur
+    // Validate against Jig master on input (real-time) + blur
+    var validationTimeout;
+    
+    jigIdEl.addEventListener('input', function() {
+      var val = (this.value || '').trim().toUpperCase();
+      this.value = val;
+      
+      // Clear previous timeout
+      if (validationTimeout) clearTimeout(validationTimeout);
+      
+      if (!val) {
+        this.classList.remove('jig-id-error', 'jig-id-valid');
+        if (jigIdErrEl) { jigIdErrEl.textContent = ''; jigIdErrEl.style.display = 'none'; }
+        var cycleEl = document.getElementById('modalNoOfCycle');
+        if (cycleEl) cycleEl.textContent = '1';
+        return;
+      }
+      
+      // Format check: J###-#### (9 chars)
+      if (!/^J\d{3}-\d{4}$/.test(val)) {
+        this.classList.add('jig-id-error');
+        this.classList.remove('jig-id-valid');
+        if (jigIdErrEl) { jigIdErrEl.textContent = 'Invalid format. Expected J###-#### (e.g. J098-0001)'; jigIdErrEl.style.display = 'block'; }
+        return;
+      }
+      
+      // Debounce validation: wait 300ms before calling backend
+      validationTimeout = setTimeout(function() {
+        var lotId = window.CURRENT_LOT_ID || window.currentJigLotId || '';
+        var validateUrl = '/jig_loading/api/jig/validate/?jig_id=' + encodeURIComponent(val);
+        if (lotId) {
+          validateUrl += '&lot_id=' + encodeURIComponent(lotId);
+        }
+        
+        fetch(validateUrl, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': _getCsrf() }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.exists) {
+            // Update cycle count display
+            var cycleEl = document.getElementById('modalNoOfCycle');
+            if (cycleEl) {
+              cycleEl.textContent = d.cycle_count || 1;
+            }
+
+            // CRITICAL: Check if jig is drafted by a DIFFERENT lot only
+            if (d.is_drafted && d.drafted_by_other_lot) {
+              jigIdEl.classList.add('jig-id-error');
+              jigIdEl.classList.remove('jig-id-valid');
+              if (jigIdErrEl) {
+                jigIdErrEl.textContent = 'Already Drafted';
+                jigIdErrEl.style.display = 'block';
+              }
+              // Auto-select the jig input field for user convenience
+              setTimeout(function() { jigIdEl.select(); }, 50);
+              return;
+            }
+
+            // Check if jig can be reused
+            if (!d.can_reuse) {
+              jigIdEl.classList.add('jig-id-error');
+              jigIdEl.classList.remove('jig-id-valid');
+              if (jigIdErrEl) {
+                jigIdErrEl.textContent = d.message || 'This Jig ID is already in use. Unload first before reuse.';
+                jigIdErrEl.style.display = 'block';
+              }
+              return;
+            }
+
+            jigIdEl.classList.add('jig-id-valid');
+            jigIdEl.classList.remove('jig-id-error');
+            if (jigIdErrEl) { jigIdErrEl.textContent = ''; jigIdErrEl.style.display = 'none'; }
+          } else {
+            jigIdEl.classList.add('jig-id-error');
+            jigIdEl.classList.remove('jig-id-valid');
+            if (jigIdErrEl) { jigIdErrEl.textContent = d.message || 'Jig ' + val + ' not found in Jig master.'; jigIdErrEl.style.display = 'block'; }
+            // Reset cycle count for non-existent jigs
+            var cycleEl = document.getElementById('modalNoOfCycle');
+            if (cycleEl) {
+              cycleEl.textContent = '1';
+            }
+          }
+        })
+        .catch(function(err) {
+          console.error('Jig validation error:', err);
+          jigIdEl.classList.remove('jig-id-error', 'jig-id-valid');
+        });
+      }, 300);
+    });
+    
+    // Also keep blur event as fallback
     jigIdEl.addEventListener('blur', function() {
       var val = (this.value || '').trim().toUpperCase();
       this.value = val;
@@ -6475,9 +6577,21 @@ if (window.jQuery) {
         if (jigIdErrEl) { jigIdErrEl.textContent = 'Invalid format. Expected J###-#### (e.g. J098-0001)'; jigIdErrEl.style.display = 'block'; }
         return;
       }
-      // Existence check — call backend
+      
+      // Get lot_id from global context (set during modal open)
+      var lotId = window.CURRENT_LOT_ID || window.currentJigLotId || '';
+      if (!lotId) {
+        console.warn('Jig validation: lot_id not available');
+      }
+      
+      // Existence check — call backend with lot_id parameter
       var me = this;
-      fetch('/jig_loading/api/jig/validate/?jig_id=' + encodeURIComponent(val), {
+      var validateUrl = '/jig_loading/api/jig/validate/?jig_id=' + encodeURIComponent(val);
+      if (lotId) {
+        validateUrl += '&lot_id=' + encodeURIComponent(lotId);
+      }
+      
+      fetch(validateUrl, {
         method: 'GET',
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': _getCsrf() }
@@ -6485,16 +6599,52 @@ if (window.jQuery) {
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.exists) {
+          // Update cycle count display
+          var cycleEl = document.getElementById('modalNoOfCycle');
+          if (cycleEl) {
+            cycleEl.textContent = d.cycle_count || 1;
+          }
+
+          // CRITICAL: Check if jig is drafted by a DIFFERENT lot only
+          if (d.is_drafted && d.drafted_by_other_lot) {
+            me.classList.add('jig-id-error');
+            me.classList.remove('jig-id-valid');
+            if (jigIdErrEl) {
+              jigIdErrEl.textContent = 'Already Drafted';
+              jigIdErrEl.style.display = 'block';
+            }
+            // Auto-select the jig input field for user convenience
+            setTimeout(function() { me.select(); }, 100);
+            return;
+          }
+
+          // Check if jig can be reused
+          if (!d.can_reuse) {
+            me.classList.add('jig-id-error');
+            me.classList.remove('jig-id-valid');
+            if (jigIdErrEl) {
+              jigIdErrEl.textContent = d.message || 'This Jig ID is already in use. Unload first before reuse.';
+              jigIdErrEl.style.display = 'block';
+            }
+            return;
+          }
+
           me.classList.add('jig-id-valid');
           me.classList.remove('jig-id-error');
           if (jigIdErrEl) { jigIdErrEl.textContent = ''; jigIdErrEl.style.display = 'none'; }
         } else {
           me.classList.add('jig-id-error');
           me.classList.remove('jig-id-valid');
-          if (jigIdErrEl) { jigIdErrEl.textContent = 'Jig ' + val + ' not found in Jig master.'; jigIdErrEl.style.display = 'block'; }
+          if (jigIdErrEl) { jigIdErrEl.textContent = d.message || 'Jig ' + val + ' not found in Jig master.'; jigIdErrEl.style.display = 'block'; }
+          // Reset cycle count for non-existent jigs
+          var cycleEl = document.getElementById('modalNoOfCycle');
+          if (cycleEl) {
+            cycleEl.textContent = '1';
+          }
         }
       })
-      .catch(function() {
+      .catch(function(err) {
+        console.error('Jig validation error:', err);
         me.classList.remove('jig-id-error', 'jig-id-valid');
       });
     });

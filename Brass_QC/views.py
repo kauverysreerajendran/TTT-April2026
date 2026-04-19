@@ -974,9 +974,16 @@ def brass_qc_action(request):
             remainder = qty % capacity
             slots = []
             if remainder > 0:
+                # Has remainder: first slot is top with remainder qty
                 slots.append({"qty": remainder, "is_top": True, "tray_id": None})
-            for i in range(full_trays):
-                slots.append({"qty": capacity, "is_top": False, "tray_id": None})
+                # Then full capacity trays as non-top
+                for i in range(full_trays):
+                    slots.append({"qty": capacity, "is_top": False, "tray_id": None})
+            else:
+                # No remainder: first full capacity tray is top, rest are non-top
+                slots.append({"qty": capacity, "is_top": True, "tray_id": None})
+                for i in range(full_trays - 1):
+                    slots.append({"qty": capacity, "is_top": False, "tray_id": None})
             return slots
 
         accept_slots = compute_slots(accepted_qty, tray_capacity) if accepted_qty > 0 else []
@@ -1122,7 +1129,19 @@ def _handle_submission(request, action):
     try:
         stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
     except TotalStockModel.DoesNotExist:
-        return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        # ✅ FIX: Map split child lot back to parent using transition_lot_ids
+        # When Brass QC receives a child lot from Brass Audit partial submission,
+        # the lot_id is actually a brass_audit_transition_*_lot_id that maps to the parent lot
+        parent_stock = TotalStockModel.objects.filter(
+            Q(brass_audit_transition_accept_lot_id=lot_id) |
+            Q(brass_audit_transition_reject_lot_id=lot_id) |
+            Q(brass_audit_transition_lot_id=lot_id)
+        ).first()
+        if parent_stock:
+            stock = parent_stock
+            logger.info(f"[QC ACTION] Mapped child lot_id={lot_id} → parent lot_id={parent_stock.lot_id} for split-lot processing")
+        else:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
 
     if action == "SAVE_REMARK":
         remark_text = remarks
@@ -1662,16 +1681,23 @@ def allocate_trays(request):
     # e.g. reject_qty=20, capacity=16 → slots: [4 (top), 16]
 
     def compute_slots(qty, capacity):
-        """Compute tray slot quantities. Top tray gets remainder."""
+        """Compute tray slot quantities. Top tray gets remainder, or first full tray if no remainder."""
         if qty <= 0 or capacity <= 0:
             return []
         full_trays = qty // capacity
         remainder = qty % capacity
         slots = []
         if remainder > 0:
+            # Has remainder: first slot is top with remainder qty
             slots.append({"qty": remainder, "is_top": True, "tray_id": None})
-        for i in range(full_trays):
-            slots.append({"qty": capacity, "is_top": False, "tray_id": None})
+            # Then full capacity trays as non-top
+            for i in range(full_trays):
+                slots.append({"qty": capacity, "is_top": False, "tray_id": None})
+        else:
+            # No remainder: first full capacity tray is top, rest are non-top
+            slots.append({"qty": capacity, "is_top": True, "tray_id": None})
+            for i in range(full_trays - 1):
+                slots.append({"qty": capacity, "is_top": False, "tray_id": None})
         return slots
 
     accept_slots = compute_slots(accepted_qty, tray_capacity) if accepted_qty > 0 else []

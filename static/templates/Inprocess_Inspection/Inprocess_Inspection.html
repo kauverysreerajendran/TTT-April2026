@@ -1282,8 +1282,8 @@
                         <th>JIG ID <i class="fa fa-filter" aria-hidden="true"></i></th>
                         <th>Date &amp; <br> Time <i class="fa fa-filter" aria-hidden="true"></i></th>
                         <th>Model Presents <i class="fa fa-filter" aria-hidden="true"></i></th>
-                        <!--<th>Plating Stk No <i class="fa fa-filter" aria-hidden="true"></i></th>
-                         <th>Polishing Stk No <i class="fa fa-filter" aria-hidden="true"></i></th> -->
+                        <th style="min-width:130px;max-width:160px;white-space:normal;word-break:break-word;">Plating Stk No <i class="fa fa-filter" aria-hidden="true"></i></th>
+                         <!-- <th>Polishing Stk No <i class="fa fa-filter" aria-hidden="true"></i></th> -->
                         <th>Plating Color <i class="fa fa-filter" aria-hidden="true"></i></th>
                         <th>Polish Finish <i class="fa fa-filter" aria-hidden="true"></i></th>
                         <th style="display: none;">Version <i class="fa fa-filter" aria-hidden="true" ></i></th>
@@ -1345,7 +1345,7 @@
                         </td>
                         <!-- Model Presents - Multi-model circles or single circle -->
                         <td  {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %} class="model-stock-no-cell"
-                        data-multi-model='{{ jig_detail.multi_model_allocation|json_encode }}'
+                        data-multi-model='{{ jig_detail.enriched_multi_model_allocation|json_encode }}'
                         data-images='{{ jig_detail.model_images|json_encode }}'
                         data-model-colors='{{ jig_detail.model_colors|json_encode }}'
                         data-model-list='{{ jig_detail.no_of_model_cases|json_encode }}'>
@@ -1393,23 +1393,10 @@
                         {% endif %}
                         </td>
                         <!-- Plating Stock No from ModelMasterCreation -->
-                                           <!--<td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}> 
-                           {% if jig_detail.final_plating_stk_nos %}
-                               {{ jig_detail.final_plating_stk_nos }}
-                           
-                           {% else %}
-                               N/A
-                           {% endif %} 
-                           </td>            -->     
-                        <!-- Polishing Stock No from ModelMasterCreation -->
-                        <!--                       <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>
-                           {% if jig_detail.final_polishing_stk_nos %}
-                               {{ jig_detail.final_polishing_stk_nos }}
-                           
-                           {% else %}
-                               N/A
-                           {% endif %}
-                           </td>  -->                     
+                        <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %} style="min-width:130px;max-width:160px;white-space:normal;word-break:break-word;font-size:11px;">
+                           {{ jig_detail.final_plating_stk_nos|default:"N/A" }}
+                        </td>
+                        <!-- Polishing Stock No from ModelMasterCreation (hidden) -->                     
                         <!-- Plating Color from ModelMasterCreation -->
                                                 <!-- In your Inprocess_Inspection.html template, find the plating color cell and update it: -->
                         <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>
@@ -1480,7 +1467,7 @@
                         {% endif %}
                         </td>
                         <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>{{ jig_detail.jig_capacity }} - Jig</td>
-                        <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>{{ jig_detail.total_cases_loaded|default:"0" }}</td>
+                        <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}><span class="jig-lot-qty-display" data-jig-id="{{ jig_detail.id }}">{{ jig_detail.total_cases_loaded|default:"0" }}</span></td>
                       <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>{{ jig_detail.ep_bath_type }}</td>
                         <!-- Nickel Bath No - Dropdown -->
                         <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>
@@ -1618,9 +1605,10 @@
                         </td>
                         <!-- Current Stage -->
                         <td {% if jig_detail.inprocess_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                        <div class="d-inline-block px-3 fw-semibold text-center rounded-pill current-stage-display"
+                           data-jig-id="{{ jig_detail.id }}"
                            style="border: 1px solid #9adeed; background-color: #d1edf3; color: #033b5d; font-size: 12px; white-space: nowrap; padding: 6px;">
-                           {{ jig_detail.last_process_module|default:"Jig Loading" }}
+                           {% if jig_detail.bath_numbers %}Inprocess Inspection{% else %}{{ jig_detail.last_process_module|default:"Jig Loading" }}{% endif %}
                         </div>
                         </td>
                         <!-- VoiceRec with tooltip (audio remark) -->
@@ -2525,6 +2513,12 @@
                 inspectionLink.setAttribute('data-jig-id', jigId);
 
                }
+
+               // Fix 3: Update Current Stage to "Inprocess Inspection"
+               const currentStageDiv = row.querySelector('.current-stage-display');
+               if (currentStageDiv) {
+                 currentStageDiv.textContent = 'Inprocess Inspection';
+               }
              }
              
            } else {
@@ -2610,10 +2604,12 @@
              var imgUrl     = m.model_image_url || '/static/assets/images/imagePlaceholder.jpg';
              var color      = circleColors[idx % circleColors.length];
              var roleLabel  = m.model_role === 'primary' ? '<span style="font-size:8px;background:#28a745;color:#fff;border-radius:3px;padding:1px 4px;margin-top:2px;display:inline-block;">Primary</span>' : '';
+             var platingStkNo = m.plating_stk_no || '';
              html += '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;" onclick="showModelImagesFull(' + JSON.stringify(modelName) + ',' + JSON.stringify([imgUrl]) + ')">'
                    + '<div style="width:18px;height:18px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;flex-shrink:0;">' + (idx+1) + '</div>'
                    + '<img src="' + imgUrl + '" alt="' + modelName + '" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fafafa;" />'
                    + '<div style="font-weight:600;color:#023E4DCC;font-size:11px;text-align:center;word-break:break-all;line-height:1.2;">' + modelName + '</div>'
+                   + (platingStkNo ? '<div style="font-size:9px;color:#028084;background:#e6f7f8;border-radius:3px;padding:1px 5px;margin-top:1px;word-break:break-all;text-align:center;">' + platingStkNo + '</div>' : '')
                    + '<div style="font-size:10px;color:#555;">Qty: ' + qty + '</div>'
                    + roleLabel
                    + '</div>';
@@ -4102,6 +4098,28 @@ document.addEventListener('DOMContentLoaded', function() {
         tooltip.style.pointerEvents = 'none';
       });
     });
+  });
+});
+</script>
+
+<!-- Fix 2: Auto-fetch JigLot Qty from server when displayed value is 0 -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.jig-lot-qty-display').forEach(function(span) {
+    var currentQty = parseInt(span.textContent.trim()) || 0;
+    if (currentQty === 0) {
+      var jigId = span.getAttribute('data-jig-id');
+      if (jigId) {
+        fetch('/inprocess_inspection/get_jig_completed_qty/?jig_id=' + encodeURIComponent(jigId))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success && data.qty) {
+              span.textContent = data.qty;
+            }
+          })
+          .catch(function() {});
+      }
+    }
   });
 });
 </script>

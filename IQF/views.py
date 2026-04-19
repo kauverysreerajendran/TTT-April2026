@@ -309,7 +309,7 @@ class IQFPickTableView(APIView):
                 'version__version_name': batch.version.version_name if batch.version else '',
                 'vendor_internal': batch.vendor_internal,
                 'location__location_name': batch.location.location_name if batch.location else '',
-                'tray_type': batch.tray_type,
+                'tray_type': '',  # ✅ START EMPTY — only populate from actual trays below
                 'tray_capacity': batch.tray_capacity,
                 'Moved_to_D_Picker': batch.Moved_to_D_Picker,
                 'Draft_Saved': iqf_has_drafts,  # ✅ USE IQF-SPECIFIC DRAFTS INSTEAD OF GLOBAL Draft_Saved
@@ -385,7 +385,8 @@ class IQFPickTableView(APIView):
             data['vendor_location'] = f"{data.get('vendor_internal', '')}_{data.get('location__location_name', '')}"
 
             # ── Dynamically resolve tray_type and tray_capacity from actual lot trays ──
-            # BrassTrayId → IQFTrayId → batch fallback
+            # BrassTrayId → IQFTrayId — NO batch fallback
+            # ✅ RULE: Only show tray_type if actual trays exist in system (from Jig Unloading onwards)
             _lot_id_for_tray = data.get('stock_lot_id')
             _dyn_tray = (
                 BrassTrayId.objects.filter(lot_id=_lot_id_for_tray, delink_tray=False)
@@ -399,9 +400,11 @@ class IQFPickTableView(APIView):
                     .exclude(tray_capacity__isnull=True).values('tray_type', 'tray_capacity').first()
                 )
             if _dyn_tray:
-                data['tray_type'] = _dyn_tray['tray_type'] or data.get('tray_type', '')
+                # Only set tray_type if found in actual tray records — not from batch
+                data['tray_type'] = _dyn_tray['tray_type']
                 data['tray_capacity'] = _dyn_tray['tray_capacity'] or data.get('tray_capacity', 0)
                 tray_capacity = data['tray_capacity'] or tray_capacity
+            # else: keep tray_type as empty (not from batch fallback)
 
             # ── Count actual trays for the lot — SAME LOGIC AS iqf_lot_details ──
             _tray_qty_map = {}

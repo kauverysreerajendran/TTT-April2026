@@ -12,4 +12,6 @@ urlpatterns = [
     # Bath number related APIs
     path('get_bath_numbers_by_type/', views.GetBathNumbersByTypeAPIView.as_view(), name='get_bath_numbers_by_type'),
     path('save_bath_number/', views.SaveBathNumberAPIView.as_view(), name='save_bath_number'),
+    # JigLot Qty dynamic fetch
+    path('get_jig_completed_qty/', views.get_jig_completed_qty, name='get_jig_completed_qty'),
 ]

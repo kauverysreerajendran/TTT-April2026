@@ -829,7 +829,32 @@ class InprocessInspectionView(TemplateView):
         # Set template attributes for Inprocess Inspection table
         jig_detail.jig_qr_id = jig_detail.jig_id  # For JIG ID column
         jig_detail.jig_loaded_date_time = jig_detail.IP_loaded_date_time or jig_detail.updated_at  # For Date & Time column
-        jig_detail.total_cases_loaded = jig_detail.updated_lot_qty  # For Jig Lot Qty column
+        # Fix 2: Use loaded_cases_qty (real jig qty) with fallback chain
+        jig_detail.total_cases_loaded = (
+            getattr(jig_detail, 'loaded_cases_qty', None) or
+            getattr(jig_detail, 'updated_lot_qty', None) or
+            getattr(jig_detail, 'original_lot_qty', None) or
+            0
+        )
+
+        # Fix 1: Enrich multi_model_allocation with plating_stk_no from ModelMasterCreation
+        try:
+            _mm = getattr(jig_detail, 'multi_model_allocation', None)
+            if _mm and isinstance(_mm, list):
+                _mm_batch_ids = [m.get('batch_id') for m in _mm if m.get('batch_id')]
+                _mmc_plating = {
+                    m.batch_id: (m.plating_stk_no or '')
+                    for m in ModelMasterCreation.objects.filter(batch_id__in=_mm_batch_ids).only('batch_id', 'plating_stk_no')
+                }
+                jig_detail.enriched_multi_model_allocation = [
+                    dict(m, plating_stk_no=_mmc_plating.get(m.get('batch_id'), ''))
+                    for m in _mm
+                ]
+            else:
+                jig_detail.enriched_multi_model_allocation = _mm or []
+        except Exception as _e:
+            print(f"   ⚠️ Error enriching multi_model_allocation: {_e}")
+            jig_detail.enriched_multi_model_allocation = getattr(jig_detail, 'multi_model_allocation', []) or []
         
         # Parse draft_data for bath_type and tray info
         draft_data = jig_detail.draft_data or {}
@@ -1519,6 +1544,32 @@ class InprocessInspectionView(TemplateView):
             'source_model': 'Unknown',
             'batch_model_type': 'Unknown'
         }
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_jig_completed_qty(request):
+    """
+    API endpoint to fetch the real loaded qty from JigCompleted for a given jig id.
+    Returns loaded_cases_qty (primary) with fallback to updated_lot_qty and original_lot_qty.
+    """
+    jig_id = request.GET.get('jig_id', '').strip()
+    if not jig_id:
+        return JsonResponse({'success': False, 'error': 'jig_id is required'}, status=400)
+    try:
+        jig = JigCompleted.objects.get(id=jig_id)
+        qty = (
+            jig.loaded_cases_qty or
+            jig.updated_lot_qty or
+            jig.original_lot_qty or
+            0
+        )
+        return JsonResponse({'success': True, 'qty': qty})
+    except JigCompleted.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'JigCompleted record not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class GetBathNumbersByTypeAPIView(APIView):

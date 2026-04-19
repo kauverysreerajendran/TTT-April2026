@@ -1785,7 +1785,15 @@
                     <td class="{{ data.ui.row_blur }}">{{ data.category }}</td>
                     <td class="{{ data.ui.row_blur }}">{{data.polish_finish}}</td>
                     <td style="display: none;">{{data.version__version_name}}</td>
-                    <td class="{{ data.ui.row_blur }}">{{data.tray_type}}-{{data.tray_capacity}}</td>
+                    <td class="{{ data.ui.row_blur }}">
+                      {% if data.tray_type %}
+                        {{data.tray_type}}-{{data.tray_capacity}}
+                      {% elif data.tray_capacity %}
+                        {{data.tray_capacity}}
+                      {% else %}
+                        <span style="color:#ccc;">—</span>
+                      {% endif %}
+                    </td>
                     <td class="{{ data.ui.row_blur }}">{{data.location__location_name}}</td>
                     
                     <td class="{{ data.ui.row_blur }}">{{data.no_of_trays}}</td>
@@ -3342,6 +3350,8 @@ document.addEventListener('click', function(evt){
                 }catch(e){ console.error('enable bin icon failed', e); }
               }
             }catch(e){ console.error('enable audit btn failed', e); }
+            // Reload so Q circle updates without manual browser refresh
+            setTimeout(() => window.location.reload(), 500);
           } else {
             // unchecked: leave as unchecked input (was disabled for request), re-enable it
             el.disabled = false;

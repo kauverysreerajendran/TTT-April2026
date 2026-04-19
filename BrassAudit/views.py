@@ -245,6 +245,15 @@ class BrassAuditPickTableView(APIView):
 
             data['available_qty'] = data.get('brass_audit_accepted_qty') if data.get('brass_audit_accepted_qty') and data.get('brass_audit_accepted_qty') > 0 else (data.get('brass_audit_physical_qty') if data.get('brass_audit_physical_qty') and data.get('brass_audit_physical_qty') > 0 else data.get('brass_qc_accepted_qty', 0))
 
+            # ✅ Fallback: Display most recent available date/time for "Last Date and Time" column
+            # Priority: brass_audit_last_process_date_time → bq_last_process_date_time → iqf_last_process_date_time
+            display_last_datetime = (
+                data.get('brass_audit_last_process_date_time') or
+                data.get('bq_last_process_date_time') or
+                data.get('iqf_last_process_date_time')
+            )
+            data['display_last_process_date_time'] = display_last_datetime
+
             # Backend-computed flags
             data['can_delete'] = (
                 not data.get('brass_audit_accptance') and
@@ -916,9 +925,16 @@ def brass_audit_action(request):
             remainder = qty % capacity
             slots = []
             if remainder > 0:
+                # Has remainder: first slot is top with remainder qty
                 slots.append({"qty": remainder, "is_top": True, "tray_id": None})
-            for i in range(full_trays):
-                slots.append({"qty": capacity, "is_top": False, "tray_id": None})
+                # Then full capacity trays as non-top
+                for i in range(full_trays):
+                    slots.append({"qty": capacity, "is_top": False, "tray_id": None})
+            else:
+                # No remainder: first full capacity tray is top, rest are non-top
+                slots.append({"qty": capacity, "is_top": True, "tray_id": None})
+                for i in range(full_trays - 1):
+                    slots.append({"qty": capacity, "is_top": False, "tray_id": None})
             return slots
 
         accept_slots = compute_slots(accepted_qty, tray_capacity) if accepted_qty > 0 else []
@@ -1039,7 +1055,19 @@ def _handle_audit_submission(request, action):
     try:
         stock = TotalStockModel.objects.select_related('batch_id').get(lot_id=lot_id)
     except TotalStockModel.DoesNotExist:
-        return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
+        # ✅ FIX: Map split child lot back to parent using transition_lot_ids
+        # When Brass Audit receives a child lot from partial Brass QC submission,
+        # the lot_id is actually a transition_*_lot_id that maps to the parent lot
+        parent_stock = TotalStockModel.objects.filter(
+            Q(brass_audit_transition_accept_lot_id=lot_id) |
+            Q(brass_audit_transition_reject_lot_id=lot_id) |
+            Q(brass_audit_transition_lot_id=lot_id)
+        ).first()
+        if parent_stock:
+            stock = parent_stock
+            logger.info(f"[AUDIT ACTION] Mapped child lot_id={lot_id} → parent lot_id={parent_stock.lot_id} for split-lot processing")
+        else:
+            return JsonResponse({"success": False, "error": "Lot not found"}, status=404)
 
     if action == "SAVE_REMARK":
         remark_text = remarks
@@ -1224,7 +1252,7 @@ def _handle_audit_submission(request, action):
     # ═══ TRANSITION LOT ID — Create new lot_id for each transition ═══
     if submission_type == "FULL_ACCEPT":
         t_lot_id = generate_new_lot_id()
-        t_label = "full accept from brass audit to iqf"
+        t_label = "full accept from brass audit to jig loading"
         submission.transition_lot_id = t_lot_id
         submission.transition_label = t_label
         submission.save(update_fields=['transition_lot_id', 'transition_label'])
@@ -1254,7 +1282,7 @@ def _handle_audit_submission(request, action):
         logger.info(f"[AUDIT TRANSITION] PARTIAL lot_id={lot_id} → accept={t_accept_lot_id}, reject={t_reject_lot_id}")
 
     # ═══ STAGE MOVEMENT — Brass Audit hierarchy ═══
-    # Full Accept → IQF
+    # Full Accept → Jig Loading
     # Full Reject → back to Brass QC (as NEW lot context)
     # Partial → accepted portion to IQF, rejected portion marked
     if submission_type == "FULL_ACCEPT":
@@ -1263,7 +1291,7 @@ def _handle_audit_submission(request, action):
         stock.brass_audit_few_cases_accptance = False
         stock.brass_audit_physical_qty = accepted_qty
         stock.brass_audit_accepted_qty = accepted_qty
-        stock.next_process_module = 'IQF'
+        stock.next_process_module = 'Jig Loading'
         stock.last_process_module = 'Brass Audit'
     elif submission_type == "FULL_REJECT":
         stock.brass_audit_accptance = False
@@ -1287,6 +1315,8 @@ def _handle_audit_submission(request, action):
         stock.next_process_module = 'IQF'
         stock.last_process_module = 'Brass Audit'
         stock.send_brass_audit_to_iqf = True
+        # ✅ FIX: Ensure parent lot can trigger Brass QC for rejected portion
+        stock.send_brass_audit_to_qc = True
 
     # Clear draft state
     Brass_Audit_Draft_Store.objects.filter(lot_id=lot_id, draft_type='rejection_draft').delete()
@@ -1323,6 +1353,63 @@ def _handle_audit_submission(request, action):
             logger.info(f"[AUDIT TRAY SYNC] lot_id={lot_id}, stored {len(accepted_trays)} accepted tray(s) to BrassAuditTrayId")
         except Exception as _e:
             logger.error(f"[AUDIT TRAY SYNC] Failed to sync trays for lot_id={lot_id}: {_e}")
+
+    # ✅ CRITICAL FIX: Create rejected child lot via cloning to ensure schema compatibility
+    if submission_type == "PARTIAL" and submission.transition_reject_lot_id:
+        try:
+            reject_child_lot_id = submission.transition_reject_lot_id
+            if not TotalStockModel.objects.filter(lot_id=reject_child_lot_id).exists():
+                # Clone parent to child
+                child = TotalStockModel.objects.get(pk=stock.pk)
+                child.pk = None  # Force new record
+                child.lot_id = reject_child_lot_id
+                
+                # Update quantities for rejected portion
+                child.total_stock = rejected_qty
+                child.brass_audit_physical_qty = rejected_qty
+                child.brass_audit_accepted_qty = 0
+                child.brass_qc_accepted_qty = rejected_qty  # Inherits as input for next stage
+                
+                # Movement & Process Control
+                child.last_process_module = "Brass Audit"
+                child.next_process_module = "Brass QC"
+                
+                # Reset flags for fresh processing in next stage
+                child.brass_qc_accptance = False
+                child.brass_qc_rejection = False
+                child.brass_qc_few_cases_accptance = False
+                child.brass_qc_accepted_qty_verified = False
+                
+                # Rejection context
+                child.brass_audit_accptance = False
+                child.brass_audit_rejection = True
+                child.brass_audit_few_cases_accptance = False
+                
+                # Route control
+                child.send_brass_audit_to_qc = True
+                child.send_brass_audit_to_iqf = False
+                
+                child.save()
+                logger.info(f"[AUDIT CHILD LOT CREATED] {reject_child_lot_id} qty={rejected_qty}")
+
+                # ✅ Force tray creation for rejected child lot
+                BrassTrayId.objects.filter(lot_id=reject_child_lot_id).delete()
+                for idx, t in enumerate(rejected_trays):
+                    BrassTrayId.objects.create(
+                        lot_id=reject_child_lot_id,
+                        tray_id=t.get("tray_id", ""),
+                        tray_quantity=int(t.get("qty") or 0),
+                        batch_id=stock.batch_id,
+                        user=request.user,
+                        top_tray=(idx == 0),
+                        delink_tray=False,
+                        rejected_tray=False,
+                        new_tray=False,
+                    )
+                logger.info(f"[AUDIT CHILD TRAYS] lot_id={reject_child_lot_id}, created {len(rejected_trays)} tray(s)")
+
+        except Exception as e:
+            logger.error(f"[AUDIT CHILD LOT FAILED] {str(e)}")
 
     logger.info(f"[AUDIT ACTION] [DONE] type={submission_type}, lot_id={lot_id}, moved_to={stock.next_process_module}")
 

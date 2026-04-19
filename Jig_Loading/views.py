@@ -526,8 +526,9 @@ class JigView(TemplateView):
 								d['lot_status'] = 'Partial Draft'
 								d['lot_status_class'] = 'lot-status-partial-draft'
 							else:
-								d['lot_status'] = 'Released'
-								d['lot_status_class'] = 'lot-status-released'
+								# FIXED: Excess lots should be "Yet to Start" when no draft exists
+								d['lot_status'] = 'Yet to Start'
+								d['lot_status_class'] = 'lot-status-yet'
 						elif d.get('stock_lot_id') in draft_lot_ids:
 							d['lot_status'] = 'Draft'
 							d['lot_status_class'] = 'lot-status-draft'
@@ -2126,6 +2127,103 @@ def build_unified_tray_table_multi_model(multi_model_allocation, computed, lot_q
 	return rows
 
 
+def get_next_jig_cycle(jig_id, lot_id):
+	"""Calculate the next jig cycle count based on completed operations.
+
+	CRITICAL: Lot-aware cycle tracking + draft detection across all lots.
+	Checks BOTH Jig.drafted flag AND draft records in JigCompleted.
+
+	Logic:
+	- Check if jig has ANY draft record (across all lots) OR jig.drafted=True
+	- If drafted by different lot → return 'drafted_by_other_lot': True
+	- Count submitted JigCompleted records for THIS (jig_id, lot_id) pair
+	- Cycle starts at 1 for first use, increments after unload/reload
+
+	Args:
+		jig_id: The jig identifier
+		lot_id: The lot ID attempting to use this jig
+
+	Returns:
+		{
+			'cycle_count': cycle number per (jig_id, lot_id) pair,
+			'is_loaded': boolean,
+			'can_reuse': boolean,
+			'is_drafted': True if jig has draft in ANY lot,
+			'drafted_by_other_lot': True if drafted by different lot
+		}
+	"""
+	try:
+		# Check if jig exists in master table
+		jig_obj = Jig.objects.filter(jig_qr_id=jig_id).first()
+		if not jig_obj:
+			return {
+				'cycle_count': 1,
+				'is_loaded': False,
+				'can_reuse': True,
+				'is_drafted': False,
+				'drafted_by_other_lot': False
+			}
+
+		# CRITICAL: Check if jig has drafted flag set in Jig model
+		# This is the primary indicator that draft is active
+		has_draft = jig_obj.drafted
+		drafted_by_other_lot = False
+
+		if has_draft:
+			# If drafted flag is set, check which lot has the draft
+			# by looking at jig_obj.lot_id
+			if jig_obj.lot_id and jig_obj.lot_id != lot_id:
+				drafted_by_other_lot = True
+		else:
+			# Fallback: Check draft records in JigCompleted (for consistency)
+			draft_records = JigCompleted.objects.filter(
+				jig_id=jig_id,
+				draft_status__in=['draft', 'active']
+			)
+			has_draft = draft_records.exists()
+			if has_draft:
+				current_lot_draft = draft_records.filter(lot_id=lot_id).exists()
+				drafted_by_other_lot = not current_lot_draft
+
+		# Current load status (independent of lot)
+		is_loaded = jig_obj.is_loaded
+
+		# Count SUBMITTED operations for THIS specific (jig_id, lot_id) pair
+		# This makes cycle count per-lot
+		submitted_count = JigCompleted.objects.filter(
+			jig_id=jig_id,
+			lot_id=lot_id,
+			draft_status='submitted'
+		).count()
+
+		# Cycle = submitted operations + 1 (first use = 1)
+		next_cycle = submitted_count + 1
+
+		# Can reuse only if:
+		# 1. NOT currently loaded (is_loaded = False)
+		# 2. NO draft records OR the draft belongs to the SAME lot (same-lot re-entry is allowed)
+		can_reuse = (not is_loaded) and (not has_draft or not drafted_by_other_lot)
+
+		return {
+			'cycle_count': next_cycle,
+			'is_loaded': is_loaded,
+			'can_reuse': can_reuse,
+			'is_drafted': has_draft,
+			'drafted_by_other_lot': drafted_by_other_lot
+		}
+
+	except Exception as e:
+		logging.exception(f"Error calculating jig cycle for {jig_id}, {lot_id}: {e}")
+		# Fallback
+		return {
+			'cycle_count': 1,
+			'is_loaded': False,
+			'can_reuse': True,
+			'is_drafted': False,
+			'drafted_by_other_lot': False
+		}
+
+
 def fetch_lot_data(lot_id, batch_id, jig_capacity_override=None):
 	"""Fetch lot qty, jig capacity, tray capacity, and model metadata from DB."""
 	lot_qty = 0
@@ -3441,6 +3539,23 @@ class JigSaveAPI(APIView):
 			if not Jig.objects.filter(jig_qr_id=jig_id).exists():
 				return Response({'status': 'error', 'message': f'Jig {jig_id} does not exist. Please scan a valid Jig ID from the Jig master.'}, status=status.HTTP_400_BAD_REQUEST)
 
+			# Jig reuse validation — prevent using loaded/drafted jigs
+			cycle_info = get_next_jig_cycle(jig_id, lot_id)
+			
+			# CRITICAL: Block if jig has draft in ANY lot
+			if cycle_info['is_drafted']:
+				return Response(
+					{'status': 'error', 'message': 'Drafted already'},
+					status=status.HTTP_409_CONFLICT
+				)
+			
+			# Block if jig is currently loaded
+			if not cycle_info['can_reuse']:
+				return Response(
+					{'status': 'error', 'message': 'This Jig ID is already in use. Unload first before reuse.'},
+					status=status.HTTP_409_CONFLICT
+				)
+
 			# Jig uniqueness check
 			already_loaded = JigCompleted.objects.filter(
 				jig_id=jig_id, draft_status='submitted'
@@ -3554,6 +3669,19 @@ class JigSaveAPI(APIView):
 					'excess_qty': total_excess_qty,
 				}
 			)
+			
+			# CRITICAL: Set Jig.drafted flag when action='draft'
+			if action == 'draft' and jig_id:
+				try:
+					jig_obj = Jig.objects.filter(jig_qr_id=jig_id).first()
+					if jig_obj:
+						jig_obj.drafted = True
+						jig_obj.lot_id = lot_id
+						jig_obj.batch_id = batch_id
+						jig_obj.save()
+						logging.info(f'JigSaveAPI: Set Jig.drafted=True for {jig_id} in lot {lot_id}')
+				except Exception as e:
+					logging.exception(f'JigSaveAPI: Failed to set drafted flag: {e}')
 			logging.info(json.dumps({
 				'event': 'JIG_SAVE_STORED',
 				'action': action, 'draft_status': draft_status,
@@ -3834,18 +3962,66 @@ class JigSaveAPI(APIView):
 # JIG ID VALIDATION API — lightweight existence check
 # =============================================================================
 class JigValidateAPI(APIView):
-	"""GET /api/jig/validate/?jig_id=J098-0001
-	Returns {exists: true/false} for real-time frontend validation.
-	No side-effects — read-only check against Jig master table.
+	"""GET /api/jig/validate/?jig_id=J098-0001&lot_id=LID123
+	Returns validation info including existence, cycle count, draft status, and reuse status.
+	CRITICAL: lot_id parameter required for lot-aware draft checking.
 	"""
 	permission_classes = [IsAuthenticated]
 
 	def get(self, request):
 		jig_id = (request.GET.get('jig_id', '') or '').strip().upper()
+		lot_id = (request.GET.get('lot_id', '') or '').strip()
+
 		if not jig_id:
-			return Response({'exists': False, 'message': 'jig_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+			return Response(
+				{'exists': False, 'message': 'jig_id is required'},
+				status=status.HTTP_400_BAD_REQUEST
+			)
+
+		if not lot_id:
+			return Response(
+				{'exists': False, 'message': 'lot_id is required'},
+				status=status.HTTP_400_BAD_REQUEST
+			)
+
+		# Check if jig exists in master table
 		exists = Jig.objects.filter(jig_qr_id=jig_id).exists()
-		return Response({'exists': exists, 'jig_id': jig_id})
+
+		if not exists:
+			return Response({
+				'exists': False,
+				'jig_id': jig_id,
+				'lot_id': lot_id,
+				'cycle_count': 1,
+				'can_reuse': True,
+				'is_loaded': False,
+				'is_drafted': False,
+				'drafted_by_other_lot': False,
+				'message': 'Jig ID not found in master table'
+			})
+
+		# Get cycle count and reuse validation (NOW LOT-AWARE)
+		cycle_info = get_next_jig_cycle(jig_id, lot_id)
+
+		response_data = {
+			'exists': True,
+			'jig_id': jig_id,
+			'lot_id': lot_id,
+			'cycle_count': cycle_info['cycle_count'],
+			'can_reuse': cycle_info['can_reuse'],
+			'is_loaded': cycle_info['is_loaded'],
+			'is_drafted': cycle_info['is_drafted'],
+			'drafted_by_other_lot': cycle_info['drafted_by_other_lot']
+		}
+
+		# CRITICAL: Block jigs drafted by a DIFFERENT lot only
+		if cycle_info['is_drafted'] and cycle_info['drafted_by_other_lot']:
+			response_data['message'] = 'Drafted already'
+			response_data['can_reuse'] = False
+		elif not cycle_info['can_reuse'] and cycle_info['is_loaded']:
+			response_data['message'] = 'This Jig ID is already in use. Unload first before reuse.'
+
+		return Response(response_data)
 
 
 # =============================================================================

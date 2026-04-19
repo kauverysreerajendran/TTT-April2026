@@ -1991,11 +1991,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update Q circle instantly based on verified status
             const qCircle = row.querySelector('div[title="Quantity"]');
             if (qCircle) {
-              qCircle.style.backgroundColor = verified ? '#0c8249' : '#bdbdbd';
+              qCircle.style.setProperty('background-color', verified ? '#0c8249' : '#bdbdbd', 'important');
             }
           }
 
           console.log(`[BrassQC] Verified lot ${lotId} ✓`);
+          // Reload page so Q circle reflects updated state without manual refresh
+          setTimeout(() => window.location.reload(), 500);
         } else {
           cb.checked = !verified; // revert on failure
           alert('Failed to save: ' + (result.error || 'Unknown error'));
