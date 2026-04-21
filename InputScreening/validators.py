@@ -292,7 +292,80 @@ def parse_manual_submit_payload(data: dict) -> dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DRAFT PAYLOAD VALIDATOR – tolerant of incomplete state
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _parse_rejection_entries_lenient(raw) -> list:
+    """Like parse_rejection_entries but allows empty list / 0 qty for drafts."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValidationError("rejection_entries must be a JSON array.")
+    cleaned = []
+    seen_reason_ids: set = set()
+    for idx, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValidationError(f"rejection_entries[{idx}] must be an object.")
+        rid = clean_str(entry.get("reason_id"), max_len=20)
+        if not rid:
+            continue
+        if rid in seen_reason_ids:
+            raise ValidationError(f"Duplicate reason_id {rid}.")
+        seen_reason_ids.add(rid)
+        try:
+            qty = int(entry.get("qty") or 0)
+        except (TypeError, ValueError):
+            raise ValidationError(f"rejection_entries[{idx}].qty must be an integer.")
+        if qty < 0:
+            raise ValidationError(f"rejection_entries[{idx}].qty cannot be negative.")
+        cleaned.append({
+            "reason_id": rid,
+            "reason_text": clean_str(entry.get("reason_text", ""), max_len=100),
+            "qty": qty,
+        })
+    return cleaned
 
 
+def parse_draft_payload(data: dict) -> dict:
+    """Parse the Save-Draft payload.
+
+    Same shape as ``parse_manual_submit_payload`` but every field except
+    ``lot_id`` is optional – the draft stores whatever the operator has
+    entered so far, even if scans / quantities are incomplete.
+    """
+    lot_id = clean_str(data.get("lot_id"), max_len=100)
+    if not lot_id:
+        raise ValidationError("lot_id is required.")
+
+    entries = _parse_rejection_entries_lenient(data.get("rejection_entries"))
+
+    reject_assignments = _parse_assignment_list(
+        data.get("reject_assignments"), "reject_assignments", allow_reason=True
+    )
+    accept_assignments = _parse_assignment_list(
+        data.get("accept_assignments"), "accept_assignments", allow_reason=False
+    )
+
+    raw_delink = data.get("delink_tray_ids", [])
+    if raw_delink is None:
+        delink_ids = []
+    elif isinstance(raw_delink, list):
+        delink_ids = [
+            clean_str(t, max_len=100) for t in raw_delink if clean_str(t, max_len=100)
+        ]
+    else:
+        raise ValidationError("delink_tray_ids must be a list.")
+
+    remarks = clean_str(data.get("remarks", ""), max_len=500)
+
+    return {
+        "lot_id": lot_id,
+        "rejection_entries": entries,
+        "reject_assignments": reject_assignments,
+        "delink_tray_ids": delink_ids,
+        "accept_assignments": accept_assignments,
+        "remarks": remarks,
+    }
 
 

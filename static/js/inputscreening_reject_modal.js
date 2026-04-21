@@ -478,9 +478,29 @@
     var rows = $("isrm-delink-rows");
     if (!rows) return;
 
-    if (state.counters.delinkAvailable <= 0) {
+    // Remaining delink slots = emptied count − active trays already reused
+    // in reject scans. Once reject fully consumes the emptied pool there
+    // is nothing left to delink, so the whole section hides.
+    var activeIds = new Set((state.activeTrays || []).map(function (t) {
+      return (t.tray_id || "").toUpperCase();
+    }));
+    var reusedInReject = state.rejectScans.filter(function (s) {
+      return s && activeIds.has((s.tray_id || "").toUpperCase());
+    }).length;
+    var remainingDelink = Math.max(
+      0,
+      (state.counters.delinkAvailable || 0) - reusedInReject
+    );
+
+    // Drop any already-scanned delink rows that no longer fit inside the
+    // shrunken pool (e.g. the user just reused one more emptied tray).
+    if (state.delinkScans.length > remainingDelink) {
+      state.delinkScans = state.delinkScans.slice(0, remainingDelink);
+    }
+
+    if (remainingDelink <= 0 && state.delinkScans.length === 0) {
       $("isrm-sec-delink").style.display = "none";
-      state.delinkScans = [];
+      rows.innerHTML = "";
       return;
     }
     $("isrm-sec-delink").style.display = "";
@@ -494,7 +514,7 @@
         '</div>';
     }).join("");
 
-    if (state.delinkScans.length < state.counters.delinkAvailable) {
+    if (state.delinkScans.length < remainingDelink) {
       var nextIdx = state.delinkScans.length + 1;
       var disabled = !rejectStepDone();
       html += '<div class="isrm-delink-row">' +
@@ -760,20 +780,58 @@
 
   function saveDraft() {
     if (!state.lotId) return;
+    var entries = collectRejectionEntries();
     var payload = {
-      ts: Date.now(),
-      reasons: collectRejectionEntries(),
-      rejectScans: state.rejectScans,
-      acceptScans: state.acceptScans,
-      delinkScans: state.delinkScans,
+      lot_id: state.lotId,
+      rejection_entries: entries,
+      reject_assignments: state.rejectSlots.map(function (slot, i) {
+        var s = state.rejectScans[i];
+        return s ? { tray_id: s.tray_id, reason_id: slot.reason_id } : null;
+      }).filter(Boolean),
+      accept_assignments: state.acceptSlots.map(function (_, i) {
+        var s = state.acceptScans[i];
+        return s ? { tray_id: s.tray_id } : null;
+      }).filter(Boolean),
+      delink_tray_ids: (state.delinkScans || []).map(function (d) { return d.tray_id; }),
       remarks: ($("isrm-remarks") || {}).value || "",
     };
+
+    // Local fallback – retained so UI state is recoverable if the network
+    // request fails before the backend acknowledges the draft.
     try {
-      window.localStorage.setItem(draftKey(), JSON.stringify(payload));
-      setInsight("success", "Draft saved locally.");
-    } catch (e) {
-      setInsight("error", "Could not save draft (storage full?).");
-    }
+      window.localStorage.setItem(draftKey(), JSON.stringify({
+        ts: Date.now(),
+        reasons: entries,
+        rejectScans: state.rejectScans,
+        acceptScans: state.acceptScans,
+        delinkScans: state.delinkScans,
+        remarks: payload.remarks,
+      }));
+    } catch (e) { /* storage full – ignore, backend is SSOT */ }
+
+    var draftBtn = $("isrm-draft-btn");
+    if (draftBtn) { draftBtn.disabled = true; draftBtn.textContent = "Saving…"; }
+    setInsight("busy", "Saving draft…");
+
+    fetch("/inputscreening/save_draft/", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrf() },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+      .then(function (resp) {
+        if (draftBtn) { draftBtn.disabled = false; draftBtn.textContent = "Save Draft"; }
+        if (!resp.ok || !resp.data.success) {
+          setInsight("error", (resp.data && resp.data.error) || "Draft save failed.");
+          return;
+        }
+        setInsight("success", "Draft saved.");
+      })
+      .catch(function () {
+        if (draftBtn) { draftBtn.disabled = false; draftBtn.textContent = "Save Draft"; }
+        setInsight("error", "Network error – draft stored locally only.");
+      });
   }
 
   function loadDraftIfAny() {

@@ -10,6 +10,7 @@ from .views import (
     IS_PickTable,
     IS_RejectModalContextAPI,
     IS_RejectTable,
+    IS_SaveDraftAPI,
     IS_ValidateScanAPI,
     IS_VerifyTrayAPI,
 )
@@ -49,5 +50,10 @@ urlpatterns = [
         'partial_submit_v2/',
         IS_PartialSubmitV2API.as_view(),
         name='IS_PartialSubmitV2API',
+    ),
+    path(
+        'save_draft/',
+        IS_SaveDraftAPI.as_view(),
+        name='IS_SaveDraftAPI',
     ),
 ]

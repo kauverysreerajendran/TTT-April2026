@@ -27,6 +27,25 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SUBMISSION FLAGS — update on the correct master table
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mark_lot_submitted_flags(lot_id: str) -> None:
+    """Flip the Input-Screening submission flags for ``lot_id``.
+
+    Historically this was attempted on ``ModelMasterCreation`` but those
+    columns live on ``TotalStockModel``. Using ``update()`` keeps the write
+    cheap and atomic – no-op if the lot has no matching row.
+    """
+    from modelmasterapp.models import TotalStockModel
+
+    TotalStockModel.objects.filter(lot_id=lot_id).update(
+        rejected_ip_stock=False,
+        few_cases_accepted_Ip_stock=True,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TRAY ID GENERATION
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -663,7 +682,6 @@ def finalize_submission(
     """
     from .selectors import get_lot_tray_context
     from .models import InputScreening_Submitted
-    from modelmasterapp.models import ModelMasterCreation
 
     ctx = get_lot_tray_context(lot_id, lock=True)
     if not ctx["found"]:
@@ -764,11 +782,10 @@ def finalize_submission(
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
 
-    # Mark the lot as submitted in the master
-    ModelMasterCreation.objects.filter(stock_lot_id=lot_id).update(
-        rejected_ip_stock=False,
-        few_cases_accepted_Ip_stock=True,
-    )
+    # Mark the lot as submitted in the master. The submission flags
+    # (rejected_ip_stock / few_cases_accepted_Ip_stock) live on
+    # TotalStockModel; ModelMasterCreation has no such columns.
+    _mark_lot_submitted_flags(lot_id)
 
     logger.info(
         "[IS][PARTIAL_SUBMIT] lot=%s submission_id=%s reject=%d accept=%d user=%s",
@@ -1099,7 +1116,6 @@ def finalize_submission_v2(
     """
     from .selectors import get_lot_tray_context
     from .models import InputScreening_Submitted
-    from modelmasterapp.models import ModelMasterCreation
 
     ctx = get_lot_tray_context(lot_id, lock=True)
     if not ctx["found"]:
@@ -1115,6 +1131,13 @@ def finalize_submission_v2(
     total_accept = lot_qty - total_reject
 
     _validate_reject_qty(total_reject, lot_qty)
+
+    # Any prior draft for this lot is superseded by the final submit.
+    # lot_id is UNIQUE on InputScreening_Submitted, so the draft row must
+    # be removed before we create the finalized row.
+    InputScreening_Submitted.objects.filter(
+        lot_id=lot_id, Draft_Saved=True, is_submitted=False
+    ).delete()
 
     # Re-derive the slot plan and validate user assignments against it.
     reject_slots = _build_reject_slots(rejection_entries, capacity)
@@ -1233,10 +1256,7 @@ def finalize_submission_v2(
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
 
-    ModelMasterCreation.objects.filter(stock_lot_id=lot_id).update(
-        rejected_ip_stock=False,
-        few_cases_accepted_Ip_stock=True,
-    )
+    _mark_lot_submitted_flags(lot_id)
 
     logger.info(
         "[IS][PARTIAL_SUBMIT_V2] lot=%s sub=%s reject=%d accept=%d delink=%d user=%s",
@@ -1252,5 +1272,142 @@ def finalize_submission_v2(
         "total_accept_qty": total_accept,
         "reject_trays": len(reject_alloc),
         "accept_trays": len(accept_alloc),
+        "delink_trays": len(delinked_ids),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAVE DRAFT – persist modal state "as is" without allocation validation
+# ─────────────────────────────────────────────────────────────────────────────
+
+@transaction.atomic
+def save_draft_partial_reject(
+    lot_id: str,
+    rejection_entries: List[Dict[str, Any]],
+    reject_assignments: List[Dict[str, Any]],
+    delink_tray_ids: List[str],
+    accept_assignments: List[Dict[str, Any]],
+    remarks: str,
+    user,
+) -> Dict[str, Any]:
+    """Persist the current Rejection-Window state as a draft.
+
+    Unlike ``finalize_submission_v2`` this helper performs **no** tray-scan
+    re-validation and **no** allocation math. It stores the payload exactly
+    as the operator left it so the modal can be re-opened later and the
+    user can resume where they stopped.
+
+    Uniqueness: ``InputScreening_Submitted.lot_id`` is UNIQUE, so a single
+    draft row per lot is kept.  If a draft already exists it is
+    overwritten; if a finalized row exists, saving a draft is rejected.
+    """
+    from .selectors import get_lot_tray_context
+    from .models import InputScreening_Submitted
+
+    ctx = get_lot_tray_context(lot_id, lock=True)
+    if not ctx["found"]:
+        raise ValueError(f"Lot {lot_id} not found.")
+
+    lot_qty: int = ctx["lot_qty"]
+    capacity: int = ctx["tray_capacity"] or 1
+    tray_type: Optional[str] = ctx["tray_type"]
+    active_trays: List[Dict] = ctx["active_trays"]
+    batch_id_val: str = ctx.get("batch_id", "")
+
+    # Block draft if this lot is already finalized.
+    existing = InputScreening_Submitted.objects.select_for_update().filter(
+        lot_id=lot_id
+    ).first()
+    if existing and existing.is_submitted:
+        raise ValueError(f"Lot {lot_id} is already submitted – cannot save draft.")
+
+    total_reject = sum(int(e.get("qty") or 0) for e in rejection_entries)
+    total_accept = max(0, lot_qty - total_reject)
+
+    # Build snapshots "as is" – no re-validation, no ID generation.
+    reject_trays_json = [
+        {
+            "tray_id": _norm(a.get("tray_id")),
+            "reason_id": a.get("reason_id") or "",
+        }
+        for a in (reject_assignments or [])
+        if _norm(a.get("tray_id"))
+    ]
+    accept_trays_json = [
+        {"tray_id": _norm(a.get("tray_id"))}
+        for a in (accept_assignments or [])
+        if _norm(a.get("tray_id"))
+    ]
+    delinked_ids = [_norm(t) for t in (delink_tray_ids or []) if _norm(t)]
+
+    rejection_reasons_json = {
+        e["reason_id"]: {
+            "reason": e.get("reason_text", ""),
+            "qty": int(e.get("qty") or 0),
+        }
+        for e in rejection_entries
+        if e.get("reason_id")
+    }
+
+    allocation_preview_json = {
+        "total_reject_qty": total_reject,
+        "total_accept_qty": total_accept,
+        "delinked_tray_ids": delinked_ids,
+        "reject_assignments": reject_trays_json,
+        "accept_assignments": accept_trays_json,
+    }
+
+    defaults = {
+        "batch_id": batch_id_val,
+        "module_name": "Input Screening",
+        "plating_stock_no": ctx.get("plating_stk_no"),
+        "model_no": ctx.get("model_no"),
+        "tray_type": tray_type,
+        "tray_capacity": capacity,
+        "original_lot_qty": lot_qty,
+        "submitted_lot_qty": lot_qty,
+        "accepted_qty": total_accept,
+        "rejected_qty": total_reject,
+        "active_trays_count": len(active_trays),
+        "reject_trays_count": len(reject_trays_json),
+        "accept_trays_count": len(accept_trays_json),
+        "remarks": remarks or "",
+        "is_partial_accept": False,
+        "is_partial_reject": False,
+        "is_full_accept": False,
+        "is_full_reject": False,
+        "is_active": True,
+        "is_submitted": False,
+        "Draft_Saved": True,
+        "submitted_at": None,
+        "all_trays_json": reject_trays_json + accept_trays_json,
+        "accepted_trays_json": accept_trays_json,
+        "rejected_trays_json": reject_trays_json,
+        "rejection_reasons_json": rejection_reasons_json,
+        "allocation_preview_json": allocation_preview_json,
+        "delink_trays_json": [{"tray_id": tid} for tid in delinked_ids],
+        "created_by": user if getattr(user, "is_authenticated", False) else None,
+    }
+
+    submission, created = InputScreening_Submitted.objects.update_or_create(
+        lot_id=lot_id,
+        defaults=defaults,
+    )
+
+    logger.info(
+        "[IS][SAVE_DRAFT] lot=%s sub=%s created=%s reject=%d accept=%d user=%s",
+        lot_id, submission.id, created, total_reject, total_accept,
+        getattr(user, "username", "anonymous"),
+    )
+
+    return {
+        "success": True,
+        "lot_id": lot_id,
+        "submission_id": submission.id,
+        "created": created,
+        "total_reject_qty": total_reject,
+        "total_accept_qty": total_accept,
+        "reject_trays": len(reject_trays_json),
+        "accept_trays": len(accept_trays_json),
         "delink_trays": len(delinked_ids),
     }

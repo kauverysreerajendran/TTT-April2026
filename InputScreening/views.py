@@ -27,10 +27,12 @@ from .services_reject import (
     get_reject_modal_context,
     finalize_submission,
     finalize_submission_v2,
+    save_draft_partial_reject,
     validate_scanned_tray,
 )
 from .validators import (
     ValidationError,
+    parse_draft_payload,
     parse_lot_tray,
     parse_manual_submit_payload,
     parse_preview_payload,
@@ -364,3 +366,51 @@ class IS_PartialSubmitV2API(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         return Response(result, status=status.HTTP_201_CREATED)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAVE DRAFT — PERSIST MODAL STATE "AS IS"
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_SaveDraftAPI(APIView):
+    """POST: persist the current Rejection Window state as a draft.
+
+    Same payload shape as ``IS_PartialSubmitV2API``, but every field other
+    than ``lot_id`` is optional. No tray-scan re-validation is performed –
+    the draft is stored exactly as submitted so the modal can be resumed.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            parsed = parse_draft_payload(request.data)
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = save_draft_partial_reject(
+                lot_id=parsed["lot_id"],
+                rejection_entries=parsed["rejection_entries"],
+                reject_assignments=parsed["reject_assignments"],
+                delink_tray_ids=parsed["delink_tray_ids"],
+                accept_assignments=parsed["accept_assignments"],
+                remarks=parsed["remarks"],
+                user=request.user,
+            )
+        except ValueError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except Exception:
+            logger.exception(
+                "[IS][SAVE_DRAFT] Unexpected error for lot=%s",
+                parsed.get("lot_id"),
+            )
+            return Response(
+                {"success": False, "error": "Draft save failed due to an internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(result, status=status.HTTP_200_OK)
