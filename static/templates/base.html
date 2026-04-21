@@ -2690,5 +2690,22 @@
         });
       });
       </script>
+
+      <script nonce="{{ csp_nonce }}">
+document.addEventListener('keydown', function(e) {
+
+    // CTRL + SHIFT + R
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+
+        if (typeof hardRefreshPage === 'function') {
+            hardRefreshPage();
+        } else {
+            location.reload(true);
+        }
+    }
+
+});
+</script>
    </body>
 </html>

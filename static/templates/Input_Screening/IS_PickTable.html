@@ -563,16 +563,7 @@
                   <div id="trayScanDetails">
                      <!-- ════════════════ IS REJECT MODAL CONTENT ════════════════ -->
                      <div id="isRejectModalBody" class="is-reject-body">
-                        <!-- Running info banner -->
-                        <div class="is-reject-banner" aria-hidden="true">
-                           <div class="is-reject-banner-track">
-                              <span>✔ Enter reject quantity to begin</span>
-                              <span>✔ Tap or scan tray to assign</span>
-                              <span>✔ Top tray is auto-prioritised</span>
-                              <span>✔ Lot Rejection requires a remark</span>
-                              <span>✔ Backend computes the final split — no manual math</span>
-                           </div>
-                        </div>
+
                         <!-- Lot summary card (LOT ID intentionally hidden from UI) -->
                         <div class="is-reject-summary">
                            <div class="is-reject-summary-cell"><span class="lbl">Tray Type</span><span class="val" id="isRejTrayType">—</span></div>
@@ -589,8 +580,7 @@
                               <span class="val" id="isRejBalanceAccept">0</span>
                            </div>
                         </div>
-                        <!-- Active tray chip strip (dynamic from backend) -->
-                        <div id="isRejActiveTraysStrip" class="is-reject-tray-strip" style="display:none;"></div>
+                       
                         <!-- Reasons grid -->
                         <div class="is-reject-section">
                            <div class="is-reject-section-title">📋 Enter Rejection Quantities</div>
@@ -598,6 +588,8 @@
                               <div class="is-reject-loading">Loading rejection reasons…</div>
                            </div>
                         </div>
+                         <!-- Active tray chip strip (dynamic from backend) -->
+                        <div id="isRejActiveTraysStrip" class="is-reject-tray-strip" style="display:none;"></div>
                         <!-- Tray allocation preview -->
                         <div class="is-reject-section" id="isRejAllocSection" style="display:none;">
                            <div class="is-reject-section-title">🧮 Tray Allocation Preview</div>
@@ -783,12 +775,7 @@
           </div>
         </div>
         <div style="display:flex; flex-direction:row; align-items:center; gap:12px;">
-          <div id="tvm-running-info"
-               style="font-size:11px; text-align:right; min-height:28px; max-width:210px;
-                      word-break:break-word; background:#f0f9fa; border:1px solid #c4e7eb;
-                      border-radius:8px; padding:5px 10px; line-height:1.5;
-                      transition:background .3s, border-color .3s;">
-          </div>
+
           <button id="closeTrayVerificationModal"
                   style="background:#f0f5f6; border:1px solid #d0dfe1; color:#028084;
                          width:36px; height:36px; border-radius:50%; font-size:22px;

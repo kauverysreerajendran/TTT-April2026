@@ -10,6 +10,7 @@ from .views import (
     IS_RejectionReasonsAPI,
     IS_RejectSubmitAPI,
     IS_RejectTable,
+    IS_ValidateTrayAPI,
     IS_VerifyTrayAPI,
 )
 
@@ -26,5 +27,6 @@ urlpatterns = [
     path('rejection_reasons/', IS_RejectionReasonsAPI.as_view(), name='IS_RejectionReasonsAPI'),
     path('reject_context/', IS_RejectContextAPI.as_view(), name='IS_RejectContextAPI'),
     path('reject_allocate/', IS_RejectAllocateAPI.as_view(), name='IS_RejectAllocateAPI'),
+    path('validate_reject_tray/', IS_ValidateTrayAPI.as_view(), name='IS_ValidateTrayAPI'),
     path('reject_submit/', IS_RejectSubmitAPI.as_view(), name='IS_RejectSubmitAPI'),
 ]

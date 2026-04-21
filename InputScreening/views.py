@@ -187,6 +187,27 @@ class IS_RejectAllocateAPI(APIView):
         return Response(result, status=http)
 
 
+class IS_ValidateTrayAPI(APIView):
+    """Real-time tray ID validation for rejection workflow.
+
+    Called by the modal as the operator scans/types tray IDs so invalid
+    trays are surfaced immediately (before submit attempt).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .services import validate_tray_availability
+        tray_id = request.GET.get("tray_id", "").strip()
+        lot_id = request.GET.get("lot_id", "").strip()
+        if not tray_id or not lot_id:
+            return Response(
+                {"valid": False, "error": "tray_id and lot_id required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = validate_tray_availability(tray_id, lot_id)
+        return Response(result)
+
+
 class IS_RejectSubmitAPI(APIView):
     """Atomic submit of the reject decision (idempotent per lot)."""
     permission_classes = [IsAuthenticated]

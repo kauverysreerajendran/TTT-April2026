@@ -306,6 +306,23 @@ def record_tray_verification(lot_id: str, tray_id: str, user) -> Tuple[Dict[str,
     pending = total - verified
     all_verified = total > 0 and pending == 0
 
+    # When every tray for the lot is verified, mark the parent lot as
+    # quantity-verified so the Pick Table's "Q" badge in Process Status
+    # turns full green (template reads ``ip_person_qty_verified``).
+    # Idempotent — safe to call repeatedly.
+    if all_verified:
+        try:
+            from modelmasterapp.models import ModelMasterCreation as _MMC
+            _MMC.objects.filter(stock_lot_id=lot_id).update(
+                ip_person_qty_verified=True,
+                tray_verify=True,
+            )
+        except Exception:  # pragma: no cover - defensive only
+            logger.warning(
+                "[IS][VERIFY] could not flip ip_person_qty_verified for lot=%s",
+                lot_id,
+            )
+
     total_qty = (
         _DPH.objects.filter(lot_id=lot_id, delink_tray=False)
         .aggregate(s=_Sum("tray_quantity"))["s"] or 0
@@ -506,30 +523,41 @@ def compute_reject_allocation(
 
     accept_qty = max(total_qty - reject_qty, 0)
 
-    # ── Phase A: ordered physical trays (top first, then id-asc) ─────
+    # ── Phase A: ordered physical trays for reject consumption ──────
+    # Manufacturing rule: drain SMALLEST trays first so partial trays
+    # finish first (no half-full trays left behind). Top tray takes
+    # priority within equal-qty groups so the operator's first physical
+    # tray is consumed first when sizes match.
     active = get_active_dp_trays(lot_id)
+    consume_order = sorted(
+        active,
+        key=lambda t: (
+            t.get("tray_quantity") or 0,           # smallest qty first
+            0 if t.get("top_tray") else 1,         # top first as tie-break
+        ),
+    )
+    # Display order for the active-tray strip keeps TOP first (UI-stable).
     active_sorted = sorted(
         active, key=lambda t: (0 if t.get("top_tray") else 1,)
-    )  # stable sort preserves id-asc from selector
+    )
 
     # ── Phase B + C: sequential physical split ───────────────────────
     reject_physical: List[Dict[str, Any]] = []
     accept_physical: List[Dict[str, Any]] = []
     rem = reject_qty
-    for t in active_sorted:
+    consumed_ids: set = set()
+    for t in consume_order:
         tqty = t.get("tray_quantity") or 0
         is_top = bool(t.get("top_tray"))
         tid = t["tray_id"]
         if rem <= 0:
-            if tqty > 0:
-                accept_physical.append(
-                    {"tray_id": tid, "qty": tqty, "is_top": is_top, "partial": False}
-                )
-        elif rem >= tqty:
+            break
+        if rem >= tqty:
             # Whole tray drained → eligible for reuse on the reject side.
             reject_physical.append(
                 {"tray_id": tid, "qty": tqty, "is_top": is_top, "consumed": "full"}
             )
+            consumed_ids.add(tid)
             rem -= tqty
         else:
             # Tray splits: rem qty reject, remainder stays on accept side.
@@ -544,7 +572,20 @@ def compute_reject_allocation(
                     "partial": True,
                 }
             )
+            consumed_ids.add(tid)
             rem = 0
+    # Trays not touched by the reject pull belong to the accept side
+    # (kept in display order: top first).
+    for t in active_sorted:
+        tid = t["tray_id"]
+        if tid in consumed_ids:
+            continue
+        tqty = t.get("tray_quantity") or 0
+        if tqty > 0:
+            accept_physical.append(
+                {"tray_id": tid, "qty": tqty, "is_top": bool(t.get("top_tray")),
+                 "partial": False}
+            )
 
     # ── Phase D: reusable pool = trays fully drained by reject ───────
     reusable_pool = [r["tray_id"] for r in reject_physical if r.get("consumed") == "full"]
@@ -615,18 +656,52 @@ def compute_reject_allocation(
             "partial": ap.get("partial", False),
         })
 
-    # Delink candidates (separate workflow step on the floor).
+    # ── Delink candidates ───────────────────────────────────────────
+    # Two sources, merged & de-duplicated by tray_id (preserves order:
+    # already-delinked first, then newly-emptied):
+    #   1. Trays previously delinked in DB (`delink_tray=True`).
+    #   2. Trays that became physically empty in *this* reject preview
+    #      (Phase D: ``consumed == 'full'``). These are not yet flagged
+    #      in DB but the operator can delink them now because they hold
+    #      zero stock after the rejection is committed.
     delink_candidates: List[Dict[str, Any]] = []
+    seen_delink: set = set()
     try:
         from DayPlanning.models import DPTrayId_History
-        delink_candidates = list(
+        existing = list(
             DPTrayId_History.objects
             .filter(lot_id=lot_id, delink_tray=True)
             .order_by("id")
             .values("tray_id", "tray_quantity")
         )
+        for d in existing:
+            tid = d.get("tray_id")
+            if tid and tid not in seen_delink:
+                seen_delink.add(tid)
+                delink_candidates.append({
+                    "tray_id": tid,
+                    "tray_quantity": d.get("tray_quantity") or 0,
+                    "source": "existing",
+                })
     except Exception:  # pragma: no cover
         logger.warning("[IS][REJECT] could not load delink candidates for lot=%s", lot_id)
+
+    # Newly-emptied trays from the current reject pull are eligible for
+    # delink even though their DB flag has not been flipped yet. Surface
+    # them so the modal shows the correct ``Delink Trays Available``
+    # count instead of zero.
+    for r in reject_physical:
+        if r.get("consumed") != "full":
+            continue
+        tid = r.get("tray_id")
+        if not tid or tid in seen_delink:
+            continue
+        seen_delink.add(tid)
+        delink_candidates.append({
+            "tray_id": tid,
+            "tray_quantity": r.get("qty") or 0,
+            "source": "newly_emptied",
+        })
 
     return {
         "success": True,
@@ -662,6 +737,109 @@ def compute_reject_allocation(
         },
         "auto_assign_tray_ids": False,
     }
+
+
+def validate_tray_availability(tray_id: str, lot_id: str) -> Dict[str, Any]:
+    """Check if a tray ID is available for use in rejection workflow.
+
+    Returns one of::
+
+        {"valid": True,  "tray_status": "reused", "reason": ""}
+        {"valid": True,  "tray_status": "new",    "reason": ""}
+        {"valid": False, "tray_status": "invalid","reason": "<why>"}
+
+    ``tray_status`` is the **single source of truth** the modal renders as a
+    badge (``REUSED TRAY`` / ``NEW TRAY`` / ``INVALID TRAY``). The legacy
+    ``error`` and ``suggestions`` keys are intentionally dropped — the
+    factory ergonomics rule is that the system **never recommends a tray
+    ID**; the operator decides physically.
+
+    Rules (pool-based validation — operator can use any eligible tray):
+      * If tray already exists in ``DPTrayId_History`` and belongs to *this*
+        lot → ``reused``.
+      * If tray does not exist anywhere and matches the ``XX-A#####``
+        pattern → ``new``.
+      * Otherwise (belongs to another lot, occupied in IS by another lot,
+        bad format) → ``invalid``.
+    """
+    from DayPlanning.models import DPTrayId_History
+    from .models import IPTrayId
+    import re
+
+    tray_id = (tray_id or "").strip().upper()
+    if not tray_id:
+        return {"valid": False, "tray_status": "invalid", "reason": "tray_id is required"}
+
+    # Canonical new tray pattern (XX-A#####)
+    TRAY_PATTERN = re.compile(r"^[A-Z]{2}-A\d{5}$")
+
+    dp_tray = DPTrayId_History.objects.filter(tray_id=tray_id).first()
+    if dp_tray:
+        # Tray exists — must be the same lot to be a legal reuse.
+        if dp_tray.lot_id and dp_tray.lot_id != lot_id:
+            return {
+                "valid": False,
+                "tray_status": "invalid",
+                "reason": f"Tray belongs to lot {dp_tray.lot_id}",
+            }
+        tray_status = "reused"
+    else:
+        if not TRAY_PATTERN.match(tray_id):
+            return {
+                "valid": False,
+                "tray_status": "invalid",
+                "reason": "Invalid format (expected XX-A#####)",
+            }
+        tray_status = "new"
+
+    # Cross-module occupancy check (another lot already using the ID in IS).
+    ip_occupied = IPTrayId.objects.filter(
+        tray_id=tray_id,
+        rejected_tray=False,
+        delink_tray=False,
+        lot_id__isnull=False,
+    ).exclude(lot_id=lot_id).exists()
+    if ip_occupied:
+        return {
+            "valid": False,
+            "tray_status": "invalid",
+            "reason": "Tray occupied in Input Screening",
+        }
+
+    return {"valid": True, "tray_status": tray_status, "reason": ""}
+
+
+def _get_eligible_tray_suggestions(lot_id: str, limit: int = 3) -> List[str]:
+    """Return up to ``limit`` eligible tray IDs from the requesting lot.  
+    
+    Priority:  
+      1. Reusable trays (delink_tray=True OR tray_quantity=0)  
+      2. Active trays with stock (for reference)  
+    """
+    from django.db.models import Q
+    from DayPlanning.models import DPTrayId_History
+    
+    # Fetch eligible trays: delinked or zero qty (reusable)
+    eligible = list(
+        DPTrayId_History.objects.filter(
+            lot_id=lot_id,
+        ).filter(
+            Q(delink_tray=True) | Q(tray_quantity=0)
+        ).order_by("id").values_list("tray_id", flat=True)[:limit]
+    )
+    
+    # If not enough, add active trays with stock
+    if len(eligible) < limit:
+        active = list(
+            DPTrayId_History.objects.filter(
+                lot_id=lot_id,
+                delink_tray=False,
+                tray_quantity__gt=0,
+            ).order_by("-top_tray", "id").values_list("tray_id", flat=True)[:(limit - len(eligible))]
+        )
+        eligible.extend(active)
+    
+    return eligible
 
 
 @transaction.atomic
