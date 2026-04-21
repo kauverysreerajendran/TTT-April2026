@@ -48,177 +48,251 @@ def require_lot_id(value) -> str:
     return lot_id
 
 
-# ---------------------------------------------------------------------------
-# Reject-window validators
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# REJECT PAYLOAD VALIDATORS
+# ─────────────────────────────────────────────────────────────────────────────
 
-_MAX_REASONS = 50  # Defensive cap — IS rarely has more than ~12 reasons.
+def parse_rejection_entries(raw_entries) -> list:
+    """Validate and normalise the rejection_entries list from a request body.
+
+    Expected input:
+        [{"reason_id": "R01", "reason_text": "SCRATCH", "qty": 10}, ...]
+
+    Returns a list of cleaned dicts.  Raises ``ValidationError`` on any issue.
+    """
+    if not isinstance(raw_entries, list):
+        raise ValidationError("rejection_entries must be a JSON array.")
+    if not raw_entries:
+        raise ValidationError("rejection_entries cannot be empty.")
+
+    seen_reason_ids: set = set()
+    cleaned = []
+    for idx, entry in enumerate(raw_entries):
+        if not isinstance(entry, dict):
+            raise ValidationError(
+                f"rejection_entries[{idx}] must be an object."
+            )
+
+        reason_id = clean_str(entry.get("reason_id"), max_len=20)
+        reason_text = clean_str(entry.get("reason_text"), max_len=255)
+        qty_raw = entry.get("qty")
+
+        if not reason_id:
+            raise ValidationError(
+                f"rejection_entries[{idx}]: reason_id is required."
+            )
+        if reason_id in seen_reason_ids:
+            raise ValidationError(
+                f"Duplicate reason_id '{reason_id}' in rejection_entries."
+            )
+        seen_reason_ids.add(reason_id)
+
+        try:
+            qty = int(qty_raw)
+        except (TypeError, ValueError):
+            raise ValidationError(
+                f"rejection_entries[{idx}]: qty must be an integer, got {qty_raw!r}."
+            )
+        if qty <= 0:
+            raise ValidationError(
+                f"rejection_entries[{idx}]: qty must be > 0, got {qty}."
+            )
+
+        cleaned.append(
+            {"reason_id": reason_id, "reason_text": reason_text, "qty": qty}
+        )
+
+    return cleaned
 
 
-def _coerce_int(value, *, field: str, minimum: int = 0) -> int:
+def parse_delink_count(value) -> int:
+    """Parse and validate delink_count from a request body."""
     try:
-        n = int(value)
+        count = int(value) if value is not None else 0
     except (TypeError, ValueError):
-        raise ValidationError(f"{field} must be an integer")
-    if n < minimum:
-        raise ValidationError(f"{field} must be >= {minimum}")
-    return n
+        raise ValidationError("delink_count must be an integer.")
+    if count < 0:
+        raise ValidationError("delink_count cannot be negative.")
+    return count
 
 
-def parse_reason_quantities(payload) -> Tuple[Dict[int, int], int]:
-    """Validate the ``reasons`` array sent from the reject modal.
+def parse_reject_submit_payload(data: dict) -> dict:
+    """Parse and validate the full submit payload for partial accept/reject.
 
-    Expected shape::
+    Expected fields:
+        lot_id           (str)
+        rejection_entries ([{reason_id, reason_text, qty}])
+        delink_count     (int, default 0)
+        remarks          (str, optional)
 
-        {"reasons": [{"reason_id": 7, "qty": 17}, {"reason_id": 8, "qty": 5}]}
-
-    Returns ``({reason_id: qty}, total_reject_qty)``. Reasons with
-    ``qty == 0`` are silently dropped — the modal sends every reason row
-    so the user can see them all.
+    Returns a dict of cleaned values.
     """
-    raw = payload.get("reasons")
-    if raw is None:
-        raise ValidationError("reasons is required")
-    if not isinstance(raw, list):
-        raise ValidationError("reasons must be a list")
-    if len(raw) > _MAX_REASONS:
-        raise ValidationError("too many rejection reasons")
+    lot_id = clean_str(data.get("lot_id"), max_len=100)
+    if not lot_id:
+        raise ValidationError("lot_id is required.")
 
-    out: Dict[int, int] = {}
-    total = 0
-    for idx, item in enumerate(raw):
-        if not isinstance(item, dict):
-            raise ValidationError(f"reasons[{idx}] must be an object")
-        rid = _coerce_int(item.get("reason_id"), field=f"reasons[{idx}].reason_id", minimum=1)
-        qty = _coerce_int(item.get("qty"), field=f"reasons[{idx}].qty", minimum=0)
-        if qty == 0:
-            continue
-        if rid in out:
-            raise ValidationError(f"duplicate reason_id {rid}")
-        out[rid] = qty
-        total += qty
-    return out, total
+    raw_entries = data.get("rejection_entries")
+    entries = parse_rejection_entries(raw_entries)
 
+    delink_count = parse_delink_count(data.get("delink_count", 0))
 
-def parse_reject_allocation_payload(payload) -> Tuple[str, int, Dict[int, int]]:
-    """Validate the payload used by the live allocation API.
-
-    Returns ``(lot_id, reject_qty, reasons_map)``. When ``reasons`` is
-    omitted from the payload, the map is empty and the backend falls back
-    to the single-bucket allocation (no reason segregation).
-    """
-    lot_id = require_lot_id(payload.get("lot_id"))
-    reject_qty = _coerce_int(payload.get("reject_qty"), field="reject_qty", minimum=0)
-    reasons: Dict[int, int] = {}
-    if payload.get("reasons") is not None:
-        reasons, total = parse_reason_quantities(payload)
-        if reject_qty == 0 and total > 0:
-            reject_qty = total
-        elif total and total != reject_qty:
-            raise ValidationError(
-                "sum of reason quantities must equal reject_qty"
-            )
-    return lot_id, reject_qty, reasons
-
-
-def parse_tray_assignments(payload):
-    """Validate optional ``tray_assignments`` array sent at submit time.
-
-    Expected shape::
-
-        "tray_assignments": [
-            {"tray_id": "NB-A00012", "reason_id": 7, "qty": 17},
-            {"tray_id": "NB-A00013", "reason_id": 7, "qty": 25},
-            {"tray_id": "NB-A00014", "reason_id": 8, "qty": 5}
-        ]
-
-    Enforces the **one-reason-per-tray** business rule: the same
-    ``tray_id`` may not appear with two different ``reason_id`` values.
-    Returns the cleaned list (empty when omitted).
-    """
-    raw = payload.get("tray_assignments")
-    if raw is None:
-        return []
-    if not isinstance(raw, list):
-        raise ValidationError("tray_assignments must be a list")
-    if len(raw) > 200:  # generous defensive cap
-        raise ValidationError("too many tray_assignments")
-
-    seen_tray_to_reason: Dict[str, int] = {}
-    out = []
-    for idx, item in enumerate(raw):
-        if not isinstance(item, dict):
-            raise ValidationError(f"tray_assignments[{idx}] must be an object")
-        tray_id = clean_str(item.get("tray_id"), max_len=100)
-        if not tray_id:
-            raise ValidationError(f"tray_assignments[{idx}].tray_id is required")
-        rid = _coerce_int(
-            item.get("reason_id"),
-            field=f"tray_assignments[{idx}].reason_id",
-            minimum=1,
-        )
-        qty = _coerce_int(
-            item.get("qty"),
-            field=f"tray_assignments[{idx}].qty",
-            minimum=1,
-        )
-        prev = seen_tray_to_reason.get(tray_id)
-        if prev is not None and prev != rid:
-            raise ValidationError(
-                f"tray '{tray_id}' cannot mix reasons "
-                f"({prev} and {rid}) — one reason per tray only"
-            )
-        seen_tray_to_reason[tray_id] = rid
-        out.append({"tray_id": tray_id, "reason_id": rid, "qty": qty})
-    return out
-
-
-def parse_reject_submit_payload(payload):
-    """Validate the final submit payload sent from the reject modal.
-
-    Expected shape::
-
-        {
-            "lot_id": "LID...",
-            "reasons": [{"reason_id": 7, "qty": 17}, ...],
-            "remarks": "optional",
-            "full_lot_rejection": false,
-            "tray_assignments": [                        # optional
-                {"tray_id": "NB-A00012", "reason_id": 7, "qty": 17}
-            ]
-        }
-    """
-    lot_id = require_lot_id(payload.get("lot_id"))
-    reasons, total = parse_reason_quantities(payload)
-    if total <= 0:
-        raise ValidationError("total reject qty must be > 0")
-    remarks = clean_str(payload.get("remarks"), max_len=255)
-    full_lot = bool(payload.get("full_lot_rejection"))
-    if full_lot and not remarks:
-        raise ValidationError("remarks are mandatory for full lot rejection")
-    tray_assignments = parse_tray_assignments(payload)
-
-    # Cross-check: per-reason tray-assignment totals must match the
-    # per-reason qty supplied in ``reasons`` (when assignments provided).
-    if tray_assignments:
-        per_reason_assigned: Dict[int, int] = {}
-        for a in tray_assignments:
-            per_reason_assigned[a["reason_id"]] = (
-                per_reason_assigned.get(a["reason_id"], 0) + a["qty"]
-            )
-        for rid, qty in reasons.items():
-            assigned = per_reason_assigned.get(rid, 0)
-            if assigned and assigned != qty:
-                raise ValidationError(
-                    f"reason {rid}: assigned tray qty {assigned} "
-                    f"!= declared qty {qty}"
-                )
+    remarks = clean_str(data.get("remarks", ""), max_len=500)
 
     return {
         "lot_id": lot_id,
-        "reasons": reasons,
-        "total_reject_qty": total,
+        "rejection_entries": entries,
+        "delink_count": delink_count,
         "remarks": remarks,
-        "full_lot_rejection": full_lot,
-        "tray_assignments": tray_assignments,
     }
+
+
+def parse_preview_payload(data: dict) -> dict:
+    """Parse the live-preview request (same shape as submit minus remarks)."""
+    lot_id = clean_str(data.get("lot_id"), max_len=100)
+    if not lot_id:
+        raise ValidationError("lot_id is required.")
+
+    raw_entries = data.get("rejection_entries", [])
+    entries = parse_rejection_entries(raw_entries)
+
+    delink_count = parse_delink_count(data.get("delink_count", 0))
+
+    return {
+        "lot_id": lot_id,
+        "rejection_entries": entries,
+        "delink_count": delink_count,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MANUAL SCAN FLOW VALIDATORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+_VALID_SLOT_TYPES = {"reject", "delink", "accept"}
+
+
+def parse_scan_payload(data: dict) -> dict:
+    """Validate payload for the per-scan validation endpoint.
+
+    Expected:
+        {
+            "lot_id": "...",
+            "slot_type": "reject" | "delink" | "accept",
+            "tray_id": "...",
+            "used_tray_ids": ["...", ...]   # optional
+        }
+    """
+    lot_id = clean_str(data.get("lot_id"), max_len=100)
+    if not lot_id:
+        raise ValidationError("lot_id is required.")
+
+    slot_type = clean_str(data.get("slot_type"), max_len=20).lower()
+    if slot_type not in _VALID_SLOT_TYPES:
+        raise ValidationError(
+            f"slot_type must be one of: {', '.join(sorted(_VALID_SLOT_TYPES))}."
+        )
+
+    tray_id = clean_str(data.get("tray_id"), max_len=100)
+    if not tray_id:
+        raise ValidationError("tray_id is required.")
+
+    raw_used = data.get("used_tray_ids", [])
+    if raw_used is None:
+        used = []
+    elif isinstance(raw_used, list):
+        used = [clean_str(t, max_len=100) for t in raw_used if clean_str(t, max_len=100)]
+    else:
+        raise ValidationError("used_tray_ids must be a list.")
+
+    # Optional – frontend forwards the total reject qty so backend can
+    # derive which active trays are physically emptied (drain engine).
+    raw_reject_qty = data.get("reject_qty", 0)
+    try:
+        reject_qty = int(raw_reject_qty or 0)
+    except (TypeError, ValueError):
+        raise ValidationError("reject_qty must be an integer.")
+    if reject_qty < 0:
+        raise ValidationError("reject_qty cannot be negative.")
+
+    return {
+        "lot_id": lot_id,
+        "slot_type": slot_type,
+        "tray_id": tray_id,
+        "used_tray_ids": used,
+        "reject_qty": reject_qty,
+    }
+
+
+def _parse_assignment_list(raw, label: str, allow_reason: bool) -> list:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValidationError(f"{label} must be a JSON array.")
+    cleaned = []
+    for idx, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ValidationError(f"{label}[{idx}] must be an object.")
+        tid = clean_str(item.get("tray_id"), max_len=100)
+        if not tid:
+            raise ValidationError(f"{label}[{idx}].tray_id is required.")
+        entry = {"tray_id": tid}
+        if allow_reason:
+            rid = clean_str(item.get("reason_id"), max_len=20)
+            if rid:
+                entry["reason_id"] = rid
+        cleaned.append(entry)
+    return cleaned
+
+
+def parse_manual_submit_payload(data: dict) -> dict:
+    """Parse the v2 submit payload that carries user-scanned tray IDs.
+
+    Expected:
+        {
+            "lot_id": "...",
+            "rejection_entries": [{reason_id, reason_text, qty}, ...],
+            "reject_assignments": [{tray_id, reason_id?}, ...],
+            "delink_tray_ids": ["...", ...],
+            "accept_assignments": [{tray_id}, ...],
+            "remarks": "..."
+        }
+    """
+    lot_id = clean_str(data.get("lot_id"), max_len=100)
+    if not lot_id:
+        raise ValidationError("lot_id is required.")
+
+    entries = parse_rejection_entries(data.get("rejection_entries"))
+
+    reject_assignments = _parse_assignment_list(
+        data.get("reject_assignments"), "reject_assignments", allow_reason=True
+    )
+    accept_assignments = _parse_assignment_list(
+        data.get("accept_assignments"), "accept_assignments", allow_reason=False
+    )
+
+    raw_delink = data.get("delink_tray_ids", [])
+    if raw_delink is None:
+        delink_ids = []
+    elif isinstance(raw_delink, list):
+        delink_ids = [
+            clean_str(t, max_len=100) for t in raw_delink if clean_str(t, max_len=100)
+        ]
+    else:
+        raise ValidationError("delink_tray_ids must be a list.")
+
+    remarks = clean_str(data.get("remarks", ""), max_len=500)
+
+    return {
+        "lot_id": lot_id,
+        "rejection_entries": entries,
+        "reject_assignments": reject_assignments,
+        "delink_tray_ids": delink_ids,
+        "accept_assignments": accept_assignments,
+        "remarks": remarks,
+    }
+
+
+
+
+
+

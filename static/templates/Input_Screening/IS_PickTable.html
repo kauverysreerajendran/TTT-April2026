@@ -1,8 +1,8 @@
-{% extends "base.html" %} 
+﻿{% extends "base.html" %} 
 {% load static %}
 {% load stock_filters %} 
 {% block content %}
-<script nonce="{{ csp_nonce }}">console.log("🔥 CRITICAL DEBUG: IS_PickTable.html LOADED 🔥");</script>
+<script nonce="{{ csp_nonce }}">console.log("ðŸ”¥ CRITICAL DEBUG: IS_PickTable.html LOADED ðŸ”¥");</script>
 <link rel="stylesheet" href="{% static 'css/inputscreening_picktable.css' %}">
  
 <div class="content-wrapper">
@@ -118,6 +118,7 @@
                         data-ip-onhold-picking="{{ data.ip_onhold_picking }}"
                         data-tray-verify="{{ data.tray_verify }}"
                         data-draft-tray-verify="{{ data.draft_tray_verify }}"
+                        data-ip-person-qty-verified="{{ data.ip_person_qty_verified|yesno:'true,false' }}"
                         data-ip-hold-lot="{{ data.ip_hold_lot }}"
                         data-few-cases-acceptance="{{data.few_cases_accepted_Ip_stock}}"
                         data-model-no="{{ data.plating_stk_no }}"
@@ -191,45 +192,13 @@
                         </td>
                         <!-- Action Column -->
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        <!-- ✅ Always show delete button for admin users, regardless of processing status -->
+                        <!-- âœ… Always show delete button for admin users, regardless of processing status -->
                         {% if is_admin%}
                         <a href="#" class="delete-batch-btn" title="Delete" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.stock_lot_id }}">
                         <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
                         </a>
                         {% endif %}
                         
-                        {% if not data.accepted_Ip_stock and not data.rejected_ip_stock and not data.accepted_tray_scan_status %}
-                        <!-- Accept/Reject Buttons Section -->
-                        {% if data.few_cases_accepted_Ip_stock and data.ip_onhold_picking %}
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                           style="background-color: #66bb6a; pointer-events: none; opacity: 0.6; cursor: not-allowed;"
-                           disabled>
-                        <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                           style="background-color: #e57373;"
-                           data-stock-lot-id="{{ data.stock_lot_id }}"
-                           data-batch-id="{{ data.batch_id }}"
-                           data-dp-physical-qty="{{ data.dp_physical_qty|default:0 }}">
-                        <i class="fa fa-times-circle"></i>Set Top Tray
-                        </button>
-                        {% else %}
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                        style="background-color: #66bb6a;"
-                        data-lot-id="{{ data.stock_lot_id }}"
-                        {% if not data.ip_person_qty_verified %}disabled{% endif %}>
-                        <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                        style="background-color: #e57373;"
-                        data-stock-lot-id="{{ data.stock_lot_id }}"
-                        data-batch-id="{{ data.batch_id }}"
-                        data-dp-physical-qty="{{ data.dp_physical_qty|default:0 }}"
-                        {% if not data.ip_person_qty_verified %}disabled{% endif %}>
-                        <i class="fa fa-times-circle"></i>Reject
-                        </button>
-                        {% endif %}
-                        {% endif %}
                         <!-- Eye icon to view submitted "Tray Scan Table" -->
                         <a href="#"
                            title="View"
@@ -249,6 +218,30 @@
                            alt="View"
                            style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
                         </a>
+                        
+                        <!-- Accept button (green checkmark + text) - enabled when all trays verified -->
+                        <button
+                           type="button"
+                           class="btn-accept-is"
+                           title="Accept lot"
+                           data-stock-lot-id="{{ data.stock_lot_id }}"
+                           data-batch-id="{{ data.batch_id }}"
+                           style="background-color: #1ba878; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: {% if data.all_trays_verified %}pointer{% else %}not-allowed{% endif %}; margin-left: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; opacity: {% if data.all_trays_verified %}1{% else %}0.5{% endif %};"
+                           {% if not data.all_trays_verified %}disabled{% endif %}>
+                        Accept
+                        </button>
+                        
+                        <!-- Reject button (red X + text) - enabled when all trays verified -->
+                        <button
+                           type="button"
+                           class="btn-reject-is"
+                           title="Reject lot"
+                           data-stock-lot-id="{{ data.stock_lot_id }}"
+                           data-batch-id="{{ data.batch_id }}"
+                           style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: {% if data.all_trays_verified %}pointer{% else %}not-allowed{% endif %}; margin-left: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; opacity: {% if data.all_trays_verified %}1{% else %}0.5{% endif %};"
+                           {% if not data.all_trays_verified %}disabled{% endif %}>
+                        Reject
+                        </button>
                         </td>
                         <!-- LOT Qty Column -->
                         <td {% if data.ip_hold_lot %} class="row-inactive-blur" {% endif %}>
@@ -272,9 +265,9 @@
                               data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quantity"
                               class="d-flex align-items-center justify-content-center rounded-circle"
                               style="width: 28px; height: 28px; 
-                              {% if data.ip_person_qty_verified %}
+                              {% if data.all_trays_verified %}
                               background-color: #0c8249;
-                              {% elif data.draft_tray_verify and not data.ip_person_qty_verified %}
+                              {% elif data.draft_tray_verify and not data.all_trays_verified %}
                               background: linear-gradient(to right, #0c8249 50%, #bdbdbd 50%);
                               {% else %}
                               background-color: #bdbdbd;
@@ -413,7 +406,7 @@
                             >
                               <!-- Close button in top-right corner -->
                               <button type="button" class="remark-close-btn" style="position: absolute; top: 8px; right: 8px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; display: none; line-height: 1; padding: 0;">
-                                ×
+                                Ã—
                               </button>
                               <textarea
                                 placeholder="Type your remark..."
@@ -561,15 +554,15 @@
                      >&times;</span
                      >
                   <div id="trayScanDetails">
-                     <!-- ════════════════ IS REJECT MODAL CONTENT ════════════════ -->
+                     <!--  IS REJECT MODAL CONTENT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
                      <div id="isRejectModalBody" class="is-reject-body">
 
                         <!-- Lot summary card (LOT ID intentionally hidden from UI) -->
                         <div class="is-reject-summary">
-                           <div class="is-reject-summary-cell"><span class="lbl">Tray Type</span><span class="val" id="isRejTrayType">—</span></div>
-                           <div class="is-reject-summary-cell"><span class="lbl">Capacity</span><span class="val" id="isRejTrayCapacity">—</span></div>
-                           <div class="is-reject-summary-cell"><span class="lbl">Total Qty</span><span class="val" id="isRejTotalQty">—</span></div>
-                           <div class="is-reject-summary-cell"><span class="lbl">Active Trays</span><span class="val" id="isRejActiveTrayCount">—</span></div>
+                           <div class="is-reject-summary-cell"><span class="lbl">Tray Type</span><span class="val" id="isRejTrayType">â€”</span></div>
+                           <div class="is-reject-summary-cell"><span class="lbl">Capacity</span><span class="val" id="isRejTrayCapacity">â€”</span></div>
+                           <div class="is-reject-summary-cell"><span class="lbl">Total Qty</span><span class="val" id="isRejTotalQty">â€”</span></div>
+                           <div class="is-reject-summary-cell"><span class="lbl">Active Trays</span><span class="val" id="isRejActiveTrayCount">â€”</span></div>
                            <!-- Live totals (compact squares at top) -->
                            <div class="is-reject-total-card reject" style="margin-left: 8px;">
                               <span class="lbl">REJECT</span>
@@ -583,23 +576,23 @@
                        
                         <!-- Reasons grid -->
                         <div class="is-reject-section">
-                           <div class="is-reject-section-title">📋 Enter Rejection Quantities</div>
+                           <div class="is-reject-section-title">ðŸ“‹ Enter Rejection Quantities</div>
                            <div id="isRejReasonsGrid" class="is-reject-reasons-grid">
-                              <div class="is-reject-loading">Loading rejection reasons…</div>
+                              <div class="is-reject-loading">Loading rejection reasonsâ€¦</div>
                            </div>
                         </div>
                          <!-- Active tray chip strip (dynamic from backend) -->
                         <div id="isRejActiveTraysStrip" class="is-reject-tray-strip" style="display:none;"></div>
                         <!-- Tray allocation preview -->
                         <div class="is-reject-section" id="isRejAllocSection" style="display:none;">
-                           <div class="is-reject-section-title">🧮 Tray Allocation Preview</div>
+                           <div class="is-reject-section-title">ðŸ§® Tray Allocation Preview</div>
                            <div class="is-reject-alloc-grids">
                               <div>
-                                 <div class="is-reject-alloc-head reject">REJECT TRAYS · <span id="isRejAllocRejQty">0</span></div>
+                                 <div class="is-reject-alloc-head reject">REJECT TRAYS Â· <span id="isRejAllocRejQty">0</span></div>
                                  <div id="isRejAllocRejList" class="is-reject-alloc-list"></div>
                               </div>
                               <div>
-                                 <div class="is-reject-alloc-head accept">ACCEPT TRAYS · <span id="isRejAllocAccQty">0</span></div>
+                                 <div class="is-reject-alloc-head accept">ACCEPT TRAYS Â· <span id="isRejAllocAccQty">0</span></div>
                                  <div id="isRejAllocAccList" class="is-reject-alloc-list"></div>
                               </div>
                            </div>
@@ -607,7 +600,7 @@
                         <!-- Remarks -->
                         <div class="is-reject-section" id="isRejRemarksSection">
                            <label for="isRejRemarks" id="isRejRemarksLabel" style="font-size:12px; font-weight:600; color:#00695c;">Remarks (optional)</label>
-                           <textarea id="isRejRemarks" rows="2" maxlength="255" placeholder="Add a comment for the rejection record…"
+                           <textarea id="isRejRemarks" rows="2" maxlength="255" placeholder="Add a comment for the rejection recordâ€¦"
                               style="width:100%; padding:8px; border:1px solid #b2dfdb; border-radius:6px; font-size:13px; resize:vertical; background:#ffffff;"></textarea>
                         </div>
                         <!-- Error / status -->
@@ -616,6 +609,7 @@
                         <div class="is-reject-actions">
                            <button type="button" id="isRejClearBtn" class="is-reject-btn clear" style="background-color:#ff9800; color:white;">Clear</button>
                            <button type="button" id="isRejCancelBtn" class="is-reject-btn cancel">Cancel</button>
+                           <button type="button" id="isRejDraftBtn" class="is-reject-btn draft" style="background-color:#2196F3; color:white;">Save Draft</button>
                            <button type="button" id="isRejSubmitBtn" class="is-reject-btn submit" disabled>Submit Rejection</button>
                         </div>
                      </div>
@@ -682,7 +676,7 @@
                   {% if page_obj.number > 3 %}
                   <li><a href="?page=1">1</a></li>
                   {% if page_obj.number > 4 %}
-                  <li class="disabled"><span>…</span></li>
+                  <li class="disabled"><span>â€¦</span></li>
                   {% endif %}
                   {% endif %}
                   {# Show pages around current page #}
@@ -698,7 +692,7 @@
                   {# Show ellipsis and last page if needed #}
                   {% if page_obj.number < page_obj.paginator.num_pages|add:'-2' %}
                   {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %}
-                  <li class="disabled"><span>…</span></li>
+                  <li class="disabled"><span>â€¦</span></li>
                   {% endif %}
                   <li><a href="?page={{ page_obj.paginator.num_pages }}">{{ page_obj.paginator.num_pages }}</a></li>
                   {% endif %}
@@ -760,7 +754,7 @@
               width:min(720px,96vw); max-height:90vh; display:flex; flex-direction:column;
               overflow:hidden; animation:tvmSlideIn 0.28s cubic-bezier(.4,0,.2,1); border:1px solid #e6f1f2;">
 
-    <!-- ── Header (Light Theme) ── -->
+    <!--  Header (Light Theme)  -->
     <div style="background:#f8fdfE; border-bottom:2px solid #e0eef0;
                 padding:24px 28px 20px; flex-shrink:0;">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
@@ -768,10 +762,10 @@
           <div style="font-size:11px; letter-spacing:1.4px; text-transform:uppercase;
                       color:#028084; font-weight:700; margin-bottom:6px;">Input Screening</div>
           <h4 style="margin:0; font-size:18px; font-weight:800; letter-spacing:.2px; color:#002f33;">
-            🔍 Tray Verification Panel
+            Tray Verification Panel
           </h4>
           <div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:12px; font-size:13px;">
-            <span style="color:#555;"><span style="color:#028084; font-weight:700;">Plating Stock no -</span> <strong id="tvm-plating-stk" style="color:#333; font-family:monospace; margin-left:4px;">—</strong></span>
+            <span style="color:#555;"><span style="color:#028084; font-weight:700;">Plating Stock no -</span> <strong id="tvm-plating-stk" style="color:#333; font-family:monospace; margin-left:4px;">â€”</strong></span>
           </div>
         </div>
         <div style="display:flex; flex-direction:row; align-items:center; gap:12px;">
@@ -825,7 +819,7 @@
       </div>
     </div>
 
-    <!-- ── Live Activity Bar (Light Theme) ── -->
+    <!--  Live Activity Bar (Light Theme)  -->
     <div id="tvm-activity-bar"
          style="background:#fafbfc; border-bottom:1px solid #e6f1f2;
                 padding:12px 28px; display:flex; align-items:center; gap:12px;
@@ -839,14 +833,14 @@
       </span>
     </div>
 
-    <!-- ── Success Banner (hidden by default, shown when all trays verified) ── -->
+    <!--  Success Banner (hidden by default, shown when all trays verified)  -->
     <div id="tvm-success-banner"
          style="display:none; flex-shrink:0; background:#f0fdf7; border-bottom:2px solid #1ba878;
                 padding:12px 28px; font-size:13px; font-weight:700; color:#0c6b46;
                 text-align:center; letter-spacing:.2px;">
     </div>
 
-    <!-- ── Tray Table Header (fixed, non-scrollable) ── -->
+    <!--  Tray Table Header (fixed, non-scrollable)  -->
     <div style="flex-shrink:0; background:#f8fdfE; border-bottom:2px solid #d0dfe1; padding:0 28px;">
       <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
         <colgroup>
@@ -870,7 +864,7 @@
       </table>
     </div>
 
-    <!-- ── Tray Table Body (scrollable, clipped) ── -->
+    <!--  Tray Table Body (scrollable, clipped)  -->
     <div id="tvm-table-body-container" style="flex:1; overflow-y:auto; overflow-x:hidden; padding:0 28px 16px;">
       <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
         <colgroup>
@@ -882,14 +876,14 @@
         <tbody id="tvm-tray-tbody">
           <tr>
             <td colspan="4" style="text-align:center; color:#bbb; padding:28px; font-size:13px;">
-              Loading trays…
+              Loading traysâ€¦
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- ── Scan Input Section (Light Theme) ── -->
+    <!--  Scan Input Section (Light Theme)  -->
     <div style="background:#f8fdfE; border-top:1px solid #e6f1f2;
                 padding:18px 28px 22px; flex-shrink:0;">
       <label style="font-size:11px; color:#028084; font-weight:800;
@@ -898,7 +892,7 @@
       </label>
       <div style="display:flex; gap:12px; align-items:center;">
         <input id="tvm-scan-input" type="text"
-               placeholder="Scan or type Tray ID and press Enter…"
+               placeholder="Scan or type Tray ID and press Enter"
                autocomplete="off" autocorrect="off" spellcheck="false"
                maxlength="9"
                style="flex:1; padding:11px 18px; border:2px solid #d0dfe1; background:#fff;
@@ -912,7 +906,7 @@
                 onmouseover="this.style.background='#e6f1f2'; this.style.borderColor='#b5e0e2';"
                 onmouseout="this.style.background='#f0f5f6'; this.style.borderColor='#d0dfe1';"
                 title="Clear input">
-          Clear ✕
+          Clear
         </button>
         <button id="tvm-scan-btn"
                 style="background:#028084; color:#fff; border:none; border-radius:32px;
@@ -920,7 +914,7 @@
                        white-space:nowrap; transition:all .2s; letter-spacing:.3px; box-shadow:0 2px 8px rgba(2,128,132,.18);"
                 onmouseover="this.style.background='#026a6d'; this.style.boxShadow='0 4px 12px rgba(2,128,132,.28)';"
                 onmouseout="this.style.background='#028084'; this.style.boxShadow='0 2px 8px rgba(2,128,132,.18)';">
-          Verify ✓
+          Verify
         </button>
       </div>
       <div id="tvm-scan-hint" style="font-size:11px; color:#999; margin-top:15px; padding-left:6px; font-weight:500;">
@@ -946,17 +940,188 @@
    </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════
+     IS PARTIAL REJECT MODAL — manual scan flow
+     ════════════════════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="{% static 'css/inputscreening_reject_modal.css' %}">
+
+<div id="isRejectModal" class="isrm-overlay" role="dialog" aria-modal="true" aria-labelledby="isrm-title">
+  <div class="isrm-dialog" role="document">
+
+    <!-- ── Header ─────────────────────────────────────────────────── -->
+    <div class="isrm-header">
+      <div class="isrm-header-title" id="isrm-title">
+        <span>Input Screening</span>
+        <span class="isrm-sep">/</span>
+        <span class="isrm-batch" id="isrm-h-batch">—</span>
+        <span class="isrm-sep">/</span>
+        <span class="isrm-window">Rejection Window</span>
+        <span class="isrm-lotqty">Lot Qty: <span id="isrm-h-lotqty">0</span></span>
+      </div>
+      <div class="isrm-header-actions">
+        <div id="isrm-insight" class="isrm-insight" title="Live activity">
+          <span class="isrm-insight-dot"></span>
+          <span class="isrm-insight-text" id="isrm-insight-text">Idle</span>
+        </div>
+        <label class="isrm-lot-reject-toggle" title="Mark whole lot as rejected">
+          <input type="checkbox" id="isrm-lot-reject-toggle" />
+          Lot Rejection
+        </label>
+        <button id="isrm-close-btn" class="isrm-close-btn" type="button" title="Close">&times;</button>
+      </div>
+    </div>
+
+    <!-- ── Body (scrollable) ──────────────────────────────────────── -->
+    <div class="isrm-body">
+
+      <div id="isrm-status" class="isrm-status info">Loading lot data…</div>
+
+      <!-- Summary card row -->
+      <div class="isrm-summary">
+        <div class="isrm-summary-cell">
+          <span class="isrm-summary-label">Tray Type</span>
+          <span class="isrm-summary-value" id="isrm-tray-type">—</span>
+        </div>
+        <div class="isrm-summary-cell">
+          <span class="isrm-summary-label">Capacity</span>
+          <span class="isrm-summary-value" id="isrm-capacity">—</span>
+        </div>
+        <div class="isrm-summary-cell">
+          <span class="isrm-summary-label">Total Qty</span>
+          <span class="isrm-summary-value" id="isrm-total-qty">—</span>
+        </div>
+        <div class="isrm-summary-cell">
+          <span class="isrm-summary-label">Active Trays</span>
+          <span class="isrm-summary-value" id="isrm-active-trays">—</span>
+        </div>
+        <div class="isrm-summary-cell isrm-reject-cell">
+          <span class="isrm-summary-label">Reject</span>
+          <span class="isrm-summary-value isrm-reject" id="isrm-total-reject">0</span>
+        </div>
+        <div class="isrm-summary-cell isrm-accept-cell">
+          <span class="isrm-summary-label">Accept</span>
+          <span class="isrm-summary-value isrm-accept" id="isrm-total-accept">0</span>
+        </div>
+      </div>
+
+      <!-- Section 1: Enter Rejection Quantities -->
+      <div class="isrm-section" id="isrm-sec-reasons">
+        <div class="isrm-section-title">
+          <span class="isrm-step">Step 1</span>
+          <span>Enter Rejection Quantities</span>
+        </div>
+        <div class="isrm-section-body">
+          <div class="isrm-reason-grid" id="isrm-reason-grid">
+            <div style="grid-column:1/-1;color:#aaa;font-size:12px;text-align:center;padding:10px;">Loading…</div>
+          </div>
+          <!-- Tray Reuse Calculator Card (shown after qty entered) -->
+          <div class="isrm-calc-card" id="isrm-calc-card" style="display:none;">
+            <div class="isrm-calc-col accept-col">
+              <div class="isrm-calc-label">Accept Qty</div>
+              <div class="isrm-calc-value" id="isrm-calc-accept-qty">—</div>
+              <div class="isrm-calc-sub">of <span id="isrm-calc-lot-qty">—</span> lot qty</div>
+            </div>
+            <div class="isrm-calc-col reuse-col">
+              <div class="isrm-calc-label">Reusable Trays</div>
+              <div class="isrm-calc-value" id="isrm-c-reusable">0</div>
+              <div class="isrm-calc-sub">Existing active → Reject</div>
+            </div>
+            <div class="isrm-calc-col new-col">
+              <div class="isrm-calc-label">New Trays Needed</div>
+              <div class="isrm-calc-value" id="isrm-c-required">0</div>
+              <div class="isrm-calc-sub">Fresh IDs required</div>
+            </div>
+          </div>
+          <!-- Rule note -->
+          <div class="isrm-calc-rule" id="isrm-calc-rule" style="display:none;">
+            Each reject tray holds one reason only — no mixing.
+            &nbsp;<span id="isrm-c-delink" style="display:none;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active tray pills -->
+      <div class="isrm-active-pills" id="isrm-active-pills">
+        <span style="color:#aaa;font-size:12px;">Loading active trays…</span>
+      </div>
+
+      <!-- Section 2: Tray Allocation Preview -->
+      <div class="isrm-section isrm-locked" id="isrm-sec-alloc">
+        <div class="isrm-section-title">
+          <span class="isrm-step">Step 2</span>
+          <span>Tray Allocation Preview</span>
+        </div>
+        <div class="isrm-section-body">
+          <div class="isrm-alloc-grid">
+            <div class="isrm-alloc-col reject">
+              <div class="isrm-alloc-col-head">
+                Reject Trays · <span id="isrm-reject-count">0</span>
+              </div>
+              <div class="isrm-alloc-col-body" id="isrm-reject-rows">
+                <div style="color:#bbb;font-size:11px;text-align:center;padding:10px;">Enter rejection quantities to begin</div>
+              </div>
+            </div>
+            <div class="isrm-alloc-col accept">
+              <div class="isrm-alloc-col-head">
+                Accept Trays · <span id="isrm-accept-count">0</span>
+              </div>
+              <div class="isrm-alloc-col-body" id="isrm-accept-rows">
+                <div style="color:#bbb;font-size:11px;text-align:center;padding:10px;">Enter rejection quantities to begin</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Delink Trays (optional) -->
+      <div class="isrm-section isrm-locked" id="isrm-sec-delink" style="display:none;">
+        <div class="isrm-section-title">
+          <span class="isrm-step">Step 3</span>
+          <span>Delink Trays (Optional)</span>
+        </div>
+        <div class="isrm-section-body">
+          <div class="isrm-help-line">Scan or tap an eligible tray to remove it from the lot.</div>
+          <div id="isrm-delink-rows"></div>
+        </div>
+      </div>
+
+      <!-- Section 4: Remarks -->
+      <div class="isrm-section">
+        <div class="isrm-section-title">
+          <span>Remarks (Optional)</span>
+        </div>
+        <div class="isrm-section-body">
+          <textarea id="isrm-remarks" class="isrm-remarks" maxlength="500"
+                    placeholder="Add a comment for the rejection record…"></textarea>
+        </div>
+      </div>
+
+    </div><!-- /.isrm-body -->
+
+    <!-- ── Sticky footer ──────────────────────────────────────────── -->
+    <div class="isrm-footer">
+      <button type="button" id="isrm-cancel-btn" class="isrm-btn isrm-btn-cancel">Cancel</button>
+      <button type="button" id="isrm-clear-btn" class="isrm-btn isrm-btn-clear">Clear</button>
+      <button type="button" id="isrm-draft-btn" class="isrm-btn isrm-btn-draft">Save Draft</button>
+      <button type="button" id="isrm-submit-btn" class="isrm-btn isrm-btn-submit" disabled>Submit</button>
+    </div>
+
+  </div><!-- /.isrm-dialog -->
+</div><!-- /#isRejectModal -->
+
 {% block script %}
 
 
-<!-- ✅ SCRIPT 1: Save IP Checkbox -->
+<!-- SCRIPT 1: Save IP Checkbox -->
 <script nonce="{{ csp_nonce }}">
   window.IS_STATIC = window.IS_STATIC || {};
   window.IS_STATIC.viewIcon = "{% static 'assets/icons/view2.png' %}";
 </script>
 
 <script nonce="{{ csp_nonce }}" src="{% static 'js/inputscreening_picktable.js' %}" defer></script>
-<script nonce="{{ csp_nonce }}" src="{% static 'js/is_reject_modal.js' %}" defer></script>
+<script nonce="{{ csp_nonce }}" src="{% static 'js/inputscreening_reject_modal.js' %}" defer></script>
 
 
 {% endblock %} {% endblock content %}
+
+

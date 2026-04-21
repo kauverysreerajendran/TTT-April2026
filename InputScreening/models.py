@@ -429,6 +429,29 @@ class InputScreening_Submitted(models.Model):
         auto_now=True,
         help_text="Last update timestamp"
     )
+    
+    # ─────────────────────────────────────────────────────────────────────
+    # Draft & Submission State
+    # ─────────────────────────────────────────────────────────────────────
+    
+    Draft_Saved = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this is a draft save (not finalized)"
+    )
+    
+    is_submitted = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if final submit completed"
+    )
+    
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Timestamp of final submission (null for drafts)"
+    )
 
     # ─────────────────────────────────────────────────────────────────────
     # JSON Snapshot Fields - Complete Immutable Data

@@ -28,22 +28,21 @@ from django.templatetags.static import static
 
 logger = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
 # Pick Table row enrichment
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_IMAGE = "assets/images/imagePlaceholder.jpg"
 
-
 def _prefetch_pick_table_extras(rows: List[Dict[str, Any]]):
     """Bulk-fetch sibling data needed by row enrichment in O(1) queries.
 
-    Returns three dicts keyed for fast row-level lookup so the enrichment
+    Returns four dicts keyed for fast row-level lookup so the enrichment
     loop avoids the N+1 pattern present in the legacy view.
     """
     from modelmasterapp.models import ModelMasterCreation, TotalStockModel
-    from .models import IP_Rejection_ReasonStore
+    from DayPlanning.models import DPTrayId_History
+    from .models import IP_Rejection_ReasonStore, IP_TrayVerificationStatus
 
     batch_ids = {r["batch_id"] for r in rows if r.get("batch_id")}
     lot_ids = {r["stock_lot_id"] for r in rows if r.get("stock_lot_id")}
@@ -68,8 +67,26 @@ def _prefetch_pick_table_extras(rows: List[Dict[str, Any]]):
         for rec in IP_Rejection_ReasonStore.objects.filter(lot_id__in=lot_ids):
             rejection_map.setdefault(rec.lot_id, rec.total_rejection_quantity or 0)
 
-    return mmc_map, stock_map, rejection_map
+    # ✅ NEW: Check tray verification status for each lot
+    verification_map: Dict[str, bool] = {}
+    if lot_ids:
+        for lot_id in lot_ids:
+            # Get all active trays for this lot
+            total_trays = DPTrayId_History.objects.filter(
+                lot_id=lot_id, delink_tray=False
+            ).count()
+            
+            # Get verified trays count
+            verified_trays = IP_TrayVerificationStatus.objects.filter(
+                lot_id=lot_id, is_verified=True
+            ).count()
+            
+            # All trays verified if counts match and at least one tray exists
+            verification_map[lot_id] = (
+                total_trays > 0 and total_trays == verified_trays
+            )
 
+    return mmc_map, stock_map, rejection_map, verification_map
 
 def enrich_pick_table_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Decorate the dict rows produced by ``pick_table_queryset`` with the
@@ -81,13 +98,16 @@ def enrich_pick_table_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     debug ``print`` statements have been replaced with structured
     logging at DEBUG level.
     """
-    mmc_map, stock_map, rejection_map = _prefetch_pick_table_extras(rows)
+    mmc_map, stock_map, rejection_map, verification_map = _prefetch_pick_table_extras(rows)
     placeholder = [static(_PLACEHOLDER_IMAGE)]
 
     for data in rows:
         batch_id = data.get("batch_id")
         lot_id = data.get("stock_lot_id")
         logger.debug("IS pick row batch=%s lot=%s", batch_id, lot_id)
+
+        # ✅ NEW: Add tray verification status
+        data["all_trays_verified"] = verification_map.get(lot_id, False)
 
         # vendor_location (template renders this directly)
         data["vendor_location"] = (
@@ -133,11 +153,9 @@ def enrich_pick_table_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     return rows
 
-
 # ---------------------------------------------------------------------------
 # Tray verification panel
 # ---------------------------------------------------------------------------
-
 
 def get_dp_tray_panel(lot_id: str) -> Dict[str, Any]:
     """Return the payload shown in the tray verification panel for *lot_id*.
@@ -214,7 +232,6 @@ def get_dp_tray_panel(lot_id: str) -> Dict[str, Any]:
         "total_qty": total_qty,
         "verified_qty": verified_qty,
     }
-
 
 def record_tray_verification(lot_id: str, tray_id: str, user) -> Tuple[Dict[str, Any], int]:
     """Validate and (idempotently) record a tray verification.
@@ -350,614 +367,6 @@ def record_tray_verification(lot_id: str, tray_id: str, user) -> Tuple[Dict[str,
             "enable_actions": {"accept": all_verified, "reject": all_verified},
             "total_qty": total_qty,
             "verified_qty": verified_qty,
-        },
-        200,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Reject window – allocation + submit
-# ---------------------------------------------------------------------------
-
-
-def _compute_slots(qty: int, capacity: int) -> List[Dict[str, Any]]:
-    """Split ``qty`` into tray slots of ``capacity``.
-
-    The first slot becomes the *top tray* and carries the remainder so the
-    factory operator scans the partially-filled tray first. When ``qty``
-    divides evenly, the very first capacity-sized slot is marked top.
-    """
-    if qty <= 0 or capacity <= 0:
-        return []
-    full = qty // capacity
-    rem = qty % capacity
-    slots: List[Dict[str, Any]] = []
-    if rem > 0:
-        slots.append({"qty": rem, "is_top": True})
-        slots.extend({"qty": capacity, "is_top": False} for _ in range(full))
-    else:
-        slots.append({"qty": capacity, "is_top": True})
-        slots.extend({"qty": capacity, "is_top": False} for _ in range(full - 1))
-    return slots
-
-
-def _tray_prefix(tray_type: str) -> str:
-    """Map the human ``tray_type`` to the 3-char prefix used for IDs.
-
-    Mirrors the convention used across IS / DP / IQF: ``Jumbo`` → ``JB-``,
-    everything else (Normal / blank) → ``NB-``.
-    """
-    t = (tray_type or "").strip().lower()
-    if t.startswith("jumbo"):
-        return "JB-"
-    return "NB-"
-
-
-def _next_tray_ids(prefix: str, count: int) -> List[str]:
-    """Return ``count`` fresh tray IDs that do not collide with existing
-    rows in ``DPTrayId_History`` or ``IPTrayId``.
-
-    The numbering format matches the legacy ``XX-A00###`` style produced
-    by ``loading_modelmaster``.
-    """
-    from .selectors import get_max_tray_serial
-
-    if count <= 0:
-        return []
-    start = get_max_tray_serial(prefix) + 1
-    return [f"{prefix}A{(start + i):05d}" for i in range(count)]
-
-
-def _allocate_one_side(
-    slots: List[Dict[str, Any]],
-    *,
-    reusable: List[Dict[str, Any]],
-    new_prefix: str,
-    new_id_offset: int,
-    reveal_tray_ids: bool = False,
-) -> Tuple[List[Dict[str, Any]], int]:
-    """Classify each slot as Reused vs New (no tray-ID auto-assignment).
-
-    By default (``reveal_tray_ids=False``) the returned slots carry an
-    **empty** ``tray_id`` — the operator must scan or tap a tray on the
-    floor before any ID is bound to a slot. The classification is still
-    useful for the UI (badge + colour). Pass ``reveal_tray_ids=True`` for
-    legacy behaviour (preview shows the candidate ID).
-
-    The ``new_id_offset`` argument is kept for backward compatibility with
-    callers that still want to know how many *new* slots exist (so they
-    can keep a monotonic ID counter for downstream allocations).
-    """
-    if not slots:
-        return [], 0
-
-    new_needed = max(0, len(slots) - len(reusable))
-    new_ids: List[str] = []
-    if reveal_tray_ids and new_needed:
-        new_ids = _next_tray_ids(new_prefix, new_needed + new_id_offset)[new_id_offset:]
-
-    out: List[Dict[str, Any]] = []
-    reuse_idx = 0
-    new_idx = 0
-    for slot in slots:
-        if reuse_idx < len(reusable):
-            r = reusable[reuse_idx]
-            reuse_idx += 1
-            out.append({
-                "tray_id": r["tray_id"] if reveal_tray_ids else "",
-                "candidate_tray_id": r["tray_id"],  # backend hint only
-                "qty": slot["qty"],
-                "is_top": slot["is_top"],
-                "source": "Reused",
-                "reason_id": slot.get("reason_id"),
-                "reason_code": slot.get("reason_code"),
-            })
-        else:
-            tray_id = new_ids[new_idx] if new_idx < len(new_ids) else ""
-            new_idx += 1
-            out.append({
-                "tray_id": tray_id,
-                "candidate_tray_id": "",
-                "qty": slot["qty"],
-                "is_top": slot["is_top"],
-                "source": "New",
-                "reason_id": slot.get("reason_id"),
-                "reason_code": slot.get("reason_code"),
-            })
-    return out, new_idx
-
-
-def compute_reject_allocation(
-    lot_id: str,
-    reject_qty: int,
-    reasons: Dict[int, int] | None = None,
-) -> Dict[str, Any]:
-    """Phased reject + accept allocation driven by **physical stock**.
-
-    Algorithm (manufacturing-correct):
-
-    * **Phase A** – Read active lot trays ordered ``top_tray DESC, id ASC``.
-    * **Phase B** – Sequentially pull ``reject_qty`` from those trays
-      (a tray that is partially consumed splits into a reject portion
-      and an accept remainder).
-    * **Phase C** – Build ``reject_physical_stock`` and
-      ``accept_physical_stock`` from that split.
-    * **Phase D** – A tray is *reusable* only when fully drained by the
-      reject pull (qty became zero). Partially-consumed and untouched
-      trays belong to the accept side and **cannot** be reused for
-      reject.
-    * **Phase E** – Map operator-supplied ``reasons`` into reject slots.
-      Per business rule **R01 will not share a tray with R02** – every
-      slot carries exactly one ``reason_id``. Reusable existing trays
-      (Phase D) are consumed first; any shortfall becomes "New Tray
-      required" so the operator scans a fresh ID on the floor.
-    * **Phase F** – Return the structured payload the modal renders.
-
-    The response **never** auto-fills ``tray_id`` for any slot — the
-    operator must scan/tap. ``candidate_tray_id`` is provided only as a
-    backend hint (drives the chip strip + tap-to-fill UX).
-    """
-    from .selectors import get_active_dp_trays, get_lot_reject_context
-
-    ctx = get_lot_reject_context(lot_id)
-    if ctx is None:
-        return {"success": False, "error": "Lot not found"}
-
-    total_qty = ctx["total_qty"]
-    capacity = ctx["tray_capacity"]
-    if capacity <= 0:
-        return {"success": False, "error": "Tray capacity not configured for this lot"}
-
-    if reject_qty < 0 or reject_qty > total_qty:
-        return {
-            "success": False,
-            "error": f"reject_qty must be between 0 and {total_qty}",
-        }
-
-    reasons = reasons or {}
-    if reasons and sum(reasons.values()) != reject_qty:
-        return {
-            "success": False,
-            "error": "sum of reason quantities must equal reject_qty",
-        }
-
-    accept_qty = max(total_qty - reject_qty, 0)
-
-    # ── Phase A: ordered physical trays for reject consumption ──────
-    # Manufacturing rule: drain SMALLEST trays first so partial trays
-    # finish first (no half-full trays left behind). Top tray takes
-    # priority within equal-qty groups so the operator's first physical
-    # tray is consumed first when sizes match.
-    active = get_active_dp_trays(lot_id)
-    consume_order = sorted(
-        active,
-        key=lambda t: (
-            t.get("tray_quantity") or 0,           # smallest qty first
-            0 if t.get("top_tray") else 1,         # top first as tie-break
-        ),
-    )
-    # Display order for the active-tray strip keeps TOP first (UI-stable).
-    active_sorted = sorted(
-        active, key=lambda t: (0 if t.get("top_tray") else 1,)
-    )
-
-    # ── Phase B + C: sequential physical split ───────────────────────
-    reject_physical: List[Dict[str, Any]] = []
-    accept_physical: List[Dict[str, Any]] = []
-    rem = reject_qty
-    consumed_ids: set = set()
-    for t in consume_order:
-        tqty = t.get("tray_quantity") or 0
-        is_top = bool(t.get("top_tray"))
-        tid = t["tray_id"]
-        if rem <= 0:
-            break
-        if rem >= tqty:
-            # Whole tray drained → eligible for reuse on the reject side.
-            reject_physical.append(
-                {"tray_id": tid, "qty": tqty, "is_top": is_top, "consumed": "full"}
-            )
-            consumed_ids.add(tid)
-            rem -= tqty
-        else:
-            # Tray splits: rem qty reject, remainder stays on accept side.
-            reject_physical.append(
-                {"tray_id": tid, "qty": rem, "is_top": is_top, "consumed": "partial"}
-            )
-            accept_physical.append(
-                {
-                    "tray_id": tid,
-                    "qty": tqty - rem,
-                    "is_top": is_top,
-                    "partial": True,
-                }
-            )
-            consumed_ids.add(tid)
-            rem = 0
-    # Trays not touched by the reject pull belong to the accept side
-    # (kept in display order: top first).
-    for t in active_sorted:
-        tid = t["tray_id"]
-        if tid in consumed_ids:
-            continue
-        tqty = t.get("tray_quantity") or 0
-        if tqty > 0:
-            accept_physical.append(
-                {"tray_id": tid, "qty": tqty, "is_top": bool(t.get("top_tray")),
-                 "partial": False}
-            )
-
-    # ── Phase D: reusable pool = trays fully drained by reject ───────
-    reusable_pool = [r["tray_id"] for r in reject_physical if r.get("consumed") == "full"]
-
-    # ── Phase E: reason-segregated reject slots (one reason per tray) ─
-    reject_slots: List[Dict[str, Any]] = []
-    if reasons:
-        from .models import IP_Rejection_Table
-        reason_meta = {
-            r.id: r for r in IP_Rejection_Table.objects.filter(id__in=reasons.keys())
-        }
-        for rid in sorted(reasons.keys()):
-            qty = reasons[rid]
-            if qty <= 0:
-                continue
-            code = (
-                reason_meta[rid].rejection_reason_id if rid in reason_meta else ""
-            )
-            full, rem_q = divmod(qty, capacity)
-            for _ in range(full):
-                reject_slots.append({
-                    "qty": capacity, "reason_id": rid, "reason_code": code,
-                })
-            if rem_q:
-                reject_slots.append({
-                    "qty": rem_q, "reason_id": rid, "reason_code": code,
-                })
-    else:
-        # No per-reason map provided — mirror the physical reject split
-        # so the UI still shows the right number of slots.
-        for r in reject_physical:
-            reject_slots.append({
-                "qty": r["qty"], "reason_id": None, "reason_code": "",
-            })
-
-    # Assign source classification + candidate hint (NEVER auto-fill tray_id).
-    reusable_iter = iter(reusable_pool)
-    for slot in reject_slots:
-        cand = next(reusable_iter, None)
-        slot["tray_id"] = ""              # operator must scan/tap
-        slot["candidate_tray_id"] = cand or ""
-        slot["source"] = "Reused" if cand else "New"
-        slot["is_top"] = False             # TOP badge only on physical accept top
-
-    new_required = max(0, len(reject_slots) - len(reusable_pool))
-
-    # ── Accept slots: physical accept stock keeps original tray IDs. ──
-    # Mark TOP on the actual physical top tray that survives (priority:
-    # original top tray → first surviving tray). Exactly one TOP badge.
-    physical_top_id = None
-    for ap in accept_physical:
-        if ap.get("is_top"):
-            physical_top_id = ap["tray_id"]
-            break
-    if not physical_top_id and accept_physical:
-        physical_top_id = accept_physical[0]["tray_id"]
-
-    accept_slots: List[Dict[str, Any]] = []
-    for ap in accept_physical:
-        accept_slots.append({
-            "tray_id": "",                                   # operator scans
-            "candidate_tray_id": ap["tray_id"],
-            "qty": ap["qty"],
-            "is_top": ap["tray_id"] == physical_top_id,
-            "source": "Reused",
-            "reason_id": None,
-            "reason_code": "",
-            "partial": ap.get("partial", False),
-        })
-
-    # ── Delink candidates ───────────────────────────────────────────
-    # Two sources, merged & de-duplicated by tray_id (preserves order:
-    # already-delinked first, then newly-emptied):
-    #   1. Trays previously delinked in DB (`delink_tray=True`).
-    #   2. Trays that became physically empty in *this* reject preview
-    #      (Phase D: ``consumed == 'full'``). These are not yet flagged
-    #      in DB but the operator can delink them now because they hold
-    #      zero stock after the rejection is committed.
-    delink_candidates: List[Dict[str, Any]] = []
-    seen_delink: set = set()
-    try:
-        from DayPlanning.models import DPTrayId_History
-        existing = list(
-            DPTrayId_History.objects
-            .filter(lot_id=lot_id, delink_tray=True)
-            .order_by("id")
-            .values("tray_id", "tray_quantity")
-        )
-        for d in existing:
-            tid = d.get("tray_id")
-            if tid and tid not in seen_delink:
-                seen_delink.add(tid)
-                delink_candidates.append({
-                    "tray_id": tid,
-                    "tray_quantity": d.get("tray_quantity") or 0,
-                    "source": "existing",
-                })
-    except Exception:  # pragma: no cover
-        logger.warning("[IS][REJECT] could not load delink candidates for lot=%s", lot_id)
-
-    # Newly-emptied trays from the current reject pull are eligible for
-    # delink even though their DB flag has not been flipped yet. Surface
-    # them so the modal shows the correct ``Delink Trays Available``
-    # count instead of zero.
-    for r in reject_physical:
-        if r.get("consumed") != "full":
-            continue
-        tid = r.get("tray_id")
-        if not tid or tid in seen_delink:
-            continue
-        seen_delink.add(tid)
-        delink_candidates.append({
-            "tray_id": tid,
-            "tray_quantity": r.get("qty") or 0,
-            "source": "newly_emptied",
-        })
-
-    return {
-        "success": True,
-        "lot_id": lot_id,
-        "model_no": ctx["model_no"],
-        "plating_stk_no": ctx["plating_stk_no"],
-        "tray_type": ctx["tray_type"],
-        "tray_capacity": capacity,
-        "total_qty": total_qty,
-        "reject_qty": reject_qty,
-        "accept_qty": accept_qty,
-        # Spec-friendly aliases:
-        "reject_total": reject_qty,
-        "accept_total": accept_qty,
-        "reject_slots": reject_slots,
-        "accept_slots": accept_slots,
-        "reject_trays": reject_slots,
-        "accept_trays": accept_slots,
-        "active_trays": [
-            {
-                "tray_id": t["tray_id"],
-                "qty": t.get("tray_quantity") or 0,
-                "is_top": bool(t.get("top_tray")),
-            }
-            for t in active_sorted
-        ],
-        "reusable_tray_ids": reusable_pool,
-        "delink_candidates": delink_candidates,
-        "reuse_summary": {
-            "reusable_existing": len(reusable_pool),
-            "new_required": new_required,
-            "delink_available": len(delink_candidates),
-        },
-        "auto_assign_tray_ids": False,
-    }
-
-
-def validate_tray_availability(tray_id: str, lot_id: str) -> Dict[str, Any]:
-    """Check if a tray ID is available for use in rejection workflow.
-
-    Returns one of::
-
-        {"valid": True,  "tray_status": "reused", "reason": ""}
-        {"valid": True,  "tray_status": "new",    "reason": ""}
-        {"valid": False, "tray_status": "invalid","reason": "<why>"}
-
-    ``tray_status`` is the **single source of truth** the modal renders as a
-    badge (``REUSED TRAY`` / ``NEW TRAY`` / ``INVALID TRAY``). The legacy
-    ``error`` and ``suggestions`` keys are intentionally dropped — the
-    factory ergonomics rule is that the system **never recommends a tray
-    ID**; the operator decides physically.
-
-    Rules (pool-based validation — operator can use any eligible tray):
-      * If tray already exists in ``DPTrayId_History`` and belongs to *this*
-        lot → ``reused``.
-      * If tray does not exist anywhere and matches the ``XX-A#####``
-        pattern → ``new``.
-      * Otherwise (belongs to another lot, occupied in IS by another lot,
-        bad format) → ``invalid``.
-    """
-    from DayPlanning.models import DPTrayId_History
-    from .models import IPTrayId
-    import re
-
-    tray_id = (tray_id or "").strip().upper()
-    if not tray_id:
-        return {"valid": False, "tray_status": "invalid", "reason": "tray_id is required"}
-
-    # Canonical new tray pattern (XX-A#####)
-    TRAY_PATTERN = re.compile(r"^[A-Z]{2}-A\d{5}$")
-
-    dp_tray = DPTrayId_History.objects.filter(tray_id=tray_id).first()
-    if dp_tray:
-        # Tray exists — must be the same lot to be a legal reuse.
-        if dp_tray.lot_id and dp_tray.lot_id != lot_id:
-            return {
-                "valid": False,
-                "tray_status": "invalid",
-                "reason": f"Tray belongs to lot {dp_tray.lot_id}",
-            }
-        tray_status = "reused"
-    else:
-        if not TRAY_PATTERN.match(tray_id):
-            return {
-                "valid": False,
-                "tray_status": "invalid",
-                "reason": "Invalid format (expected XX-A#####)",
-            }
-        tray_status = "new"
-
-    # Cross-module occupancy check (another lot already using the ID in IS).
-    ip_occupied = IPTrayId.objects.filter(
-        tray_id=tray_id,
-        rejected_tray=False,
-        delink_tray=False,
-        lot_id__isnull=False,
-    ).exclude(lot_id=lot_id).exists()
-    if ip_occupied:
-        return {
-            "valid": False,
-            "tray_status": "invalid",
-            "reason": "Tray occupied in Input Screening",
-        }
-
-    return {"valid": True, "tray_status": tray_status, "reason": ""}
-
-
-def _get_eligible_tray_suggestions(lot_id: str, limit: int = 3) -> List[str]:
-    """Return up to ``limit`` eligible tray IDs from the requesting lot.  
-    
-    Priority:  
-      1. Reusable trays (delink_tray=True OR tray_quantity=0)  
-      2. Active trays with stock (for reference)  
-    """
-    from django.db.models import Q
-    from DayPlanning.models import DPTrayId_History
-    
-    # Fetch eligible trays: delinked or zero qty (reusable)
-    eligible = list(
-        DPTrayId_History.objects.filter(
-            lot_id=lot_id,
-        ).filter(
-            Q(delink_tray=True) | Q(tray_quantity=0)
-        ).order_by("id").values_list("tray_id", flat=True)[:limit]
-    )
-    
-    # If not enough, add active trays with stock
-    if len(eligible) < limit:
-        active = list(
-            DPTrayId_History.objects.filter(
-                lot_id=lot_id,
-                delink_tray=False,
-                tray_quantity__gt=0,
-            ).order_by("-top_tray", "id").values_list("tray_id", flat=True)[:(limit - len(eligible))]
-        )
-        eligible.extend(active)
-    
-    return eligible
-
-
-@transaction.atomic
-def submit_partial_reject(payload: Dict[str, Any], user) -> Tuple[Dict[str, Any], int]:
-    """Persist the user's reject decision atomically.
-
-    Writes performed (all inside a single transaction):
-      * ``IP_Rejection_ReasonStore``  – aggregate row keyed by ``lot_id``.
-      * ``IP_Rejected_TrayScan``      – one row per (reason, qty).
-      * ``TotalStockModel`` flags     – marks the lot as having a partial
-        rejection so the Pick Table / Brass QC selectors react correctly.
-    """
-    from django.db.models import F
-    from modelmasterapp.models import TotalStockModel
-    from .models import (
-        IP_Rejected_TrayScan,
-        IP_Rejection_ReasonStore,
-        IP_Rejection_Table,
-    )
-
-    lot_id = payload["lot_id"]
-    reasons = payload["reasons"]            # {reason_id: qty}
-    total_reject = payload["total_reject_qty"]
-    remarks = payload["remarks"]
-    full_lot = payload["full_lot_rejection"]
-    tray_assignments = payload.get("tray_assignments") or []
-
-    # Lock the stock row first to serialise concurrent submits for the
-    # same lot (factory worst case: scanner double-tap).
-    stock = (
-        TotalStockModel.objects
-        .select_for_update()
-        .filter(lot_id=lot_id)
-        .first()
-    )
-    if not stock:
-        return {"success": False, "error": "Lot not found"}, 404
-
-    base_qty = stock.total_IP_accpeted_quantity or (
-        stock.batch_id.total_batch_quantity if stock.batch_id else 0
-    )
-    if total_reject > base_qty:
-        return (
-            {"success": False, "error": f"reject qty {total_reject} > available {base_qty}"},
-            400,
-        )
-
-    # Idempotency: refuse duplicate submits for the same lot.
-    if IP_Rejection_ReasonStore.objects.filter(lot_id=lot_id).exists():
-        return {"success": False, "error": "Rejection already recorded for this lot"}, 409
-
-    reason_objs = {
-        r.id: r for r in IP_Rejection_Table.objects.filter(id__in=reasons.keys())
-    }
-    missing = set(reasons.keys()) - set(reason_objs.keys())
-    if missing:
-        return {"success": False, "error": f"unknown reason_ids: {sorted(missing)}"}, 400
-
-    store = IP_Rejection_ReasonStore.objects.create(
-        lot_id=lot_id,
-        user=user,
-        total_rejection_quantity=total_reject,
-        batch_rejection=full_lot,
-        lot_rejected_comment=remarks or None,
-    )
-    store.rejection_reason.set(list(reason_objs.values()))
-
-    # Persist tray scans. Prefer the per-tray ``tray_assignments`` payload
-    # (one row per scanned tray, one reason per tray strictly enforced).
-    # Fall back to the legacy aggregate (one row per reason, no tray ID)
-    # when assignments are not provided so older clients keep working.
-    if tray_assignments:
-        IP_Rejected_TrayScan.objects.bulk_create([
-            IP_Rejected_TrayScan(
-                lot_id=lot_id,
-                rejected_tray_quantity=str(a["qty"]),
-                rejected_tray_id=a["tray_id"],
-                rejection_reason=reason_objs[a["reason_id"]],
-                user=user,
-            )
-            for a in tray_assignments
-        ])
-    else:
-        IP_Rejected_TrayScan.objects.bulk_create([
-            IP_Rejected_TrayScan(
-                lot_id=lot_id,
-                rejected_tray_quantity=str(qty),
-                rejection_reason=reason_objs[rid],
-                user=user,
-            )
-            for rid, qty in reasons.items()
-        ])
-
-    # Update the stock flags so downstream selectors / Brass QC see the
-    # correct state. Same field set the legacy view used.
-    if full_lot or total_reject >= base_qty:
-        stock.rejected_ip_stock = True
-        stock.accepted_Ip_stock = False
-        stock.few_cases_accepted_Ip_stock = False
-    else:
-        stock.few_cases_accepted_Ip_stock = True
-    stock.ip_onhold_picking = False
-    stock.next_process_module = "Brass_QC" if not full_lot else stock.next_process_module
-    stock.save()
-
-    logger.info(
-        "[IS][REJECT] lot=%s reject=%s reasons=%s full=%s user=%s",
-        lot_id, total_reject, list(reasons.keys()), full_lot,
-        getattr(user, "username", None),
-    )
-
-    return (
-        {
-            "success": True,
-            "lot_id": lot_id,
-            "rejected_qty": total_reject,
-            "accepted_qty": max(base_qty - total_reject, 0),
-            "full_lot_rejection": full_lot,
         },
         200,
     )

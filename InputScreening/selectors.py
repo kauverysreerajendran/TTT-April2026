@@ -12,10 +12,14 @@ filters applied. The only differences are:
 """
 from __future__ import annotations
 
+import logging
+from typing import Any, Dict, List, Optional
+
 from django.db.models import Exists, F, OuterRef, Q, QuerySet, Subquery
 
-# Imported lazily inside functions to avoid heavy import-time fan-out.
+logger = logging.getLogger(__name__)
 
+# Imported lazily inside functions to avoid heavy import-time fan-out.
 
 PICK_TABLE_COLUMNS = (
     "batch_id",
@@ -57,8 +61,8 @@ PICK_TABLE_COLUMNS = (
     "tray_verify",
     "lot_rejected_comment",
     "draft_tray_verify",
+    "has_draft",  # ✅ Added for draft indicator
 )
-
 
 def _latest(field: str):
     """Return a Subquery that pulls ``field`` from the most recent
@@ -72,7 +76,6 @@ def _latest(field: str):
         .values(field)[:1]
     )
 
-
 def pick_table_queryset() -> QuerySet:
     """Build the queryset that powers the Input Screening Pick Table.
 
@@ -81,17 +84,32 @@ def pick_table_queryset() -> QuerySet:
     
     **ERR3 FIX**: Excludes submitted lots (those in InputScreening_Submitted).
     Once a lot is submitted, it moves to the appropriate Completed/Reject table.
+    
+    **DRAFT SUPPORT**: Lots with active drafts (Draft_Saved=True, is_submitted=False)
+    remain in Pick Table so users can continue work. Only final submit removes them.
     """
     from modelmasterapp.models import ModelMasterCreation, TotalStockModel
     from .models import IP_Rejection_ReasonStore, InputScreening_Submitted
 
     tray_scan_exists = Exists(TotalStockModel.objects.filter(batch_id=OuterRef("pk")))
     
-    # Check if this lot_id has been submitted (is_active=True)
+    # Check if this lot_id has been FINALIZED (is_submitted=True)
+    # Draft lots (Draft_Saved=True, is_submitted=False) should NOT be excluded
     submitted_lots = Exists(
         InputScreening_Submitted.objects.filter(
             lot_id=OuterRef("stock_lot_id"),
-            is_active=True
+            is_active=True,
+            is_submitted=True  # ✅ Only exclude finalized submissions
+        )
+    )
+    
+    # Check if this lot has an active draft
+    has_draft = Exists(
+        InputScreening_Submitted.objects.filter(
+            lot_id=OuterRef("stock_lot_id"),
+            is_active=True,
+            Draft_Saved=True,
+            is_submitted=False
         )
     )
 
@@ -130,6 +148,7 @@ def pick_table_queryset() -> QuerySet:
             ip_release_reason=_latest("ip_release_reason"),
             remove_lot=_latest("remove_lot"),
             submitted=submitted_lots,
+            has_draft=has_draft,  # ✅ Indicate if lot has active draft
         )
         .filter(tray_scan_exists=True, Moved_to_D_Picker=True)
         .exclude(
@@ -144,124 +163,99 @@ def pick_table_queryset() -> QuerySet:
     return qs
 
 
-# ---------------------------------------------------------------------------
-# Reject-window selectors
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# REJECT MODAL — LOT + TRAY CONTEXT QUERY
+# ─────────────────────────────────────────────────────────────────────────────
 
+def get_lot_tray_context(lot_id: str, lock: bool = False) -> Dict[str, Any]:
+    """Fetch all tray and lot metadata required for the reject modal and
+    allocation engine.
 
-def get_rejection_reasons():
-    """Return [(id, code, reason), ...] used by the IS reject modal.
+    Args:
+        lot_id: Lot ID string (stock_lot_id on ModelMasterCreation).
+        lock:   When True, applies ``select_for_update()`` on DPTrayId_History
+                rows to prevent concurrent allocation races during final submit.
 
-    Sorted by ``rejection_reason_id`` so the modal renders deterministically
-    (R01, R02, ...). Read-only — no side effects.
+    Returns:
+        {
+            found: bool,
+            lot_qty: int,
+            tray_type: str|None,
+            tray_capacity: int,
+            active_trays: [{tray_id, qty}],
+            batch_id: str|None,
+            model_no: str|None,
+            plating_stk_no: str|None,
+        }
     """
-    from .models import IP_Rejection_Table
-
-    return list(
-        IP_Rejection_Table.objects
-        .all()
-        .order_by("rejection_reason_id")
-        .values("id", "rejection_reason_id", "rejection_reason")
-    )
-
-
-def get_lot_reject_context(lot_id: str):
-    """Return lot meta required to drive the reject modal header + allocator.
-
-    All values are read-only / cheap aggregates so this is safe to call
-    on every modal open. Returns ``None`` if the lot is not found.
-    """
-    from django.db.models import Sum
     from DayPlanning.models import DPTrayId_History
     from modelmasterapp.models import ModelMasterCreation, TotalStockModel
 
-    stock = (
-        TotalStockModel.objects
-        .select_related("batch_id")
-        .filter(lot_id=lot_id)
+    # ``lot_id`` arriving here is the value stored on TotalStockModel.lot_id
+    # (the same value rendered as ``data-stock-lot-id`` in the pick table).
+    # Resolve to the parent ModelMasterCreation row via the FK on TotalStockModel.
+    ts_row = (
+        TotalStockModel.objects.filter(lot_id=lot_id)
+        .only("batch_id")
         .first()
     )
-    if not stock:
-        return None
+    if not ts_row or not ts_row.batch_id_id:
+        return {"found": False}
 
-    batch = stock.batch_id
-    tray_capacity = (batch.tray_capacity if batch and batch.tray_capacity else 0) or 0
-    tray_type = (batch.tray_type if batch and batch.tray_type else "") or ""
-
-    # Source of truth for picker qty: total IP accepted qty when set,
-    # otherwise the batch total. Mirrors legacy IS view behaviour.
-    accepted_qty = stock.total_IP_accpeted_quantity or 0
-    base_qty = (
-        accepted_qty
-        if accepted_qty > 0
-        else (batch.total_batch_quantity if batch else 0)
+    mmc = (
+        ModelMasterCreation.objects.filter(pk=ts_row.batch_id_id)
+        .select_related("model_stock_no")
+        .only(
+            "batch_id",
+            "total_batch_quantity",
+            "tray_capacity",
+            "tray_type",
+            "plating_stk_no",
+            "model_stock_no__model_no",
+        )
+        .first()
     )
 
-    # Total qty actually present in the DP trays for this lot — used as a
-    # cap so we never allow more rejection than what the scanner counted.
-    dp_qty = (
-        DPTrayId_History.objects
-        .filter(lot_id=lot_id, delink_tray=False)
-        .aggregate(s=Sum("tray_quantity"))["s"]
-        or 0
-    )
-    total_qty = base_qty if base_qty else dp_qty
+    if not mmc:
+        return {"found": False}
 
-    plating_stk_no = ""
-    model_no = ""
-    if batch:
-        plating_stk_no = batch.plating_stk_no or ""
-        if getattr(batch, "model_stock_no", None):
-            model_no = getattr(batch.model_stock_no, "model_no", "") or ""
+    tray_qs = DPTrayId_History.objects.filter(lot_id=lot_id, delink_tray=False)
+    if lock:
+        tray_qs = tray_qs.select_for_update()
+
+    active_trays: List[Dict[str, Any]] = [
+        {
+            "tray_id": t["tray_id"],
+            "qty": t["tray_quantity"] or 0,
+            "top_tray": bool(t.get("top_tray")),
+        }
+        for t in tray_qs.order_by("id").values(
+            "tray_id", "tray_quantity", "top_tray"
+        )
+    ]
+
+    capacity = (
+        mmc.tray_capacity
+        or next((t["qty"] for t in active_trays if t["qty"] > 0), 16)
+    )
+    tray_type_val: Optional[str] = None
+    if active_trays:
+        first_tray = (
+            DPTrayId_History.objects.filter(lot_id=lot_id, delink_tray=False)
+            .only("tray_type")
+            .first()
+        )
+        tray_type_val = first_tray.tray_type if first_tray else None
 
     return {
-        "lot_id": lot_id,
-        "batch_id": batch.batch_id if batch else None,
-        "model_no": model_no,
-        "plating_stk_no": plating_stk_no,
-        "tray_type": tray_type,
-        "tray_capacity": tray_capacity,
-        "total_qty": total_qty,
+        "found": True,
+        "lot_qty": mmc.total_batch_quantity or 0,
+        "tray_type": tray_type_val,
+        "tray_capacity": capacity,
+        "active_trays": active_trays,
+        "batch_id": str(mmc.batch_id) if mmc.batch_id else None,
+        "model_no": (
+            mmc.model_stock_no.model_no if mmc.model_stock_no_id else None
+        ),
+        "plating_stk_no": mmc.plating_stk_no,
     }
-
-
-def get_active_dp_trays(lot_id: str):
-    """Return active (non-delinked) DP trays for ``lot_id`` ordered by id.
-
-    Used both for displaying the reusable-tray chip strip in the modal and
-    by the allocation algorithm to identify the existing top tray.
-    """
-    from DayPlanning.models import DPTrayId_History
-
-    return list(
-        DPTrayId_History.objects
-        .filter(lot_id=lot_id, delink_tray=False)
-        .order_by("id")
-        .values("tray_id", "tray_quantity", "top_tray")
-    )
-
-
-def get_max_tray_serial(prefix: str) -> int:
-    """Return the highest numeric suffix used for tray IDs starting with
-    ``prefix`` across the DP and IP tray tables.
-
-    Used by the new-tray-id generator in ``services.py`` so freshly minted
-    IDs never collide with existing rows. Returns 0 when the prefix has
-    no rows yet.
-    """
-    from DayPlanning.models import DPTrayId_History
-    from .models import IPTrayId
-
-    max_n = 0
-    for model in (DPTrayId_History, IPTrayId):
-        for tid in model.objects.filter(tray_id__startswith=prefix).values_list(
-            "tray_id", flat=True
-        ):
-            tail = (tid or "")[len(prefix):]
-            try:
-                n = int(tail)
-            except (TypeError, ValueError):
-                continue
-            if n > max_n:
-                max_n = n
-    return max_n

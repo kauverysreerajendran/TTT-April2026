@@ -2,15 +2,15 @@ from django.urls import path
 
 from .views import (
     IS_AcceptTable,
+    IS_AllocationPreviewAPI,
     IS_Completed_Table,
     IS_GetDPTraysAPI,
+    IS_PartialSubmitAPI,
+    IS_PartialSubmitV2API,
     IS_PickTable,
-    IS_RejectAllocateAPI,
-    IS_RejectContextAPI,
-    IS_RejectionReasonsAPI,
-    IS_RejectSubmitAPI,
+    IS_RejectModalContextAPI,
     IS_RejectTable,
-    IS_ValidateTrayAPI,
+    IS_ValidateScanAPI,
     IS_VerifyTrayAPI,
 )
 
@@ -23,10 +23,31 @@ urlpatterns = [
     path('IS_RejectTable/', IS_RejectTable.as_view(), name='IS_RejectTable'),
     path('get_dp_trays/', IS_GetDPTraysAPI.as_view(), name='IS_GetDPTraysAPI'),
     path('verify_tray/', IS_VerifyTrayAPI.as_view(), name='IS_VerifyTrayAPI'),
-    # Reject window APIs
-    path('rejection_reasons/', IS_RejectionReasonsAPI.as_view(), name='IS_RejectionReasonsAPI'),
-    path('reject_context/', IS_RejectContextAPI.as_view(), name='IS_RejectContextAPI'),
-    path('reject_allocate/', IS_RejectAllocateAPI.as_view(), name='IS_RejectAllocateAPI'),
-    path('validate_reject_tray/', IS_ValidateTrayAPI.as_view(), name='IS_ValidateTrayAPI'),
-    path('reject_submit/', IS_RejectSubmitAPI.as_view(), name='IS_RejectSubmitAPI'),
+    # ── Partial Accept / Partial Reject ──────────────────────────────────
+    path(
+        'reject_modal_context/',
+        IS_RejectModalContextAPI.as_view(),
+        name='IS_RejectModalContextAPI',
+    ),
+    path(
+        'allocation_preview/',
+        IS_AllocationPreviewAPI.as_view(),
+        name='IS_AllocationPreviewAPI',
+    ),
+    path(
+        'partial_submit/',
+        IS_PartialSubmitAPI.as_view(),
+        name='IS_PartialSubmitAPI',
+    ),
+    # ── Manual scan flow ────────────────────────────────────────────────
+    path(
+        'validate_scan/',
+        IS_ValidateScanAPI.as_view(),
+        name='IS_ValidateScanAPI',
+    ),
+    path(
+        'partial_submit_v2/',
+        IS_PartialSubmitV2API.as_view(),
+        name='IS_PartialSubmitV2API',
+    ),
 ]

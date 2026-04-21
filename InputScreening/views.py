@@ -15,22 +15,27 @@ from rest_framework.views import APIView
 from .models import IP_Rejection_Table
 from .selectors import (
     PICK_TABLE_COLUMNS,
-    get_lot_reject_context,
-    get_rejection_reasons,
     pick_table_queryset,
 )
 from .services import (
-    compute_reject_allocation,
     enrich_pick_table_rows,
     get_dp_tray_panel,
     record_tray_verification,
-    submit_partial_reject,
+)
+from .services_reject import (
+    build_live_preview,
+    get_reject_modal_context,
+    finalize_submission,
+    finalize_submission_v2,
+    validate_scanned_tray,
 )
 from .validators import (
     ValidationError,
     parse_lot_tray,
-    parse_reject_allocation_payload,
+    parse_manual_submit_payload,
+    parse_preview_payload,
     parse_reject_submit_payload,
+    parse_scan_payload,
     require_lot_id,
 )
 
@@ -38,12 +43,10 @@ logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 10
 
-
 def _is_admin(user):
     if not getattr(user, "is_authenticated", False):
         return False
     return user.groups.filter(name="Admin").exists()
-
 
 def _empty_table_context(user):
     return {
@@ -54,7 +57,6 @@ def _empty_table_context(user):
         "ip_rejection_reasons": IP_Rejection_Table.objects.all(),
         "is_admin": _is_admin(user),
     }
-
 
 class IS_PickTable(APIView):
     renderer_classes = [TemplateHTMLRenderer]
@@ -79,8 +81,8 @@ class IS_PickTable(APIView):
         }
         return Response(context, template_name=self.template_name)
 
-
 class IS_AcceptTable(APIView):
+    """Deprecated - Accept functionality removed. Kept for URL routing compatibility."""
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_AcceptTable.html"
     permission_classes = [IsAuthenticated]
@@ -88,8 +90,8 @@ class IS_AcceptTable(APIView):
     def get(self, request):
         return Response(_empty_table_context(request.user), template_name=self.template_name)
 
-
 class IS_Completed_Table(APIView):
+    """Deprecated - Reject/Accept flow removed. Kept for URL routing compatibility."""
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_Completed_Table.html"
     permission_classes = [IsAuthenticated]
@@ -97,15 +99,14 @@ class IS_Completed_Table(APIView):
     def get(self, request):
         return Response(_empty_table_context(request.user), template_name=self.template_name)
 
-
 class IS_RejectTable(APIView):
+    """Deprecated - Reject functionality removed. Kept for URL routing compatibility."""
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_RejectTable.html"
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(_empty_table_context(request.user), template_name=self.template_name)
-
 
 class IS_GetDPTraysAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -119,7 +120,6 @@ class IS_GetDPTraysAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(get_dp_tray_panel(lot_id))
-
 
 class IS_VerifyTrayAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -136,21 +136,23 @@ class IS_VerifyTrayAPI(APIView):
         return Response(payload, status=http_status)
 
 
-# ---------------------------------------------------------------------------
-# Reject window APIs (thin)
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# PARTIAL ACCEPT / PARTIAL REJECT — THREE NEW API VIEWS
+# ─────────────────────────────────────────────────────────────────────────────
 
+class IS_RejectModalContextAPI(APIView):
+    """GET: Return all data needed to open the Reject modal popup.
 
-class IS_RejectionReasonsAPI(APIView):
-    """Return the master list of rejection reasons rendered in the modal."""
-    permission_classes = [IsAuthenticated]
+    Query params:
+        lot_id (required)
 
-    def get(self, request):
-        return Response({"success": True, "reasons": get_rejection_reasons()})
-
-
-class IS_RejectContextAPI(APIView):
-    """Return lot meta (qty, capacity, model) for the reject modal header."""
+    Response:
+        {
+            success, lot_id, lot_qty, tray_type, tray_capacity,
+            active_tray_count, active_trays, rejection_reasons,
+            batch_id, model_no, plating_stk_no
+        }
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -161,64 +163,204 @@ class IS_RejectContextAPI(APIView):
                 {"success": False, "error": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        ctx = get_lot_reject_context(lot_id)
-        if ctx is None:
-            return Response(
-                {"success": False, "error": "Lot not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        return Response({"success": True, **ctx})
+        payload = get_reject_modal_context(lot_id)
+        if not payload.get("success"):
+            return Response(payload, status=status.HTTP_404_NOT_FOUND)
+        return Response(payload)
 
 
-class IS_RejectAllocateAPI(APIView):
-    """Live allocation preview — called as the operator types reject qty."""
-    permission_classes = [IsAuthenticated]
+class IS_AllocationPreviewAPI(APIView):
+    """POST: Compute live tray allocation preview without writing to DB.
 
-    def post(self, request):
-        try:
-            lot_id, reject_qty, reasons = parse_reject_allocation_payload(request.data)
-        except ValidationError as exc:
-            return Response(
-                {"success": False, "error": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        result = compute_reject_allocation(lot_id, reject_qty, reasons=reasons)
-        http = status.HTTP_200_OK if result.get("success") else status.HTTP_400_BAD_REQUEST
-        return Response(result, status=http)
+    Called each time the user updates reject quantities in the modal.
+    Frontend renders the returned preview – no business logic in JS.
 
+    Body (JSON):
+        {
+            "lot_id": "LID...",
+            "rejection_entries": [
+                {"reason_id": "R01", "reason_text": "SCRATCH", "qty": 17}
+            ],
+            "delink_count": 2
+        }
 
-class IS_ValidateTrayAPI(APIView):
-    """Real-time tray ID validation for rejection workflow.
-
-    Called by the modal as the operator scans/types tray IDs so invalid
-    trays are surfaced immediately (before submit attempt).
+    Response:
+        {
+            success, lot_id, lot_qty, tray_capacity,
+            total_reject_qty, total_accept_qty,
+            reject_allocations, accept_allocations,
+            delinked_tray_ids, new_reject_tray_ids,
+            validation_errors
+        }
     """
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        from .services import validate_tray_availability
-        tray_id = request.GET.get("tray_id", "").strip()
-        lot_id = request.GET.get("lot_id", "").strip()
-        if not tray_id or not lot_id:
-            return Response(
-                {"valid": False, "error": "tray_id and lot_id required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        result = validate_tray_availability(tray_id, lot_id)
-        return Response(result)
-
-
-class IS_RejectSubmitAPI(APIView):
-    """Atomic submit of the reject decision (idempotent per lot)."""
-    permission_classes = [IsAuthenticated]
-
     def post(self, request):
         try:
-            payload = parse_reject_submit_payload(request.data)
+            parsed = parse_preview_payload(request.data)
         except ValidationError as exc:
             return Response(
                 {"success": False, "error": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        result, http = submit_partial_reject(payload, request.user)
-        return Response(result, status=http)
+        payload = build_live_preview(
+            lot_id=parsed["lot_id"],
+            rejection_entries=parsed["rejection_entries"],
+            delink_count=parsed["delink_count"],
+        )
+        # Return 200 even with validation_errors – the frontend displays them
+        return Response(payload)
+
+
+class IS_PartialSubmitAPI(APIView):
+    """POST: Finalise and persist a partial accept / partial reject submission.
+
+    Re-runs the allocation engine server-side (prevents stale-preview abuse).
+    All DB writes are atomic – no partial saves possible.
+
+    Body (JSON):
+        {
+            "lot_id": "LID...",
+            "rejection_entries": [
+                {"reason_id": "R01", "reason_text": "SCRATCH", "qty": 17},
+                {"reason_id": "R04", "reason_text": "DAMAGE", "qty": 5}
+            ],
+            "delink_count": 2,
+            "remarks": "Optional operator note"
+        }
+
+    Response (success):
+        {
+            success: true,
+            lot_id, submission_id,
+            total_reject_qty, total_accept_qty,
+            reject_trays, accept_trays
+        }
+
+    Response (error):
+        { success: false, error: "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            parsed = parse_reject_submit_payload(request.data)
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = finalize_submission(
+                lot_id=parsed["lot_id"],
+                rejection_entries=parsed["rejection_entries"],
+                delink_count=parsed["delink_count"],
+                remarks=parsed["remarks"],
+                user=request.user,
+            )
+        except ValueError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except Exception:
+            logger.exception(
+                "[IS][PARTIAL_SUBMIT] Unexpected error for lot=%s",
+                parsed.get("lot_id"),
+            )
+            return Response(
+                {"success": False, "error": "Submission failed due to an internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(result, status=status.HTTP_201_CREATED)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MANUAL SCAN FLOW — VALIDATE A SINGLE TRAY SCAN
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_ValidateScanAPI(APIView):
+    """POST: validate a single user-scanned tray ID for a slot.
+
+    Body:
+        {
+            "lot_id": "...",
+            "slot_type": "reject" | "delink" | "accept",
+            "tray_id": "...",
+            "used_tray_ids": ["...", ...]
+        }
+
+    Response: see ``services_reject.validate_scanned_tray``.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            parsed = parse_scan_payload(request.data)
+        except ValidationError as exc:
+            return Response(
+                {"valid": False, "reason": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = validate_scanned_tray(
+            lot_id=parsed["lot_id"],
+            slot_type=parsed["slot_type"],
+            tray_id=parsed["tray_id"],
+            used_tray_ids=parsed["used_tray_ids"],
+            reject_qty=parsed.get("reject_qty", 0),
+        )
+        return Response(result)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MANUAL SCAN FLOW — FINAL SUBMIT WITH USER-SCANNED IDS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_PartialSubmitV2API(APIView):
+    """POST: persist partial reject using USER-SCANNED tray assignments.
+
+    Body:
+        {
+            "lot_id": "...",
+            "rejection_entries": [{reason_id, reason_text, qty}, ...],
+            "reject_assignments": [{tray_id, reason_id?}, ...],
+            "delink_tray_ids": ["...", ...],
+            "accept_assignments": [{tray_id}, ...],
+            "remarks": "..."
+        }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            parsed = parse_manual_submit_payload(request.data)
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = finalize_submission_v2(
+                lot_id=parsed["lot_id"],
+                rejection_entries=parsed["rejection_entries"],
+                reject_assignments=parsed["reject_assignments"],
+                delink_tray_ids=parsed["delink_tray_ids"],
+                accept_assignments=parsed["accept_assignments"],
+                remarks=parsed["remarks"],
+                user=request.user,
+            )
+        except ValueError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except Exception:
+            logger.exception(
+                "[IS][PARTIAL_SUBMIT_V2] Unexpected error for lot=%s",
+                parsed.get("lot_id"),
+            )
+            return Response(
+                {"success": False, "error": "Submission failed due to an internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(result, status=status.HTTP_201_CREATED)

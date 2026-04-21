@@ -20,6 +20,71 @@
       pointer-events: auto !important;
     }
 
+    /* ✅ NEW: Accept and Reject button styles */
+    .btn-accept-is {
+      background-color: #1ba878 !important;
+      color: white !important;
+      border: none !important;
+      padding: 6px 12px !important;
+      border-radius: 4px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      transition: all 0.3s ease !important;
+      margin-left: 4px !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+    }
+
+    .btn-accept-is:hover:not(:disabled) {
+      background-color: #159668 !important;
+      box-shadow: 0 2px 8px rgba(27, 168, 120, 0.4) !important;
+      transform: translateY(-2px) !important;
+    }
+
+    .btn-accept-is:active:not(:disabled) {
+      transform: translateY(0) !important;
+    }
+
+    .btn-accept-is:disabled {
+      opacity: 0.5 !important;
+      cursor: not-allowed !important;
+    }
+
+    .btn-reject-is {
+      background-color: #e57373 !important;
+      color: white !important;
+      border: none !important;
+      padding: 6px 12px !important;
+      border-radius: 4px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      transition: all 0.3s ease !important;
+      margin-left: 4px !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+    }
+
+    .btn-reject-is:hover:not(:disabled) {
+      background-color: #ef5350 !important;
+      box-shadow: 0 2px 8px rgba(229, 115, 115, 0.4) !important;
+      transform: translateY(-2px) !important;
+    }
+
+    .btn-reject-is:active:not(:disabled) {
+      transform: translateY(0) !important;
+    }
+
+    .btn-reject-is:disabled {
+      opacity: 0.5 !important;
+      cursor: not-allowed !important;
+    }
+
 /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
 @media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
