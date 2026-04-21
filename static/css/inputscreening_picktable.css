@@ -1,0 +1,1840 @@
+    /* ✅ FIX: Ensure acceptedTrayCancelBtn is always accessible */
+    #acceptedTrayCancelBtn {
+      z-index: 900005 !important; /* Highest priority above all modals and overlays */
+      pointer-events: auto !important;
+      cursor: pointer !important;
+      position: relative !important;
+      opacity: 1 !important;
+      user-select: none !important;
+    }
+    
+    /* Override any conflicting styles when modal is open */
+    .new-popup-modal.open #acceptedTrayCancelBtn {
+      pointer-events: auto !important;
+      z-index: 900005 !important;
+      cursor: pointer !important;
+    }
+    
+    /* Ensure button remains accessible even with body pointer-events restrictions */
+    body[style*="pointer-events: none"] #acceptedTrayCancelBtn {
+      pointer-events: auto !important;
+    }
+
+/* ========== Tablet override — paste at file end (after other table styles) ========== */
+/* --- Tablet: freeze first 3 columns consistently with desktop --- */
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+
+*{
+  font-size: 20px !important; /* Increase font size for better readability */
+}
+
+:root { --app-font-size: 20px; }
+
+.model-image-tooltip{
+  transform: translateX(-25%) !important;
+  top: 45% !important;
+  z-index: 500000 !important; /* high so it sits above table & scrollbar */
+
+}
+
+
+  /* Core layout blocks */
+  .content-wrapper,
+  .card, .card-body,
+  .table-responsive,
+  #order-listing,
+  #trayScanModal_DayPlanning,
+  .tray-scan-modal-DayPlanning,
+  .pagination-wrapper {
+    font-size: var(--app-font-size) !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Table headings / cells / icons */
+  #order-listing th,
+  #order-listing td,
+  #order-listing thead th {
+    font-size: var(--app-font-size) !important;
+    vertical-align: middle !important;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  /* Ensure heading/title and date controls match */
+  h4.text-left.mt-0.mb-3,
+  .calendar-bar .date-input-group label,
+  .calendar-bar .date-input-group input,
+  #search-date-range-simple,
+  #clear-date-filter-simple,
+  .calendar-btn,
+  #trayScanModal_DayPlanning input.form-control,#trayValidateBtn,
+  #trayScanModal_DayPlanning table th, #trayScanModal_DayPlanning table td,
+  #modalModelNo_DayPlanning
+ {
+    font-size: var(--app-font-size) !important;
+  }  
+
+  /* Reserve space for filter icons in header cells */
+#order-listing th {
+  position: relative;
+  overflow: visible !important;
+  white-space: normal !important; /* allow wrapping */
+}
+
+/* Ensure filter icons always stay to the right */
+#order-listing th .fa-filter {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px !important;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+  /* Column 1 */
+  #order-listing th:nth-child(1),
+  #order-listing td:nth-child(1) {
+    position: sticky;
+    left: 0 !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
+    background: #f7fafd;
+    z-index: 30;
+  }
+
+  /* Column 2 */
+  #order-listing th:nth-child(2),
+  #order-listing td:nth-child(2) {
+    position: sticky;
+    left: 120px !important;   /* = width of col1 */
+    min-width: 125px !important;
+    max-width: 125px !important;
+    background: #f7fafd;
+    z-index: 25;
+  }
+
+  /* Column 3 */
+  #order-listing th:nth-child(3),
+  #order-listing td:nth-child(3) {
+    position: sticky;
+    left: 245px !important;  /* 120 (col1) + 125 (col2) */
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background: #f7fafd;
+    z-index: 20;
+  }
+
+  /* Sticky header */
+  #order-listing thead th {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: #028084 !important;
+    color: #e5fcff !important;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+  .table-container {
+    overflow-x: auto;
+  }
+
+  /* Other columns (fit remaining space) */
+  #order-listing th:nth-child(4)  { min-width: 135px !important; max-width: 135px !important; }
+  #order-listing th:nth-child(5)  { min-width: 115px !important; max-width: 115px !important; }
+  #order-listing th:nth-child(6)  { min-width: 135px !important; max-width: 135px !important; }
+  #order-listing th:nth-child(7)  { min-width: 105px !important; max-width: 105px !important; }
+  #order-listing th:nth-child(8)  { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(9)  { min-width: 140px !important; max-width: 145px !important; }
+  #order-listing th:nth-child(10) { min-width: 120px !important; max-width: 120px !important; }
+  #order-listing th:nth-child(11) { min-width: 110px !important; max-width: 110px !important; }
+  #order-listing th:nth-child(12) { min-width: 120px !important; max-width: 120px !important; }
+  #order-listing th:nth-child(13) { min-width: 125px !important; max-width: 120px !important; }
+  #order-listing th:nth-child(14) { min-width: 110px !important; max-width: 100px !important; }
+  #order-listing th:nth-child(15) { min-width: 110px !important; max-width: 100px !important; }
+  #order-listing th:nth-child(16) { min-width: 120px !important; max-width: 150px !important; }
+  #order-listing th:nth-child(17) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(18) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(19) { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(20) { min-width: 130px !important; max-width: 130px !important; }
+
+
+  /* Prevent overlap */
+  #order-listing th:nth-child(-n+3),
+  #order-listing td:nth-child(-n+3) {
+    z-index: 45 !important;
+  }
+
+  /* Hide hidden columns */
+  #order-listing th[hidden],
+  #order-listing td[hidden] {
+    display: none !important;
+  }
+} 
+      /* Add to your CSS file for Excel-like grid lines */
+.table-bordered th, .table-bordered td {
+  border: 1px solid #d9dedf !important;
+}
+  /* Make the table header sticky */
+thead th {
+  position: sticky;
+  top: 0;
+  background-color: white; /* or your table header bg color */
+  z-index: 5; /* ensure it stays above the table rows */
+  
+}
+
+#order-listing thead th {
+  height: 38px !important; /* Increase as needed */
+  background: #028084 !important;
+  color: #e5fcff !important;
+  vertical-align: middle !important;
+  border-bottom: 2.5px solid #bdbdbd !important; /* Thicker grey line below heading */
+}
+/* style for hol/unhold row - blurred bg */
+#order-listing tr:last-child td {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  /* background: #f4f3f3 !important; */
+}
+/* Gird line color combination */
+#order-listing th,
+#order-listing td {
+  border-right: 1.5px solid #bababa !important; /* Vertical lines: blue */
+  border-bottom: 1.5px solid #121413 !important; /* Horizontal lines: green */
+}
+
+  
+/* Default: Desktop/Laptop (wider columns for larger font) - server */
+/* #order-listing th:nth-child(1) {
+  min-width: 90px;
+  max-width: 90px;
+} */ /* S.No */
+/* #order-listing th:nth-child(2) {
+  min-width: 90px;
+  max-width: 100px;
+} */ /* Last Updated */
+/* #order-listing th:nth-child(3) {
+  min-width: 90px;
+  max-width: 120px;
+} */ /* Plating */
+#order-listing th:nth-child(4) {
+  min-width: 110px;
+  max-width: 120px;
+} /* Polishing Stk No */
+#order-listing th:nth-child(5) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Plating Color */
+#order-listing th:nth-child(6) {
+  min-width: 100px;
+  max-width: 110px;
+} /* Category */
+#order-listing th:nth-child(7) {
+  min-width: 85px;
+  max-width: 95px;
+} /* Polish Finish */
+#order-listing th:nth-child(8) {
+  min-width: 110px;
+  max-width: 110px;
+} /* Version */
+#order-listing th:nth-child(9) {
+  min-width: 90px;
+  max-width: 95px;
+} /* Tray Cate-Capacity */
+#order-listing th:nth-child(10) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Source */
+#order-listing th:nth-child(11) {
+  min-width: 80px;
+  max-width: 80px;
+} /* No of Trays */
+#order-listing th:nth-child(12) {
+  min-width: 100px;
+  max-width: 105px;
+} /* Input Qty */
+#order-listing th:nth-child(13) {
+  min-width: 95px;
+  max-width: 100px;
+} /* Process Status */
+#order-listing th:nth-child(14) {
+  min-width: 90px;
+  max-width: 100px;
+} /*  Action */
+#order-listing th:nth-child(15) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Lot Status */
+#order-listing th:nth-child(16) {
+  min-width: 160px;
+  max-width: 170px;
+} /* Current Stage */
+#order-listing th:nth-child(17) {
+  min-width: 110px;
+  max-width: 100px;
+} /* Remarks */
+#order-listing th:nth-child(18) {
+  min-width: 100px;
+  max-width: 110px;
+}
+
+
+/* Right-align filter icons */
+#order-listing th .fa-filter {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+#order-listing th .fa-filter:hover {
+  opacity: 1;
+}
+
+
+  
+#order-listing th:last-child,
+#order-listing td:last-child {
+  border-right: none;
+  max-width: 95px;
+  min-width: 100px;
+}
+/* Overall Table Shrink */
+#order-listing tr,
+#order-listing td,
+#order-listing th {
+  height: 20px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+/* Table heading font size */
+/* Add this at the end of your <style> block in DP_PickTable.html */
+
+/* Professional table header styling with proper text wrapping */
+#order-listing th {
+  position: relative;
+  padding: 8px 12px 8px 16px !important;
+  text-align: left !important;
+  vertical-align: middle !important;
+  white-space: normal !important;
+  line-height: 1.3 !important;
+  word-break: keep-all !important;
+  hyphens: none !important;
+  /* font-size: 13px; */
+  /* font-weight: 600 !important; */
+  background: #028084 !important;
+  color: #e5fcff !important;
+  border-bottom: 2.5px solid #bdbdbd !important;
+  /* min-width: 80px;
+  max-width: 140px; */
+   overflow-wrap: break-word;
+  word-wrap: break-word;
+   z-index: 20 !important;
+}
+
+/* Make sure header cells for sticky columns are always above body cells */
+/* Fix: Prevent shadow/rows from showing behind sticky columns while scrolling */
+#order-listing th:nth-child(-n+3),
+#order-listing td:nth-child(-n+3) {
+  z-index: 30 !important; 
+box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+
+/* Prevent sticky columns from overlapping sticky header */
+#order-listing td:nth-child(-n+3) {
+  z-index: 11 !important;
+}
+  /* Make the first column sticky and opaque */
+#order-listing td:first-child,
+#order-listing th:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;      /* Or match your table background */
+  z-index: 2;            /* Above blurred rows */
+  box-shadow: 2px 0 4px rgba(0,0,0,0.03); /* Optional: subtle shadow */
+}
+/* Force specific table headers to wrap onto two lines */
+#order-listing th:nth-child(4),   /* Polishing Stk No */
+#order-listing th:nth-child(5),   /* Plating Color */
+#order-listing th:nth-child(7),   /* Polish Finish */
+#order-listing th:nth-child(9),   /* Tray Cate-Capacity */
+#order-listing th:nth-child(11),  /* No of Tray */
+#order-listing th:nth-child(12),  /* Input Qty */
+#order-listing th:nth-child(13)   /* Process Status */ {
+  white-space: normal !important;
+  line-height: 1.2 !important;
+  word-break: break-word !important;
+
+  text-align: center;
+  vertical-align: middle;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+/* Freeze style for 1st - 3 columns */
+/* --- Freeze first 3 columns and table header for #order-listing --- */
+#order-listing {
+  position: relative;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  background: #fff;
+  /* Ensure enough left padding for sticky columns */
+}
+
+#order-listing th,
+#order-listing td {
+  background-clip: padding-box;
+  /* Prevent overlap artifacts */
+  z-index: 1;
+}
+
+/* Sticky header */
+#order-listing thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #028084 !important;
+  color: #e5fcff !important;
+}
+
+/* Freeze 1st column */
+#order-listing th:nth-child(1),
+#order-listing td:nth-child(1) {
+  position: sticky;
+  left: 0 !important;
+  z-index: 12; /* Above header */
+  background: #f7fafd;
+  min-width: 105px;
+  max-width: 105px;
+  overflow: visible !important;
+}
+
+/* Freeze 2nd column - Last Updated*/
+#order-listing th:nth-child(2),
+#order-listing td:nth-child(2) {
+  position: sticky;
+  left: 105px; /* Match min-width of 1st col */
+  z-index: 12;
+  background: #f7fafd;
+  min-width: 100px; /* Increased width */
+  max-width: 110px; /* Increased width */
+}
+
+/* Freeze 3rd column */
+#order-listing th:nth-child(3),
+#order-listing td:nth-child(3) {
+  position: sticky;
+  left: 205px; /* 105px (1st) + 100px (2nd) */
+  z-index: 12;
+  background: #f7fafd;
+  min-width: 130px; /* Increased width 100 - old value*/
+  max-width: 140px; /* Increased width  110 - old value*/
+}
+
+/* ...existing code... */
+
+/* Prevent sticky columns from overlapping sticky header */
+#order-listing th:nth-child(-n + 3) {
+  z-index: 12;
+}
+#order-listing td:nth-child(-n + 3) {
+  z-index: 11;
+}
+
+/* Ensure sticky columns and header work together */
+#order-listing th,
+#order-listing td {
+  box-sizing: border-box;
+  /* Prevent content shake */
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+
+    .blurred-heading, .blurred-cell {
+    filter: blur(2px) grayscale(0.7) opacity(0.6);
+    user-select: none;
+    cursor: not-allowed;
+    background: #f5f5f5 !important;
+  }
+  /* Remark tooltip positioning is handled by JS */
+  .remark-tooltip {
+    top: auto !important;
+    bottom: auto !important;
+  }
+
+  /* Styling for remark tooltip close button */
+  .remark-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: none;
+    line-height: 1;
+    padding: 0;
+    transition: all 0.2s ease;
+    z-index: 1001;
+  }
+
+  .remark-close-btn:hover {
+    background: #c82333;
+    transform: scale(1.05);
+  }
+
+  .remark-close-btn:active {
+    transform: scale(0.95);
+  }
+#trayScanDetails.table-grid {
+  display: grid !important;
+  grid-template-columns: 100px 200px 160px !important; /* ✅ Increased column widths for better spacing */
+  gap: 2px !important; /* ✅ Added gap for cleaner separation */
+  max-height: 400px !important; /* ✅ Increased height for better usability */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 15px 20px 15px 10px; /* ✅ Enhanced padding for professional look */
+  margin-top: 15px; /* ✅ Better top spacing */
+  border: 2px solid #e1e8ed; /* ✅ Subtle professional border */
+  border-radius: 8px; /* ✅ Modern rounded corners */
+  background: #fafbfc; /* ✅ Professional background */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08); /* ✅ Professional shadow */
+}
+ 
+
+#trayScanDetails.table-grid::-webkit-scrollbar {
+  width: 8px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* ✅ MODAL Z-INDEX FIX: Ensure modals and their elements stay above all other content */
+.new-popup-modal,
+.tray-scan-modal,
+.tray-scan-modal-DayPlanning {
+  z-index: 900000 !important; /* Above tooltips (500000) but below critical overlays */
+}
+
+.new-popup-modal *,
+.tray-scan-modal *,
+.tray-scan-modal-DayPlanning * {
+  z-index: inherit !important; /* Inherit modal's high z-index */
+}
+
+/* Ensure modal close buttons are always clickable */
+#closeAcceptedTrayModal,
+#closeNewPopupModal,
+#closeTrayScanModal,
+#closeTrayScanModal_DayPlanning {
+  z-index: 900001 !important; /* Slightly above modal content */
+  pointer-events: auto !important;
+ 
+}
+
+/* ✅ Move close icon to right side for trayScanModal_DayPlanning */
+#closeTrayScanModal_DayPlanning {
+  position: absolute !important;
+  top: 10px !important;
+  right: 15px !important;
+  font-size: 24px !important;
+  color: #dc3545 !important;
+  cursor: pointer !important;
+  z-index: 900002 !important; /* Above modal content */
+  pointer-events: auto !important;
+  transition: color 0.3s ease !important;
+}
+
+
+
+
+#closeAcceptedTrayModal {
+  /* ...existing styles... */
+  color: #dc3545 !important; /* Use a grey shade, or remove this line for default */
+}
+
+/* Ensure modal backdrop doesn't interfere */
+.new-popup-modal.open #closeAcceptedTrayModal {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* ✅ FIX: Ensure accepted tray modal buttons display in original colors (not grey) */
+.new-popup-modal button {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  background-color: initial !important; /* Reset to original background */
+  color: white !important; /* Ensure text is visible */
+  border: none !important; /* Maintain original border */
+  border-radius: 30px !important; /* Maintain original radius */
+}
+
+/* Specific overrides for each button to ensure original colors */
+#acceptedTrayUpdateDraftBtn {
+  background-color: #f39c12 !important; /* Original draft color */
+}
+
+#acceptedTrayFinalSubmitBtn,
+#acceptedTraySubmitBtn {
+  background-color: #28a745 !important; /* Original submit color */
+}
+
+#acceptedTrayDraftBtn {
+  background-color: #007bff !important; /* Original draft color */
+}
+
+#acceptedTrayCancelBtn {
+  background-color: #6c757d !important; /* Original cancel color */
+}
+
+/* Override any disabled-looking styles */
+.new-popup-modal button:disabled,
+.new-popup-modal button[disabled] {
+  opacity: 1 !important;
+  background-color: #ccc !important; /* Fallback grey for truly disabled buttons */
+  cursor: not-allowed !important;
+}
+
+/* Ensure buttons look enabled when modal is open */
+.new-popup-modal.open button {
+  opacity: 1 !important;
+  filter: none !important; /* Remove any greyscale or blur effects */
+}
+
+/* Specific targeting for draft mode buttons */
+#acceptedTrayUpdateDraftBtn,
+#acceptedTrayFinalSubmitBtn,
+#acceptedTrayDraftBtn,
+#acceptedTraySubmitBtn,
+#acceptedTrayCancelBtn {
+  z-index: 900004 !important; /* Highest priority */
+  pointer-events: auto !important;
+  position: relative !important;
+  cursor: pointer !important;
+}
+
+/* Override any conflicting styles when modal is open */
+.new-popup-modal.open button {
+  pointer-events: auto !important;
+  z-index: 900004 !important;
+}
+
+/* Ensure modal backdrop doesn't interfere */
+.new-popup-modal {
+  pointer-events: auto !important;
+}
+
+.new-popup-modal * {
+  pointer-events: inherit !important; /* Allow children to inherit */
+}
+
+/* Override any conflicting styles */
+.new-popup-modal * #closeAcceptedTrayModal,
+.new-popup-modal.open * #closeAcceptedTrayModal {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 900003 !important;
+}
+
+/* Reduce tooltip z-index when modal is open */
+body:has(.new-popup-modal.open) .model-image-tooltip,
+body:has(.tray-scan-modal.open) .model-image-tooltip,
+body:has(.tray-scan-modal-DayPlanning.open) .model-image-tooltip {
+  z-index: 10000 !important; /* Much lower when modal is active */
+  pointer-events: none !important; /* Disable tooltip interaction when modal is open */
+}
+ 
+ 
+.tray-scan-modal.open {
+  width:500px !important;
+}
+/* ✅ ENHANCED: Professional 4-column layout with validation status */
+#trayScanDetails.table-grid.four-column {
+  grid-template-columns: 80px 1fr 120px 160px !important; /* ✅ Better proportions */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  gap: 3px !important; /* ✅ Consistent gap for 4-column */
+}
+ 
+/* ✅ ENHANCED: Professional styling for individual grid cells inside trayScanDetails */
+#trayScanDetails.table-grid > div {
+  background: #ffffff; /* ✅ Clean white background */
+  padding: 12px 15px; /* ✅ Generous padding for readability */
+  font-size: 14px; /* ✅ Better readability font size */
+  font-weight: 500; /* ✅ Semi-bold for clarity */
+  line-height: 1.4; /* ✅ Better line spacing */
+  border: 1px solid #e1e8ed; /* ✅ Subtle modern border */
+  border-radius: 6px; /* ✅ Rounded corners for modern look */
+  margin: 0; /* reset any margin from <p> or others */
+  color: #2c3e50; /* ✅ Professional text color */
+  transition: background-color 0.2s ease; /* ✅ Smooth hover effect */
+}
+
+/* ✅ ADDED: Hover effect for interactive feel */
+#trayScanDetails.table-grid > div:hover {
+  background: #f8f9fa;
+  border-color: #c3d4e6;
+}
+ 
+/* ✅ ENHANCED: Professional S.no column styling */
+#trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+  text-align: center;
+  font-weight: 700; /* ✅ Bold for S.no */
+  padding: 12px 8px; /* ✅ Better padding for S.no */
+  background: #f0f4f8; /* ✅ Distinct background for S.no */
+  color: #495057; /* ✅ Professional color */
+  border-left: 3px solid #007bff; /* ✅ Professional accent border */
+}
+ 
+/* ✅ ENHANCED: Mobile responsiveness with professional styling */
+@media (max-width: 768px) {
+  #trayScanDetails.table-grid {
+    grid-template-columns: 60px 1fr 1fr !important; /* ✅ Better mobile S.no column */
+    gap: 1px !important; /* ✅ Tighter gap on mobile */
+    padding: 10px 15px; /* ✅ Adjusted mobile padding */
+  }
+  #trayScanDetails.table-grid.four-column {
+    grid-template-columns: 50px 1fr 90px 110px !important; /* ✅ Better mobile proportions */
+  }
+  #trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+    padding: 8px 4px; /* ✅ Adjusted mobile S.no padding */
+    font-size: 12px; /* ✅ Readable font size on mobile */
+    font-weight: 700;
+  }
+  #trayScanDetails.table-grid > div {
+    padding: 8px 10px; /* ✅ Adjusted mobile cell padding */
+    font-size: 13px; /* ✅ Mobile font size */
+  }
+}
+ 
+/* ✅ ENHANCED: Very small screens with professional styling */
+@media (max-width: 480px) {
+  #trayScanDetails.table-grid {
+    grid-template-columns: 45px 1fr 80px !important; /* ✅ Compact mobile S.no column */
+    padding: 8px 10px; /* ✅ Compact mobile padding */
+  }
+  #trayScanDetails.table-grid.four-column {
+    grid-template-columns: 40px 1fr 75px 95px !important; /* ✅ Compact 4-column */
+  }
+  #trayScanDetails.table-grid > div {
+    padding: 6px 8px; /* ✅ Very compact cell padding */
+    font-size: 12px; /* ✅ Compact font size */
+  }
+  #trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+    padding: 6px 3px; /* ✅ Very compact S.no padding */
+    font-size: 11px;
+    font-weight: 700;
+  }
+}
+
+/* ========== HOLD/UNHOLD TOGGLE SWITCH STYLES ========== */
+.hold-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px; 
+}
+
+.hold-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.hold-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 20px;
+}
+
+.hold-slider:before {
+  position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #bbb;
+    border: 2px solid #bbb;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+input:checked + .hold-slider {
+  position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #e5e5e5;
+    border-radius: 20px;
+    transition: 0.3s;
+  }
+
+input:focus + .hold-slider {
+  box-shadow: 0 0 1px #28a745;
+}
+
+input:checked + .hold-slider:before {
+  transform: translateX(14px);
+}
+
+/* Disabled state for toggle switch */
+.hold-toggle-switch input:disabled + .hold-slider {
+  opacity: 0.5;
+  cursor: pointer;
+  background-color: #e0e0e0;
+}
+
+.hold-toggle-switch input:disabled + .hold-slider:before {
+  background-color: #f5f5f5;
+}
+
+/* Hold remark icon styles */
+.hold-remark-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  min-width: 18px;
+  min-height: 18px;
+  z-index: 2;
+  position: relative;
+}
+
+.hold-remark-icon:hover {
+  transform: scale(1.15);
+  cursor: pointer;
+}
+
+.row-inactive {
+  cursor: pointer !important;
+}
+
+.row-inactive * {
+  cursor: pointer !important;
+}
+
+/* ================================================================
+   REJECTION MODAL — Premium Centered Dialog
+   Refined · Modern · Elegant
+   ================================================================ */
+
+/* ── Ambient background variables ──────────────────────────────── */
+:root {
+  --tsm-accent:       #2a6f74;
+  --tsm-accent-light: #3d9096;
+  --tsm-accent-pale:  #e8f4f5;
+  --tsm-header-from:  #1f4e52;
+  --tsm-header-to:    #2a6f74;
+  --tsm-border:       #cdd7e2;
+  --tsm-bg:           #f9fafb;
+  --tsm-card:         #ffffff;
+  --tsm-text:         #1e2d3d;
+  --tsm-text-muted:   #6b7e96;
+  --tsm-scroll-thumb: rgba(42,111,116,0.35);
+  --tsm-scroll-hover: rgba(42,111,116,0.6);
+}
+
+/* ── Full-screen backdrop ────────────────────────────────────────  */
+#trayScanModal {
+  position: fixed !important;
+  inset: 0 !important;
+  right: auto !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 22, 38, 0.62) 0%,
+    rgba(28, 46, 64, 0.55) 100%
+  ) !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  z-index: 900100 !important;
+  transition: none !important;
+  backdrop-filter: blur(5px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(1.4) !important;
+  box-shadow: none !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+/* ── Open state ──────────────────────────────────────────────────  */
+#trayScanModal.open {
+  display: flex !important;
+  animation: tsmDialogEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes tsmDialogEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Dialog card ────────────────────────────────────────────────── */
+#trayScanModal > .tray-scan-modal-content {
+  background: var(--tsm-card) !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow:
+    0 2px 0  rgba(42,111,116,0.30),
+    0 20px 60px rgba(10, 20, 40, 0.30),
+    0 6px  18px rgba(10, 20, 40, 0.14) !important;
+  width: 760px !important;
+  max-width: 96vw !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 !important;
+  position: relative !important;
+  right: auto !important;
+  height: auto !important;
+  top: auto !important;
+  transition: none !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--tsm-scroll-thumb) transparent !important;
+}
+
+/* ── Custom scrollbar (Webkit) ───────────────────────────────────  */
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar {
+  width: 5px !important;
+}
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar-track {
+  background: transparent !important;
+  margin: 14px 0 !important;
+}
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar-thumb {
+  background: var(--tsm-scroll-thumb) !important;
+  border-radius: 10px !important;
+  border: none !important;
+  transition: background 0.2s !important;
+}
+#trayScanModal > .tray-scan-modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--tsm-scroll-hover) !important;
+}
+
+/* ── Header ──────────────────────────────────────────────────────  */
+#trayScanModal #trayScanModalHeader {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 0 !important; /* Reset — will size inner spans */
+  border-bottom: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  display: block !important;
+  line-height: 1 !important;
+}
+
+/* Inject header aesthetics via pseudo — avoids touching the h4 tag */
+#trayScanModal #trayScanModalHeader::before {
+  content: '' !important;
+  display: block !important;
+  height: 4px !important;
+  background: linear-gradient(
+    90deg,
+    var(--tsm-header-from) 0%,
+    var(--tsm-accent-light) 55%,
+    rgba(42,111,116,0.18) 100%
+  ) !important;
+  border-radius: 14px 14px 0 0 !important;
+}
+
+/* Header text row */
+#trayScanModal #trayScanModalHeader {
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  color: var(--tsm-text) !important;
+  background: linear-gradient(
+    135deg,
+    #f0f5f6 0%,
+    #e8f0f2 100%
+  ) !important;
+  padding: 0 58px 16px 26px !important;
+  border-bottom: 1.5px solid var(--tsm-border) !important;
+  border-radius: 14px 14px 0 0 !important;
+  display: block !important;
+  line-height: 1.5 !important;
+}
+
+#trayScanModal #trayScanModalHeader::before {
+  margin: 0 -58px 14px -26px !important; /* Stretch edge-to-edge above text */
+}
+
+/* ── "Rejection Window" breadcrumb text coloring ─────────────────  */
+#trayScanModal #trayScanModalHeader .modal-model-no {
+  color: var(--tsm-accent) !important;
+  font-weight: 700 !important;
+}
+
+/* ── Close button — circle with X ───────────────────────────────  */
+#trayScanModal #closeTrayScanModal {
+  position: absolute !important;
+  top: 12px !important;
+  right: 14px !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 29px !important;
+  text-align: center !important;
+  font-size: 22px !important;
+  font-weight: 300 !important;
+  color: var(--tsm-text-muted) !important;
+  background: rgba(255,255,255,0.72) !important;
+  border: 1px solid #dce4ee !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.15s !important;
+  backdrop-filter: blur(2px) !important;
+}
+#trayScanModal #closeTrayScanModal:hover {
+  background: #fdecea !important;
+  border-color: #e8b4b4 !important;
+  color: #c0392b !important;
+  transform: scale(1.08) !important;
+}
+
+/* ── Inner content area ──────────────────────────────────────────  */
+#trayScanModal #trayScanDetails {
+  padding: 22px 26px 28px !important;
+  background: var(--tsm-bg) !important;
+  min-height: 80px !important;
+}
+
+/* ── Micro-polish: table header inside the rejection reasons ─────  */
+#trayScanModal #trayScanDetails table thead th {
+  background: var(--tsm-accent) !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.4px !important;
+  padding: 10px 8px !important;
+  border-color: rgba(255,255,255,0.15) !important;
+}
+
+/* Stripe rows */
+#trayScanModal #trayScanDetails table tbody tr:nth-child(even) td {
+  background-color: #f4f8f9 !important;
+}
+#trayScanModal #trayScanDetails table tbody tr:hover td {
+  background-color: #eaf4f5 !important;
+  transition: background-color 0.15s !important;
+}
+
+/* ── Action buttons inside rejection form ────────────────────────  */
+#trayScanModal #draftButton,
+#trayScanModal #proceedButton,
+#trayScanModal #cancelButton {
+  font-family: 'Segoe UI', system-ui, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  padding: 9px 22px !important;
+  border-radius: 50px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: transform 0.14s, box-shadow 0.18s, filter 0.18s !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12) !important;
+}
+#trayScanModal #draftButton {
+  background: linear-gradient(135deg, #e67e22, #d35400) !important;
+  color: #fff !important;
+}
+#trayScanModal #proceedButton {
+  background: linear-gradient(135deg, var(--tsm-accent-light), var(--tsm-header-from)) !important;
+  color: #fff !important;
+}
+#trayScanModal #cancelButton {
+  background: linear-gradient(135deg, #95a5b5, #6b7e96) !important;
+  color: #fff !important;
+}
+#trayScanModal #draftButton:hover,
+#trayScanModal #proceedButton:hover,
+#trayScanModal #cancelButton:hover {
+  filter: brightness(1.09) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+}
+
+/* ── Qty input refinement ────────────────────────────────────────  */
+#trayScanModal .rejection-qty-input {
+  border: 1.5px solid #c8d6de !important;
+  border-radius: 6px !important;
+  background: #f7fcfc !important;
+  font-weight: 600 !important;
+  color: var(--tsm-accent) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+#trayScanModal .rejection-qty-input:focus {
+  border-color: var(--tsm-accent) !important;
+  box-shadow: 0 0 0 3px rgba(42,111,116,0.12) !important;
+  outline: none !important;
+}
+
+/* ── Total row ───────────────────────────────────────────────────  */
+#trayScanModal #rejection-total-qty {
+  background: linear-gradient(135deg, var(--tsm-accent-pale), #d6eef0) !important;
+  color: var(--tsm-accent) !important;
+  font-weight: 800 !important;
+  font-size: 16px !important;
+}
+
+/* ── Lot rejection remarks textarea ─────────────────────────────  */
+#trayScanModal #lotRejectionRemarksInput {
+  border: 1.5px solid #26c6a0 !important;
+  border-radius: 8px !important;
+  background: #f7fffd !important;
+  font-size: 13px !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+#trayScanModal #lotRejectionRemarksInput:focus {
+  border-color: #1aa37f !important;
+  box-shadow: 0 0 0 3px rgba(26,163,127,0.12) !important;
+  outline: none !important;
+}
+
+/* ── Responsive — tablet ─────────────────────────────────────────  */
+@media (max-width: 768px) {
+  #trayScanModal > .tray-scan-modal-content {
+    width: 98vw !important;
+    max-height: 93vh !important;
+    border-radius: 11px !important;
+  }
+  #trayScanModal #trayScanModalHeader {
+    font-size: 13px !important;
+    padding: 0 50px 14px 16px !important;
+  }
+  #trayScanModal #trayScanDetails {
+    padding: 14px 16px 18px !important;
+  }
+}
+
+/* ── Responsive — mobile ─────────────────────────────────────────  */
+@media (max-width: 480px) {
+  #trayScanModal {
+    padding: 6px !important;
+  }
+  #trayScanModal > .tray-scan-modal-content {
+    max-height: 97vh !important;
+    border-radius: 8px !important;
+  }
+  #trayScanModal #draftButton,
+  #trayScanModal #proceedButton,
+  #trayScanModal #cancelButton {
+    padding: 8px 16px !important;
+    font-size: 12.5px !important;
+  }
+}
+
+/* ================================================================
+   ACCEPTED TRAY / DELINK MODAL  (#newPopupModal)
+   Centered overlay — matches rejection modal palette
+   ================================================================ */
+
+/* ── Full-screen backdrop ────────────────────────────────────────  */
+#newPopupModal {
+  position: fixed !important;
+  inset: 0 !important;
+  right: auto !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 22, 38, 0.58) 0%,
+    rgba(28, 46, 64, 0.50) 100%
+  ) !important;
+  display: none !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  z-index: 900200 !important;
+  transition: none !important;
+  backdrop-filter: blur(5px) saturate(1.35) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(1.35) !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  animation: none !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+
+/* ── Open state ──────────────────────────────────────────────────  */
+#newPopupModal.open {
+  display: flex !important;
+  left: 0 !important;
+  top: 0 !important;
+  animation: npmEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes npmEnter {
+  from { opacity: 0; transform: translateY(-16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+/* ── Dialog card ─────────────────────────────────────────────────  */
+#newPopupModal > .tray-scan-modal-content {
+  background: #ffffff !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+  box-shadow:
+    0 2px 0  rgba(42, 111, 116, 0.28),
+    0 22px 64px rgba(10, 20, 40, 0.30),
+    0 6px  20px rgba(10, 20, 40, 0.12) !important;
+  width: 680px !important;
+  max-width: 96vw !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 !important;
+  position: relative !important;
+  right: auto !important;
+  left: auto !important;
+  top: auto !important;
+  height: auto !important;
+  transition: none !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(42,111,116,0.32) transparent !important;
+}
+
+/* ── Scrollbar (Webkit) ──────────────────────────────────────────  */
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar { width: 5px !important; }
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar-track {
+  background: transparent !important; margin: 14px 0 !important;
+}
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar-thumb {
+  background: rgba(42,111,116,0.30) !important;
+  border-radius: 10px !important;
+}
+#newPopupModal > .tray-scan-modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(42,111,116,0.55) !important;
+}
+
+/* ── Accent top bar injected via wrapper pseudo ──────────────────  */
+#newPopupModal > .tray-scan-modal-content::before {
+  content: '' !important;
+  display: block !important;
+  height: 4px !important;
+  background: linear-gradient(
+    90deg,
+    #1f4e52 0%,
+    #3d9096 55%,
+    rgba(42,111,116,0.15) 100%
+  ) !important;
+  border-radius: 14px 14px 0 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* ── Close button (rendered dynamically by JS) ───────────────────  */
+#newPopupModal #closeAcceptedTrayModal,
+#newPopupModal #closeNewPopupModal {
+  position: absolute !important;
+  top: 12px !important;
+  right: 14px !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 28px !important;
+  text-align: center !important;
+  font-size: 18px !important;
+  font-weight: 300 !important;
+  color: #6b7e96 !important;
+  background: rgba(255,255,255,0.78) !important;
+  border: 1px solid #dce4ee !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+  padding: 0 !important;
+  transition: background 0.18s, color 0.18s, transform 0.14s !important;
+  backdrop-filter: blur(2px) !important;
+}
+#newPopupModal #closeAcceptedTrayModal:hover,
+#newPopupModal #closeNewPopupModal:hover {
+  background: #fdecea !important;
+  border-color: #e8b4b4 !important;
+  color: #c0392b !important;
+  transform: scale(1.08) !important;
+}
+
+/* ── Inner content padding ───────────────────────────────────────  */
+#newPopupModal > .tray-scan-modal-content > * {
+  padding-left: 22px !important;
+  padding-right: 22px !important;
+}
+#newPopupModal > .tray-scan-modal-content > *:first-child {
+  padding-top: 18px !important;
+}
+#newPopupModal > .tray-scan-modal-content > *:last-child {
+  padding-bottom: 22px !important;
+}
+/* Don't double-pad the accent bar pseudo-element */
+#newPopupModal > .tray-scan-modal-content > div:first-of-type {
+  padding-top: 18px !important;
+}
+
+/* ── Section sub-headers inside dynamic HTML ─────────────────────  */
+#newPopupModal .d-flex.justify-content-between h4,
+#newPopupModal .d-flex.justify-content-between h5 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  color: #1e2d3d !important;
+}
+
+/* ── Delink table — red accent ───────────────────────────────────  */
+#delinkSection table thead th {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%) !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  border-color: rgba(255,255,255,0.18) !important;
+}
+#delinkSection table tbody tr:nth-child(even) td {
+  background-color: #fdf4f4 !important;
+}
+#delinkSection table tbody tr:hover td {
+  background-color: #fce8e8 !important;
+  transition: background-color 0.14s !important;
+}
+
+/* ── Top tray scan input ─────────────────────────────────────────  */
+#topTrayIdInput {
+  border: 1.5px solid #c8d6de !important;
+  border-radius: 7px !important;
+  background: #f7fbfc !important;
+  font-weight: 600 !important;
+  color: #1f4e52 !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+#topTrayIdInput:focus {
+  border-color: #2a6f74 !important;
+  box-shadow: 0 0 0 3px rgba(42,111,116,0.13) !important;
+  outline: none !important;
+}
+#topTrayIdInput[readonly] {
+  background: #e8f5e4 !important;
+  border-color: #4caf50 !important;
+  color: #2e7d32 !important;
+}
+
+/* ── Action buttons ──────────────────────────────────────────────  */
+#newPopupModal #acceptedTrayDraftBtn,
+#newPopupModal #acceptedTrayFinalSubmitBtn,
+#newPopupModal #acceptedTraySubmitBtn,
+#newPopupModal #acceptedTrayCancelBtn {
+  font-family: 'Segoe UI', system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  padding: 9px 22px !important;
+  border-radius: 50px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: transform 0.13s, box-shadow 0.18s, filter 0.16s !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.11) !important;
+}
+#newPopupModal #acceptedTrayDraftBtn {
+  background: linear-gradient(135deg, #e67e22, #d35400) !important;
+  color: #fff !important;
+}
+#newPopupModal #acceptedTrayFinalSubmitBtn,
+#newPopupModal #acceptedTraySubmitBtn {
+  background: linear-gradient(135deg, #3d9096, #1f4e52) !important;
+  color: #fff !important;
+}
+#newPopupModal #acceptedTrayCancelBtn {
+  background: linear-gradient(135deg, #8e9db0, #6b7e96) !important;
+  color: #fff !important;
+}
+#newPopupModal #acceptedTrayDraftBtn:hover,
+#newPopupModal #acceptedTrayFinalSubmitBtn:hover,
+#newPopupModal #acceptedTraySubmitBtn:hover,
+#newPopupModal #acceptedTrayCancelBtn:hover {
+  filter: brightness(1.09) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+}
+
+/* ── Tablet ──────────────────────────────────────────────────────  */
+@media (max-width: 768px) {
+  #newPopupModal > .tray-scan-modal-content {
+    width: 98vw !important;
+    max-height: 93vh !important;
+    border-radius: 10px !important;
+  }
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────  */
+@media (max-width: 480px) {
+  #newPopupModal { padding: 6px !important; }
+  #newPopupModal > .tray-scan-modal-content {
+    max-height: 96vh !important;
+    border-radius: 8px !important;
+  }
+}
+
+/* ========== TRAY VERIFICATION PANEL MODAL ANIMATIONS ========== */
+@keyframes tvmSlideIn {
+  from { opacity: 0; transform: translateY(-24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+@keyframes tvmShake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-7px); }
+  40%       { transform: translateX(7px); }
+  60%       { transform: translateX(-5px); }
+  80%       { transform: translateX(5px); }
+}
+@keyframes tvmRowFlash {
+  0%   { background-color: #d4edda; }
+  100% { background-color: transparent; }
+}
+/* Elegant progress bar animations */
+@keyframes scanStripe {
+  0%   { left: -100%; }
+  100% { left: 100%; }
+}
+@keyframes qtySparkle {
+  0%   { opacity: 0; transform: scale(0.8); }
+  50%  { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(0.8); }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   IS REJECT MODAL — Light teal theme (Brass QC parity, IS-scoped)
+   Added for the "Reject" button popup in IS_PickTable.html.
+   ──────────────────────────────────────────────────────────────────── */
+/* ── Width override: compact modal (reduced from 1600px → 900px) ── */
+#trayScanModal .tray-scan-modal-content {
+  width: 88vw !important;
+  max-width: 900px !important;
+}
+/* Obsolete workflow-steps banner is never rendered any more — keep this
+   defensive rule so any cached/legacy DOM cannot reserve vertical space. */
+#trayScanModal #isRejWorkflowSteps { display: none !important; }
+
+#trayScanModal .is-reject-body {
+  padding: 8px 10px 10px;
+  background: linear-gradient(135deg, #f3fbfa, #f6fbf4) !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #1e2d3d;
+  border-radius: 0 0 14px 14px;
+}
+
+#trayScanModal .is-reject-summary {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid #cfe6e3;
+  border-left: 3px solid #4db6ac;
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+#trayScanModal .is-reject-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#trayScanModal .is-reject-summary-cell .lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: #607d8b;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+#trayScanModal .is-reject-summary-cell .val {
+  font-size: 15px;
+  font-weight: 700;
+  color: #00695c;
+  word-break: break-all;
+}
+
+#trayScanModal .is-reject-totals {
+  display: grid;
+  grid-template-columns: 120px 120px;
+  gap: 10px;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+#trayScanModal .is-reject-total-card {
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-start;
+  border: 1.5px solid;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  min-height: auto;
+}
+#trayScanModal .is-reject-total-card.reject {
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+  border-color: #f1c6c6;
+}
+#trayScanModal .is-reject-total-card.accept {
+  background: linear-gradient(135deg, #f3faf3 0%, #e8f5e9 100%);
+  border-color: #c4e2c4;
+}
+#trayScanModal .is-reject-total-card .lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+#trayScanModal .is-reject-total-card.reject .lbl { color: #c62828; }
+#trayScanModal .is-reject-total-card.accept .lbl { color: #2e7d32; }
+#trayScanModal .is-reject-total-card .val {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+#trayScanModal .is-reject-total-card.reject .val { color: #c62828; }
+#trayScanModal .is-reject-total-card.accept .val { color: #2e7d32; }
+
+#trayScanModal .is-reject-section {
+  background: rgba(255,255,255,0.85);
+  border: 1px solid #d9ebe8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+#trayScanModal .is-reject-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #00695c;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #b2dfdb;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+#trayScanModal .is-reject-reasons-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 18px;
+}
+#trayScanModal .is-reject-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  color: #607d8b;
+  padding: 4px 0;
+}
+#trayScanModal .is-reject-reason-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #e0f2f1;
+}
+#trayScanModal .is-reject-reason-row .seq {
+  min-width: 28px;
+  text-align: right;
+  color: #78909c;
+  font-size: 11px;
+  font-weight: 600;
+}
+#trayScanModal .is-reject-reason-row .reason-text {
+  flex: 1;
+  font-size: 12px;
+  color: #1e2d3d;
+  line-height: 1.3;
+}
+#trayScanModal .is-reject-qty-input {
+  width: 70px;
+  text-align: center;
+  border: 1px solid #80cbc4;
+  border-radius: 6px;
+  padding: 3px 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #00695c;
+  background: #ffffff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#trayScanModal .is-reject-qty-input:focus {
+  outline: none;
+  border-color: #00897b;
+  box-shadow: 0 0 0 3px rgba(0,137,123,0.18);
+}
+#trayScanModal .is-reject-qty-input.has-value {
+  background: #e0f2f1;
+  border-color: #00897b;
+}
+
+#trayScanModal .is-reject-alloc-grids {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+#trayScanModal .is-reject-alloc-grids > div {
+  flex: 1 1 380px;
+  min-width: 360px;
+}
+#trayScanModal .is-reject-alloc-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 6px 6px 0 0;
+  text-align: center;
+}
+#trayScanModal .is-reject-alloc-head.reject {
+  background: #fde2e4;
+  color: #b71c1c;
+}
+#trayScanModal .is-reject-alloc-head.accept {
+  background: #d6ecd8;
+  color: #1b5e20;
+}
+#trayScanModal .is-reject-alloc-list {
+  border: 1px solid #cfe6e3;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  background: #ffffff;
+  max-height: 150px;
+  overflow-y: auto;
+}
+#trayScanModal .is-reject-alloc-row {
+  display: grid;
+  grid-template-columns: 30px 1fr 50px 70px;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border-bottom: 1px solid #f1f8e9;
+  align-items: center;
+}
+#trayScanModal .is-reject-alloc-row:nth-child(even) { background: #fafafa; }
+#trayScanModal .is-reject-alloc-row .sno { color: #78909c; text-align: center; }
+#trayScanModal .is-reject-alloc-row .tray-id { color: #00695c; font-weight: 600; word-break: break-all; }
+#trayScanModal .is-reject-alloc-row .qty { text-align: center; color: #1e2d3d; font-weight: 600; }
+#trayScanModal .is-reject-alloc-row .badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+}
+#trayScanModal .is-reject-alloc-row .badge.new { background: #e3f2fd; color: #1565c0; }
+#trayScanModal .is-reject-alloc-row .badge.reused { background: #fff3e0; color: #e65100; }
+#trayScanModal .is-reject-alloc-row .badge.top { background: #ffe0b2; color: #bf360c; }
+#trayScanModal .is-reject-alloc-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #90a4ae;
+}
+
+#trayScanModal .is-reject-error {
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  color: #c62828;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+#trayScanModal .is-reject-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+#trayScanModal .is-reject-btn {
+  padding: 9px 22px;
+  border-radius: 24px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s, opacity 0.15s;
+}
+#trayScanModal .is-reject-btn.cancel {
+  background: #b0bec5;
+  color: #ffffff;
+}
+#trayScanModal .is-reject-btn.cancel:hover { background: #90a4ae; }
+#trayScanModal .is-reject-btn.submit {
+  background: linear-gradient(135deg, #00897b, #00695c);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0,105,92,0.25);
+}
+#trayScanModal .is-reject-btn.submit:hover:not([disabled]) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,105,92,0.32);
+}
+#trayScanModal .is-reject-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+}
+
+@media (max-width: 700px) {
+  #trayScanModal .is-reject-summary { grid-template-columns: 1fr 1fr; }
+  #trayScanModal .is-reject-reasons-grid { grid-template-columns: 1fr; }
+  #trayScanModal .tray-scan-modal-content { width: 95vw !important; max-width: 100% !important; }
+}
+
+
+/* ------------------------------------------------------------------
+   IS Reject Modal � running banner, active-tray chips, mandatory
+   remark highlight (added with reject revamp).
+   ------------------------------------------------------------------ */
+#trayScanModal .is-reject-banner {
+  overflow: hidden;
+  background: linear-gradient(90deg, #e0f2f1, #e8f5e9);
+  border: 1px solid #b2dfdb;
+  border-radius: 8px;
+  padding: 3px 0;
+  margin-bottom: 6px;
+  position: relative;
+}
+#trayScanModal .is-reject-banner-track {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: isRejectMarquee 28s linear infinite;
+  font-size: 12px;
+  color: #00695c;
+  font-weight: 600;
+}
+#trayScanModal .is-reject-banner-track span {
+  margin-right: 42px;
+  letter-spacing: 0.2px;
+}
+#trayScanModal .is-reject-banner:hover .is-reject-banner-track {
+  animation-play-state: paused;
+}
+@keyframes isRejectMarquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+#trayScanModal .is-reject-tray-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.85);
+  border: 1px dashed #b2dfdb;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+#trayScanModal .is-reject-tray-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cfe6e3;
+  border-radius: 14px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #1e2d3d;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+#trayScanModal .is-reject-tray-chip .qty {
+  background: #e0f2f1;
+  color: #00695c;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+}
+#trayScanModal .is-reject-tray-chip.top {
+  border-color: #ffcc80;
+  background: #fff8e1;
+}
+#trayScanModal .is-reject-tray-chip.top::after {
+  content: 'TOP';
+  background: #ffe0b2;
+  color: #bf360c;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* Mandatory remark highlight when Lot Rejection is checked */
+#trayScanModal #isRejRemarksSection.required {
+  background: #fff8e1;
+  border: 1px solid #ffd180;
+  box-shadow: 0 0 0 3px rgba(255,167,38,0.12);
+}
+#trayScanModal #isRejRemarksSection.required #isRejRemarks {
+  border-color: #ff9800;
+}
+#trayScanModal #isRejRemarksSection.required #isRejRemarksLabel::after {
+  content: ' *';
+  color: #c62828;
+  font-weight: 700;
+}
+
+/* Lot-Rej chip-style label active state */
+#isRejFullLotWrap.active {
+  background: #ffcdd2;
+  color: #7b1010;
+}
+
+/* Compact reasons grid */
+#trayScanModal .is-reject-reason-row { padding: 3px 0; }

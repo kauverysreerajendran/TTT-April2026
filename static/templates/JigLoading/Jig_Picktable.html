@@ -556,54 +556,35 @@
   </div>
 </div>
 
-<!-- Jig Loading Tray Scan Modal (Right-side UI, copied from BrassAudit) -->
-<div id="newPopupModal_Jig" class="new-popup-modal">
-  <div>
-    <span id="closeNewPopupModal_Jig" class="tray-scan-close">&times;</span>
-    
-    <!-- Header Section with Model Details -->
-    <div style="background: linear-gradient(135deg, #e8f5f7 0%, #f0fafb 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #028084;">
-      <div style="display: flex; align-items: flex-start; gap: 12px;">
-        <img id="trayModalUserImg_Jig_top" src="/static/assets/images/imagePlaceholder.jpg" alt="Model image" style="border-radius: 4px; width: 60px; height: 60px; object-fit: contain; background: #fff; padding: 4px;" />
-        <div style="flex: 1;">
-          <h6 style="margin: 0 0 8px 0; font-weight: 700; color: #028084; font-size: 13px;">MODEL NO: <span id="modalModelNo_Jig_top" style="font-size: 14px;"></span></h6>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
-            <div>
-              <span style="color: #666; font-weight: 500;">Lot Qty:</span>
-              <span id="modalLotQty_Jig_top" style="font-weight: 700; color: #e67e22; margin-left: 4px;"></span>
-            </div>
-
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px; flex-direction: column; margin-top: 2px;">
-          <button id="trayValidateBtn_Jig_top" type="button" class="tray-validate-btn" style="white-space: nowrap; padding: 6px 14px; font-size: 12px;">Tray Validate</button>
-          <img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoBtn_Jig_top" style="width: 24px; height: 24px; cursor: pointer; align-self: center;" title="Clear Tray IDs" />
+<!-- Jig Loading Tray View Panel (right-side slide-in) -->
+<div id="jigTrayViewPanel" class="jig-tray-view-panel">
+  <div class="jig-tray-view-panel__header">
+    <span id="closeJigTrayViewPanel" class="jig-tray-view-panel__close">&times;</span>
+    <div class="jig-tray-view-panel__model-info">
+      <img id="trayModalUserImg_Jig_top" src="/static/assets/images/imagePlaceholder.jpg" alt="Model image" class="jig-tray-view-panel__model-img" />
+      <div class="jig-tray-view-panel__model-details">
+        <h6 class="jig-tray-view-panel__model-no">MODEL NO: <span id="modalModelNo_Jig_top"></span></h6>
+        <div class="jig-tray-view-panel__meta">
+          <span class="jig-tray-view-panel__meta-label">Lot Qty:</span>
+          <span id="modalLotQty_Jig_top" class="jig-tray-view-panel__meta-value"></span>
         </div>
       </div>
     </div>
-
-    <!-- Section Title -->
-    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #028084; border-left: 3px solid #028084; padding-left: 10px; margin: 16px 0 12px 0;">
-      Jig Loading - Tray Scan
-    </div>
-
-    <!-- Tray Details Table -->
-    <div id="trayScanDetails_Jig_top" style="margin-top: 8px;">
-      <table class="table accepted-trays-table" style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr style="background:#f5f5f5; color:#333;">
-            <th style="width:70px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">S.no</th>
-            <th style="text-align:left; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray ID</th>
-            <th style="width:130px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray Qty</th>
-          </tr>
-        </thead>
-        <tbody id="acceptedTraysBody_Jig">
-          <!-- Dynamic rows injected by JS -->
-        </tbody>
-      </table>
-    </div>
-
-
+    <div class="jig-tray-view-panel__section-title">Jig Loading - Tray Scan</div>
+  </div>
+  <div class="jig-tray-view-panel__body">
+    <table class="jig-tray-view-panel__table">
+      <thead>
+        <tr>
+          <th style="width:60px;">S.No</th>
+          <th>Tray ID</th>
+          <th style="width:100px;">Tray Qty</th>
+        </tr>
+      </thead>
+      <tbody id="acceptedTraysBody_Jig">
+        <!-- Dynamic rows injected by JS -->
+      </tbody>
+    </table>
   </div>
 </div>
 
@@ -1161,10 +1142,10 @@ document.addEventListener('DOMContentLoaded', function () {
       // For excess lots, fetch half_filled_tray_info via lightweight API (not embedded in DOM)
       if (actionEl.getAttribute('data-is-excess-lot') === 'true') {
         var excessBatchId = params.batch_id;
-        var modal = document.getElementById('newPopupModal_Jig');
+        var modal = document.getElementById('jigTrayViewPanel');
         if (modal) {
-          var content = modal.querySelector('.tray-scan-modal-content') || modal;
-          content.innerHTML = '<div style="padding:40px;text-align:center;color:#666;">Loading excess tray data...</div>';
+          var body = modal.querySelector('.jig-tray-view-panel__body');
+          if (body) body.innerHTML = '<div style="padding:40px;text-align:center;color:#666;">Loading excess tray data...</div>';
           modal.classList.add('open');
         }
         fetch('/jig_loading/api/excess-tray-info/?batch_id=' + encodeURIComponent(excessBatchId), {
@@ -1176,22 +1157,25 @@ document.addEventListener('DOMContentLoaded', function () {
           var hfTrays = data.trays || [];
           var totalHfQty = data.total_qty || hfTrays.reduce(function(s, t) { return s + (parseInt(t.qty || 0) || 0); }, 0);
           if (modal) {
-            var content = modal.querySelector('.tray-scan-modal-content') || modal;
-            var hfHtml = '<div class="new-popup-inner" style="width:100%">';
-            hfHtml += '<span id="closeNewPopupModal_Jig" class="tray-scan-close">&times;</span>';
-            hfHtml += '<div class="modal-top-header" style="display:flex;align-items:center;gap:16px;">';
-            hfHtml += '<div class="user-profile"><img src="/static/assets/images/imagePlaceholder.jpg" style="width:50px;height:50px;border-radius:50%;" alt="Model image"></div>';
-            hfHtml += '<div style="flex:1"><h5 style="margin:0;font-weight:600;color:#595959">Jig Loading - Excess Lot Trays</h5>';
-            hfHtml += '<p style="margin:4px 0 0 0;font-size:13px;color:#666">Remaining Qty: <span style="font-weight:700;color:#e67e22;">' + totalHfQty + '</span></p></div></div>';
-            hfHtml += '<div id="trayScanDetails_Jig_top" class="table-grid" style="margin-top:12px;">';
-            hfHtml += '<table class="table table-bordered" style="font-size:13px;"><thead><tr>';
-            hfHtml += '<th>S.No</th><th>Tray ID</th><th>Qty</th><th>Type</th></tr></thead><tbody>';
+            // Update header for excess lot
+            var headerTitle = modal.querySelector('.jig-tray-view-panel__section-title');
+            if (headerTitle) headerTitle.textContent = 'Jig Loading - Excess Lot Trays';
+            var modelNo = modal.querySelector('#modalModelNo_Jig_top');
+            if (modelNo) modelNo.textContent = '';
+            var lotQty = modal.querySelector('#modalLotQty_Jig_top');
+            if (lotQty) lotQty.textContent = totalHfQty;
+            var metaLabel = modal.querySelector('.jig-tray-view-panel__meta-label');
+            if (metaLabel) metaLabel.textContent = 'Remaining Qty:';
+            // Build table rows
+            var bodyEl = modal.querySelector('.jig-tray-view-panel__body');
+            var hfHtml = '<table class="jig-tray-view-panel__table"><thead><tr>';
+            hfHtml += '<th style="width:60px;">S.No</th><th>Tray ID</th><th style="width:80px;">Qty</th><th style="width:100px;">Type</th></tr></thead><tbody>';
             hfTrays.forEach(function(t, idx) {
               var typeLabel = t.is_top_half_filled ? '&#9733; Top Tray' : 'Excess';
-              hfHtml += '<tr><td>' + (idx + 1) + '</td><td style="font-weight:600;font-family:monospace;">' + (t.tray_id || '') + '</td><td>' + (t.qty || 0) + '</td><td>' + typeLabel + '</td></tr>';
+              hfHtml += '<tr><td>' + (idx + 1) + '</td><td><span class="jig-tray-view-panel__tray-id">' + (t.tray_id || '') + '</span></td><td>' + (t.qty || 0) + '</td><td>' + typeLabel + '</td></tr>';
             });
-            hfHtml += '</tbody></table></div></div>';
-            content.innerHTML = hfHtml;
+            hfHtml += '</tbody></table>';
+            if (bodyEl) bodyEl.innerHTML = hfHtml;
           }
         })
         .catch(function(err) { console.warn('[EXCESS_VIEW] Failed to fetch excess tray info', err); });
@@ -1204,7 +1188,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeof showAcceptedTrayModal_Jig === 'function') {
           showAcceptedTrayModal_Jig(params.stock_lot_id);
         } else {
-          const modal = document.getElementById('newPopupModal_Jig');
+          const modal = document.getElementById('jigTrayViewPanel');
           if (modal) modal.classList.add('open');
           console.warn('showAcceptedTrayModal not defined, and Jig adapter missing', params);
         }
@@ -1227,10 +1211,10 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
   });
-  // close handler for right-side modal
+  // close handler for right-side panel
   document.body.addEventListener('click', function (e) {
-    if (e.target.id === 'closeNewPopupModal_Jig' || e.target.closest('#newPopupModal_Jig .tray-scan-close')) {
-      const m = document.getElementById('newPopupModal_Jig');
+    if (e.target.id === 'closeJigTrayViewPanel' || e.target.closest('#jigTrayViewPanel .jig-tray-view-panel__close')) {
+      const m = document.getElementById('jigTrayViewPanel');
       if (m) m.classList.remove('open');
       // ✅ Clear active row highlight when modal closes
       if (window.clearActiveRow) window.clearActiveRow();
@@ -1313,65 +1297,46 @@ document.addEventListener('DOMContentLoaded', function () {
         const accepted = result.accepted || [];
         const brassMeta = result.brass_meta || {};
 
-        const modal = document.getElementById('newPopupModal_Jig');
+        const modal = document.getElementById('jigTrayViewPanel');
         if (!modal) return;
-        const content = modal.querySelector('.tray-scan-modal-content') || modal;
 
         const lotQtyFromMeta = (meta) => (meta && (meta.lot_qty || meta.available_qty || meta.brass_audit_physical_qty || '')) || '';
 
         function renderModal(meta) {
           const lotQtyDisplay = lotQtyFromMeta(meta) || '';
-          const missingQty = meta && meta.missing_qty ? meta.missing_qty : 0;
-          const physicalQty = meta && meta.brass_audit_physical_qty ? meta.brass_audit_physical_qty : lotQtyDisplay;
           
+          // Update header elements (they exist in the static HTML)
+          const modelNoEl = modal.querySelector('#modalModelNo_Jig_top');
+          const lotQtyEl = modal.querySelector('#modalLotQty_Jig_top');
+          const sectionTitle = modal.querySelector('.jig-tray-view-panel__section-title');
+          const metaLabel = modal.querySelector('.jig-tray-view-panel__meta-label');
+          
+          if (modelNoEl) modelNoEl.textContent = '';
+          if (lotQtyEl) lotQtyEl.textContent = lotQtyDisplay;
+          if (sectionTitle) sectionTitle.textContent = 'Jig Loading - Tray Scan';
+          if (metaLabel) metaLabel.textContent = 'Lot Qty:';
+
+          // Build table rows into the body
+          const bodyEl = modal.querySelector('.jig-tray-view-panel__body');
           let html = '';
-          html += `<div class="new-popup-inner" style="width:100%">`;
-          html += `<span id="closeNewPopupModal_Jig" class="tray-scan-close">&times;</span>`;
-          
-          // Header section with model details - matching the image layout
-          html += `<div style="background: linear-gradient(135deg, #e8f5f7 0%, #f0fafb 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #028084;">`;
-          html += `<div style="display: flex; align-items: flex-start; gap: 12px;">`;
-          html += `<img id="trayModalUserImg_Jig_top" src="/static/assets/images/imagePlaceholder.jpg" alt="Model image" style="border-radius: 4px; width: 60px; height: 60px; object-fit: contain; background: #fff; padding: 4px;" />`;
-          html += `<div style="flex: 1;">`;
-          html += `<h6 style="margin: 0 0 8px 0; font-weight: 700; color: #028084; font-size: 13px;">MODEL NO: <span id="modalModelNo_Jig_top" style="font-size: 14px;"></span></h6>`;
-          html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">`;
-          html += `<div><span style="color: #666; font-weight: 500;">Lot Qty:</span><span id="modalLotQty_Jig_top" style="font-weight: 700; color: #e67e22; margin-left: 4px;">${lotQtyDisplay}</span></div>`;
-          html += `</div></div>`;
-          html += `<div style="display: flex; gap: 8px; flex-direction: column; margin-top: 2px;">`;
-          html += `<button id="trayValidateBtn_Jig_top" type="button" class="tray-validate-btn" style="white-space: nowrap; padding: 6px 14px; font-size: 12px;">Tray Validate</button>`;
-          html += `<img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoBtn_Jig_top" style="width: 24px; height: 24px; cursor: pointer; align-self: center;" title="Clear Tray IDs" />`;
-          html += `</div></div></div>`;
-          
-          // Section title
-          html += `<div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #028084; border-left: 3px solid #028084; padding-left: 10px; margin: 16px 0 12px 0;">Jig Loading - Tray Scan</div>`;
-          
-          // Table section
-          html += `<div id="trayScanDetails_Jig_top" style="margin-top: 8px;">`;
 
           if (!accepted.length) {
-            html += '<div style="padding:12px">No accepted trays available</div>';
+            html = '<div style="padding:24px;text-align:center;color:#999;">No accepted trays available</div>';
           } else {
-            html += '<table class="table accepted-trays-table" style="width:100%; border-collapse:collapse;"><thead><tr style="background:#f5f5f5; color:#333;"><th style="width:70px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">S.no</th><th style="text-align:left; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray ID</th><th style="width:130px; text-align:center; padding:12px; border-bottom:2px solid #ddd; font-weight:700; font-size:12px;">Tray Qty</th></tr></thead><tbody>';
+            html = '<table class="jig-tray-view-panel__table"><thead><tr><th style="width:60px;">S.No</th><th>Tray ID</th><th style="width:100px;">Tray Qty</th></tr></thead><tbody>';
             accepted.forEach((t, i) => {
               const trayId = (t.tray_id || t.tray || t.trayId || '').toString();
               const qty = (t.qty || t.tray_quantity || t.tray_qty || '').toString();
               const isTop = !!(t.top_tray || t.topTray || t.top);
-              const trClass = isTop ? 'top-tray-row' : '';
-              // Move top-tray indicator into the S.no cell as plain text
-              const snoText = isTop ? `${i+1} (Top Tray)` : `${i+1}`;
-              html += `<tr class="${trClass}"><td style="white-space:nowrap; text-align:center; padding:10px 12px; font-size:13px;">${snoText}</td><td style="text-align:left; padding:10px 12px; font-size:13px;"><input type="text" class="form-control" style="width:100%; padding: 6px 10px; height: 34px; font-size:13px; border: 1px solid #d1d5db;" value="${trayId}" readonly></td><td style="text-align:center; padding:10px 12px; font-size:13px;"><input type="text" class="form-control" style="width:100%; padding: 6px 10px; height: 34px; font-size:13px; border: 1px solid #d1d5db; text-align:center;" value="${qty}" readonly></td></tr>`;
+              const trClass = isTop ? 'jig-tray-view-panel__row--top' : '';
+              const snoText = isTop ? `${i+1} &#9733;` : `${i+1}`;
+              html += `<tr class="${trClass}"><td>${snoText}</td><td><span class="jig-tray-view-panel__tray-id">${trayId}</span></td><td>${qty}</td></tr>`;
             });
             html += '</tbody></table>';
           }
 
-          html += `</div>`; // close trayScanDetails_Jig_top
-          html += `</div>`; // close new-popup-inner
-
-          content.innerHTML = html;
+          if (bodyEl) bodyEl.innerHTML = html;
           modal.classList.add('open');
-
-          const closeBtn = document.getElementById('closeNewPopupModal_Jig');
-          if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.remove('open'));
         }
 
         // If brass metadata wasn't provided by earlier calls, fetch it so we can show lot qty
@@ -1386,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', function () {
       })
       .catch(err => {
         console.error('Failed to load accepted tray data for Jig:', err);
-        const modal = document.getElementById('newPopupModal_Jig');
+        const modal = document.getElementById('jigTrayViewPanel');
         if (modal) modal.classList.add('open');
       });
   }
@@ -5331,10 +5296,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 100);
 
   // ===== CLEAR ACTIVE ROW TRIGGERS =====
-  // Attach to: closeNewPopupModal_Jig, close-btn, submitJigBtn, draftJigBtn, cancelJigBtn
+  // Attach to: closeJigTrayViewPanel, close-btn, submitJigBtn, draftJigBtn, cancelJigBtn
   setTimeout(function() {
     // Close Modal Button
-    const closeBtn = document.getElementById('closeNewPopupModal_Jig');
+    const closeBtn = document.getElementById('closeJigTrayViewPanel');
     if (closeBtn) {
       closeBtn.addEventListener('click', function() {
         clearActiveRow();
@@ -5406,6 +5371,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return { valid: true, message: '' };
   }
 
+  /* # Jig ID Validation with formatter */
   function applyJigIdValidation(inputEl) {
     var errorDiv = document.getElementById('jigIdError');
     var val = (inputEl.value || '').toUpperCase();
@@ -6413,7 +6379,7 @@ function closeJigModal(){
 
 // Also reset when known modal close buttons are clicked
 document.addEventListener('click', function(e){
-  if (e.target.closest('.new-popup-modal .tray-scan-close') || e.target.closest('.right-slide-modal .close-btn') || e.target.closest('.jig-modal-header .close-btn')) {
+  if (e.target.closest('.jig-tray-view-panel__close') || e.target.closest('.right-slide-modal .close-btn') || e.target.closest('.jig-modal-header .close-btn')) {
     closeJigModal();
   }
 });

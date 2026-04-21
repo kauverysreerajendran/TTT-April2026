@@ -1711,7 +1711,7 @@ function getValidationConfig() {
   
   // Get lot_id from modal context
   const modal = document.getElementById("trayScanModal_DayPlanning");
-  const stockLotId = modal?.dataset.stockLotId || getCurrentLotId();
+  const stockLotId = (modal ? modal.dataset.stockLotId : undefined) || getCurrentLotId();
   
   if (isVerified) {
     console.log("✅ [Validation Config] Using AfterCheck validation (BrassTrayId data)");
@@ -2444,7 +2444,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
            // Get values for the modal
         const modelNo = row.getAttribute('data-model-no') || '';
-        const lotQty = row.querySelector('.lot-qty')?.textContent.trim() || '';
+        var _lotQtyEl = row.querySelector('.lot-qty');
+        const lotQty = (_lotQtyEl ? _lotQtyEl.textContent.trim() : '') || '';
         const missingQty = row.getAttribute('data-brass-missing-qty') || '';
         const physicalQty = row.getAttribute('data-brass-physical-qty') || '';
 
@@ -2454,56 +2455,17 @@ document.addEventListener("DOMContentLoaded", function () {
           
           
 if (isBatchRejection) {
-  // Always fetch accepted tray scan data to get latest is_delink_only status
-  fetch(`/nickle_inspection/nickel_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`)
-    .then(res => res.json())
-    .then(rescanData => {
-      if (rescanData.success && rescanData.is_delink_only) {
-        // Check if delink trays are available
-        fetch(`/nickle_inspection/nickel_qc_get_delink_tray_data/?lot_id=${encodeURIComponent(stockLotId)}`)
-          .then(res => res.json())
-          .then(delinkData => {
-            if (delinkData.success && delinkData.delink_trays && delinkData.delink_trays.length > 0) {
-              // Open modal in delink-only mode
-              showAcceptedTrayModal(rescanData, stockLotId, false, true);
-            } else {
-              Swal.fire('No Delink Needed', 'There are no empty trays available for delink in this lot.', 'info');
-            }
-          });
-      } else {
-        // Fallback: show normal modal (should not happen for delink-only lots)
-        showAcceptedTrayModal(rescanData, stockLotId, false, false);
-      }
-    });
-          // ✅ UPDATED: If nq_onhold_picking is True, directly show accepted tray modal
+  // Open Nickel QC-style rejection modal (let user scan everything manually)
+  if (typeof window.openNickelRejectModal === 'function') {
+    window.openNickelRejectModal(stockLotId, row);
+  }
+          // ✅ UPDATED: If nq_onhold_picking is True, open reject modal (let user scan manually)
         }else if (isOnHold) {
-            console.log('🎯 "Set Top Tray" clicked - showing accepted tray modal directly...');
-            
-            // Directly fetch and show accepted tray data (skip rejection details popup)
-            fetch(`/nickle_inspection/nickel_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`)
-              .then(res => res.json())
-              .then(rescanData => {
-                if (rescanData.success) {
-                  console.log('✅ Fetched accepted tray data:', rescanData);
-                  
-                  // Check if draft exists
-                  const hasDraft = rescanData.has_draft;
-                  
-                  // Show the accepted tray modal directly
-                  showAcceptedTrayModal(rescanData, stockLotId, hasDraft);
-                  
-                  console.log('🚀 Accepted tray modal displayed directly');
-                } else {
-                  console.error('❌ Failed to fetch accepted tray data:', rescanData.error);
-                  // Fallback: show error message
-                  alert('Error loading accepted tray data: ' + (rescanData.error || 'Unknown error'));
-                }
-              })
-              .catch(error => {
-                console.error('❌ Network error fetching accepted tray data:', error);
-                // Fallback: show error message
-                alert('Network error loading accepted tray data. Please try again.');
-              });
+            console.log('🎯 "Set Top Tray" clicked - opening rejection modal...');
+            // Open Nickel QC-style rejection modal
+            if (typeof window.openNickelRejectModal === 'function') {
+              window.openNickelRejectModal(stockLotId, row);
+            }
           } else {
             // Open Brass QC-style rejection modal
             if (typeof window.openNickelRejectModal === 'function') {
@@ -5512,7 +5474,7 @@ function addSimpleTableTrayValidation() {
       
       // ✅ PROGRESSIVE VALIDATION: Get context for THIS specific tray
       const modal = document.getElementById("trayScanModal");
-      const currentLotId = modal?.dataset?.stockLotId;
+      const currentLotId = (modal && modal.dataset) ? modal.dataset.stockLotId : undefined;
 
       if (!currentLotId) {
         input._hasError = true;
@@ -5677,7 +5639,7 @@ function collectSimpleTableSessionAllocations(excludeInput) {
                        document.querySelector('tbody tr');
     let trayCapacity = 12; // Default
     if (currentRow) {
-      const trayCapacityText = currentRow.cells[7]?.textContent || '';
+      const trayCapacityText = (currentRow.cells[7] ? currentRow.cells[7].textContent : '') || '';
       if (trayCapacityText.includes('-')) {
         trayCapacity = parseInt(trayCapacityText.split('-')[1]) || 12;
       }
@@ -6724,7 +6686,7 @@ function attachValidationToInputsForBatchRejection() {
 // Helper function 
 function getCurrentLotId() {
   const modal = document.getElementById('delinkModal');
-  return modal?.dataset?.lotId || null;
+  return (modal && modal.dataset) ? (modal.dataset.lotId || null) : null;
 }
 
 
@@ -7032,8 +6994,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!lotId) return;
 
       // Always fetch accepted tray scan data to get latest is_delink_only status
-      fetch(`/nickle_inspection/nickel_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(lotId)}`)
-        .then(res => res.json())
+/* PRE-FETCH REMOVED */
         .then(rescanData => {
           if (rescanData.success && rescanData.is_delink_only) {
             // Check if delink trays are available
@@ -7086,31 +7047,31 @@ function getCookie(name) {
         const physicalQtyInput = row.querySelector('.physical-qty-input');
     
         // Enable input on page load if not checked/disabled
-        if (!checkbox.checked && !checkbox.disabled) {
+        if (missingQtyInput && !checkbox.checked && !checkbox.disabled) {
           missingQtyInput.disabled = false;
         }
     
         // Live update physical qty as user types
-        missingQtyInput.addEventListener('input', function () {
-          let missingQty = parseInt(missingQtyInput.value, 10);
-          if (isNaN(missingQty) || missingQty < 0) {
-            physicalQtyInput.value = totalQty;
-            return;
-          }
-          if (missingQty > totalQty) {
-            missingQtyInput.value = totalQty;
-            missingQty = totalQty;
-          }
-          physicalQtyInput.value = totalQty - missingQty;
-        });
+        if (missingQtyInput) {
+          missingQtyInput.addEventListener('input', function () {
+            let missingQty = parseInt(missingQtyInput.value, 10);
+            if (isNaN(missingQty) || missingQty < 0) {
+              if (physicalQtyInput) physicalQtyInput.value = totalQty;
+              return;
+            }
+            if (missingQty > totalQty) {
+              missingQtyInput.value = totalQty;
+              missingQty = totalQty;
+            }
+            if (physicalQtyInput) physicalQtyInput.value = totalQty - missingQty;
+          });
+        }
     
         checkbox.addEventListener('change', function () {
           if (checkbox.checked && !checkbox.disabled) {
-            missingQtyInput.disabled = false;
-            missingQtyInput.focus();
+            if (missingQtyInput) { missingQtyInput.disabled = false; missingQtyInput.focus(); }
           } else {
-            missingQtyInput.value = '';
-            missingQtyInput.disabled = false;
+            if (missingQtyInput) { missingQtyInput.value = ''; missingQtyInput.disabled = false; }
             if (physicalQtyInput) physicalQtyInput.value = totalQty;
           }
         });
@@ -7119,13 +7080,13 @@ function getCookie(name) {
         checkbox.addEventListener('change', function () {
           if (!checkbox.checked || checkbox.disabled) return;
           const lotId = checkbox.getAttribute('data-lot-id');
-          let missingQty = missingQtyInput.value.trim();
+          let missingQty = missingQtyInput ? missingQtyInput.value.trim() : '0';
           if (!lotId) {
             Swal.fire('Error', 'Lot ID not found.', 'error');
             checkbox.checked = false;
             return;
           }
-          if (!missingQty || isNaN(missingQty) || parseInt(missingQty) < 0) {
+          if (missingQtyInput && (!missingQty || isNaN(missingQty) || parseInt(missingQty) < 0)) {
             Swal.fire('Error', 'Enter a valid missing quantity.', 'error');
             checkbox.checked = false;
             return;
@@ -7146,10 +7107,10 @@ function getCookie(name) {
             if (data.success) {
               checkbox.checked = true;
               checkbox.disabled = true;
-              missingQtyInput.disabled = true;
+              if (missingQtyInput) missingQtyInput.disabled = true;
               // Update physical qty
               if (physicalQtyInput) {
-                physicalQtyInput.value = totalQty - parseInt(missingQty);
+                physicalQtyInput.value = totalQty - parseInt(missingQty || 0);
               }
                   window.location.reload(); // Reload page after success
 
@@ -8820,7 +8781,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // ✅ Handle Info button click
-    const infoBtn = tooltip?.querySelector('.info-btn');
+    const infoBtn = tooltip ? tooltip.querySelector('.info-btn') : null;
     if (infoBtn) {
       // Initially hide the button
       infoBtn.style.display = 'none';
@@ -8844,7 +8805,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ✅ FIXED: Handle Close button click - Complete tooltip closure
-    const closeBtn = tooltip?.querySelector('.close-btn');
+    const closeBtn = tooltip ? tooltip.querySelector('.close-btn') : null;
     if (closeBtn) {
       // Initially hide the button
       closeBtn.style.display = 'none';
@@ -9484,6 +9445,8 @@ function nqCheckPendingScanAfterPageLoad() {
 
 <!-- ══════════ NICKEL QC REJECT FLOW (Brass QC Style) ══════════ -->
 <script nonce="{{ csp_nonce }}">
+// ✅ ERROR 2 FIX: Wrap in DOMContentLoaded to ensure all DOM elements exist before accessing them
+document.addEventListener('DOMContentLoaded', function() {
 (function initNickelRejectFlow() {
   var overlay = document.getElementById('nickelRejectModalOverlay');
   if (!overlay) return;
@@ -9543,7 +9506,8 @@ function nqCheckPendingScanAfterPageLoad() {
   window.openNickelRejectModal = function(lotId, row) {
     _lotId = lotId;
     var modelNo = row.getAttribute('data-model-no') || '';
-    _totalQty = parseInt(row.getAttribute('data-available-qty') || row.querySelector('.lot-qty')?.textContent?.trim() || '0', 10);
+    var lotQtyEl = row.querySelector('.lot-qty');
+    _totalQty = parseInt(row.getAttribute('data-available-qty') || (lotQtyEl ? lotQtyEl.textContent.trim() : '') || '0', 10);
     _trayCapacity = 0;
     var actionState = row.getAttribute('data-action-state') || '';
 
@@ -9755,18 +9719,33 @@ function nqCheckPendingScanAfterPageLoad() {
       renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); updateSummary(); return;
     }
 
-    // All reject slots filled — handle auto-delinked trays (Nickel QC mode)
-    if (hasAutoDelinks) {
+    // ✅ ERROR 3 FIX: All reject slots filled — check delink status before unlocking accept
+    // Show delink section if there are any delink slots (auto or manual)
+    if (_delinkSlots.length > 0) {
       renderDelinkSlots(); delinkSection.style.display = '';
       combinedDelinkQty.textContent = _delinkSlots.reduce(function(sum, s) { return sum + (s.qty || 0); }, 0);
-      // All auto-delink slots are pre-filled → unlock accept section immediately
-      acceptSlotsContainer.parentElement.style.opacity = '1'; acceptSlotsContainer.parentElement.style.pointerEvents = 'auto';
+      
+      // Check if all delink slots have tray IDs (whether auto-filled or manually scanned)
+      var emptyDelink = _delinkSlots.filter(function(s) { return !s.tray_id; }).length;
+      
+      // Keep accept section locked until all delink slots are filled
+      if (emptyDelink > 0) {
+        acceptSlotsContainer.parentElement.style.opacity = '0.3'; 
+        acceptSlotsContainer.parentElement.style.pointerEvents = 'none';
+        _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; });
+        renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); updateSummary(); return;
+      }
+      
+      // All delink slots filled → unlock accept section
+      acceptSlotsContainer.parentElement.style.opacity = '1'; 
+      acceptSlotsContainer.parentElement.style.pointerEvents = 'auto';
       var topFilled = _acceptSlots.some(function(s) { return s.is_top && s.tray_id; });
-      if (topFilled) { autoFillAcceptNonTop(); } else { _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; }); }
+      if (topFilled) { autoFillAcceptNonTop(); } 
+      else { _acceptSlots.forEach(function(s) { if (!s.is_top && !originalIds[s.tray_id]) s.tray_id = null; }); }
       renderSlots(acceptSlotsContainer, _acceptSlots, 'accept'); renderOriginalTrays(); updateSummary(); return;
     }
 
-    // Standard Brass QC-style delink logic (no auto delinks)
+    // Standard Brass QC-style delink logic (no delinks at all)
     var originalsInReject = {}; _rejectSlots.forEach(function(s) { if (s.tray_id && originalIds[s.tray_id]) originalsInReject[s.tray_id] = true; });
     var remainingOriginals = _trayData.filter(function(t) { return !originalsInReject[t.tray_id]; });
     var delinkNeeded = (_reuseCount > 0) ? Math.max(0, remainingOriginals.length - _acceptSlots.length) : 0;
@@ -9811,10 +9790,11 @@ function nqCheckPendingScanAfterPageLoad() {
     _delinkSlots.forEach(function(slot, idx) {
       html += '<tr><td style="padding:5px 8px; border:1px solid #ffe0b2; text-align:center;">' + (idx + 1) + '</td>';
       if (slot.auto) {
-        // Auto-delinked: read-only display
-        html += '<td style="padding:5px 8px; border:1px solid #ffe0b2;">' +
+        // ✅ FIX: Add remove button for auto-delinked trays
+        html += '<td style="padding:3px 6px; border:1px solid #ffe0b2;"><div style="display:flex; align-items:center; gap:4px;">' +
           '<span style="color:#e65100; font-weight:500;"><i class="fa fa-unlink"></i> ' + escHtml(slot.tray_id) + '</span>' +
           ' <span style="background:#fff3e0; border:1px solid #ffcc80; border-radius:3px; padding:1px 5px; font-size:10px; color:#e65100; font-weight:600;">AUTO</span>' +
+          '<button type="button" class="nq-delink-clear-btn" data-idx="' + idx + '" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:13px; padding:0 3px;" title="Remove">&times;</button></div>' +
           '</td><td style="padding:5px 8px; border:1px solid #ffe0b2; text-align:center; color:#e65100; font-weight:600;">' + (slot.qty || 0) + '</td>';
       } else if (slot.tray_id) {
         html += '<td style="padding:3px 6px; border:1px solid #ffe0b2;"><div style="display:flex; align-items:center; gap:4px;"><span style="color:#e65100;"><i class="fa fa-unlink"></i> ' + escHtml(slot.tray_id) + '</span>' +
@@ -9832,8 +9812,10 @@ function nqCheckPendingScanAfterPageLoad() {
     delinkListContainer.querySelectorAll('.nq-delink-clear-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var idx = parseInt(this.getAttribute('data-idx'), 10);
-        if (_delinkSlots[idx] && _delinkSlots[idx].auto) return;  // Cannot clear auto-delinked trays
-        _delinkSlots[idx].tray_id = null; _acceptSlots.forEach(function(s) { if (!s.is_top) s.tray_id = null; });
+        // ✅ FIX: Allow clearing auto-delinked trays
+        _delinkSlots[idx].tray_id = null; 
+        _delinkSlots[idx].auto = false; // Clear auto flag
+        _acceptSlots.forEach(function(s) { if (!s.is_top) s.tray_id = null; });
         renderDelinkSlots(); renderOriginalTrays(); checkPhaseTransition();
       });
     });
@@ -9878,7 +9860,11 @@ function nqCheckPendingScanAfterPageLoad() {
       html += '<td style="padding:5px 8px; border:1px solid ' + borderClr + '; text-align:center;">' + (idx + 1) + topTag + '</td>';
       if (slot.tray_id) {
         if (type === 'accept' && !slot.is_top) {
-          html += '<td style="padding:5px 8px; border:1px solid ' + borderClr + ';"><span style="color:#2e7d32; font-size:12px;">' + escHtml(slot.tray_id) + '</span> <span style="background:#e8f5e9; color:#388e3c; padding:1px 6px; border-radius:8px; font-size:10px;">Auto</span></td>';
+          // ✅ FIX: Add remove button for auto-allocated accept trays
+          html += '<td style="padding:3px 6px; border:1px solid ' + borderClr + ';"><div style="display:flex; align-items:center; gap:4px;">' +
+            '<span style="color:#2e7d32; font-size:12px;">' + escHtml(slot.tray_id) + '</span> ' +
+            '<span style="background:#e8f5e9; color:#388e3c; padding:1px 6px; border-radius:8px; font-size:10px;">Auto</span>' +
+            '<button type="button" class="nq-slot-clear-btn" data-idx="' + idx + '" data-type="' + type + '" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:13px; padding:0 3px; flex-shrink:0;" title="Remove">&times;</button></div></td>';
         } else {
           var newBadge = !originalIds[slot.tray_id] ? ' <span style="background:#e3f2fd; color:#1565c0; padding:1px 6px; border-radius:8px; font-size:10px; flex-shrink:0;">New</span>' : '';
           var reusedBadge = originalIds[slot.tray_id] ? ' <span style="background:#fff3e0; color:#e65100; padding:1px 6px; border-radius:8px; font-size:10px; flex-shrink:0;">Reused</span>' : '';
@@ -10025,6 +10011,20 @@ function nqCheckPendingScanAfterPageLoad() {
     _rejectSlots.forEach(function(s) { if (s.tray_id) rejQty += s.qty; });
     combinedAcceptQty.textContent = accQty; combinedRejectQty.textContent = rejQty;
     combinedDelinkQty.textContent = _delinkSlots.filter(function(s) { return s.tray_id; }).length;
+    // ✅ FIX: Enable/disable submit button based on validation
+    validateAndEnableSubmit();
+  }
+
+  // ✅ SIMPLIFIED: Enable submit when there's reject qty or full lot checked
+  function validateAndEnableSubmit() {
+    if (fullLotCb.checked) {
+      submitBtn.disabled = false;
+      submitBtn.title = '';
+      return;
+    }
+    var totalReject = parseInt(totalDisplay.textContent || '0', 10);
+    submitBtn.disabled = (totalReject <= 0);
+    submitBtn.title = (totalReject <= 0) ? 'Enter rejection quantity first' : '';
   }
 
   // Full Lot Rejection checkbox
@@ -10033,6 +10033,7 @@ function nqCheckPendingScanAfterPageLoad() {
     if (this.checked) { inputs.forEach(function(inp) { inp.value = ''; }); allocationSection.style.display = 'none'; _acceptSlots = []; _rejectSlots = []; _delinkSlots = []; remarksInput.focus(); }
     else { inputs.forEach(function(inp) { inp.value = ''; }); }
     updateTotals();
+    validateAndEnableSubmit(); // ✅ FIX: Update submit button state
   });
 
   // Global Clear All
@@ -10127,6 +10128,7 @@ function nqCheckPendingScanAfterPageLoad() {
     }).catch(function(err) { submitBtn.disabled = false; errorDiv.textContent = 'Network error.'; });
   });
 })();
+}); // End DOMContentLoaded
 </script>
 
 {% endblock %} {% endblock content %}

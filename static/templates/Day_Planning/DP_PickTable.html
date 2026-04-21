@@ -620,7 +620,9 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
   <tr> 
     {% for heading in visible_headings %}
       <th class="{% if not is_admin and not visible_headings|get_item:heading %}blurred-heading{% endif %}">
-        {% if display_headings_map %}
+        {% if heading == 'Plating Stk No' %}
+          Plating Stock Number
+        {% elif display_headings_map %}
           {{ display_headings_map|get_item:heading|safe }}
         {% else %}
           {{ heading }}
@@ -690,6 +692,50 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
           </div>
         </span>
       </td>
+      <!-- ✅ ACTION COLUMN MOVED TO 4TH POSITION -->
+      <td class="{% if not is_admin and not visible_headings|get_item:'Action' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {% if is_admin %}
+          {% if not data.Moved_to_D_Picker %}
+            <a href="#" class="edit-qty-btn" data-batch-id="{{ data.batch_id }}">
+              <img src="{% static 'assets/icons/edit1.png' %}" alt="Edit" style="width: 24px; margin-right: 8px; height: auto"/>
+            </a>
+          {% else %}
+            <span style="opacity:0.5; pointer-events:none; display:inline-block;">
+              <img src="{% static 'assets/icons/edit1.png' %}" alt="Edit Disabled" style="width: 24px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);"/>
+            </span>
+          {% endif %}
+          {% if not data.Moved_to_D_Picker %}
+            <a href="#" title="Delete">
+              <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 24px; margin-right: 8px; height: auto; cursor:pointer;" />
+            </a>
+          {% else %}
+            <span title="Cannot delete after moved" style="opacity:0.5; pointer-events:none; display:inline-block;">
+              <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 24px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5); cursor:not-allowed;" />
+            </span>
+          {% endif %}
+        {% endif %}
+        {% if not data.Moved_to_D_Picker %}
+          <a href="#" class="text-primary tray-scan-btn" style="text-decoration: underline"
+             data-batch-id="{{ data.batch_id }}" 
+             data-model-no="{{ data.model_stock_no__model_no }}"
+             data-no-of-trays="{{ data.no_of_trays }}" 
+             data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+             data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}" 
+             data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+             data-top-tray-qty-verified="{{ data.top_tray_qty_verified }}" 
+             data-draft-saved="{{data.Draft_Saved}}"
+             data-total-batch-quantity="{{ data.total_batch_quantity|default:'0' }}"
+             data-model-image="{{ data.model_images.0|default:'' }}"
+             data-needs-top-tray-scan="{{ data.needs_top_tray_scan|yesno:'true,false' }}"
+             data-tray-scan-status="{{ data.tray_scan_status|yesno:'true,false' }}">
+            {% if data.needs_top_tray_scan %}
+              Set Top Tray
+            {% else %}
+              Tray Scan
+            {% endif %}
+          </a>
+        {% endif %}
+      </td>
       <td class="{% if not is_admin and not visible_headings|get_item:'Polishing Stk No' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
         {{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}
       </td>
@@ -738,49 +784,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                style="width: 28px; height: 28px; background-color: #d3d2d2; color: white; font-weight: bold; cursor: pointer;">
             T
           </div>
-        {% endif %}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Action' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {% if is_admin %}
-          {% if not data.Moved_to_D_Picker %}
-            <a href="#" class="edit-qty-btn" data-batch-id="{{ data.batch_id }}">
-              <img src="{% static 'assets/icons/edit1.png' %}" alt="Edit" style="width: 24px; margin-right: 8px; height: auto"/>
-            </a>
-          {% else %}
-            <span style="opacity:0.5; pointer-events:none; display:inline-block;">
-              <img src="{% static 'assets/icons/edit1.png' %}" alt="Edit Disabled" style="width: 24px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);"/>
-            </span>
-          {% endif %}
-          {% if not data.Moved_to_D_Picker %}
-            <a href="#" title="Delete">
-              <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 24px; margin-right: 8px; height: auto; cursor:pointer;" />
-            </a>
-          {% else %}
-            <span title="Cannot delete after moved" style="opacity:0.5; pointer-events:none; display:inline-block;">
-              <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 24px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5); cursor:not-allowed;" />
-            </span>
-          {% endif %}
-        {% endif %}
-        {% if not data.Moved_to_D_Picker %}
-          <a href="#" class="text-primary tray-scan-btn" style="text-decoration: underline"
-             data-batch-id="{{ data.batch_id }}" 
-             data-model-no="{{ data.model_stock_no__model_no }}"
-             data-no-of-trays="{{ data.no_of_trays }}" 
-             data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-             data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}" 
-             data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-             data-top-tray-qty-verified="{{ data.top_tray_qty_verified }}" 
-             data-draft-saved="{{data.Draft_Saved}}"
-             data-total-batch-quantity="{{ data.total_batch_quantity|default:'0' }}"
-             data-model-image="{{ data.model_images.0|default:'' }}"
-             data-needs-top-tray-scan="{{ data.needs_top_tray_scan|yesno:'true,false' }}"
-             data-tray-scan-status="{{ data.tray_scan_status|yesno:'true,false' }}">
-            {% if data.needs_top_tray_scan %}
-              Set Top Tray
-            {% else %}
-              Tray Scan
-            {% endif %}
-          </a>
         {% endif %}
       </td>
       <td class="{% if not is_admin and not visible_headings|get_item:'Lot Status' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
