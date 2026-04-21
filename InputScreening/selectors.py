@@ -78,11 +78,22 @@ def pick_table_queryset() -> QuerySet:
 
     Mirrors the exact filter / annotate / exclude / order chain of the
     legacy view so the page contents are unchanged.
+    
+    **ERR3 FIX**: Excludes submitted lots (those in InputScreening_Submitted).
+    Once a lot is submitted, it moves to the appropriate Completed/Reject table.
     """
     from modelmasterapp.models import ModelMasterCreation, TotalStockModel
-    from .models import IP_Rejection_ReasonStore
+    from .models import IP_Rejection_ReasonStore, InputScreening_Submitted
 
     tray_scan_exists = Exists(TotalStockModel.objects.filter(batch_id=OuterRef("pk")))
+    
+    # Check if this lot_id has been submitted (is_active=True)
+    submitted_lots = Exists(
+        InputScreening_Submitted.objects.filter(
+            lot_id=OuterRef("stock_lot_id"),
+            is_active=True
+        )
+    )
 
     qs = (
         ModelMasterCreation.objects.select_related(
@@ -118,6 +129,7 @@ def pick_table_queryset() -> QuerySet:
             ip_release_lot=_latest("ip_release_lot"),
             ip_release_reason=_latest("ip_release_reason"),
             remove_lot=_latest("remove_lot"),
+            submitted=submitted_lots,
         )
         .filter(tray_scan_exists=True, Moved_to_D_Picker=True)
         .exclude(
@@ -125,6 +137,7 @@ def pick_table_queryset() -> QuerySet:
             | Q(accepted_tray_scan_status=True)
             | Q(rejected_ip_stock=True)
             | Q(remove_lot=True)
+            | Q(submitted=True)  # ERR3: Exclude submitted lots
         )
         .order_by("-created_at")
     )
