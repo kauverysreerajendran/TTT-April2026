@@ -1110,7 +1110,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         // Update Process Status "Q" indicator to full green when verified
         if (enable) {
-          const processStatusCell = row.querySelector("td:nth-child(13)"); // Process Status column
+          const processStatusCell = row.querySelector("td:nth-child(9)"); // Process Status column
           if (processStatusCell) {
             const qIcon = processStatusCell.querySelector(
               "div > div:nth-child(1)",
@@ -1121,10 +1121,48 @@ document.addEventListener("DOMContentLoaded", function () {
               qIcon.style.opacity = "1";
             }
           }
+          // ── Dynamically update Lot Status → "Yet to Start" ──────────
+          const lotStatusCell = row.querySelector("td:nth-child(10)");
+          if (lotStatusCell) {
+            const pill = lotStatusCell.querySelector("div");
+            if (pill) {
+              pill.style.border = "1px solid #f9a825";
+              pill.style.backgroundColor = "#fff8e1";
+              pill.style.color = "#b26a00";
+              pill.style.fontSize = "13px";
+              pill.style.whiteSpace = "nowrap";
+              pill.textContent = "Yet to Start";
+            }
+          }
+          // ── Dynamically update Current Stage label ───────────────────
+          const currentStageCell = row.querySelector("td:nth-child(11)");
+          if (currentStageCell) {
+            const pill = currentStageCell.querySelector("div");
+            if (pill) {
+              pill.textContent = "Day Planning to Inputscreening";
+            }
+          }
         }
       }
     });
   }
+  // ─── Mark S circle as half-green (WIP) ──────────────────────────────
+  // Exposed globally so inputscreening_reject_modal.js can call it too.
+  window.isMarkSCircleWip = function (lotId) {
+    const table = document.getElementById("order-listing");
+    if (!table) return;
+    table.querySelectorAll("tbody tr").forEach(function (row) {
+      if (row.getAttribute("data-stock-lot-id") !== lotId) return;
+      const processStatusCell = row.querySelector("td:nth-child(9)");
+      if (!processStatusCell) return;
+      const sIcon = processStatusCell.querySelector("div > div:nth-child(2)"); // S icon
+      if (sIcon) {
+        sIcon.style.background =
+          "linear-gradient(to right, #0c8249 50%, #bdbdbd 50%)";
+        sIcon.style.backgroundColor = ""; // clear solid colour so gradient shows
+      }
+    });
+  };
   // ─── Load trays from backend ───────────────────────────────────────────────
   function tvmLoadTrays(lotId) {
     const tbody = document.getElementById("tvm-tray-tbody");
@@ -1354,6 +1392,8 @@ document.addEventListener("DOMContentLoaded", function () {
       window.restoreRowPosition();
     }
   }
+  // Expose globally so keyboard shortcut handler can close the modal via Esc
+  window.tvmClose = tvmClose;
   // ─── Event: view icon (delegated) ──────────────────────────────────────────
   document.addEventListener("click", function (e) {
     const viewBtn = e.target.closest(".tray-scan-btn-DayPlanning-view");
@@ -1463,24 +1503,93 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   // ─── Event: Accept button click ─────────────────────
   document.addEventListener("click", function (e) {
-    if (e.target.classList.contains("btn-accept-is")) {
-      e.preventDefault();
-      const lotId = e.target.getAttribute("data-stock-lot-id");
-      const batchId = e.target.getAttribute("data-batch-id");
-      if (!lotId || !batchId) return;
-      if (confirm("Accept this lot? All trays have been verified.")) {
-        // Show loading state
-        e.target.disabled = true;
-        e.target.style.opacity = "0.5";
-        // TODO: Implement Accept API call
-        console.log("Accept lot:", lotId, "batch:", batchId);
-        alert("Accept functionality - Implementation pending");
-        // Re-enable button
-        setTimeout(function () {
-          e.target.disabled = false;
-          e.target.style.opacity = "1";
-        }, 1000);
+    if (!e.target.classList.contains("btn-accept-is")) return;
+    e.preventDefault();
+    const btn = e.target;
+    const lotId = btn.getAttribute("data-stock-lot-id");
+    const batchId = btn.getAttribute("data-batch-id");
+    if (!lotId || !batchId) return;
+
+    const restoreBtn = function () {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+    };
+
+    const doSubmit = function () {
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      // ── mark S circle as scanning-WIP (half-green) ──────────────────
+      if (typeof window.isMarkSCircleWip === "function") {
+        window.isMarkSCircleWip(lotId);
       }
+      fetch("/inputscreening/full_accept/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": tvmGetCookie("csrftoken"),
+        },
+        body: JSON.stringify({ lot_id: lotId, batch_id: batchId }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (resp) {
+          if (!resp.ok || !resp.data || !resp.data.success) {
+            const err = (resp.data && resp.data.error) || "Failed to accept lot.";
+            if (typeof Swal !== "undefined") {
+              Swal.fire({ icon: "error", title: "Accept Failed", text: err });
+            } else {
+              window.alert(err);
+            }
+            restoreBtn();
+            return;
+          }
+          if (typeof Swal !== "undefined") {
+            Swal.fire({
+              icon: "success",
+              title: "Lot Accepted",
+              text: "The lot has moved to Brass QC.",
+              timer: 1500,
+              showConfirmButton: false,
+            }).then(function () { window.location.reload(); });
+          } else {
+            window.location.reload();
+          }
+        })
+        .catch(function () {
+          if (typeof Swal !== "undefined") {
+            Swal.fire({
+              icon: "error",
+              title: "Network Error",
+              text: "Could not reach the server. Please retry.",
+            });
+          } else {
+            window.alert("Network error.");
+          }
+          restoreBtn();
+        });
+    };
+
+    if (typeof Swal !== "undefined") {
+      Swal.fire({
+        icon: "warning",
+        title: "Accept this lot?",
+        text: "All trays have been verified. The lot will move to Brass QC.",
+        showCancelButton: true,
+        confirmButtonText: "Yes, Accept",
+        cancelButtonText: "Cancel",
+        focusCancel: true,
+        reverseButtons: true,
+        confirmButtonColor: "#1ba878",
+        cancelButtonColor: "#888",
+      }).then(function (r) {
+        if (r.isConfirmed) doSubmit();
+      });
+    } else if (window.confirm("Accept this lot? All trays have been verified.")) {
+      doSubmit();
     }
   });
   // ─── Reject button click ── handled by inputscreening_reject_modal.js ──────

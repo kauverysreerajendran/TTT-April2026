@@ -1513,128 +1513,68 @@ document.addEventListener("DOMContentLoaded", function () {
         modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
       }
 
-      // ✅ Fetch tray data with rejection information
+      // ✅ NEW: Dynamic per-child-lot panel rendering from IS submission record
+      const PANEL_MODE = 'accept'; // Accept table → show only accept lots
+      let result = null;
       let traysData = [];
       let rejectionSummary = {};
       try {
-        console.log("🔶 HARDCODED FLAGS APPLIED in Accept Table");
-        const params = new URLSearchParams({
-          debug_fix: 'true',
-          batch_id: batchId,
-          stock_lot_id: stockLotId,
-          lot_id: stockLotId,
-          accepted_ip_stock: 'true',
-          rejected_ip_stock: 'false',
-          few_cases_accepted_ip_stock: 'false'
-        });
-        
-        const resp = await fetch(`/inputscreening/CompleteTable_tray_id_list/?${params}`);
-        const result = await resp.json();
-        if (result.success) {
-          traysData = result.trays || [];
-          rejectionSummary = result.rejection_summary || {};
-          console.log('✅ Fetched trays with rejection data:', traysData);
-          console.log('📊 Rejection summary:', rejectionSummary);
-        }
+        const resp = await fetch(`/inputscreening/submitted_detail/?lot_id=${encodeURIComponent(stockLotId)}`);
+        result = await resp.json();
       } catch (e) {
-        console.error('❌ Error fetching tray data:', e);
+        console.error('❌ Error fetching IS submission detail:', e);
       }
 
-      // ✅ UPDATED: Build modal content - Keep existing structure + add SHORTAGE
-      // ✅ FIXED: Build modal content - Correct row numbering
-function buildTableHTML(showValidationColumn = false) {
-  let html = `
-    <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
-      <thead>
-        <tr>
-          <th style="width:50px;">S.no</th>
-          <th>Tray ID</th>
-          <th>Tray Qty</th>
-          ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
-        </tr>
-      </thead>
-      <tbody>
-  `;
-  
-  let rowCounter = 2; // ✅ FIXED: Start from 2 since top tray is 1
-  
-  // ✅ First, add all regular trays (with tray_id)
-  if (traysData && traysData.length > 0) {
-  traysData
-    .filter(tray => !tray.rejected_tray && !tray.delink_tray && tray.tray_id !== 'SHORTAGE') // Only accepted trays (exclude delinked)
-    .forEach((tray, index) => {
-      // ✅ FIXED: Proper S.no numbering
-      let displaySNo;
-      if (tray.ip_top_tray || tray.top_tray) {
-        displaySNo = '1 (Top Tray)';
-      } else {
-        displaySNo = rowCounter;
-        rowCounter++; // Increment after assigning
+      function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       }
-      
-      // Use ip_top_tray_qty for top tray, regular tray_quantity for others
-      // ...inside buildTableHTML()...
-      let displayQuantity;
-      if (acceptedIpStock && tray.top_tray) {
-        // For fully accepted, use tray_quantity from TrayId where top_tray=True
-        displayQuantity = tray.tray_quantity;
-      } else if (tray.ip_top_tray && tray.ip_top_tray_qty !== null) {
-        // For partial/rejected, use ip_top_tray_qty if present
-        displayQuantity = tray.ip_top_tray_qty;
-      } else {
-        displayQuantity = tray.tray_quantity;
+      function _renderTraySnapshot(trays) {
+        if (!trays || !trays.length) return '<div style="color:#888;font-size:12px;padding:6px;">No trays</div>';
+        const rows = trays.map((t, i) => {
+          const top = t.top_tray ? '<span style="background:#0288d1;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">TOP</span>' : '';
+          const reason = t.reason_text ? `<span style="background:#b71c1c;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">${_esc(t.reason_text)}</span>` : '';
+          const src = t.source ? `<span style="color:#666;font-size:10px;margin-left:6px;">(${_esc(t.source)})</span>` : '';
+          return `<tr><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:center;">${i+1}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;font-family:monospace;">${_esc(t.tray_id)}${top}${reason}${src}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;">${_esc(t.qty)}</td></tr>`;
+        }).join('');
+        return `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;"><thead><tr style="background:#f5f5f5;"><th style="padding:4px 8px;border:1px solid #e0e0e0;width:40px;">#</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:left;">Tray ID</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;width:80px;">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
       }
-      // ✅ Keep existing status tag logic
-let statusTag = '';
-      if (tray.delink_tray) {
-        // If tray is delinked, show DELINKED status (highest priority)
-        statusTag = '<span style="background: #9e9e9e; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>';
-      } else if (fewCasesAcceptedIpStock) {
-        if (tray.rejected_tray) {
-          statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
-        } else {
-          statusTag = '<span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>';
+      function _renderAcceptPanel(al, isFullAccept) {
+        const typeLabel = isFullAccept ? 'FULL ACCEPT' : 'PARTIAL ACCEPT';
+        const typeBg = isFullAccept ? '#1b5e20' : '#2e7d32';
+        return `<div style="border:1px solid #c8e6c9;background:#f1f8e9;border-radius:6px;padding:10px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:bold;">${typeLabel}</span>
+              <span style="font-family:monospace;color:#00695c;font-weight:bold;">${_esc(al.new_lot_id)}</span>
+            </div>
+            <div style="font-size:11px;color:#555;">${_esc(al.created_at || '')}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12px;">
+            <div><strong>Accepted Qty:</strong> <span style="color:#2e7d32;font-weight:bold;">${_esc(al.accepted_qty)}</span></div>
+            <div><strong>Accept Trays Count:</strong> ${_esc(al.accept_trays_count)}</div>
+          </div>
+          <div style="margin-top:6px;"><strong style="font-size:12px;">Trays Snapshot:</strong>${_renderTraySnapshot(al.trays || [])}</div>
+        </div>`;
+      }
+      function buildTableHTML() {
+        if (!result || !result.success) {
+          return '<div style="padding:20px;text-align:center;color:#c62828;font-size:13px;">No submitted detail available for this lot.</div>';
         }
-      } else if (acceptedIpStock && !tray.rejected_tray) {
-        statusTag = '<span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>';
-      } else if (rejectedIpStock && tray.rejected_tray) {
-        statusTag = '<span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>';
+        const isFullAccept = !!(result.is_full_accept);
+        let html = '<div style="padding:8px;">';
+        (result.accept_lots || []).forEach(al => { html += _renderAcceptPanel(al, isFullAccept); });
+        if (!result.accept_lots || !result.accept_lots.length) {
+          html += '<div style="padding:20px;text-align:center;color:#888;font-size:13px;">No accept lot data found.</div>';
+        }
+        html += '</div>';
+        return html;
       }
-      
-      const rowClass = (tray.ip_top_tray || tray.top_tray) ? 'top-tray-row' : '';      
-      html += `
-        <tr class="${rowClass}">
-          <td>${displaySNo}</td>
-          <td>
-            <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-            ${statusTag}
-          </td>
-          <td>
-            <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
-          </td>
-          ${showValidationColumn ? `
-            <td>
-              <div class="validation-status">
-                <div class="status-icon fail">
-                  <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                </div>
-                <div class="status-icon pass">
-                  <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                </div>
-              </div>
-            </td>
-          ` : ''}
-        </tr>
-      `;
-    });
-  }
 
-  
-  return html;
-}
-
-      // Show table 
-      detailsDiv.innerHTML = buildTableHTML(false);
+      // Show panels
+      // Remove table-grid class so CSS rule `> div { display:none !important; }` does not hide our panel divs
+      detailsDiv.classList.remove('table-grid');
+      detailsDiv.classList.add('panel-mode');
+      detailsDiv.innerHTML = buildTableHTML();
 
       // Store data for later use
       modal.buildTableHTML = buildTableHTML;

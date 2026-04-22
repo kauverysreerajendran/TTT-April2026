@@ -4,6 +4,8 @@ from .views import (
     IS_AcceptTable,
     IS_AllocationPreviewAPI,
     IS_Completed_Table,
+    IS_FullAcceptAPI,
+    IS_FullRejectAPI,
     IS_GetDPTraysAPI,
     IS_PartialSubmitAPI,
     IS_PartialSubmitV2API,
@@ -11,6 +13,7 @@ from .views import (
     IS_RejectModalContextAPI,
     IS_RejectTable,
     IS_SaveDraftAPI,
+    IS_SubmittedDetailAPI,
     IS_ValidateScanAPI,
     IS_VerifyTrayAPI,
 )
@@ -55,5 +58,21 @@ urlpatterns = [
         'save_draft/',
         IS_SaveDraftAPI.as_view(),
         name='IS_SaveDraftAPI',
+    ),
+    path(
+        'submitted_detail/',
+        IS_SubmittedDetailAPI.as_view(),
+        name='IS_SubmittedDetailAPI',
+    ),
+    # ── Full Accept / Full Reject ───────────────────────────────────────
+    path(
+        'full_accept/',
+        IS_FullAcceptAPI.as_view(),
+        name='IS_FullAcceptAPI',
+    ),
+    path(
+        'full_reject/',
+        IS_FullRejectAPI.as_view(),
+        name='IS_FullRejectAPI',
     ),
 ]

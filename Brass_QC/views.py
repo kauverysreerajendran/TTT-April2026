@@ -851,15 +851,61 @@ def brass_qc_action(request):
         # Filter out delinked and rejected trays for view icon display
         active_trays = [t for t in tray_data if not t.get('is_delinked') and not t.get('is_rejected')]
 
+        # ── ERR3 FIX: When this Brass QC row originates from an IS Partial
+        # Accept submission, the parent TotalStockModel still carries the
+        # original lot_id and qty (e.g. 100), but the *real* accept lot is a
+        # child IS_PartialAcceptLot row (new_lot_id, accepted_qty, snapshot).
+        # The view icon must surface that child data dynamically. We do NOT
+        # mutate any other module state — only the response payload for this
+        # single endpoint is enriched.
+        display_lot_id = lot_id
+        child_created_at_str = None
+        accept_trays_count = 0
+        if not is_iqf and getattr(stock, 'few_cases_accepted_Ip_stock', False):
+            from InputScreening.models import IS_PartialAcceptLot
+            child = (
+                IS_PartialAcceptLot.objects
+                .filter(parent_lot_id=lot_id)
+                .order_by('-created_at')
+                .first()
+            )
+            if child:
+                snapshot = child.trays_snapshot or []
+                snap_trays = [
+                    {
+                        "tray_id": t.get("tray_id", ""),
+                        "qty": int(t.get("qty") or 0),
+                        "is_rejected": False,
+                        "is_top": bool(t.get("top_tray", False)),
+                        "is_delinked": False,
+                        "status": "ACCEPT_TOP" if t.get("top_tray") else "ACCEPT",
+                    }
+                    for t in snapshot
+                    if t.get("tray_id") and int(t.get("qty") or 0) > 0
+                ]
+                if snap_trays:
+                    active_trays = snap_trays
+                    total_qty = int(child.accepted_qty or 0)
+                    display_lot_id = child.new_lot_id
+                    source = "IS_PartialAcceptLot"
+                    accept_trays_count = len(snap_trays)
+                    if child.created_at:
+                        from django.utils import timezone
+                        local_dt = timezone.localtime(child.created_at)
+                        child_created_at_str = local_dt.strftime("%B %d, %Y, %I:%M %p").lstrip("0")
+
         logger.info(f"[ACTION:GET_TRAYS] lot_id={lot_id}, is_iqf={is_iqf}, source={source}, trays={len(active_trays)}, total_qty={total_qty}")
         return JsonResponse({
-            "lot_id": lot_id,
+            "lot_id": display_lot_id,
+            "parent_lot_id": lot_id,
             "batch_id": stock.batch_id.batch_id if stock.batch_id else "",
             "total_qty": total_qty,
             "tray_capacity": tray_capacity,
             "is_iqf": is_iqf,
             "source": source,
             "trays": active_trays,
+            "child_created_at": child_created_at_str,
+            "accept_trays_count": accept_trays_count,
         })
 
     elif action == 'GET_SUBMISSION_TRAYS':
@@ -867,14 +913,45 @@ def brass_qc_action(request):
         lot_id = request.data.get('lot_id')
         if not lot_id:
             return JsonResponse({"success": False, "error": "lot_id is required"}, status=400)
+        
+        # ✅ FIX: Handle both parent lot_id AND child lot_id (from partial accept/reject splits)
+        # First try direct parent lookup
         submission = Brass_QC_Submission.objects.filter(lot_id=lot_id, is_completed=True).order_by('-created_at').first()
+        
+        # If not found, check if this lot_id matches a child lot from a partial split
+        if not submission:
+            from django.db.models import Q
+            submission = Brass_QC_Submission.objects.filter(
+                Q(transition_accept_lot_id=lot_id) | Q(transition_reject_lot_id=lot_id),
+                is_completed=True
+            ).order_by('-created_at').first()
+            
+            # Track which child lot this is so we know which data to use
+            is_child_accept = submission and submission.transition_accept_lot_id == lot_id
+            is_child_reject = submission and submission.transition_reject_lot_id == lot_id
+        else:
+            is_child_accept = False
+            is_child_reject = False
+        
         if not submission:
             logger.warning(f"[ACTION:GET_SUBMISSION_TRAYS] No completed submission for lot_id={lot_id}")
             return JsonResponse({"success": True, "lot_id": lot_id, "trays": [],
                                  "accepted_qty": 0, "rejected_qty": 0, "total_lot_qty": 0, "submission_type": ""})
         trays = []
-        accept_data = submission.full_accept_data or submission.partial_accept_data or {}
-        reject_data = submission.full_reject_data or submission.partial_reject_data or {}
+        
+        # ✅ FIX: For child lots from partial splits, use only the relevant child data
+        if is_child_accept:
+            # Child accept lot: use ONLY partial_accept_data, ignore reject data
+            accept_data = submission.partial_accept_data or {}
+            reject_data = {}
+        elif is_child_reject:
+            # Child reject lot: use ONLY partial_reject_data, ignore accept data
+            accept_data = {}
+            reject_data = submission.partial_reject_data or {}
+        else:
+            # Parent lot: use full or partial data as available
+            accept_data = submission.full_accept_data or submission.partial_accept_data or {}
+            reject_data = submission.full_reject_data or submission.partial_reject_data or {}
 
         # Build per-tray qty maps from submission snapshots
         # These hold the qty USED per tray_id in each stream
@@ -894,12 +971,15 @@ def brass_qc_action(request):
 
         # Build delinked trays: original trays whose full qty was not consumed
         # Source: BrassTrayId (all, including any previously delinked) → fallback TrayId
+        # ✅ FIX: Use parent lot_id for original tray lookups when dealing with child lots
+        parent_lot_id = submission.lot_id if (is_child_accept or is_child_reject) else lot_id
+        
         original_qty_map = {}  # tray_id → original qty
-        for bt in BrassTrayId.objects.filter(lot_id=lot_id):
+        for bt in BrassTrayId.objects.filter(lot_id=parent_lot_id):
             if bt.tray_id:
                 original_qty_map[bt.tray_id] = int(bt.tray_quantity or 0)
         if not original_qty_map:
-            for ti in TrayId.objects.filter(lot_id=lot_id, tray_quantity__gt=0):
+            for ti in TrayId.objects.filter(lot_id=parent_lot_id, tray_quantity__gt=0):
                 original_qty_map[ti.tray_id] = int(ti.tray_quantity or 0)
 
         delink_trays = []

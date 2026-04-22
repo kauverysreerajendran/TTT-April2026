@@ -1,67 +1,66 @@
 # ============================================================================
-# InputScreening Submission Service
+# InputScreening Submission Service – NEW ARCHITECTURE
 # ============================================================================
 #
-# Handles all submission logic for InputScreening_Submitted model:
-# - Atomic transaction safety (no half-saves)
-# - Automatic child lot ID generation for splits
-# - Permanent snapshot creation
-# - Parent/child lot relationship management
+# Matches Jig_Loading pattern:
+# - InputScreening_Submitted: Parent lot record (SSOT for original lot)
+# - IS_PartialAcceptLot: Child lot record for partial accept submissions
+# - IS_PartialRejectLot: Child lot record for partial reject submissions
+# - IS_AllocationTray: Individual tray records (replaces JSON snapshots)
+#
+# All lot IDs use the existing LID{YYYYMMDDHHMMSS}{counter} format.
+# Each submission is atomic and revokable.
 #
 
 from django.db import transaction
 from django.utils import timezone
-from .models import InputScreening_Submitted
+from .models import (
+    InputScreening_Submitted,
+    IS_PartialAcceptLot,
+    IS_PartialRejectLot,
+    IS_AllocationTray,
+)
 import uuid
 import logging
+import threading
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-
-# ─────────────────────────────────────────────────────────────────────────
-# LOT ID GENERATION
-# ─────────────────────────────────────────────────────────────────────────
-
+# Thread-safe counter for lot ID generation
 _lot_id_counter = 0
-_lot_id_counter_lock = None
+_lot_id_counter_lock = threading.Lock()
 
-def _init_counter_lock():
-    """Initialize counter lock for thread-safe lot ID generation."""
-    global _lot_id_counter_lock
-    if _lot_id_counter_lock is None:
-        import threading
-        _lot_id_counter_lock = threading.Lock()
+# ─────────────────────────────────────────────────────────────────────────
+# LOT ID GENERATION – THREAD-SAFE
+# ─────────────────────────────────────────────────────────────────────────
+
+_last_timestamp = None
 
 def generate_lot_id():
     """
-    Generate a new child lot ID in the same format as existing lot IDs.
+    Generate a new lot ID in the existing LID{YYYYMMDDHHMMSS}{counter} format.
     
     Format: LID{YYYYMMDDHHMMSS}{counter:06d}
     Example: LID20260421130738000001
     
-    This maintains consistency with the existing lot ID format while ensuring
-    uniqueness via a monotonic counter that increments each time this function
-    is called (within the same second) and resets when the second changes.
+    Thread-safe: uses a global lock to ensure uniqueness.
+    Counter resets when second changes.
     
     Used for:
-    - Child lots created from partial accept
-    - Child lots created from partial reject
-    - Any lot needing a new unique identifier
+    - Partial accept lot IDs
+    - Partial reject lot IDs
+    - Any new lot needing unique ID
     """
-    from datetime import datetime
-    import threading
-    
-    _init_counter_lock()
-    global _lot_id_counter
+    global _lot_id_counter, _last_timestamp
     
     # Get current timestamp in YYYYMMDDHHMMSS format
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     
     with _lot_id_counter_lock:
         # If this is a new second, reset counter
-        # (check by comparing with previously generated timestamp)
-        if not hasattr(generate_lot_id, '_last_timestamp') or generate_lot_id._last_timestamp != timestamp:
-            generate_lot_id._last_timestamp = timestamp
+        if _last_timestamp != timestamp:
+            _last_timestamp = timestamp
             _lot_id_counter = 0
         
         # Increment counter for this second
@@ -74,19 +73,24 @@ def generate_lot_id():
 def validate_lot_id_unique(lot_id):
     """
     Check if a lot_id is available (not already used).
+    Checks both parent and child lot tables.
     
     Returns: True if available, False if already exists
     """
-    return not InputScreening_Submitted.objects.filter(lot_id=lot_id).exists()
+    return (
+        not InputScreening_Submitted.objects.filter(lot_id=lot_id).exists()
+        and not IS_PartialAcceptLot.objects.filter(new_lot_id=lot_id).exists()
+        and not IS_PartialRejectLot.objects.filter(new_lot_id=lot_id).exists()
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# SUBMISSION CREATION - ATOMIC TRANSACTION SAFE
+# PARENT LOT CREATION – FULL ACCEPT (creates parent record)
 # ─────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def create_full_accept_submission(
-    original_lot_id,
+def create_parent_submission_full_accept(
+    parent_lot_id,
     batch_id,
     original_qty,
     plating_stock_no,
@@ -96,89 +100,135 @@ def create_full_accept_submission(
     active_trays_count,
     top_tray_id,
     top_tray_qty,
-    all_trays_json,
     created_by,
     remarks=None,
 ):
     """
-    Create a FULL ACCEPT submission.
+    Create parent InputScreening_Submitted record for FULL ACCEPT.
     
-    - No split occurs (is_child_lot=False)
-    - Parent lot is fully accepted
-    - All trays go to accepted_trays_json
+    Returns:
+        InputScreening_Submitted instance (parent lot record)
+    """
+    record = InputScreening_Submitted(
+        lot_id=parent_lot_id,
+        batch_id=batch_id,
+        module_name="Input Screening",
+        
+        plating_stock_no=plating_stock_no,
+        model_no=model_no,
+        tray_type=tray_type,
+        tray_capacity=tray_capacity,
+        
+        original_lot_qty=original_qty,
+        active_trays_count=active_trays_count,
+        top_tray_id=top_tray_id,
+        top_tray_qty=top_tray_qty,
+        has_top_tray=bool(top_tray_id),
+        
+        is_full_accept=True,
+        is_partial_accept=False,
+        is_partial_reject=False,
+        is_full_reject=False,
+        
+        is_active=True,
+        is_revoked=False,
+        
+        Draft_Saved=False,
+        is_submitted=True,
+        submitted_at=timezone.now(),
+        
+        remarks=remarks,
+        created_by=created_by,
+    )
+    
+    record.save()
+    logger.info(f"✅ Created parent submission (FULL ACCEPT): {parent_lot_id}")
+    
+    return record
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# FULL ACCEPT CHILD LOT CREATION
+# ─────────────────────────────────────────────────────────────────────────
+
+@transaction.atomic
+def create_full_accept_child_lot(
+    parent_lot_id,
+    parent_batch_id,
+    original_qty,
+    all_trays,
+    created_by,
+    remarks=None,
+):
+    """
+    Create IS_PartialAcceptLot record for FULL ACCEPT.
+    
+    Copies parent lot info and ALL trays as-is to child lot.
+    All trays are marked as accepted.
     
     Args:
-        original_lot_id: Parent lot ID from ModelmasterCreation
-        batch_id: Batch ID
-        original_qty: Complete quantity
-        plating_stock_no: Plating stock number
-        model_no: Model number
-        tray_type: Tray type
-        tray_capacity: Capacity per tray
-        active_trays_count: Number of trays
-        top_tray_id: Top tray if exists
-        top_tray_qty: Qty in top tray
-        all_trays_json: All trays snapshot
+        parent_lot_id: Original parent lot ID
+        parent_batch_id: Original batch ID  
+        original_qty: Total original quantity (all accepted)
+        all_trays: List of all trays from parent: 
+                   [{"tray_id": "...", "qty": N, "top_tray": False, "original_qty": N}, ...]
         created_by: User object
         remarks: Optional remarks
         
     Returns:
-        InputScreening_Submitted instance (saved to DB)
+        (IS_PartialAcceptLot instance, new_lot_id)
     """
-    record = InputScreening_Submitted(
-        lot_id=original_lot_id,
-        parent_lot_id=None,  # No parent for full accept
-        batch_id=batch_id,
-        module_name="Input Screening",
-        
-        plating_stock_no=plating_stock_no,
-        model_no=model_no,
-        tray_type=tray_type,
-        tray_capacity=tray_capacity,
-        
-        original_lot_qty=original_qty,
-        submitted_lot_qty=original_qty,
-        accepted_qty=original_qty,
-        rejected_qty=0,
-        
-        active_trays_count=active_trays_count,
-        accept_trays_count=active_trays_count,
-        reject_trays_count=0,
-        
-        top_tray_id=top_tray_id,
-        top_tray_qty=top_tray_qty,
-        has_top_tray=bool(top_tray_id),
-        
-        remarks=remarks or "",
-        
-        is_partial_accept=False,
-        is_partial_reject=False,
-        is_full_accept=True,
-        is_full_reject=False,
-        
-        is_child_lot=False,
-        is_active=True,
-        is_revoked=False,
-        
-        created_by=created_by,
-        created_at=timezone.now(),
-        
-        all_trays_json=all_trays_json,
-        accepted_trays_json=all_trays_json,  # All trays are accepted
-        rejected_trays_json=[],
-        rejection_reasons_json={},
-        allocation_preview_json={},
-        delink_trays_json=[],
+    # Generate new lot ID for this full accept submission
+    new_lot_id = generate_lot_id()
+    
+    # Get parent submission record
+    parent_submission = InputScreening_Submitted.objects.get(
+        lot_id=parent_lot_id, batch_id=parent_batch_id
     )
     
-    record.save()
-    logger.info(f"✅ Full Accept submission created: {record.lot_id}")
-    return record
+    # Create full accept lot record (as child lot in IS_PartialAcceptLot)
+    accept_lot = IS_PartialAcceptLot(
+        new_lot_id=new_lot_id,
+        parent_lot_id=parent_lot_id,
+        parent_batch_id=parent_batch_id,
+        parent_submission=parent_submission,
+        accepted_qty=original_qty,  # Full lot is accepted
+        accept_trays_count=len(all_trays),
+        trays_snapshot=[
+            {
+                "tray_id": t["tray_id"],
+                "qty": t["qty"],
+                "top_tray": bool(t.get("top_tray", False)),
+                "source": "existing",
+            }
+            for t in all_trays
+        ],
+        created_by=created_by,
+    )
+    accept_lot.save()
+    
+    # Create individual tray allocations (copy all parent trays as-is)
+    for tray_info in all_trays:
+        IS_AllocationTray.objects.create(
+            accept_lot=accept_lot,
+            tray_id=tray_info['tray_id'],
+            qty=tray_info['qty'],
+            original_qty=tray_info.get('original_qty', tray_info['qty']),
+            top_tray=tray_info.get('top_tray', False),
+        )
+    
+    logger.info(f"✅ Created full accept child lot: {new_lot_id} (from {parent_lot_id}, qty={original_qty})")
+    
+    return accept_lot, new_lot_id
 
+
+# ─────────────────────────────────────────────────────────────────────────
+# PARENT LOT CREATION – FULL REJECT (creates parent record)
+# ─────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def create_full_reject_submission(
-    original_lot_id,
+def create_parent_submission_full_reject(
+    parent_lot_id,
     batch_id,
     original_qty,
     plating_stock_no,
@@ -186,31 +236,17 @@ def create_full_reject_submission(
     tray_type,
     tray_capacity,
     active_trays_count,
-    top_tray_id,
-    top_tray_qty,
-    rejected_trays_json,
-    rejection_reasons_json,
-    allocation_preview_json,
-    delink_trays_json,
     created_by,
     remarks=None,
 ):
     """
-    Create a FULL REJECT submission.
+    Create parent InputScreening_Submitted record for FULL REJECT.
     
-    - No split occurs (is_child_lot=False)
-    - Entire lot is rejected with reasons
-    - All trays go to rejected_trays_json
-    
-    Args:
-        Same as full_accept but with rejection-specific fields
-        
     Returns:
-        InputScreening_Submitted instance (saved to DB)
+        InputScreening_Submitted instance (parent lot record)
     """
     record = InputScreening_Submitted(
-        lot_id=original_lot_id,
-        parent_lot_id=None,
+        lot_id=parent_lot_id,
         batch_id=batch_id,
         module_name="Input Screening",
         
@@ -220,263 +256,378 @@ def create_full_reject_submission(
         tray_capacity=tray_capacity,
         
         original_lot_qty=original_qty,
-        submitted_lot_qty=original_qty,
-        accepted_qty=0,
-        rejected_qty=original_qty,
-        
         active_trays_count=active_trays_count,
-        accept_trays_count=0,
-        reject_trays_count=active_trays_count,
         
-        top_tray_id=top_tray_id,
-        top_tray_qty=top_tray_qty,
-        has_top_tray=bool(top_tray_id),
-        
-        remarks=remarks or "",
-        
+        is_full_accept=False,
         is_partial_accept=False,
         is_partial_reject=False,
-        is_full_accept=False,
         is_full_reject=True,
         
-        is_child_lot=False,
         is_active=True,
         is_revoked=False,
         
-        created_by=created_by,
-        created_at=timezone.now(),
+        Draft_Saved=False,
+        is_submitted=True,
+        submitted_at=timezone.now(),
         
-        all_trays_json=rejected_trays_json,  # All trays are rejected
-        accepted_trays_json=[],
-        rejected_trays_json=rejected_trays_json,
-        rejection_reasons_json=rejection_reasons_json,
-        allocation_preview_json=allocation_preview_json,
-        delink_trays_json=delink_trays_json,
+        remarks=remarks,
+        created_by=created_by,
     )
     
     record.save()
-    logger.info(f"❌ Full Reject submission created: {record.lot_id}")
+    logger.info(f"✅ Created parent submission (FULL REJECT): {parent_lot_id}")
+    
     return record
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# FULL REJECT CHILD LOT CREATION
+# ─────────────────────────────────────────────────────────────────────────
+
 @transaction.atomic
-def create_partial_split_submission(
-    original_lot_id,
-    batch_id,
+def create_full_reject_child_lot(
+    parent_lot_id,
+    parent_batch_id,
     original_qty,
-    plating_stock_no,
-    model_no,
-    tray_type,
-    tray_capacity,
-    accept_qty,
-    reject_qty,
-    accept_trays_json,
-    reject_trays_json,
-    accept_tray_count,
-    reject_tray_count,
-    accept_top_tray_id,
-    accept_top_tray_qty,
-    reject_top_tray_id,
-    reject_top_tray_qty,
-    rejection_reasons_json,
-    allocation_preview_json,
-    delink_trays_json,
+    all_trays,
+    rejection_reasons,
     created_by,
     remarks=None,
 ):
     """
-    Create PARTIAL ACCEPT + PARTIAL REJECT split submissions.
+    Create IS_PartialRejectLot record for FULL REJECT.
     
-    This creates TWO independent child lots:
-    1. Accept child lot (with generated lot_id)
-    2. Reject child lot (with generated lot_id)
-    
-    Both are marked as:
-    - is_child_lot=True
-    - parent_lot_id=original_lot_id
-    - is_active=True (they are the new source of truth)
-    
-    After split:
-    - Parent lot should be REVOKED or marked with remaining balance
-    - Future modules only use child lot data
+    Copies parent lot info and ALL trays as-is to child lot.
+    All trays are marked as rejected.
     
     Args:
-        original_lot_id: Parent lot ID from submission
-        accept_qty: Accepted quantity
-        reject_qty: Rejected quantity
-        accept_trays_json: Trays holding accepted qty
-        reject_trays_json: Trays holding rejected qty
-        accept_tray_count: Count of accept trays
-        reject_tray_count: Count of reject trays
-        (other params similar to full submissions)
+        parent_lot_id: Original parent lot ID
+        parent_batch_id: Original batch ID
+        original_qty: Total original quantity (all rejected)
+        all_trays: List of all trays from parent: 
+                   [{"tray_id": "...", "qty": N, "top_tray": False, "original_qty": N}, ...]
+        rejection_reasons: Dict of rejection reasons (can be empty for system reject)
+        created_by: User object
+        remarks: Optional rejection remarks
         
     Returns:
-        tuple: (accept_record, reject_record) both saved to DB
+        (IS_PartialRejectLot instance, new_lot_id)
     """
+    # Generate new lot ID for this full reject submission
+    new_lot_id = generate_lot_id()
     
-    # Generate new unique lot IDs for children
-    accept_lot_id = generate_lot_id()
-    reject_lot_id = generate_lot_id()
-    
-    # Ensure uniqueness (should succeed, but defensive)
-    max_retries = 3
-    for _ in range(max_retries):
-        if validate_lot_id_unique(accept_lot_id) and validate_lot_id_unique(reject_lot_id):
-            break
-        accept_lot_id = generate_lot_id()
-        reject_lot_id = generate_lot_id()
-    
-    # CREATE ACCEPT CHILD LOT
-    accept_record = InputScreening_Submitted(
-        lot_id=accept_lot_id,
-        parent_lot_id=original_lot_id,
-        batch_id=batch_id,
-        module_name="Input Screening",
-        
-        plating_stock_no=plating_stock_no,
-        model_no=model_no,
-        tray_type=tray_type,
-        tray_capacity=tray_capacity,
-        
-        original_lot_qty=original_qty,  # Store original for reference
-        submitted_lot_qty=accept_qty,  # Only accepted qty
-        accepted_qty=accept_qty,
-        rejected_qty=0,
-        
-        active_trays_count=accept_tray_count,
-        accept_trays_count=accept_tray_count,
-        reject_trays_count=0,
-        
-        top_tray_id=accept_top_tray_id,
-        top_tray_qty=accept_top_tray_qty,
-        has_top_tray=bool(accept_top_tray_id),
-        
-        remarks=remarks or "",
-        
-        is_partial_accept=True,
-        is_partial_reject=False,
-        is_full_accept=False,
-        is_full_reject=False,
-        
-        is_child_lot=True,
-        is_active=True,  # Child is active!
-        is_revoked=False,
-        
-        created_by=created_by,
-        created_at=timezone.now(),
-        
-        all_trays_json=accept_trays_json,
-        accepted_trays_json=accept_trays_json,
-        rejected_trays_json=[],
-        rejection_reasons_json={},
-        allocation_preview_json=allocation_preview_json,
-        delink_trays_json=delink_trays_json,
+    # Get parent submission record
+    parent_submission = InputScreening_Submitted.objects.get(
+        lot_id=parent_lot_id, batch_id=parent_batch_id
     )
-    accept_record.save()
-    logger.info(f"✅ Partial Accept child lot created: {accept_record.lot_id} (parent: {original_lot_id})")
     
-    # CREATE REJECT CHILD LOT
-    reject_record = InputScreening_Submitted(
-        lot_id=reject_lot_id,
-        parent_lot_id=original_lot_id,
-        batch_id=batch_id,
-        module_name="Input Screening",
-        
-        plating_stock_no=plating_stock_no,
-        model_no=model_no,
-        tray_type=tray_type,
-        tray_capacity=tray_capacity,
-        
-        original_lot_qty=original_qty,  # Store original for reference
-        submitted_lot_qty=reject_qty,  # Only rejected qty
-        accepted_qty=0,
-        rejected_qty=reject_qty,
-        
-        active_trays_count=reject_tray_count,
-        accept_trays_count=0,
-        reject_trays_count=reject_tray_count,
-        
-        top_tray_id=reject_top_tray_id,
-        top_tray_qty=reject_top_tray_qty,
-        has_top_tray=bool(reject_top_tray_id),
-        
-        remarks=remarks or "",
-        
-        is_partial_accept=False,
-        is_partial_reject=True,
-        is_full_accept=False,
-        is_full_reject=False,
-        
-        is_child_lot=True,
-        is_active=True,  # Child is active!
-        is_revoked=False,
-        
+    # Create full reject lot record (as child lot in IS_PartialRejectLot)
+    reject_lot = IS_PartialRejectLot(
+        new_lot_id=new_lot_id,
+        parent_lot_id=parent_lot_id,
+        parent_batch_id=parent_batch_id,
+        parent_submission=parent_submission,
+        rejected_qty=original_qty,  # Full lot is rejected
+        reject_trays_count=len(all_trays),
+        rejection_reasons=rejection_reasons or {},
+        delink_count=0,  # No delinks for full reject
+        trays_snapshot=[
+            {
+                "tray_id": t["tray_id"],
+                "qty": t["qty"],
+                "top_tray": bool(t.get("top_tray", False)),
+                "source": "existing",
+            }
+            for t in all_trays
+        ],
+        remarks=remarks,
         created_by=created_by,
-        created_at=timezone.now(),
-        
-        all_trays_json=reject_trays_json,
-        accepted_trays_json=[],
-        rejected_trays_json=reject_trays_json,
-        rejection_reasons_json=rejection_reasons_json,
-        allocation_preview_json=allocation_preview_json,
-        delink_trays_json=delink_trays_json,
     )
-    reject_record.save()
-    logger.info(f"❌ Partial Reject child lot created: {reject_record.lot_id} (parent: {original_lot_id})")
+    reject_lot.save()
     
-    return (accept_record, reject_record)
+    # Create individual tray allocations (copy all parent trays as-is)
+    for tray_info in all_trays:
+        IS_AllocationTray.objects.create(
+            reject_lot=reject_lot,
+            tray_id=tray_info['tray_id'],
+            qty=tray_info['qty'],
+            original_qty=tray_info.get('original_qty', tray_info['qty']),
+            is_delinked=False,  # Not delinked for full reject
+            top_tray=tray_info.get('top_tray', False),
+        )
+    
+    logger.info(f"✅ Created full reject child lot: {new_lot_id} (from {parent_lot_id}, qty={original_qty})")
+    
+    return reject_lot, new_lot_id
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# PARTIAL ACCEPT LOT CREATION
+# ─────────────────────────────────────────────────────────────────────────
+
+@transaction.atomic
+def create_partial_accept_submission(
+    parent_lot_id,
+    parent_batch_id,
+    accepted_qty,
+    accepted_trays,
+    created_by,
+):
+    """
+    Create IS_PartialAcceptLot record with individual tray allocations.
+    
+    Args:
+        parent_lot_id: Original parent lot ID
+        parent_batch_id: Original batch ID
+        accepted_qty: Total quantity accepted
+        accepted_trays: List of dicts: [{"tray_id": "...", "qty": N, "top_tray": False}, ...]
+        created_by: User object
+        
+    Returns:
+        (IS_PartialAcceptLot instance, new_lot_id)
+    """
+    # Generate new lot ID for this partial accept
+    new_lot_id = generate_lot_id()
+    
+    # Get parent submission record
+    parent_submission = InputScreening_Submitted.objects.get(
+        lot_id=parent_lot_id, batch_id=parent_batch_id
+    )
+    
+    # Create partial accept lot record
+    accept_lot = IS_PartialAcceptLot(
+        new_lot_id=new_lot_id,
+        parent_lot_id=parent_lot_id,
+        parent_batch_id=parent_batch_id,
+        parent_submission=parent_submission,
+        accepted_qty=accepted_qty,
+        accept_trays_count=len(accepted_trays),
+        created_by=created_by,
+    )
+    accept_lot.save()
+    
+    # Create individual tray allocations
+    for tray_info in accepted_trays:
+        IS_AllocationTray.objects.create(
+            accept_lot=accept_lot,
+            tray_id=tray_info['tray_id'],
+            qty=tray_info['qty'],
+            original_qty=tray_info.get('original_qty', 0),
+            top_tray=tray_info.get('top_tray', False),
+        )
+    
+    # Update parent to mark partial accept
+    parent_submission.is_partial_accept = True
+    parent_submission.save(update_fields=['is_partial_accept'])
+    
+    logger.info(f"✅ Created partial accept lot: {new_lot_id} (from {parent_lot_id}, qty={accepted_qty})")
+    
+    return accept_lot, new_lot_id
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# PARTIAL REJECT LOT CREATION
+# ─────────────────────────────────────────────────────────────────────────
+
+@transaction.atomic
+def create_partial_reject_submission(
+    parent_lot_id,
+    parent_batch_id,
+    rejected_qty,
+    rejection_reasons,
+    reject_trays,
+    delink_count,
+    created_by,
+    remarks=None,
+):
+    """
+    Create IS_PartialRejectLot record with individual tray allocations and rejection reasons.
+    
+    Args:
+        parent_lot_id: Original parent lot ID
+        parent_batch_id: Original batch ID
+        rejected_qty: Total quantity rejected
+        rejection_reasons: Dict of rejection reasons: {"R01": {"reason": "...", "qty": N}, ...}
+        reject_trays: List of dicts: [{"tray_id": "...", "qty": N, "reason_id": "R01", 
+                                       "reason_text": "...", "is_delinked": False}, ...]
+        delink_count: Number of trays delinked (reused)
+        created_by: User object
+        remarks: Optional rejection remarks
+        
+    Returns:
+        (IS_PartialRejectLot instance, new_lot_id)
+    """
+    # Generate new lot ID for this partial reject
+    new_lot_id = generate_lot_id()
+    
+    # Get parent submission record
+    parent_submission = InputScreening_Submitted.objects.get(
+        lot_id=parent_lot_id, batch_id=parent_batch_id
+    )
+    
+    # Create partial reject lot record
+    reject_lot = IS_PartialRejectLot(
+        new_lot_id=new_lot_id,
+        parent_lot_id=parent_lot_id,
+        parent_batch_id=parent_batch_id,
+        parent_submission=parent_submission,
+        rejected_qty=rejected_qty,
+        reject_trays_count=len(reject_trays),
+        rejection_reasons=rejection_reasons,
+        delink_count=delink_count,
+        remarks=remarks,
+        created_by=created_by,
+    )
+    reject_lot.save()
+    
+    # Create individual tray allocations
+    for tray_info in reject_trays:
+        IS_AllocationTray.objects.create(
+            reject_lot=reject_lot,
+            tray_id=tray_info['tray_id'],
+            qty=tray_info['qty'],
+            original_qty=tray_info.get('original_qty', 0),
+            is_delinked=tray_info.get('is_delinked', False),
+            rejection_reason_id=tray_info.get('reason_id'),
+            rejection_reason_text=tray_info.get('reason_text'),
+        )
+    
+    # Update parent to mark partial reject
+    parent_submission.is_partial_reject = True
+    parent_submission.save(update_fields=['is_partial_reject'])
+    
+    logger.info(f"✅ Created partial reject lot: {new_lot_id} (from {parent_lot_id}, qty={rejected_qty})")
+    
+    return reject_lot, new_lot_id
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # RETRIEVAL HELPERS
 # ─────────────────────────────────────────────────────────────────────────
 
-def get_active_submission(lot_id):
-    """
-    Get active submission record for a given lot_id.
-    
-    Returns:
-        InputScreening_Submitted or None
-    """
-    try:
-        return InputScreening_Submitted.objects.get(lot_id=lot_id, is_active=True)
-    except InputScreening_Submitted.DoesNotExist:
-        return None
-
-
-def get_all_child_lots(parent_lot_id):
-    """
-    Get all child lots created from a parent split.
-    
-    Args:
-        parent_lot_id: Original parent lot ID
-        
-    Returns:
-        QuerySet of InputScreening_Submitted (is_child_lot=True)
-    """
+def get_parent_submission(parent_lot_id):
+    """Get parent InputScreening_Submitted record."""
     return InputScreening_Submitted.objects.filter(
-        parent_lot_id=parent_lot_id,
-        is_child_lot=True
-    ).order_by('created_at')
+        lot_id=parent_lot_id, is_active=True
+    ).first()
 
 
-def get_parent_lot(child_lot_id):
+def get_partial_accept_lot(new_lot_id):
+    """Get IS_PartialAcceptLot with all related trays."""
+    return IS_PartialAcceptLot.objects.prefetch_related(
+        'allocation_trays'
+    ).filter(new_lot_id=new_lot_id).first()
+
+
+def get_partial_reject_lot(new_lot_id):
+    """Get IS_PartialRejectLot with all related trays."""
+    return IS_PartialRejectLot.objects.prefetch_related(
+        'allocation_trays'
+    ).filter(new_lot_id=new_lot_id).first()
+
+
+def get_all_accept_child_lots(parent_lot_id):
+    """Get all partial accept child lots for a parent."""
+    return IS_PartialAcceptLot.objects.filter(
+        parent_lot_id=parent_lot_id
+    ).prefetch_related('allocation_trays')
+
+
+def get_all_reject_child_lots(parent_lot_id):
+    """Get all partial reject child lots for a parent."""
+    return IS_PartialRejectLot.objects.filter(
+        parent_lot_id=parent_lot_id
+    ).prefetch_related('allocation_trays')
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# TRAY DATA SERIALIZATION
+# ─────────────────────────────────────────────────────────────────────────
+
+def get_accept_lot_with_trays_dict(new_lot_id):
     """
-    Get the parent lot for a child lot.
+    Get accept lot with all tray info serialized as dict.
     
-    Args:
-        child_lot_id: Child lot ID
-        
     Returns:
-        InputScreening_Submitted or None
+        {
+            "new_lot_id": "LID...",
+            "parent_lot_id": "stock_lot_id",
+            "accepted_qty": 100,
+            "accept_trays_count": 2,
+            "trays": [
+                {"tray_id": "...", "qty": 50, "original_qty": 50, "top_tray": False},
+                {...}
+            ]
+        }
     """
-    try:
-        child = InputScreening_Submitted.objects.get(lot_id=child_lot_id, is_child_lot=True)
-        if child.parent_lot_id:
-            return get_active_submission(child.parent_lot_id)
-    except InputScreening_Submitted.DoesNotExist:
-        pass
-    return None
+    accept_lot = get_partial_accept_lot(new_lot_id)
+    if not accept_lot:
+        return None
+    
+    trays = []
+    for tray in accept_lot.allocation_trays.all():
+        trays.append({
+            "tray_id": tray.tray_id,
+            "qty": tray.qty,
+            "original_qty": tray.original_qty,
+            "top_tray": tray.top_tray,
+        })
+    
+    return {
+        "new_lot_id": accept_lot.new_lot_id,
+        "parent_lot_id": accept_lot.parent_lot_id,
+        "parent_batch_id": accept_lot.parent_batch_id,
+        "accepted_qty": accept_lot.accepted_qty,
+        "accept_trays_count": accept_lot.accept_trays_count,
+        "trays": trays,
+    }
+
+
+def get_reject_lot_with_trays_dict(new_lot_id):
+    """
+    Get reject lot with all tray info serialized as dict.
+    
+    Returns:
+        {
+            "new_lot_id": "LID...",
+            "parent_lot_id": "stock_lot_id",
+            "rejected_qty": 100,
+            "reject_trays_count": 2,
+            "rejection_reasons": {...},
+            "delink_count": 0,
+            "trays": [
+                {"tray_id": "...", "qty": 50, "original_qty": 50, "reason_id": "R01", 
+                 "is_delinked": False, "top_tray": False},
+                {...}
+            ]
+        }
+    """
+    reject_lot = get_partial_reject_lot(new_lot_id)
+    if not reject_lot:
+        return None
+    
+    trays = []
+    for tray in reject_lot.allocation_trays.all():
+        trays.append({
+            "tray_id": tray.tray_id,
+            "qty": tray.qty,
+            "original_qty": tray.original_qty,
+            "reason_id": tray.rejection_reason_id,
+            "reason_text": tray.rejection_reason_text,
+            "is_delinked": tray.is_delinked,
+            "top_tray": tray.top_tray,
+        })
+    
+    return {
+        "new_lot_id": reject_lot.new_lot_id,
+        "parent_lot_id": reject_lot.parent_lot_id,
+        "parent_batch_id": reject_lot.parent_batch_id,
+        "rejected_qty": reject_lot.rejected_qty,
+        "reject_trays_count": reject_lot.reject_trays_count,
+        "rejection_reasons": reject_lot.rejection_reasons,
+        "delink_count": reject_lot.delink_count,
+        "trays": trays,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -484,262 +635,284 @@ def get_parent_lot(child_lot_id):
 # ─────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def revoke_submission(lot_id, revocation_reason="Manual audit revoke"):
+def revoke_submission(parent_lot_id):
     """
-    Revoke a submission (mark as revoked and inactive).
+    Revoke a submission and mark as inactive (for audit/rollback).
+    Marks parent and all child lots as revoked.
+    """
+    parent = get_parent_submission(parent_lot_id)
+    if not parent:
+        logger.warning(f"⚠️ Submission not found: {parent_lot_id}")
+        return False
     
-    Used for:
-    - Audit corrections
-    - Erroneous submissions
-    - Rollback scenarios
+    parent.is_revoked = True
+    parent.is_active = False
+    parent.save(update_fields=['is_revoked', 'is_active'])
     
-    Args:
-        lot_id: Lot ID to revoke
-        revocation_reason: Reason for revocation (logged)
-        
-    Returns:
-        Updated InputScreening_Submitted or None
-    """
-    try:
-        record = InputScreening_Submitted.objects.get(lot_id=lot_id)
-        record.is_revoked = True
-        record.is_active = False
-        record.save()
-        logger.warning(f"🚫 Submission revoked: {lot_id} - Reason: {revocation_reason}")
-        return record
-    except InputScreening_Submitted.DoesNotExist:
-        logger.error(f"Cannot revoke {lot_id}: Not found")
-        return None
-
-
-@transaction.atomic
-def activate_child_lot(lot_id):
-    """
-    Activate a child lot (mark as active).
+    # Revoke all child accept lots
+    IS_PartialAcceptLot.objects.filter(parent_lot_id=parent_lot_id).update(
+        created_at=timezone.now()  # Just mark as touched
+    )
     
-    Used when parent is revoked and child should take over.
-    """
-    try:
-        record = InputScreening_Submitted.objects.get(lot_id=lot_id, is_child_lot=True)
-        record.is_active = True
-        record.save()
-        logger.info(f"✅ Child lot activated: {lot_id}")
-        return record
-    except InputScreening_Submitted.DoesNotExist:
-        logger.error(f"Cannot activate {lot_id}: Not found or not a child lot")
-        return None
+    # Revoke all child reject lots
+    IS_PartialRejectLot.objects.filter(parent_lot_id=parent_lot_id).update(
+        created_at=timezone.now()
+    )
+    
+    logger.info(f"🚫 Revoked submission: {parent_lot_id}")
+    
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# QUERY HELPERS FOR FUTURE MODULES
+# QUERY HELPERS FOR DOWNSTREAM MODULES
 # ─────────────────────────────────────────────────────────────────────────
 
 def get_lot_for_next_module(lot_id):
     """
-    Get the correct lot record to use in next modules.
+    Get lot metadata for downstream module processing.
+    Resolves both parent and child lot types.
     
-    IMPORTANT: If lot_id is a parent with active children,
-    future modules should use the CHILD lot(s), not the parent.
-    
-    Args:
-        lot_id: Any lot ID (parent or child)
-        
     Returns:
-        InputScreening_Submitted: The active record to use
+        dict with lot metadata or None if not found
     """
-    record = get_active_submission(lot_id)
-    if not record:
-        return None
+    # Check if it's a parent lot
+    parent = InputScreening_Submitted.objects.filter(
+        lot_id=lot_id, is_active=True
+    ).values(
+        'lot_id', 'batch_id', 'original_lot_qty', 'plating_stock_no',
+        'model_no', 'tray_type', 'tray_capacity', 'is_full_accept', 'is_full_reject'
+    ).first()
     
-    # If this is a parent with active children, return the appropriate child
-    if not record.is_child_lot:
-        children = get_all_child_lots(lot_id)
-        active_children = children.filter(is_active=True)
-        
-        if active_children.exists():
-            # If multiple children, caller must decide which one
-            # (typically they'd have different processing paths)
-            logger.warning(f"⚠️ Lot {lot_id} has {active_children.count()} active children. Using first child.")
-            return active_children.first()
+    if parent:
+        parent['lot_type'] = 'parent'
+        return parent
     
-    return record
+    # Check if it's a partial accept child lot
+    accept_lot = IS_PartialAcceptLot.objects.filter(
+        new_lot_id=lot_id
+    ).values(
+        'new_lot_id', 'parent_lot_id', 'parent_batch_id', 'accepted_qty'
+    ).first()
+    
+    if accept_lot:
+        accept_lot['lot_type'] = 'partial_accept'
+        accept_lot['lot_qty'] = accept_lot.pop('accepted_qty')
+        return accept_lot
+    
+    # Check if it's a partial reject child lot
+    reject_lot = IS_PartialRejectLot.objects.filter(
+        new_lot_id=lot_id
+    ).values(
+        'new_lot_id', 'parent_lot_id', 'parent_batch_id', 'rejected_qty'
+    ).first()
+    
+    if reject_lot:
+        reject_lot['lot_type'] = 'partial_reject'
+        reject_lot['lot_qty'] = reject_lot.pop('rejected_qty')
+        return reject_lot
+    
+    return None
 
 
-def get_lot_metadata_for_downstream(lot_id):
+# ─────────────────────────────────────────────────────────────────────────
+# FULL ACCEPT / FULL REJECT ORCHESTRATORS
+# ─────────────────────────────────────────────────────────────────────────
+#
+# These thin wrappers tie together the existing ``create_parent_*`` and
+# ``create_*_child_lot`` helpers, update the master ``TotalStockModel``
+# flags so the lot moves to the correct downstream table (Brass QC pick
+# table for accept, IS Reject table for reject), and return a JSON-ready
+# payload for the API layer. All writes happen inside a single atomic
+# transaction so an exception leaves the database untouched.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def _get_full_lot_context(lot_id):
+    """Resolve the lot/batch/tray context required by the full-flow services.
+
+    Raises ``ValueError`` when the lot cannot be resolved or has no active
+    trays – mirrors the validation done by the partial flow.
     """
-    Extract metadata that downstream modules need.
-    
-    Returns dict with:
-    - qty (submitted_lot_qty from child or parent)
-    - trays (accepted_trays_json or rejected_trays_json)
-    - parent_lot_id (for reference)
-    - is_child_lot (marker)
+    from .selectors import get_lot_tray_context
+
+    ctx = get_lot_tray_context(lot_id, lock=True)
+    if not ctx.get("found"):
+        raise ValueError(f"Lot {lot_id} not found.")
+    if InputScreening_Submitted.objects.filter(
+        lot_id=lot_id, is_active=True
+    ).exists():
+        raise ValueError(f"Lot {lot_id} is already submitted.")
+    if not ctx.get("active_trays"):
+        raise ValueError(f"Lot {lot_id} has no active trays to submit.")
+    return ctx
+
+
+def _build_all_trays_payload(active_trays):
+    """Convert ``get_lot_tray_context`` rows into the dict shape expected
+    by ``create_full_accept_child_lot`` / ``create_full_reject_child_lot``.
     """
-    record = get_lot_for_next_module(lot_id)
-    if not record:
-        return None
-    
+    return [
+        {
+            "tray_id": t["tray_id"],
+            "qty": t["qty"],
+            "original_qty": t["qty"],
+            "top_tray": bool(t.get("top_tray")),
+        }
+        for t in active_trays
+    ]
+
+
+def _pick_top_tray(active_trays):
+    for t in active_trays:
+        if t.get("top_tray"):
+            return t["tray_id"], t["qty"]
+    return None, None
+
+
+@transaction.atomic
+def submit_full_accept(lot_id, remarks, user):
+    """Persist a FULL ACCEPT submission for ``lot_id``.
+
+    Flow:
+      1. Validate / lock the lot context.
+      2. Create parent ``InputScreening_Submitted`` record.
+      3. Create the child accept lot + per-tray rows.
+      4. Flip ``TotalStockModel`` flags so Brass QC picks up the lot.
+
+    Returns a JSON-friendly dict.
+    """
+    from modelmasterapp.models import TotalStockModel
+
+    ctx = _get_full_lot_context(lot_id)
+    active_trays = ctx["active_trays"]
+    lot_qty = ctx["lot_qty"]
+    top_id, top_qty = _pick_top_tray(active_trays)
+    all_trays = _build_all_trays_payload(active_trays)
+
+    parent = create_parent_submission_full_accept(
+        parent_lot_id=lot_id,
+        batch_id=ctx.get("batch_id"),
+        original_qty=lot_qty,
+        plating_stock_no=ctx.get("plating_stk_no"),
+        model_no=ctx.get("model_no"),
+        tray_type=ctx.get("tray_type"),
+        tray_capacity=ctx.get("tray_capacity"),
+        active_trays_count=len(active_trays),
+        top_tray_id=top_id,
+        top_tray_qty=top_qty,
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+        remarks=remarks or None,
+    )
+
+    accept_lot, new_lot_id = create_full_accept_child_lot(
+        parent_lot_id=lot_id,
+        parent_batch_id=ctx.get("batch_id"),
+        original_qty=lot_qty,
+        all_trays=all_trays,
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+        remarks=remarks or None,
+    )
+
+    # Move the lot to Brass QC pick table.
+    TotalStockModel.objects.filter(lot_id=lot_id).update(
+        accepted_Ip_stock=True,
+        rejected_ip_stock=False,
+        few_cases_accepted_Ip_stock=False,
+        total_IP_accpeted_quantity=lot_qty,
+        accepted_tray_scan_status=True,
+        last_process_module="Input Screening",
+        next_process_module="Brass QC",
+        last_process_date_time=timezone.now(),
+    )
+
+    logger.info(
+        "[IS][FULL_ACCEPT] lot=%s submission_id=%s qty=%d user=%s",
+        lot_id,
+        parent.id,
+        lot_qty,
+        getattr(user, "username", "anonymous"),
+    )
+
     return {
-        'lot_id': record.lot_id,
-        'parent_lot_id': record.parent_lot_id,
-        'batch_id': record.batch_id,
-        'qty': record.submitted_lot_qty,
-        'accepted_qty': record.accepted_qty,
-        'rejected_qty': record.rejected_qty,
-        'trays': record.accepted_trays_json if record.accepted_qty > 0 else record.rejected_trays_json,
-        'all_trays': record.all_trays_json,
-        'is_child_lot': record.is_child_lot,
-        'submission_type': 'partial_accept' if record.is_partial_accept else (
-            'partial_reject' if record.is_partial_reject else (
-                'full_accept' if record.is_full_accept else 'full_reject'
-            )
-        ),
+        "success": True,
+        "lot_id": lot_id,
+        "new_lot_id": new_lot_id,
+        "submission_id": parent.id,
+        "accepted_qty": lot_qty,
+        "accept_trays": len(all_trays),
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────
-# COMPREHENSIVE SUBMISSION HANDLER (ERR4 FIX)
-# ─────────────────────────────────────────────────────────────────────────
-
 @transaction.atomic
-def handle_submission(
-    lot_id,
-    batch_id,
-    submission_type,  # "full_accept" | "full_reject" | "partial"
-    original_qty,
-    accept_qty=None,
-    reject_qty=None,
-    plating_stock_no=None,
-    model_no=None,
-    tray_type=None,
-    tray_capacity=None,
-    active_trays_count=None,
-    accept_trays_count=None,
-    reject_trays_count=None,
-    top_tray_id=None,
-    top_tray_qty=None,
-    accept_top_tray_id=None,
-    accept_top_tray_qty=None,
-    reject_top_tray_id=None,
-    reject_top_tray_qty=None,
-    all_trays_json=None,
-    accept_trays_json=None,
-    reject_trays_json=None,
-    rejection_reasons_json=None,
-    allocation_preview_json=None,
-    delink_trays_json=None,
-    remarks=None,
-    created_by=None,
-):
+def submit_full_reject(lot_id, remarks, user):
+    """Persist a FULL REJECT submission for ``lot_id``.
+
+    Mirrors :func:`submit_full_accept` but writes a reject child lot and
+    flips the master flags so the lot lands in the IS Reject table.
     """
-    **ERR4 FIX**: Unified handler for all submission types.
-    
-    Stores submission to InputScreening_Submitted based on submission type.
-    
-    Args:
-        lot_id: Original lot ID
-        submission_type: "full_accept", "full_reject", or "partial"
-        Other args vary by submission_type
-        
-    Returns:
-        dict: {"success": True, "lot_ids": [...], "submission_type": "..."}
-              or
-              {"success": False, "error": "..."}
-    """
-    try:
-        if submission_type == "full_accept":
-            record = create_full_accept_submission(
-                original_lot_id=lot_id,
-                batch_id=batch_id,
-                original_qty=original_qty,
-                plating_stock_no=plating_stock_no,
-                model_no=model_no,
-                tray_type=tray_type,
-                tray_capacity=tray_capacity,
-                active_trays_count=active_trays_count or 0,
-                top_tray_id=top_tray_id,
-                top_tray_qty=top_tray_qty,
-                all_trays_json=all_trays_json or [],
-                created_by=created_by,
-                remarks=remarks,
-            )
-            return {
-                "success": True,
-                "lot_ids": [record.lot_id],
-                "submission_type": "full_accept",
-                "message": f"✅ Full accept submitted: {record.lot_id}",
-            }
-        
-        elif submission_type == "full_reject":
-            record = create_full_reject_submission(
-                original_lot_id=lot_id,
-                batch_id=batch_id,
-                original_qty=original_qty,
-                plating_stock_no=plating_stock_no,
-                model_no=model_no,
-                tray_type=tray_type,
-                tray_capacity=tray_capacity,
-                active_trays_count=active_trays_count or 0,
-                top_tray_id=top_tray_id,
-                top_tray_qty=top_tray_qty,
-                rejected_trays_json=reject_trays_json or [],
-                rejection_reasons_json=rejection_reasons_json or {},
-                allocation_preview_json=allocation_preview_json or {},
-                delink_trays_json=delink_trays_json or [],
-                created_by=created_by,
-                remarks=remarks,
-            )
-            return {
-                "success": True,
-                "lot_ids": [record.lot_id],
-                "submission_type": "full_reject",
-                "message": f"❌ Full reject submitted: {record.lot_id}",
-            }
-        
-        elif submission_type == "partial":
-            # Partial split creates TWO child lots
-            accept_record, reject_record = create_partial_split_submission(
-                original_lot_id=lot_id,
-                batch_id=batch_id,
-                original_qty=original_qty,
-                plating_stock_no=plating_stock_no,
-                model_no=model_no,
-                tray_type=tray_type,
-                tray_capacity=tray_capacity,
-                accept_qty=accept_qty or 0,
-                reject_qty=reject_qty or 0,
-                accept_trays_json=accept_trays_json or [],
-                reject_trays_json=reject_trays_json or [],
-                accept_tray_count=accept_trays_count or 0,
-                reject_tray_count=reject_trays_count or 0,
-                accept_top_tray_id=accept_top_tray_id,
-                accept_top_tray_qty=accept_top_tray_qty,
-                reject_top_tray_id=reject_top_tray_id,
-                reject_top_tray_qty=reject_top_tray_qty,
-                rejection_reasons_json=rejection_reasons_json or {},
-                allocation_preview_json=allocation_preview_json or {},
-                delink_trays_json=delink_trays_json or [],
-                created_by=created_by,
-                remarks=remarks,
-            )
-            return {
-                "success": True,
-                "lot_ids": [accept_record.lot_id, reject_record.lot_id],
-                "submission_type": "partial",
-                "accept_lot_id": accept_record.lot_id,
-                "reject_lot_id": reject_record.lot_id,
-                "message": f"✅ Partial split submitted: Accept {accept_record.lot_id}, Reject {reject_record.lot_id}",
-            }
-        
-        else:
-            return {
-                "success": False,
-                "error": f"Unknown submission_type: {submission_type}",
-            }
-    
-    except Exception as exc:
-        logger.exception(f"Submission failed for {lot_id}: {exc}")
-        return {
-            "success": False,
-            "error": str(exc),
-        }
+    from modelmasterapp.models import TotalStockModel
+    from DayPlanning.models import DPTrayId_History
+
+    if not (remarks or "").strip():
+        raise ValueError("Lot rejection remarks are required.")
+
+    ctx = _get_full_lot_context(lot_id)
+    active_trays = ctx["active_trays"]
+    lot_qty = ctx["lot_qty"]
+    all_trays = _build_all_trays_payload(active_trays)
+
+    parent = create_parent_submission_full_reject(
+        parent_lot_id=lot_id,
+        batch_id=ctx.get("batch_id"),
+        original_qty=lot_qty,
+        plating_stock_no=ctx.get("plating_stk_no"),
+        model_no=ctx.get("model_no"),
+        tray_type=ctx.get("tray_type"),
+        tray_capacity=ctx.get("tray_capacity"),
+        active_trays_count=len(active_trays),
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+        remarks=remarks.strip(),
+    )
+
+    reject_lot, new_lot_id = create_full_reject_child_lot(
+        parent_lot_id=lot_id,
+        parent_batch_id=ctx.get("batch_id"),
+        original_qty=lot_qty,
+        all_trays=all_trays,
+        rejection_reasons={},
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+        remarks=remarks.strip(),
+    )
+
+    # All trays of the lot are rejected – delink them so downstream
+    # modules do not pick them up.
+    DPTrayId_History.objects.filter(lot_id=lot_id).update(delink_tray=True)
+
+    # Mark the lot as fully rejected in the master.
+    TotalStockModel.objects.filter(lot_id=lot_id).update(
+        accepted_Ip_stock=False,
+        rejected_ip_stock=True,
+        few_cases_accepted_Ip_stock=False,
+        total_IP_accpeted_quantity=0,
+        last_process_module="Input Screening",
+        next_process_module="Input Screening",
+        last_process_date_time=timezone.now(),
+    )
+
+    logger.info(
+        "[IS][FULL_REJECT] lot=%s submission_id=%s qty=%d user=%s",
+        lot_id,
+        parent.id,
+        lot_qty,
+        getattr(user, "username", "anonymous"),
+    )
+
+    return {
+        "success": True,
+        "lot_id": lot_id,
+        "new_lot_id": new_lot_id,
+        "submission_id": parent.id,
+        "rejected_qty": lot_qty,
+        "reject_trays": len(all_trays),
+    }

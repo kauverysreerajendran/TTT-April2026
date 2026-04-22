@@ -1,10 +1,15 @@
-{% extends "base.html" %} 
+﻿{% extends "base.html" %} 
 {% load static %} 
 {% load stock_filters %}
 {% load custom_tags %}
 {% block content %}
 
 <style>
+
+/* Global Font Stack */
+html, body, * {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
 
 /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
@@ -14,6 +19,7 @@
 
 *{
   font-size: 20px !important; /* Increase font size for better readability */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
 }
 
 :root { --app-font-size: 20px; }
@@ -727,7 +733,8 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
              data-total-batch-quantity="{{ data.total_batch_quantity|default:'0' }}"
              data-model-image="{{ data.model_images.0|default:'' }}"
              data-needs-top-tray-scan="{{ data.needs_top_tray_scan|yesno:'true,false' }}"
-             data-tray-scan-status="{{ data.tray_scan_status|yesno:'true,false' }}">
+             data-tray-scan-status="{{ data.tray_scan_status|yesno:'true,false' }}"
+             data-tray-type="{{ data.tray_type }}">
             {% if data.needs_top_tray_scan %}
               Set Top Tray
             {% else %}
@@ -735,27 +742,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
             {% endif %}
           </a>
         {% endif %}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Polishing Stk No' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Plating Color' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.plating_color|default:"N/A" }}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Category' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.category|default:"N/A" }}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Polish Finish' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.polish_finish|default:"N/A" }}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Version' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.version__version_internal|default:"N/A" }}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Tray Cate-Capacity' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.tray_type|tray_full_name|default:"N/A" }}-{{ data.tray_capacity|default:"0" }}
-      </td>
-      <td class="{% if not is_admin and not visible_headings|get_item:'Source' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
-        {{ data.location__location_name|default:"N/A" }}
       </td>
       <td class="{% if not is_admin and not visible_headings|get_item:'No of Trays' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
         {{ data.no_of_trays|default:"0" }}
@@ -813,6 +799,27 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
             Day Planning
           {% endif %}
         </div>
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Polishing Stk No' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Plating Color' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.plating_color|default:"N/A" }}
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Category' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.category|default:"N/A" }}
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Polish Finish' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.polish_finish|default:"N/A" }}
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Version' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.version__version_internal|default:"N/A" }}
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Tray Cate-Capacity' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.tray_type|tray_full_name|default:"N/A" }}-{{ data.tray_capacity|default:"0" }}
+      </td>
+      <td class="{% if not is_admin and not visible_headings|get_item:'Source' %}blurred-cell{% endif %}{% if data.hold_lot %} row-inactive-blur{% endif %}">
+        {{ data.location__location_name|default:"N/A" }}
       </td>
 <!-- Updated Remarks Column - Replace the existing Remarks td section with this -->
 <td
@@ -1125,8 +1132,8 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
           </div>
         </div>
       </div>
-    </div>
-  </div>
+</div>
+
 
 
  
@@ -3978,8 +3985,7 @@ trayScanLinks.forEach((link) => {
         }
 
           // --- Tray Type Identification ---
-          const trayTypeCell = row.querySelector('td:nth-child(9)');
-          const trayType = trayTypeCell ? trayTypeCell.textContent.trim() : 'N/A';
+          const trayType = link.getAttribute('data-tray-type') || 'N/A';
  
                   let trayTypeDiv = modal.querySelector('#modalTrayType');
           if (!trayTypeDiv) {
@@ -3994,13 +4000,13 @@ trayScanLinks.forEach((link) => {
 
          // choose size mode, apply class and display numeric size (Normal = 16, Jumbo = 12)
 (function(){
-  // parse base type from the trayType string (e.g. "Normal-16", "Jumbo-12", "CPSF-12")
-  const rawType = (trayType || '').split('-')[0]?.trim().toLowerCase() || 'normal';
-
-  // normalize known aliases -> logical type should be 'normal' or 'jumbo'
-  let logicalType = rawType;
-  if (logicalType === 'cpsf') logicalType = 'normal';
-  // add other aliases if required, e.g. if (logicalType === 'xyz') logicalType = 'jumbo';
+  // Normalize raw DB tray_type code to 'jumbo' or 'normal'
+  const rawType = (trayType || '').trim().toLowerCase();
+  let logicalType;
+  if (rawType.startsWith('j') || rawType === 'jumbo') logicalType = 'jumbo';
+  else if (rawType.startsWith('n') || rawType === 'normal') logicalType = 'normal';
+  else if (rawType === 'cpsf') logicalType = 'normal';
+  else logicalType = trayCapacity <= 12 ? 'jumbo' : 'normal'; // capacity-based fallback
 
   const isJumbo = logicalType === 'jumbo';
 
@@ -6068,6 +6074,255 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
     errorDiv.textContent = msg;
     input.style.borderColor = '#d32f2f';
     input.style.backgroundColor = '#ffebee';
+  }
+
+  // ===== KEYBOARD SHORTCUTS =====
+  // ESC=clear | Up/Down=navigate | Enter=execute | F2=scan | T=tray-scan
+  // Delete=mark delete→Enter confirms | Left/Right=scroll | 1-9=pagination
+
+  let kbIndex = -1;           // currently highlighted row index
+  let kbAction = null;        // pending action: 'tray-scan' | 'delete' | null
+  const kbTable = document.getElementById('order-listing');
+
+  // Inject row-highlight styles (no left border)
+  (function() {
+    const s = document.createElement('style');
+    s.textContent = `
+      #order-listing tbody tr.kb-focused td         { background-color: #e3f2fd !important; }
+      #order-listing tbody tr.kb-pending-scan td    { background-color: #fff3e0 !important; }
+      #order-listing tbody tr.kb-pending-delete td  { background-color: #ffebee !important; }
+      #kb-shortcut-hint { position: fixed; bottom: 16px; right: 16px; background: rgba(30,30,30,0.93); color: #fff; border-radius: 10px; padding: 12px 16px; font-size: 12px; line-height: 1.9; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; min-width: 220px; }
+      #kb-shortcut-hint.visible { opacity: 1; }
+      #kb-shortcut-hint .kb-key { display: inline-block; background: #555; border-radius: 4px; padding: 1px 6px; font-family: monospace; font-size: 11px; margin-right: 2px; }
+      #kb-delete-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 9999; display: none; }
+      #kb-delete-confirm { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.28); padding: 24px 28px; z-index: 10000; min-width: 300px; display: none; }
+      #kb-delete-confirm h6 { margin: 0 0 8px 0; font-size: 15px; font-weight: 700; color: #d32f2f; }
+      #kb-delete-confirm p  { margin: 0 0 18px 0; font-size: 13px; color: #444; }
+      #kb-delete-confirm .kb-del-btns { display: flex; gap: 10px; justify-content: flex-end; }
+      #kb-delete-confirm .kb-del-cancel  { background: #f0f0f0; border: none; border-radius: 6px; padding: 7px 18px; cursor: pointer; font-size: 13px; }
+      #kb-delete-confirm .kb-del-confirm { background: #d32f2f; color: #fff; border: none; border-radius: 6px; padding: 7px 18px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    `;
+    document.head.appendChild(s);
+  })();
+
+  // Keyboard shortcut hint panel
+  const kbHint = document.createElement('div');
+  kbHint.id = 'kb-shortcut-hint';
+  kbHint.innerHTML = `
+    <div style="font-weight:700; margin-bottom:6px; font-size:13px;">&#9000; Keyboard Shortcuts</div>
+    <div><span class="kb-key">&uarr;&darr;</span> Navigate rows</div>
+    <div><span class="kb-key">Enter</span> Open tray scan</div>
+    <div><span class="kb-key">T</span> &rarr; <span class="kb-key">Enter</span> Tray scan</div>
+    <div><span class="kb-key">Del</span> &rarr; <span class="kb-key">Enter</span> Delete lot</div>
+    <div><span class="kb-key">F2</span> Scan / Open draft</div>
+    <div><span class="kb-key">&larr;&rarr;</span> Scroll table</div>
+    <div><span class="kb-key">1&ndash;9</span> Go to page</div>
+    <div><span class="kb-key">Esc</span> Clear selection</div>
+  `;
+  document.body.appendChild(kbHint);
+
+  let kbHintTimer = null;
+  function kbShowHint() {
+    kbHint.classList.add('visible');
+    clearTimeout(kbHintTimer);
+    kbHintTimer = setTimeout(() => kbHint.classList.remove('visible'), 3000);
+  }
+
+  // Delete confirm overlay + dialog
+  const kbDelOverlay = document.createElement('div');
+  kbDelOverlay.id = 'kb-delete-overlay';
+  document.body.appendChild(kbDelOverlay);
+
+  const kbDelConfirm = document.createElement('div');
+  kbDelConfirm.id = 'kb-delete-confirm';
+  kbDelConfirm.innerHTML = `
+    <h6>&#9888; Confirm Delete</h6>
+    <p id="kb-del-msg">Are you sure you want to delete this lot?</p>
+    <div class="kb-del-btns">
+      <button class="kb-del-cancel"  id="kb-del-cancel-btn">Cancel</button>
+      <button class="kb-del-confirm" id="kb-del-confirm-btn">Delete</button>
+    </div>
+  `;
+  document.body.appendChild(kbDelConfirm);
+
+  function kbShowDeleteConfirm(batchId, onConfirm) {
+    document.getElementById('kb-del-msg').textContent = `Delete lot "${batchId}"? This action cannot be undone.`;
+    kbDelOverlay.style.display = 'block';
+    kbDelConfirm.style.display = 'block';
+    const confirmBtn = document.getElementById('kb-del-confirm-btn');
+    const cancelBtn  = document.getElementById('kb-del-cancel-btn');
+    function cleanup() {
+      kbDelOverlay.style.display = 'none';
+      kbDelConfirm.style.display = 'none';
+      confirmBtn.onclick = null;
+      cancelBtn.onclick  = null;
+      kbDelOverlay.onclick = null;
+    }
+    confirmBtn.onclick   = function() { cleanup(); onConfirm(); };
+    cancelBtn.onclick    = function() { cleanup(); kbClear(); };
+    kbDelOverlay.onclick = function() { cleanup(); kbClear(); };
+  }
+
+  function kbRows() {
+    return Array.from(kbTable.querySelectorAll('tbody tr[data-batch-id]'));
+  }
+
+  function kbClear() {
+    kbRows().forEach(r => r.classList.remove('kb-focused', 'kb-pending-scan', 'kb-pending-delete'));
+    kbIndex = -1;
+    kbAction = null;
+  }
+
+  function kbHighlight(index, action) {
+    kbRows().forEach(r => r.classList.remove('kb-focused', 'kb-pending-scan', 'kb-pending-delete'));
+    const rows = kbRows();
+    if (index < 0 || index >= rows.length) return;
+    kbIndex = index;
+    kbAction = action || null;
+    if (action === 'delete')         rows[index].classList.add('kb-pending-delete');
+    else if (action === 'tray-scan') rows[index].classList.add('kb-pending-scan');
+    else                             rows[index].classList.add('kb-focused');
+    rows[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function kbIsModalOpen() {
+    const m = document.getElementById('trayScanModal');
+    return m && (m.classList.contains('open') ||
+      (m.style.display === 'flex' && m.style.visibility !== 'hidden'));
+  }
+
+  if (kbTable) {
+    document.addEventListener('keydown', function(e) {
+      // Skip when typing in an input field or select
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      // Skip when tray scan modal is open
+      if (kbIsModalOpen()) return;
+      // Skip when delete confirm dialog is open
+      if (kbDelConfirm.style.display === 'block') return;
+
+      const rows = kbRows();
+      if (rows.length === 0) return;
+
+      kbShowHint();
+
+      switch (e.key) {
+
+        // ── ESC: clear selection ─────────────────────────────────────────
+        case 'Escape': {
+          e.preventDefault();
+          kbClear();
+          break;
+        }
+
+        // ── Row navigation ──────────────────────────────────────────────
+        case 'ArrowUp': {
+          e.preventDefault();
+          const next = kbIndex > 0 ? kbIndex - 1 : 0;
+          kbHighlight(kbIndex < 0 ? 0 : next, kbAction);
+          break;
+        }
+        case 'ArrowDown': {
+          e.preventDefault();
+          if (kbIndex < 0) {
+            kbHighlight(0, kbAction);
+          } else {
+            kbHighlight(Math.min(kbIndex + 1, rows.length - 1), kbAction);
+          }
+          break;
+        }
+
+        // ── Enter: execute pending action ───────────────────────────────
+        case 'Enter': {
+          e.preventDefault();
+          if (kbIndex < 0) return;
+          const row = rows[kbIndex];
+          if (kbAction === 'tray-scan') {
+            const btn = row.querySelector('.tray-scan-btn');
+            if (btn) { kbClear(); btn.click(); }
+          } else if (kbAction === 'delete') {
+            const delLink = row.querySelector('a[title="Delete"]');
+            if (delLink) {
+              const batchId = row.getAttribute('data-batch-id') || 'this lot';
+              kbShowDeleteConfirm(batchId, function() {
+                kbClear();
+                delLink.click();
+              });
+            }
+          } else {
+            // No pending action — default Enter opens tray scan
+            const btn = row.querySelector('.tray-scan-btn');
+            if (btn) { kbClear(); btn.click(); }
+          }
+          break;
+        }
+
+        // ── F2: "Please Scan" info OR open draft modal ──────────────────
+        case 'F2': {
+          e.preventDefault();
+          const idx = kbIndex >= 0 ? kbIndex : 0;
+          const row = rows[idx];
+          const trayScanBtn = row ? row.querySelector('.tray-scan-btn') : null;
+          const isDrafted = trayScanBtn &&
+            (trayScanBtn.getAttribute('data-draft-saved') === 'True' ||
+             trayScanBtn.getAttribute('data-draft-saved') === 'true');
+
+          if (isDrafted) {
+            kbHighlight(idx, null);
+            setTimeout(() => { kbClear(); trayScanBtn.click(); }, 150);
+          } else {
+            const scanButton = document.getElementById('scanButton');
+            if (scanButton) { scanButton.click(); }
+          }
+          break;
+        }
+
+        // ── T: mark row for Tray Scan (orange) → Enter executes ─────────
+        case 't':
+        case 'T': {
+          e.preventDefault();
+          const idx = kbIndex >= 0 ? kbIndex : 0;
+          kbHighlight(idx, 'tray-scan');
+          break;
+        }
+
+        // ── Delete: mark row in red → Enter shows confirmation ───────────
+        case 'Delete': {
+          e.preventDefault();
+          const idx = kbIndex >= 0 ? kbIndex : 0;
+          kbHighlight(idx, 'delete');
+          break;
+        }
+
+        // ── Arrow Left/Right: scroll table ──────────────────────────────
+        case 'ArrowLeft': {
+          e.preventDefault();
+          const cont = kbTable.closest('.table-responsive');
+          if (cont) cont.scrollLeft -= 150;
+          break;
+        }
+        case 'ArrowRight': {
+          e.preventDefault();
+          const cont = kbTable.closest('.table-responsive');
+          if (cont) cont.scrollLeft += 150;
+          break;
+        }
+
+        // ── Number keys: pagination ──────────────────────────────────────
+        default:
+          if (e.key >= '1' && e.key <= '9') {
+            e.preventDefault();
+            const pageLink = document.querySelector(`.pagination a[href*="page=${e.key}"]`);
+            if (pageLink) { kbClear(); pageLink.click(); }
+          }
+      }
+    });
+
+    // Clear row selection when clicking outside the table
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#order-listing')) kbClear();
+    });
+
+    console.log('Keyboard shortcuts ready: Esc=clear | Up/Down=navigate | Enter=execute | F2=scan | T=tray-scan | Delete=delete | Arrows=scroll | 1-9=page');
   }
 </script>
   {% endblock %} {% endblock content %}

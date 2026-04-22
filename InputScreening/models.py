@@ -210,53 +210,36 @@ class IP_Accepted_TrayID_Store(models.Model):
 # INPUT SCREENING SUBMITTED MODEL - PERMANENT SNAPSHOT OF TRUTH
 # ============================================================================
 
+# =============================================================================
+# INPUT SCREENING SUBMITTED RECORDS - MATCHING JIG LOADING PATTERN
+# =============================================================================
+
 class InputScreening_Submitted(models.Model):
     """
-    Permanent immutable snapshot of Input Screening submitted records.
+    Parent lot record for Input Screening submissions.
+    Stores metadata about the original lot that was processed.
     
-    This model acts as the definitive source of truth AFTER submit, storing:
-    - Complete state of acceptance/rejection decisions
-    - All tray allocations exactly as submitted
-    - All rejection reasons with quantities
-    - Parent-child lot relationships for splits
-    - Atomic transaction safety with no half-saves
-    
-    Key guarantees:
-    - One record per submitted lot (uniqueness via lot_id)
-    - Child lots are fully independent after split
-    - Parent lot retains only remaining balance
-    - Future modules use child lot data, never parent again
-    - Fast queries via indexed lot_id, parent_lot_id, batch_id
-    - Revokable for audit/rollback scenarios
+    This is the SSOT (Single Source of Truth) for parent lot information.
+    Child lots (partial accept/reject) have their own separate records.
     """
 
     # ─────────────────────────────────────────────────────────────────────
     # Core Identifiers
     # ─────────────────────────────────────────────────────────────────────
 
-    id = models.AutoField(primary_key=True, help_text="Auto-generated primary key")
-    
     lot_id = models.CharField(
         max_length=100,
         unique=True,
         db_index=True,
-        help_text="Unique lot ID (LID format: LID{uuid})"
+        help_text="Unique parent lot ID (LID format)"
     )
-    
-    parent_lot_id = models.CharField(
-        max_length=100,
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Original parent lot if this is a split child (null for unsplit or parent)"
-    )
-    
+
     batch_id = models.CharField(
         max_length=100,
         db_index=True,
         help_text="Batch ID from ModelMasterCreation"
     )
-    
+
     module_name = models.CharField(
         max_length=100,
         default="Input Screening",
@@ -264,7 +247,7 @@ class InputScreening_Submitted(models.Model):
     )
 
     # ─────────────────────────────────────────────────────────────────────
-    # Product & Tray Information
+    # Product Information
     # ─────────────────────────────────────────────────────────────────────
 
     plating_stock_no = models.CharField(
@@ -273,21 +256,21 @@ class InputScreening_Submitted(models.Model):
         blank=True,
         help_text="Plating stock number"
     )
-    
+
     model_no = models.CharField(
         max_length=100,
         null=True,
         blank=True,
         help_text="Model number"
     )
-    
+
     tray_type = models.CharField(
         max_length=50,
         null=True,
         blank=True,
         help_text="Type of tray (Jumbo, Normal, etc.)"
     )
-    
+
     tray_capacity = models.IntegerField(
         null=True,
         blank=True,
@@ -295,49 +278,17 @@ class InputScreening_Submitted(models.Model):
     )
 
     # ─────────────────────────────────────────────────────────────────────
-    # Quantity Tracking
+    # Quantity Information
     # ─────────────────────────────────────────────────────────────────────
 
     original_lot_qty = models.IntegerField(
-        help_text="Original lot quantity before any submission"
+        help_text="Original lot quantity at Input Screening start"
     )
-    
-    submitted_lot_qty = models.IntegerField(
-        help_text="Submitted lot quantity (may differ if partial)"
-    )
-    
-    accepted_qty = models.IntegerField(
-        default=0,
-        help_text="Total accepted quantity"
-    )
-    
-    rejected_qty = models.IntegerField(
-        default=0,
-        help_text="Total rejected quantity"
-    )
-
-    # ─────────────────────────────────────────────────────────────────────
-    # Tray Allocation Summary
-    # ─────────────────────────────────────────────────────────────────────
 
     active_trays_count = models.IntegerField(
         default=0,
-        help_text="Count of active trays used in this submission"
+        help_text="Count of active trays used"
     )
-    
-    reject_trays_count = models.IntegerField(
-        default=0,
-        help_text="Count of trays holding rejected quantity"
-    )
-    
-    accept_trays_count = models.IntegerField(
-        default=0,
-        help_text="Count of trays holding accepted quantity"
-    )
-
-    # ─────────────────────────────────────────────────────────────────────
-    # Top Tray Information
-    # ─────────────────────────────────────────────────────────────────────
 
     top_tray_id = models.CharField(
         max_length=100,
@@ -345,66 +296,77 @@ class InputScreening_Submitted(models.Model):
         blank=True,
         help_text="ID of top tray (if used)"
     )
-    
+
     top_tray_qty = models.IntegerField(
         null=True,
         blank=True,
         help_text="Quantity in top tray"
     )
-    
+
     has_top_tray = models.BooleanField(
         default=False,
-        help_text="Whether a top tray was used in allocation"
+        help_text="Whether a top tray was used"
     )
 
     # ─────────────────────────────────────────────────────────────────────
-    # Submission Details
+    # Submission Metadata
     # ─────────────────────────────────────────────────────────────────────
 
     remarks = models.TextField(
         null=True,
         blank=True,
-        help_text="Operator remarks or comments"
+        help_text="Operator remarks"
     )
 
-    is_partial_accept = models.BooleanField(
-        default=False,
-        help_text="True if partial acceptance occurred (split into child lot)"
-    )
-    
-    is_partial_reject = models.BooleanField(
-        default=False,
-        help_text="True if partial rejection occurred (split into child lot)"
-    )
-    
     is_full_accept = models.BooleanField(
         default=False,
         help_text="True if entire lot was accepted"
     )
-    
+
     is_full_reject = models.BooleanField(
         default=False,
         help_text="True if entire lot was rejected"
     )
 
+    is_partial_accept = models.BooleanField(
+        default=False,
+        help_text="True if partial accept occurred (has related partial accept lot)"
+    )
+
+    is_partial_reject = models.BooleanField(
+        default=False,
+        help_text="True if partial reject occurred (has related partial reject lot)"
+    )
+
     # ─────────────────────────────────────────────────────────────────────
-    # Lot Hierarchy & State
+    # State Flags
     # ─────────────────────────────────────────────────────────────────────
 
-    is_child_lot = models.BooleanField(
-        default=False,
-        help_text="True if this lot was created from a parent split"
-    )
-    
     is_active = models.BooleanField(
         default=True,
         db_index=True,
-        help_text="True if active; False if revoked/superseded"
+        help_text="True if this record is active"
     )
-    
+
     is_revoked = models.BooleanField(
         default=False,
-        help_text="True if this submission was revoked in audit"
+        help_text="True if revoked in audit"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Draft & Submission State
+    # ─────────────────────────────────────────────────────────────────────
+
+    Draft_Saved = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if draft save (not finalized)"
+    )
+
+    is_submitted = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if final submit completed"
     )
 
     # ─────────────────────────────────────────────────────────────────────
@@ -418,73 +380,182 @@ class InputScreening_Submitted(models.Model):
         blank=True,
         help_text="User who submitted"
     )
-    
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         db_index=True,
         help_text="Timestamp of submission"
     )
-    
+
     updated_at = models.DateTimeField(
         auto_now=True,
         help_text="Last update timestamp"
     )
-    
-    # ─────────────────────────────────────────────────────────────────────
-    # Draft & Submission State
-    # ─────────────────────────────────────────────────────────────────────
-    
-    Draft_Saved = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="True if this is a draft save (not finalized)"
-    )
-    
-    is_submitted = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="True if final submit completed"
-    )
-    
+
     submitted_at = models.DateTimeField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="Timestamp of final submission (null for drafts)"
+        help_text="Timestamp of final submission"
+    )
+
+    class Meta:
+        verbose_name = "Input Screening Submitted Record"
+        verbose_name_plural = "Input Screening Submitted Records"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['lot_id'], name='iss_lot_id_idx'),
+            models.Index(fields=['batch_id'], name='iss_batch_id_idx'),
+            models.Index(fields=['is_active'], name='iss_is_active_idx'),
+            models.Index(fields=['created_at'], name='iss_created_at_idx'),
+            models.Index(fields=['lot_id', 'is_active'], name='iss_lot_active_idx'),
+            models.Index(fields=['batch_id', 'is_active'], name='iss_batch_active_idx'),
+        ]
+
+    def __str__(self):
+        status = "REVOKED" if self.is_revoked else ("ACTIVE" if self.is_active else "INACTIVE")
+        return f"{self.lot_id} ({status}) - Batch: {self.batch_id}"
+
+
+class IS_PartialAcceptLot(models.Model):
+    """
+    Partial accept lot — new lot ID created when partial acceptance occurs.
+    Stores the accepted quantity and its tray allocation.
+    """
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Core Identifiers
+    # ─────────────────────────────────────────────────────────────────────
+
+    new_lot_id = models.CharField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+        help_text="Generated lot ID for partial accept (LID format)"
+    )
+
+    parent_lot_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Original parent lot ID"
+    )
+
+    parent_batch_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Parent batch ID"
+    )
+
+    parent_submission = models.ForeignKey(
+        InputScreening_Submitted,
+        on_delete=models.CASCADE,
+        related_name='partial_accept_lots',
+        help_text="Reference to parent submission"
     )
 
     # ─────────────────────────────────────────────────────────────────────
-    # JSON Snapshot Fields - Complete Immutable Data
+    # Quantity Information
     # ─────────────────────────────────────────────────────────────────────
 
-    all_trays_json = models.JSONField(
+    accepted_qty = models.IntegerField(
+        help_text="Total accepted quantity for this lot"
+    )
+
+    accept_trays_count = models.IntegerField(
+        default=0,
+        help_text="Count of trays holding accepted quantity"
+    )
+
+    trays_snapshot = models.JSONField(
         default=list,
         blank=True,
-        help_text="""
-        Complete list of all trays in this submission.
-        Schema: [{"tray_id": "NB-A00181", "qty": 16, "top_tray": true, "type": "Normal"}, ...]
-        """
+        help_text="Snapshot of accept tray allocations at submission: [{tray_id, qty, top_tray, source}]"
     )
-    
-    accepted_trays_json = models.JSONField(
-        default=list,
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Audit Trail
+    # ─────────────────────────────────────────────────────────────────────
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        help_text="""
-        Trays allocated to accepted quantity.
-        Schema: [{"tray_id": "NB-A00182", "qty": 16, "top_tray": false}, ...]
-        """
+        help_text="User who created"
     )
-    
-    rejected_trays_json = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="""
-        Trays allocated to rejected quantity.
-        Schema: [{"tray_id": "NB-A00183", "qty": 16}, ...]
-        """
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp of creation"
     )
-    
-    rejection_reasons_json = models.JSONField(
+
+    class Meta:
+        verbose_name = "Input Screening Partial Accept Lot"
+        verbose_name_plural = "Input Screening Partial Accept Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['parent_batch_id']),
+        ]
+
+    def __str__(self):
+        return f"PartialAccept: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.accepted_qty})"
+
+
+class IS_PartialRejectLot(models.Model):
+    """
+    Partial reject lot — new lot ID created when partial rejection occurs.
+    Stores the rejected quantity, rejection reasons, and tray allocation.
+    """
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Core Identifiers
+    # ─────────────────────────────────────────────────────────────────────
+
+    new_lot_id = models.CharField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+        help_text="Generated lot ID for partial reject (LID format)"
+    )
+
+    parent_lot_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Original parent lot ID"
+    )
+
+    parent_batch_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Parent batch ID"
+    )
+
+    parent_submission = models.ForeignKey(
+        InputScreening_Submitted,
+        on_delete=models.CASCADE,
+        related_name='partial_reject_lots',
+        help_text="Reference to parent submission"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Quantity Information
+    # ─────────────────────────────────────────────────────────────────────
+
+    rejected_qty = models.IntegerField(
+        help_text="Total rejected quantity for this lot"
+    )
+
+    reject_trays_count = models.IntegerField(
+        default=0,
+        help_text="Count of trays holding rejected quantity"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Rejection Reasons
+    # ─────────────────────────────────────────────────────────────────────
+
+    rejection_reasons = models.JSONField(
         default=dict,
         blank=True,
         help_text="""
@@ -493,75 +564,147 @@ class InputScreening_Submitted(models.Model):
                  "R02": {"reason": "MODEL MIXUP", "qty": 6}}
         """
     )
-    
-    allocation_preview_json = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text="""
-        Final allocation preview snapshot.
-        Schema: {"total_reject_qty": 16, 
-                 "total_accept_qty": 484, 
-                 "reusable_trays": [...],
-                 "new_trays_required": 30}
-        """
+
+    delink_count = models.IntegerField(
+        default=0,
+        help_text="Number of trays delinked for reuse"
     )
-    
-    delink_trays_json = models.JSONField(
+
+    trays_snapshot = models.JSONField(
         default=list,
         blank=True,
-        help_text="""
-        Delinked trays available for reuse.
-        Schema: [{"tray_id": "JB-A00075", "qty": 8, "capacity": 20}, ...]
-        """
+        help_text="Snapshot of reject tray allocations at submission: [{tray_id, qty, reason_id, reason_text, source, is_delinked}]"
+    )
+
+    remarks = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Rejection remarks"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Audit Trail
+    # ─────────────────────────────────────────────────────────────────────
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="User who created"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp of creation"
     )
 
     class Meta:
-        verbose_name = "Input Screening Submitted Record"
-        verbose_name_plural = "Input Screening Submitted Records"
-        ordering = ['-created_at']
-        
-        # Comprehensive indexing for production scale
+        verbose_name = "Input Screening Partial Reject Lot"
+        verbose_name_plural = "Input Screening Partial Reject Lots"
         indexes = [
-            models.Index(fields=['lot_id'], name='iss_lot_id_idx'),
-            models.Index(fields=['parent_lot_id'], name='iss_parent_lot_id_idx'),
-            models.Index(fields=['batch_id'], name='iss_batch_id_idx'),
-            models.Index(fields=['is_active'], name='iss_is_active_idx'),
-            models.Index(fields=['created_at'], name='iss_created_at_idx'),
-            models.Index(fields=['lot_id', 'is_active'], name='iss_lot_active_idx'),
-            models.Index(fields=['parent_lot_id', 'is_child_lot'], name='iss_parent_child_idx'),
-            models.Index(fields=['batch_id', 'is_active'], name='iss_batch_active_idx'),
-            models.Index(fields=['is_partial_accept', 'is_partial_reject'], name='iss_split_type_idx'),
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['parent_batch_id']),
         ]
 
     def __str__(self):
-        status = "REVOKED" if self.is_revoked else ("ACTIVE" if self.is_active else "INACTIVE")
-        split_marker = " [CHILD]" if self.is_child_lot else ""
-        return f"{self.lot_id} ({status}){split_marker} - Batch: {self.batch_id}"
+        return f"PartialReject: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.rejected_qty})"
 
-    def get_display_status(self):
-        """Human-readable status for templates/admin."""
-        if self.is_revoked:
-            return "❌ Revoked"
-        if self.is_full_accept:
-            return "✅ Full Accept"
-        if self.is_full_reject:
-            return "❌ Full Reject"
-        if self.is_partial_accept:
-            return "⚠️ Partial Accept + Split"
-        if self.is_partial_reject:
-            return "⚠️ Partial Reject + Split"
-        return "⏳ Pending"
 
-    def generate_child_lot_id(self):
-        """
-        Generate a new independent lot ID for split child lots.
-        Format: LID{uuid.uuid4().hex[:12].upper()}
-        
-        Used when:
-        - Partial accept: creates independent accept lot
-        - Partial reject: creates independent reject lot
-        """
-        import uuid
-        return f"LID{uuid.uuid4().hex[:12].upper()}"
-    
+class IS_AllocationTray(models.Model):
+    """
+    Individual tray allocation records for both accept and reject.
+    Links to either IS_PartialAcceptLot or IS_PartialRejectLot.
+    """
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Identifiers & References
+    # ─────────────────────────────────────────────────────────────────────
+
+    tray_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Physical tray ID"
+    )
+
+    # Foreign key to either accept or reject lot (nullable, one should be set)
+    accept_lot = models.ForeignKey(
+        IS_PartialAcceptLot,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='allocation_trays',
+        help_text="Reference to accept lot (if this tray is for accepted qty)"
+    )
+
+    reject_lot = models.ForeignKey(
+        IS_PartialRejectLot,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='allocation_trays',
+        help_text="Reference to reject lot (if this tray is for rejected qty)"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Tray Information
+    # ─────────────────────────────────────────────────────────────────────
+
+    qty = models.IntegerField(
+        help_text="Quantity allocated to this tray"
+    )
+
+    original_qty = models.IntegerField(
+        default=0,
+        help_text="Original tray quantity before any split"
+    )
+
+    top_tray = models.BooleanField(
+        default=False,
+        help_text="Is this the top tray?"
+    )
+
+    # For reject trays: which rejection reason applies
+    rejection_reason_id = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        help_text="Rejection reason ID (e.g. R01, R02)"
+    )
+
+    rejection_reason_text = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Rejection reason description"
+    )
+
+    # For delinked trays
+    is_delinked = models.BooleanField(
+        default=False,
+        help_text="Is this tray delinked (reused)?"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Audit Trail
+    # ─────────────────────────────────────────────────────────────────────
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp of allocation"
+    )
+
+    class Meta:
+        verbose_name = "Input Screening Allocation Tray"
+        verbose_name_plural = "Input Screening Allocation Trays"
+        indexes = [
+            models.Index(fields=['tray_id']),
+            models.Index(fields=['accept_lot', 'tray_id']),
+            models.Index(fields=['reject_lot', 'tray_id']),
+        ]
+
+    def __str__(self):
+        lot_type = "Accept" if self.accept_lot else "Reject"
+        lot_id = self.accept_lot.new_lot_id if self.accept_lot else self.reject_lot.new_lot_id
+        return f"AllocationTray: {self.tray_id} → {lot_id} ({lot_type}, qty={self.qty})"
     

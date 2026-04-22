@@ -13,6 +13,34 @@ admin.site.register(IP_Rejection_Draft)
 
 
 # ============================================================================
+# INLINE CLASSES — shown on the parent submission change page
+# ============================================================================
+
+class IS_PartialAcceptLotInline(admin.StackedInline):
+    """Show accept child lot directly on the parent submission page."""
+    model = IS_PartialAcceptLot
+    fields = ['new_lot_id', 'accepted_qty', 'accept_trays_count', 'trays_snapshot', 'created_at']
+    readonly_fields = ['new_lot_id', 'accepted_qty', 'accept_trays_count', 'trays_snapshot', 'created_at']
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    verbose_name = "Partial Accept Lot"
+    verbose_name_plural = "Partial Accept Lots"
+
+
+class IS_PartialRejectLotInline(admin.StackedInline):
+    """Show reject child lot directly on the parent submission page."""
+    model = IS_PartialRejectLot
+    fields = ['new_lot_id', 'rejected_qty', 'reject_trays_count', 'rejection_reasons', 'trays_snapshot', 'delink_count', 'created_at']
+    readonly_fields = ['new_lot_id', 'rejected_qty', 'reject_trays_count', 'rejection_reasons', 'trays_snapshot', 'delink_count', 'created_at']
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    verbose_name = "Partial Reject Lot"
+    verbose_name_plural = "Partial Reject Lots"
+
+
+# ============================================================================
 # INPUT SCREENING SUBMITTED - ADVANCED ADMIN
 # ============================================================================
 
@@ -46,7 +74,6 @@ class InputScreening_SubmittedAdmin(admin.ModelAdmin):
         'is_partial_reject',
         'is_full_accept',
         'is_full_reject',
-        'is_child_lot',
         'tray_type',
         'created_at',
         'created_by',
@@ -56,33 +83,25 @@ class InputScreening_SubmittedAdmin(admin.ModelAdmin):
     list_display = [
         'lot_id',
         'batch_id',
-        'get_status_display',
-        'submitted_lot_qty',
-        'accepted_qty',
-        'rejected_qty',
-        'is_child_lot_display',
+        'get_submission_type_display',
+        'original_lot_qty',
+        'active_trays_count',
         'created_at',
         'created_by_display',
     ]
 
-    # Read-only fields (snapshots should not be edited)
+    # Read-only fields (should not be edited after creation)
     readonly_fields = [
         'id',
         'lot_id',
         'created_at',
         'updated_at',
-        'all_trays_json_display',
-        'accepted_trays_json_display',
-        'rejected_trays_json_display',
-        'rejection_reasons_json_display',
-        'allocation_preview_json_display',
-        'delink_trays_json_display',
     ]
 
     # Organized field grouping
     fieldsets = (
         ('🔑 Core Identifiers', {
-            'fields': ('id', 'lot_id', 'parent_lot_id', 'batch_id', 'module_name'),
+            'fields': ('id', 'lot_id', 'batch_id', 'module_name'),
         }),
         ('📦 Product & Tray Details', {
             'fields': (
@@ -92,19 +111,10 @@ class InputScreening_SubmittedAdmin(admin.ModelAdmin):
                 'tray_capacity',
             ),
         }),
-        ('📊 Quantities', {
+        ('📊 Original Lot Info', {
             'fields': (
                 'original_lot_qty',
-                'submitted_lot_qty',
-                'accepted_qty',
-                'rejected_qty',
-            ),
-        }),
-        ('🎯 Tray Allocation', {
-            'fields': (
                 'active_trays_count',
-                'accept_trays_count',
-                'reject_trays_count',
                 'has_top_tray',
                 'top_tray_id',
                 'top_tray_qty',
@@ -118,9 +128,8 @@ class InputScreening_SubmittedAdmin(admin.ModelAdmin):
                 'is_partial_reject',
             ),
         }),
-        ('🔗 Lot Hierarchy', {
+        ('🔗 Status', {
             'fields': (
-                'is_child_lot',
                 'is_active',
                 'is_revoked',
             ),
@@ -133,87 +142,178 @@ class InputScreening_SubmittedAdmin(admin.ModelAdmin):
                 'updated_at',
             ),
         }),
-        ('📸 Snapshot: All Trays', {
-            'fields': ('all_trays_json_display',),
-            'classes': ('collapse',),
-        }),
-        ('✅ Snapshot: Accepted Trays', {
-            'fields': ('accepted_trays_json_display',),
-            'classes': ('collapse',),
-        }),
-        ('❌ Snapshot: Rejected Trays', {
-            'fields': ('rejected_trays_json_display',),
-            'classes': ('collapse',),
-        }),
-        ('📋 Snapshot: Rejection Reasons', {
-            'fields': ('rejection_reasons_json_display',),
-            'classes': ('collapse',),
-        }),
-        ('🎲 Snapshot: Allocation Preview', {
-            'fields': ('allocation_preview_json_display',),
-            'classes': ('collapse',),
-        }),
-        ('♻️ Snapshot: Delink Trays', {
-            'fields': ('delink_trays_json_display',),
-            'classes': ('collapse',),
+        ('📋 Draft State', {
+            'fields': (
+                'Draft_Saved',
+                'is_submitted',
+                'submitted_at',
+            ),
         }),
     )
 
     # Ordering
     ordering = ('-created_at',)
 
-    # Display methods for list view
-    def get_status_display(self, obj):
-        """Show human-readable status with emoji."""
-        return obj.get_display_status()
-    get_status_display.short_description = 'Status'
+    # Child lot inlines
+    inlines = [IS_PartialAcceptLotInline, IS_PartialRejectLotInline]
 
-    def is_child_lot_display(self, obj):
-        """Show child lot status."""
-        return '✓ Child' if obj.is_child_lot else '◻ Root'
-    is_child_lot_display.short_description = 'Lot Type'
+    # Display methods for list view
+    def get_submission_type_display(self, obj):
+        """Show submission type with emoji."""
+        if obj.is_full_accept:
+            return '✅ Full Accept'
+        elif obj.is_full_reject:
+            return '❌ Full Reject'
+        elif obj.is_partial_accept:
+            return '⚠️ Partial Accept'
+        elif obj.is_partial_reject:
+            return '⚠️ Partial Reject'
+        else:
+            return '⏳ Pending'
+    get_submission_type_display.short_description = 'Submission Type'
 
     def created_by_display(self, obj):
         """Show creator username."""
         return obj.created_by.username if obj.created_by else '—'
     created_by_display.short_description = 'Submitted By'
 
-    # JSON display methods (formatted for readability)
-    def all_trays_json_display(self, obj):
-        """Display all_trays_json in formatted way."""
-        import json
-        return json.dumps(obj.all_trays_json, indent=2) if obj.all_trays_json else '[]'
-    all_trays_json_display.short_description = 'All Trays'
-
-    def accepted_trays_json_display(self, obj):
-        """Display accepted_trays_json in formatted way."""
-        import json
-        return json.dumps(obj.accepted_trays_json, indent=2) if obj.accepted_trays_json else '[]'
-    accepted_trays_json_display.short_description = 'Accepted Trays'
-
-    def rejected_trays_json_display(self, obj):
-        """Display rejected_trays_json in formatted way."""
-        import json
-        return json.dumps(obj.rejected_trays_json, indent=2) if obj.rejected_trays_json else '[]'
-    rejected_trays_json_display.short_description = 'Rejected Trays'
-
-    def rejection_reasons_json_display(self, obj):
-        """Display rejection_reasons_json in formatted way."""
-        import json
-        return json.dumps(obj.rejection_reasons_json, indent=2) if obj.rejection_reasons_json else '{}'
-    rejection_reasons_json_display.short_description = 'Rejection Reasons'
-
-    def allocation_preview_json_display(self, obj):
-        """Display allocation_preview_json in formatted way."""
-        import json
-        return json.dumps(obj.allocation_preview_json, indent=2) if obj.allocation_preview_json else '{}'
-    allocation_preview_json_display.short_description = 'Allocation Preview'
-
-    def delink_trays_json_display(self, obj):
-        """Display delink_trays_json in formatted way."""
-        import json
-        return json.dumps(obj.delink_trays_json, indent=2) if obj.delink_trays_json else '[]'
-    delink_trays_json_display.short_description = 'Delink Trays'
-
 
 admin.site.register(InputScreening_Submitted, InputScreening_SubmittedAdmin)
+
+
+# ============================================================================
+# PARTIAL ACCEPT LOT - ADMIN
+# ============================================================================
+
+class IS_AllocationTrayInlineAccept(admin.TabularInline):
+    """Inline admin for allocation trays within partial accept lot."""
+    model = IS_AllocationTray
+    fields = ['tray_id', 'qty', 'original_qty', 'top_tray', 'created_at']
+    readonly_fields = ['created_at']
+    extra = 0
+    can_delete = False
+
+
+class IS_PartialAcceptLotAdmin(admin.ModelAdmin):
+    """Admin interface for partial accept child lots."""
+    inlines = [IS_AllocationTrayInlineAccept]
+    
+    list_display = ['new_lot_id', 'parent_lot_id', 'accepted_qty', 'accept_trays_count', 'created_at']
+    list_filter = ['created_at', 'parent_batch_id']
+    search_fields = ['new_lot_id', 'parent_lot_id', 'parent_batch_id']
+    
+    readonly_fields = ['new_lot_id', 'created_at']
+    
+    fieldsets = (
+        ('🔑 Lot Identifiers', {
+            'fields': ('new_lot_id', 'parent_lot_id', 'parent_batch_id', 'parent_submission'),
+        }),
+        ('📊 Quantity Information', {
+            'fields': ('accepted_qty', 'accept_trays_count'),
+        }),
+        ('� Tray Allocation Snapshot', {
+            'fields': ('trays_snapshot',),
+            'description': 'Full dict of each accepted tray with qty, top_tray flag and source.',
+        }),
+        ('�👤 Audit', {
+            'fields': ('created_by', 'created_at'),
+        }),
+    )
+    
+    ordering = ('-created_at',)
+
+
+admin.site.register(IS_PartialAcceptLot, IS_PartialAcceptLotAdmin)
+
+
+# ============================================================================
+# PARTIAL REJECT LOT - ADMIN
+# ============================================================================
+
+class IS_AllocationTrayInlineReject(admin.TabularInline):
+    """Inline admin for allocation trays within partial reject lot."""
+    model = IS_AllocationTray
+    fields = ['tray_id', 'qty', 'original_qty', 'rejection_reason_id', 'is_delinked', 'created_at']
+    readonly_fields = ['created_at']
+    extra = 0
+    can_delete = False
+
+
+class IS_PartialRejectLotAdmin(admin.ModelAdmin):
+    """Admin interface for partial reject child lots."""
+    inlines = [IS_AllocationTrayInlineReject]
+    
+    list_display = ['new_lot_id', 'parent_lot_id', 'rejected_qty', 'reject_trays_count', 'delink_count', 'created_at']
+    list_filter = ['created_at', 'parent_batch_id', 'delink_count']
+    search_fields = ['new_lot_id', 'parent_lot_id', 'parent_batch_id']
+    
+    readonly_fields = ['new_lot_id', 'created_at']
+    
+    fieldsets = (
+        ('🔑 Lot Identifiers', {
+            'fields': ('new_lot_id', 'parent_lot_id', 'parent_batch_id', 'parent_submission'),
+        }),
+        ('📊 Rejection Information', {
+            'fields': ('rejected_qty', 'reject_trays_count', 'delink_count', 'rejection_reasons'),
+        }),
+        ('� Tray Allocation Snapshot', {
+            'fields': ('trays_snapshot',),
+            'description': 'Full dict of each reject tray with qty, reason_id, reason_text and source.',
+        }),
+        ('�📝 Remarks', {
+            'fields': ('remarks',),
+        }),
+        ('👤 Audit', {
+            'fields': ('created_by', 'created_at'),
+        }),
+    )
+    
+    ordering = ('-created_at',)
+
+
+admin.site.register(IS_PartialRejectLot, IS_PartialRejectLotAdmin)
+
+
+# ============================================================================
+# ALLOCATION TRAY - STANDALONE ADMIN
+# ============================================================================
+
+class IS_AllocationTrayAdmin(admin.ModelAdmin):
+    """Admin interface for individual allocated trays."""
+    
+    list_display = ['tray_id', 'qty', 'get_lot_type', 'created_at']
+    list_filter = ['created_at', 'is_delinked']
+    search_fields = ['tray_id', 'accept_lot__new_lot_id', 'reject_lot__new_lot_id']
+    
+    readonly_fields = ['created_at']
+    
+    fieldsets = (
+        ('🔑 Tray Identifier', {
+            'fields': ('tray_id', 'qty', 'original_qty'),
+        }),
+        ('🎯 Allocation', {
+            'fields': ('accept_lot', 'reject_lot'),
+        }),
+        ('📋 Rejection Details', {
+            'fields': ('rejection_reason_id', 'is_delinked', 'top_tray'),
+        }),
+        ('👤 Audit', {
+            'fields': ('created_at',),
+        }),
+    )
+    
+    ordering = ('-created_at',)
+    
+    def get_lot_type(self, obj):
+        """Show lot type (Accept/Reject)."""
+        if obj.accept_lot:
+            return '✅ Accept'
+        elif obj.reject_lot:
+            return '❌ Reject'
+        else:
+            return '⏳ Unassigned'
+    get_lot_type.short_description = 'Lot Type'
+
+
+admin.site.register(IS_AllocationTray, IS_AllocationTrayAdmin)
+

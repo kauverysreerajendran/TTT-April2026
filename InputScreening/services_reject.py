@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # SUBMISSION FLAGS — update on the correct master table
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _mark_lot_submitted_flags(lot_id: str) -> None:
+def _mark_lot_submitted_flags(lot_id: str, accepted_qty: int = 0) -> None:
     """Flip the Input-Screening submission flags for ``lot_id``.
 
     Historically this was attempted on ``ModelMasterCreation`` but those
@@ -42,6 +42,10 @@ def _mark_lot_submitted_flags(lot_id: str) -> None:
     TotalStockModel.objects.filter(lot_id=lot_id).update(
         rejected_ip_stock=False,
         few_cases_accepted_Ip_stock=True,
+        total_IP_accpeted_quantity=accepted_qty,
+        last_process_module="Input Screening",
+        next_process_module="Brass QC",
+        last_process_date_time=timezone.now(),
     )
 
 
@@ -235,9 +239,17 @@ def _allocate_reject_trays(
     new_tray_ids: List[str] = []
     allocations: List[Dict[str, Any]] = []
 
-    # Pre-count how many new trays we might need (upper bound for generation)
-    total_reject = sum(r.get("qty", 0) for r in reasons)
-    max_new_needed = math.ceil(total_reject / capacity)
+    # Pre-count how many new trays we might need (upper bound for generation).
+    # NOTE: One reason per tray (no mixing), so each reason consumes
+    # ceil(qty / capacity) tray slots independently. Using the combined
+    # total_reject would under-provision the pool whenever reasons
+    # straddle a capacity boundary (e.g. 11+8+8 in a 16-cap tray needs
+    # 3 trays, not ceil(27/16)=2).
+    max_new_needed = sum(
+        math.ceil((r.get("qty", 0) or 0) / capacity)
+        for r in reasons
+        if (r.get("qty", 0) or 0) > 0
+    )
 
     # Generate a pool of new IDs upfront (avoids repeated DB scans)
     tray_prefix = _infer_prefix(active_trays)
@@ -782,10 +794,22 @@ def finalize_submission(
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
 
+    # Sync DPTrayId_History so downstream modules (Brass QC) see only the
+    # accepted trays. Trays that were reused for reject are delinked; accept
+    # tray quantities are updated to the allocated qty.
+    from DayPlanning.models import DPTrayId_History as _DPH
+    _delink_ids = set(delinked_ids)  # In v1 this equals reused-for-reject trays
+    if _delink_ids:
+        _DPH.objects.filter(lot_id=lot_id, tray_id__in=_delink_ids).update(delink_tray=True)
+    for _a in accept_alloc:
+        _DPH.objects.filter(lot_id=lot_id, tray_id=_a["tray_id"]).update(
+            tray_quantity=_a["qty"]
+        )
+
     # Mark the lot as submitted in the master. The submission flags
     # (rejected_ip_stock / few_cases_accepted_Ip_stock) live on
     # TotalStockModel; ModelMasterCreation has no such columns.
-    _mark_lot_submitted_flags(lot_id)
+    _mark_lot_submitted_flags(lot_id, accepted_qty=total_accept)
 
     logger.info(
         "[IS][PARTIAL_SUBMIT] lot=%s submission_id=%s reject=%d accept=%d user=%s",
@@ -837,22 +861,28 @@ def _build_reject_slots(
             remaining -= fill
     return slots
 
-
+# Accept Tray Slots
 def _build_accept_slots(accept_qty: int, capacity: int) -> List[Dict[str, Any]]:
-    """Distribute accept_qty into capacity-bound slots."""
-    slots: List[Dict[str, Any]] = []
+    """Distribute accept_qty into capacity-bound slots, partial (top-tray) slot first.
+
+    Slots are sorted ascending by qty so the smallest slot (the existing
+    top-tray that only has remaining space) is always slot 0.  The user
+    is expected to scan that slot first; the remaining full slots are
+    auto-filled by the frontend once slot 0 is confirmed.
+    """
     if accept_qty <= 0 or capacity <= 0:
-        return slots
+        return []
+    raw_qtys: List[int] = []
     remaining = accept_qty
-    idx = 0
     while remaining > 0:
         fill = min(remaining, capacity)
-        slots.append({"slot_idx": idx, "qty": fill})
-        idx += 1
+        raw_qtys.append(fill)
         remaining -= fill
-    return slots
+    # Ascending order: smallest qty (partial/top tray) appears as slot 0.
+    raw_qtys.sort()
+    return [{"slot_idx": idx, "qty": qty} for idx, qty in enumerate(raw_qtys)]
 
-
+# Compute Tray Slots
 def compute_slot_plan(
     lot_id: str,
     rejection_entries: List[Dict[str, Any]],
@@ -1174,6 +1204,7 @@ def finalize_submission_v2(
         if not v["valid"]:
             raise ValueError(v["reason"])
         a["_source"] = v["source"]
+        a["_top_tray"] = bool(v.get("top_tray", False))
         seen.append(v["tray_id"])
 
     # Build allocation snapshots (slot order = plan order).
@@ -1192,6 +1223,7 @@ def finalize_submission_v2(
             "tray_id": _norm(a["tray_id"]),
             "qty": slot["qty"],
             "source": a.get("_source", "existing"),
+            "top_tray": a.get("_top_tray", False),
         }
         for slot, a in zip(accept_slots, accept_assignments)
     ]
@@ -1206,23 +1238,12 @@ def finalize_submission_v2(
         for e in rejection_entries
         if int(e.get("qty") or 0) > 0
     }
-    allocation_preview_json = {
-        "total_reject_qty": total_reject,
-        "total_accept_qty": total_accept,
-        "delinked_tray_ids": delinked_ids,
-        "reject_allocations": reject_alloc,
-        "accept_allocations": accept_alloc,
-    }
-    reject_trays_json = [
-        {"tray_id": s["tray_id"], "qty": s["qty"], "reason_id": s["reason_id"]}
-        for s in reject_alloc
-    ]
-    accept_trays_json = [
-        {"tray_id": s["tray_id"], "qty": s["qty"]}
-        for s in accept_alloc
-    ]
-    all_trays_json = reject_trays_json + accept_trays_json
+    from .models import IS_PartialAcceptLot, IS_PartialRejectLot, IS_AllocationTray
+    from .services_submitted import generate_lot_id
 
+    _user = user if getattr(user, "is_authenticated", False) else None
+
+    # ── Parent submission record (only fields that exist on the model) ──
     submission = InputScreening_Submitted.objects.create(
         lot_id=lot_id,
         batch_id=batch_id_val,
@@ -1232,12 +1253,7 @@ def finalize_submission_v2(
         tray_type=tray_type,
         tray_capacity=capacity,
         original_lot_qty=lot_qty,
-        submitted_lot_qty=lot_qty,
-        accepted_qty=total_accept,
-        rejected_qty=total_reject,
         active_trays_count=len(active_trays),
-        reject_trays_count=len(reject_alloc),
-        accept_trays_count=len(accept_alloc),
         remarks=remarks,
         is_partial_accept=True,
         is_partial_reject=True,
@@ -1247,20 +1263,75 @@ def finalize_submission_v2(
         is_submitted=True,
         submitted_at=timezone.now(),
         Draft_Saved=False,
-        all_trays_json=all_trays_json,
-        accepted_trays_json=accept_trays_json,
-        rejected_trays_json=reject_trays_json,
-        rejection_reasons_json=rejection_reasons_json,
-        allocation_preview_json=allocation_preview_json,
-        delink_trays_json=[{"tray_id": tid} for tid in delinked_ids],
-        created_by=user if getattr(user, "is_authenticated", False) else None,
+        created_by=_user,
     )
 
-    _mark_lot_submitted_flags(lot_id)
+    # ── Accept child lot ────────────────────────────────────────────────
+    accept_lot = IS_PartialAcceptLot.objects.create(
+        new_lot_id=generate_lot_id(),
+        parent_lot_id=lot_id,
+        parent_batch_id=batch_id_val,
+        parent_submission=submission,
+        accepted_qty=total_accept,
+        accept_trays_count=len(accept_alloc),
+        trays_snapshot=accept_alloc,
+        created_by=_user,
+    )
+    for a in accept_alloc:
+        IS_AllocationTray.objects.create(
+            accept_lot=accept_lot,
+            tray_id=a["tray_id"],
+            qty=a["qty"],
+            top_tray=bool(a.get("top_tray", False)),
+            is_delinked=False,
+        )
+
+    # ── Reject child lot ────────────────────────────────────────────────
+    reject_lot = IS_PartialRejectLot.objects.create(
+        new_lot_id=generate_lot_id(),
+        parent_lot_id=lot_id,
+        parent_batch_id=batch_id_val,
+        parent_submission=submission,
+        rejected_qty=total_reject,
+        reject_trays_count=len(reject_alloc),
+        rejection_reasons=rejection_reasons_json,
+        trays_snapshot=reject_alloc,
+        delink_count=len(delinked_ids),
+        remarks=remarks,
+        created_by=_user,
+    )
+    for r in reject_alloc:
+        IS_AllocationTray.objects.create(
+            reject_lot=reject_lot,
+            tray_id=r["tray_id"],
+            qty=r["qty"],
+            rejection_reason_id=r.get("reason_id"),
+            rejection_reason_text=r.get("reason_text"),
+            is_delinked=(r.get("source") == "reused"),
+        )
+
+    # Sync DPTrayId_History so downstream modules (Brass QC) see only the
+    # accepted trays. Two categories of trays must be delinked:
+    #   1. Trays reused as reject trays (source='reused' in reject_alloc)
+    #   2. Trays explicitly delinked by the operator (delink_tray_ids)
+    # Accept tray quantities are updated to the allocated qty.
+    from DayPlanning.models import DPTrayId_History as _DPH
+    _reused_ids = {r["tray_id"] for r in reject_alloc if r.get("source") == "reused"}
+    _all_delink_ids = set(delinked_ids) | _reused_ids
+    if _all_delink_ids:
+        _DPH.objects.filter(lot_id=lot_id, tray_id__in=_all_delink_ids).update(delink_tray=True)
+    for _a in accept_alloc:
+        _DPH.objects.filter(lot_id=lot_id, tray_id=_a["tray_id"]).update(
+            tray_quantity=_a["qty"]
+        )
+
+    _mark_lot_submitted_flags(lot_id, accepted_qty=total_accept)
 
     logger.info(
-        "[IS][PARTIAL_SUBMIT_V2] lot=%s sub=%s reject=%d accept=%d delink=%d user=%s",
-        lot_id, submission.id, total_reject, total_accept, len(delinked_ids),
+        "[IS][PARTIAL_SUBMIT_V2] lot=%s sub=%s accept_lot=%s reject_lot=%s "
+        "reject=%d accept=%d delink=%d user=%s",
+        lot_id, submission.id, accept_lot.new_lot_id, reject_lot.new_lot_id,
+        total_reject, total_accept, len(delinked_ids),
         getattr(user, "username", "anonymous"),
     )
 

@@ -15,6 +15,10 @@ from rest_framework.views import APIView
 from .models import IP_Rejection_Table
 from .selectors import (
     PICK_TABLE_COLUMNS,
+    get_completed_table_rows,
+    get_accept_table_rows,
+    get_reject_table_rows,
+    get_submitted_detail,
     pick_table_queryset,
 )
 from .services import (
@@ -29,6 +33,10 @@ from .services_reject import (
     finalize_submission_v2,
     save_draft_partial_reject,
     validate_scanned_tray,
+)
+from .services_submitted import (
+    submit_full_accept,
+    submit_full_reject,
 )
 from .validators import (
     ValidationError,
@@ -59,7 +67,7 @@ def _empty_table_context(user):
         "ip_rejection_reasons": IP_Rejection_Table.objects.all(),
         "is_admin": _is_admin(user),
     }
-
+# Input Screening - Pick Table
 class IS_PickTable(APIView):
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_PickTable.html"
@@ -83,32 +91,80 @@ class IS_PickTable(APIView):
         }
         return Response(context, template_name=self.template_name)
 
+# Input Screening - Accept Table
 class IS_AcceptTable(APIView):
-    """Deprecated - Accept functionality removed. Kept for URL routing compatibility."""
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_AcceptTable.html"
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(_empty_table_context(request.user), template_name=self.template_name)
+        from_date = request.GET.get("from_date") or None
+        to_date = request.GET.get("to_date") or None
+        rows = get_accept_table_rows(from_date=from_date, to_date=to_date)
+        page_number = request.GET.get("page", 1)
+        paginator = Paginator(rows, PAGE_SIZE)
+        page_obj = paginator.get_page(page_number)
+        context = {
+            "master_data": list(page_obj.object_list),
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "user": request.user,
+            "ip_rejection_reasons": IP_Rejection_Table.objects.all(),
+            "is_admin": _is_admin(request.user),
+            "from_date": from_date or "",
+            "to_date": to_date or "",
+        }
+        return Response(context, template_name=self.template_name)
 
+# Input Screening - Completed Table
 class IS_Completed_Table(APIView):
-    """Deprecated - Reject/Accept flow removed. Kept for URL routing compatibility."""
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_Completed_Table.html"
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(_empty_table_context(request.user), template_name=self.template_name)
+        from_date = request.GET.get("from_date") or None
+        to_date = request.GET.get("to_date") or None
+        rows = get_completed_table_rows(from_date=from_date, to_date=to_date)
+        page_number = request.GET.get("page", 1)
+        paginator = Paginator(rows, PAGE_SIZE)
+        page_obj = paginator.get_page(page_number)
+        context = {
+            "master_data": list(page_obj.object_list),
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "user": request.user,
+            "ip_rejection_reasons": IP_Rejection_Table.objects.all(),
+            "is_admin": _is_admin(request.user),
+            "from_date": from_date or "",
+            "to_date": to_date or "",
+        }
+        return Response(context, template_name=self.template_name)
 
+# Input Screening - Reject Table
 class IS_RejectTable(APIView):
-    """Deprecated - Reject functionality removed. Kept for URL routing compatibility."""
     renderer_classes = [TemplateHTMLRenderer]
     template_name = "Input_Screening/IS_RejectTable.html"
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(_empty_table_context(request.user), template_name=self.template_name)
+        from_date = request.GET.get("from_date") or None
+        to_date = request.GET.get("to_date") or None
+        rows = get_reject_table_rows(from_date=from_date, to_date=to_date)
+        page_number = request.GET.get("page", 1)
+        paginator = Paginator(rows, PAGE_SIZE)
+        page_obj = paginator.get_page(page_number)
+        context = {
+            "master_data": list(page_obj.object_list),
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "user": request.user,
+            "ip_rejection_reasons": IP_Rejection_Table.objects.all(),
+            "is_admin": _is_admin(request.user),
+            "from_date": from_date or "",
+            "to_date": to_date or "",
+        }
+        return Response(context, template_name=self.template_name)
 
 class IS_GetDPTraysAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -414,3 +470,120 @@ class IS_SaveDraftAPI(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         return Response(result, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUBMITTED DETAIL API — view-icon data for IS Completed Table
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_SubmittedDetailAPI(APIView):
+    """GET: Return accept/reject/delink tray details for a submitted lot.
+
+    Query params:
+        lot_id (required) — the parent lot ID
+
+    Response:
+        {
+            success, lot_id, original_lot_qty, plating_stock_no, model_no,
+            is_full_accept, is_full_reject, is_partial_accept, is_partial_reject,
+            accept_lots: [{new_lot_id, accepted_qty, accept_trays_count, trays:[...]}],
+            reject_lots: [{new_lot_id, rejected_qty, rejection_reasons, trays:[...],
+                           delinked_tray_ids, delink_count}]
+        }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            lot_id = require_lot_id(request.GET.get("lot_id"))
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payload = get_submitted_detail(lot_id)
+        if not payload.get("success"):
+            return Response(payload, status=status.HTTP_404_NOT_FOUND)
+        return Response(payload)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FULL ACCEPT / FULL REJECT — single-click finalization from pick table
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_FullAcceptAPI(APIView):
+    """POST: Mark the entire lot as accepted and forward it to Brass QC.
+
+    Body: {"lot_id": "...", "remarks": "..."}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id = require_lot_id(request.data.get("lot_id"))
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        remarks = (request.data.get("remarks") or "").strip()
+        try:
+            result = submit_full_accept(
+                lot_id=lot_id,
+                remarks=remarks,
+                user=request.user,
+            )
+        except ValueError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except Exception:
+            logger.exception("[IS][FULL_ACCEPT] Unexpected error for lot=%s", lot_id)
+            return Response(
+                {"success": False, "error": "Full accept failed due to an internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(result, status=status.HTTP_201_CREATED)
+
+
+class IS_FullRejectAPI(APIView):
+    """POST: Mark the entire lot as rejected.
+
+    Body: {"lot_id": "...", "remarks": "..."}
+    Remarks are mandatory for full rejection.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id = require_lot_id(request.data.get("lot_id"))
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        remarks = (request.data.get("remarks") or "").strip()
+        if not remarks:
+            return Response(
+                {"success": False, "error": "Lot rejection remarks are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = submit_full_reject(
+                lot_id=lot_id,
+                remarks=remarks,
+                user=request.user,
+            )
+        except ValueError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except Exception:
+            logger.exception("[IS][FULL_REJECT] Unexpected error for lot=%s", lot_id)
+            return Response(
+                {"success": False, "error": "Full reject failed due to an internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(result, status=status.HTTP_201_CREATED)

@@ -39,6 +39,9 @@
     delinkScans: [],    emptiedTrayIds: [],    counters: { reusable: 0, required: 0, delinkAvailable: 0 },
     previewTimer: null,
     isSubmitting: false,
+    isPlanStale: false,
+    scanEpoch: 0,
+    fullLotReject: false,
   };
 
   // ── DOM helpers ───────────────────────────────────────────────────────────
@@ -86,7 +89,11 @@
     state.batchId = batchId;
     resetUI();
     var modal = $("isRejectModal");
-    if (modal) modal.classList.add("open");
+    if (modal) {
+      // Clear the FOUC-blocking inline style applied in the template.
+      modal.style.display = "";
+      modal.classList.add("open");
+    }
     setStatus("info", "Loading lot data…");
     setInsight("busy", "Loading lot data…");
 
@@ -111,11 +118,15 @@
 
   function closeModal() {
     var modal = $("isRejectModal");
-    if (modal) modal.classList.remove("open");
+    if (modal) {
+      modal.classList.remove("open");
+      modal.style.display = "none";
+    }
     clearTimeout(state.previewTimer);
   }
 
   function resetUI() {
+    state.scanEpoch += 1;
     state.lotQty = 0; state.capacity = 0; state.trayType = null;
     state.activeTrays = []; state.reasons = [];
     state.rejectSlots = []; state.acceptSlots = [];
@@ -123,6 +134,7 @@
     state.emptiedTrayIds = [];
     state.counters = { reusable: 0, required: 0, delinkAvailable: 0 };
     state.isSubmitting = false;
+    state.isPlanStale = false;
 
     ["isrm-h-lotqty", "isrm-tray-type", "isrm-capacity",
      "isrm-total-qty", "isrm-active-trays"
@@ -144,10 +156,15 @@
     $("isrm-reject-count").textContent = "0";
     $("isrm-accept-count").textContent = "0";
     var lotRej = $("isrm-lot-reject-toggle"); if (lotRej) lotRej.checked = false;
+    state.fullLotReject = false;
+    var _bodyReset = document.querySelector("#isRejectModal .isrm-body");
+    if (_bodyReset) _bodyReset.classList.remove("isrm-full-reject-mode");
+    var _submitReset = $("isrm-submit-btn");
+    if (_submitReset) _submitReset.textContent = "Submit";
     setInsight("info", "Idle");
   }
 
-  // ── Apply initial context ─────────────────────────────────────────────────
+  // ── Apply initial context ────────────────
   function applyContext(data) {
     state.lotQty = data.lot_qty || 0;
     state.capacity = data.tray_capacity || 0;
@@ -237,6 +254,7 @@
   function clampQty(input) {
     var v = parseInt(input.value, 10) || 0;
     if (v < 0) v = 0;
+    if (state.lotQty > 0 && v > state.lotQty) v = state.lotQty;
     var others = collectRejectionEntries()
       .filter(function (e) { return e.reason_id !== input.getAttribute("data-reason-id"); })
       .reduce(function (s, e) { return s + e.qty; }, 0);
@@ -274,6 +292,8 @@
 
   // ── Slot plan from backend ────────────────────────────────────────────────
   function scheduleSlotPlan() {
+    state.isPlanStale = true;
+    updateSubmitState();
     clearTimeout(state.previewTimer);
     state.previewTimer = setTimeout(fetchSlotPlan, 350);
   }
@@ -325,6 +345,7 @@
   }
 
   function applySlotPlan(data) {
+    state.isPlanStale = false;
     state.rejectSlots = data.reject_slots || [];
     state.acceptSlots = data.accept_slots || [];
     state.emptiedTrayIds = (data.emptied_tray_ids || []).map(function (t) {
@@ -410,7 +431,21 @@
     }).join("");
 
     c.querySelectorAll(".isrm-reject-scan").forEach(function (inp) {
-      attachScanHandlers(inp, "reject");
+      if (!inp.readOnly) {
+        attachScanHandlers(inp, "reject");
+      }
+    });
+    // Err2 fix: tap a filled (readonly) reject input to clear & re-scan
+    c.querySelectorAll(".isrm-reject-scan[readonly]").forEach(function (inp) {
+      inp.addEventListener("click", function () {
+        var idx = parseInt(this.getAttribute("data-slot-idx"), 10);
+        state.rejectScans[idx] = null;
+        renderRejectRows();
+        renderActivePills();
+        renderDelinkSection();
+        updateSubmitState();
+        setInsight("info", "Cleared reject slot " + (idx + 1) + ". Re-scan.");
+      });
     });
     c.querySelectorAll(".isrm-reject-clear").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -459,7 +494,20 @@
     }).join("");
 
     c.querySelectorAll(".isrm-accept-scan").forEach(function (inp) {
-      attachScanHandlers(inp, "accept");
+      if (!inp.readOnly) {
+        attachScanHandlers(inp, "accept");
+      }
+    });
+    // Err2 fix: tap a filled (readonly) accept input to clear & re-scan
+    c.querySelectorAll(".isrm-accept-scan[readonly]").forEach(function (inp) {
+      inp.addEventListener("click", function () {
+        var idx = parseInt(this.getAttribute("data-slot-idx"), 10);
+        state.acceptScans[idx] = null;
+        renderAcceptRows();
+        renderActivePills();
+        updateSubmitState();
+        setInsight("info", "Cleared accept slot " + (idx + 1) + ". Re-scan.");
+      });
     });
     c.querySelectorAll(".isrm-accept-clear").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -584,8 +632,10 @@
     }
     setInsight("busy", "Validating " + trayId + " (" + slotType + ")…");
     input.disabled = true;
+    var capturedEpoch = state.scanEpoch;
     validateScan(slotType, trayId, function (res) {
       input.disabled = false;
+      if (state.scanEpoch !== capturedEpoch) return;
       if (!res.valid) {
         setStatus("error", res.reason || "Invalid tray.");
         setInsight("error", trayId + " invalid: " + (res.reason || "rejected"));
@@ -609,6 +659,9 @@
       renderRejectRows();
       renderActivePills();
       renderDelinkSection();
+      // Re-render accept rows so inputs become enabled once reject step is complete.
+      // Do NOT auto-fill here — user must manually scan the top tray (slot 1) first.
+      renderAcceptRows();
       setInsight("success", res.tray_id + " accepted as REJECT (" + res.source + ").");
     } else if (slotType === "accept") {
       var aidx = parseInt(input.getAttribute("data-slot-idx"), 10);
@@ -655,8 +708,17 @@
   // ── Fix 1: Tap an active-tray pill → fill next empty slot ────────────────
   function pickIntoNextEmptySlot(trayId) {
     // Order: reject → delink (if available) → accept
-    var delinkNeeded = state.counters.delinkAvailable > 0 &&
-                       state.delinkScans.length < state.counters.delinkAvailable;
+    // Err3 fix: use the same remainingDelink formula as renderDelinkSection so
+    // that active trays already reused in reject scans reduce the delink pool,
+    // preventing an infinite loop where delinkNeeded stays true after scanning.
+    var _activeIds = new Set((state.activeTrays || []).map(function (t) {
+      return (t.tray_id || "").toUpperCase();
+    }));
+    var _reusedInReject = state.rejectScans.filter(function (s) {
+      return s && _activeIds.has((s.tray_id || "").toUpperCase());
+    }).length;
+    var _remainingDelink = Math.max(0, (state.counters.delinkAvailable || 0) - _reusedInReject);
+    var delinkNeeded = _remainingDelink > 0 && state.delinkScans.length < _remainingDelink;
     var slotType = !rejectStepDone() ? "reject"
                  : delinkNeeded ? "delink"
                  : (state.acceptSlots.length && !acceptStepDone()) ? "accept"
@@ -680,16 +742,29 @@
     setInsight("error", "No empty " + slotType + " slot.");
   }
 
-  // ── Auto-fill remaining accept slots from unused active trays ──────────────
+  // ── Auto-fill remaining accept slots (slots 1+) from unused active trays ────
+  // Slot 0 is reserved for the top/partial tray which the user must scan first.
+  // Once slot 0 is confirmed, this function cascades through slots 1+ in order,
+  // filling each from unused active trays sorted ascending by qty.
   function autoFillRemainingAcceptSlots() {
+    // Guard: do nothing until the user has confirmed the top-tray slot (slot 0).
+    if (!state.acceptScans.length || state.acceptScans[0] === null) return;
+
     var used = new Set(collectAllUsedIds().map(function (id) { return id.toUpperCase(); }));
+    // Sort unused active trays ascending by qty so smaller trays fill first.
     var unusedActive = state.activeTrays.filter(function (t) {
       return !used.has((t.tray_id || "").toUpperCase());
-    });
+    }).sort(function (a, b) { return (a.qty || 0) - (b.qty || 0); });
+
     if (!unusedActive.length) return;
+
+    // Only target empty slots at index >= 1 (leave slot 0 to user).
     var emptyInputs = Array.prototype.slice.call(
       document.querySelectorAll(".isrm-accept-scan")
-    ).filter(function (n) { return !n.readOnly && !n.disabled && !n.value; });
+    ).filter(function (n) {
+      return !n.readOnly && !n.disabled && !n.value &&
+             parseInt(n.getAttribute("data-slot-idx"), 10) >= 1;
+    });
     if (!emptyInputs.length) return;
     var inp = emptyInputs[0];
     var trayId = unusedActive[0].tray_id.toUpperCase();
@@ -740,6 +815,7 @@
   function updateSubmitState() {
     var ok = totalReject() > 0 &&
              totalReject() < state.lotQty &&
+             !state.isPlanStale &&
              rejectStepDone() &&
              acceptStepDone() &&
              !state.isSubmitting;
@@ -760,6 +836,7 @@
 
   // ── Fix 6: Clear all user inputs (keep lot context) ──────────────────────
   function clearAllInputs() {
+    state.scanEpoch += 1;  // invalidate any in-flight scan callbacks
     var grid = $("isrm-reason-grid");
     if (grid) {
       grid.querySelectorAll(".isrm-qty-input").forEach(function (i) { i.value = 0; });
@@ -769,6 +846,10 @@
     state.delinkScans = [];
     var rmEl = $("isrm-remarks"); if (rmEl) rmEl.value = "";
     var lotRej = $("isrm-lot-reject-toggle"); if (lotRej) lotRej.checked = false;
+    // Immediately re-render rows so DOM clears without waiting for the async slot plan.
+    renderRejectRows();
+    renderAcceptRows();
+    renderDelinkSection();
     updateTotals();
     scheduleSlotPlan();
     renderActivePills();
@@ -870,7 +951,83 @@
   // ── Submit ────────────────────────────────────────────────────────────────
   function submit() {
     if (state.isSubmitting) return;
-    var entries = collectRejectionEntries();
+
+    // ── FULL LOT REJECT shortcut ────────────────────────────────────────
+    // When the operator ticks "Lot Rejection" in the header, skip the
+    // partial allocation flow entirely and POST to the dedicated full
+    // reject endpoint. Remarks are mandatory in this mode.
+    if (state.fullLotReject) {
+      var rmEl = $("isrm-remarks");
+      var rmText = ((rmEl && rmEl.value) || "").trim();
+      if (!rmText) {
+        setStatus("error", "Lot Rejection remarks are required.");
+        setInsight("error", "Remarks required.");
+        if (rmEl) rmEl.focus();
+        return;
+      }
+      state.isSubmitting = true;
+      var fbtn = $("isrm-submit-btn");
+      if (fbtn) { fbtn.disabled = true; fbtn.textContent = "Submitting\u2026"; }
+      setStatus("info", "Submitting full lot rejection\u2026");
+      setInsight("busy", "Submitting\u2026");
+      // mark S circle as scanning-WIP (half-green) ──────────────────
+      if (typeof window.isMarkSCircleWip === "function") {
+        window.isMarkSCircleWip(state.lotId);
+      }
+      fetch("/inputscreening/full_reject/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrf() },
+        body: JSON.stringify({ lot_id: state.lotId, remarks: rmText }),
+      })
+        .then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, data: j }; });
+        })
+        .then(function (resp) {
+          state.isSubmitting = false;
+          if (fbtn) fbtn.textContent = "Submit";
+          if (!resp.ok || !resp.data.success) {
+            setStatus("error", (resp.data && resp.data.error) || "Full reject failed.");
+            setInsight("error", "Submit failed.");
+            if (fbtn) fbtn.disabled = false;
+            return;
+          }
+          clearDraft();
+          setStatus("success", "Lot rejected.");
+          setInsight("success", "Submitted.");
+          if (typeof Swal !== "undefined") {
+            Swal.fire({
+              icon: "success",
+              title: "Lot Rejected",
+              text: "Rejected qty: " + resp.data.rejected_qty,
+              timer: 1800,
+              showConfirmButton: false,
+            }).then(function () { closeModal(); location.reload(); });
+          } else {
+            setTimeout(function () { closeModal(); location.reload(); }, 800);
+          }
+        })
+        .catch(function () {
+          state.isSubmitting = false;
+          if (fbtn) { fbtn.disabled = false; fbtn.textContent = "Submit"; }
+          setStatus("error", "Network error during submit.");
+          setInsight("error", "Network error.");
+        });
+      return;
+    }
+
+    // Derive rejection_entries from the PLANNED slot state so the backend
+    // always receives data that is consistent with the scanned assignments.
+    // This prevents a stale-plan mismatch when the user edits qty after scanning.
+    var planEntries = {};
+    state.rejectSlots.forEach(function (slot) {
+      var rid = slot.reason_id;
+      if (!planEntries[rid]) {
+        planEntries[rid] = { reason_id: rid, reason_text: slot.reason_text || "", qty: 0 };
+      }
+      planEntries[rid].qty += slot.qty;
+    });
+    var entries = Object.keys(planEntries).map(function (k) { return planEntries[k]; });
     if (!entries.length) { setStatus("error", "Enter at least one rejection qty."); setInsight("error", "No rejection qty."); return; }
     if (!rejectStepDone()) { setStatus("error", "Please scan all reject trays."); setInsight("error", "Reject scans incomplete."); return; }
     if (!acceptStepDone()) { setStatus("error", "Please scan all accept trays."); setInsight("error", "Accept scans incomplete."); return; }
@@ -890,10 +1047,13 @@
 
     state.isSubmitting = true;
     var btn = $("isrm-submit-btn");
-    btn.disabled = true; btn.textContent = "Submitting…";
-    setStatus("info", "Submitting…");
-    setInsight("busy", "Submitting…");
-
+    btn.disabled = true; btn.textContent = "Submitting\u2026";
+    setStatus("info", "Submitting\u2026");
+    setInsight("busy", "Submitting\u2026");
+    // ── Bug3: mark S circle as scanning-WIP (half-green) ──────────────────
+    if (typeof window.isMarkSCircleWip === "function") {
+      window.isMarkSCircleWip(state.lotId);
+    }
     fetch("/inputscreening/partial_submit_v2/", {
       method: "POST",
       credentials: "same-origin",
@@ -957,12 +1117,47 @@
     var draftBtn = $("isrm-draft-btn");
     if (draftBtn) draftBtn.addEventListener("click", saveDraft);
 
-    var modal = $("isRejectModal");
-    if (modal) {
-      modal.addEventListener("click", function (e) {
-        if (e.target === modal) closeModal();
+    // ── Lot Rejection toggle ─────────────────────────────────────────
+    // When checked: switch the modal to "full lot reject" mode, focus the
+    // remarks box and let the operator submit immediately. The submit()
+    // function detects state.fullLotReject and routes to /full_reject/.
+    var lotRejToggle = $("isrm-lot-reject-toggle");
+    if (lotRejToggle) {
+      lotRejToggle.addEventListener("change", function () {
+        state.fullLotReject = !!this.checked;
+        var body = document.querySelector("#isRejectModal .isrm-body");
+        var submitBtnEl = $("isrm-submit-btn");
+        var rmEl = $("isrm-remarks");
+        if (this.checked) {
+          if (body) body.classList.add("isrm-full-reject-mode");
+          if (submitBtnEl) {
+            submitBtnEl.disabled = false;
+            submitBtnEl.textContent = "Submit Lot Rejection";
+          }
+          setInsight(
+            "warning",
+            "Lot Rejection mode — enter remarks and click Submit."
+          );
+          setStatus(
+            "warning",
+            "Lot Rejection: the entire lot will be rejected. Remarks are required."
+          );
+          if (rmEl) {
+            rmEl.focus();
+            try { rmEl.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
+          }
+        } else {
+          if (body) body.classList.remove("isrm-full-reject-mode");
+          if (submitBtnEl) submitBtnEl.textContent = "Submit";
+          setInsight("info", "Lot Rejection mode disabled.");
+          setStatus("info", "Resume scanning to submit a partial reject.");
+          updateSubmitState();
+        }
       });
     }
+
+    // NOTE: Intentionally removed backdrop click-to-close to prevent
+    // accidental dismissal while scanning (Err1 fix).
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         var m = $("isRejectModal");

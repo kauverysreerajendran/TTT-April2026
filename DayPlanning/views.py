@@ -1563,14 +1563,70 @@ class DayPlanningPickTableAPIView(APIView):
                 images = [static('assets/images/imagePlaceholder.jpg')]
             data['model_images'] = images
  
+        # ✅ ENHANCED: Define correct column order for table headers
+        correct_column_order = [
+            'S.No',
+            'Last Updated',
+            'Plating Stk No',
+            'Action',
+            'No of Trays',
+            'Input Qty',
+            'Process Status',
+            'Lot Status',
+            'Current Stage',
+            'Polishing Stk No',
+            'Plating Color',
+            'Category',
+            'Polish Finish',
+            'Version',
+            'Tray Cate-Capacity',
+            'Source',
+            'Remarks',
+        ]
+        
+        # ✅ ENHANCED: Create display headings map for better presentation
+        display_headings_map = {
+            'S.No': 'S.No',
+            'Last Updated': 'Last Updated',
+            'Plating Stk No': 'Plating Stock Number',
+            'Action': 'Action',
+            'No of Trays': 'No of Trays',
+            'Input Qty': 'Input Qty',
+            'Process Status': 'Process Status',
+            'Lot Status': 'Lot Status',
+            'Current Stage': 'Current Stage',
+            'Polishing Stk No': 'Polishing Stk No',
+            'Plating Color': 'Plating Color',
+            'Category': 'Category',
+            'Polish Finish': 'Polish Finish',
+            'Version': 'Version',
+            'Tray Cate-Capacity': 'Tray Cate-Capacity',
+            'Source': 'Source',
+            'Remarks': 'Remarks',
+        }
+        
+        # ✅ ENHANCED: Reorder visible_headings to match correct column order
+        # Keep only columns that are in the correct order and preserve visibility settings
+        ordered_visible_headings = {}
+        for col in correct_column_order:
+            if col in visible_headings:
+                ordered_visible_headings[col] = visible_headings[col]
+            else:
+                # If column not in visible_headings, default to visible for admin
+                ordered_visible_headings[col] = is_admin
+        
+        # Update allowed_headings to match the new order
+        ordered_allowed_headings = [h for h in correct_column_order if ordered_visible_headings.get(h, False)]
+        
         context = {
             'master_data': master_data,
             'page_obj': page_obj,
             'paginator': paginator,
             'user': user,
             'is_admin': is_admin,
-            'visible_headings': visible_headings,
-            'allowed_headings': allowed_headings,
+            'visible_headings': ordered_visible_headings,
+            'allowed_headings': ordered_allowed_headings,
+            'display_headings_map': display_headings_map,
         }
         return Response(context, template_name=self.template_name)
 

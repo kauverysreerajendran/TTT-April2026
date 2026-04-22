@@ -1524,292 +1524,101 @@ document.addEventListener("DOMContentLoaded", function () {
         modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
       }
 
-      // ✅ Fetch tray data with rejection information
+      // ✅ NEW: Dynamic per-child-lot panel rendering from IS submission record
+      const PANEL_MODE = 'both'; // Completed table → show both accept + reject lots
+      let result = null;
       let traysData = [];
       let rejectionSummary = {};
       try {
-        const params = new URLSearchParams({
-          stock_lot_id: stockLotId,
-          lot_id: stockLotId,
-          accepted_ip_stock: acceptedIpStock,
-          rejected_ip_stock: rejectedIpStock,
-          few_cases_accepted_ip_stock: fewCasesAcceptedIpStock
-        });
-        
-        const resp = await fetch(`/inputscreening/CompleteTable_tray_id_list/?${params}`);
-        const result = await resp.json();
-        if (result.success) {
-          traysData = result.trays || [];
-          rejectionSummary = result.rejection_summary || {};
-          console.log('✅ Fetched trays with rejection data:', traysData);
-          console.log('📊 Rejection summary:', rejectionSummary);
-        }
+        const resp = await fetch(`/inputscreening/submitted_detail/?lot_id=${encodeURIComponent(stockLotId)}`);
+        result = await resp.json();
       } catch (e) {
-        console.error('❌ Error fetching tray data:', e);
+        console.error('❌ Error fetching IS submission detail:', e);
       }
 
-      function buildTableHTML(showValidationColumn = false) {
-        let html = `
-          <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
-            <thead>
-              <tr>
-                <th style="width:50px;">S.no</th>
-                <th>Tray ID</th>
-                <th>Tray Qty</th>
-                ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
-              </tr>
-            </thead>
-            <tbody>
-        `;
-      
-        let rowCounter = 1;
-        let topTrayShown = false;
-      
-                // ✅ SECTION 1: ACCEPTED TRAYS ONLY - Sort to show top tray first
-        if (traysData && traysData.length > 0) {
-          const acceptedTrays = traysData.filter(tray => !tray.rejected_tray && !tray.delink_tray);
-          
-          // Only add section header if there are actually accepted trays
-          if (acceptedTrays.length > 0) {
-            // ✅ FIXED: Sort accepted trays to show top tray first
-            acceptedTrays.sort((a, b) => {
-              // Top tray should come first
-              if (a.top_tray && !b.top_tray) return -1;
-              if (!a.top_tray && b.top_tray) return 1;
-              // If both or neither are top trays, maintain original order
-              return 0;
-            });
-            
-            html += `
-              <tr style="background-color: #e8f5e8; font-weight: bold;">
-                <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
-                  ✅ ACCEPTED TRAYS
-                </td>
-              </tr>
-            `;
-            
-            acceptedTrays.forEach((tray) => {
-              let displaySNo;
-              if (!topTrayShown && tray.top_tray) {
-                displaySNo = `${rowCounter} (Top Tray)`;
-                topTrayShown = true;
-              } else {
-                displaySNo = rowCounter;
-              }
-              
-              let displayQuantity;
-              if (acceptedIpStock && tray.top_tray) {
-                displayQuantity = tray.tray_quantity;
-              } else {
-                displayQuantity = tray.tray_quantity;
-              }
-            
-              const rowClass = tray.top_tray ? 'top-tray-row' : '';
-              
-              html += `
-                <tr class="${rowClass}">
-                  <td>${displaySNo}</td>
-                  <td>
-                    <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-                    <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
-                  </td>
-                  <td>
-                    <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
-                  </td>
-                  ${showValidationColumn ? `
-                    <td>
-                      <div class="validation-status">
-                        <div class="status-icon fail">
-                          <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                        </div>
-                        <div class="status-icon pass">
-                          <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                        </div>
-                      </div>
-                    </td>
-                  ` : ''}
-                </tr>
-              `;
-              rowCounter++;
-            });
-          }
-      
-          // ✅ SECTION 2: REJECTED TRAYS (separate from delinked)
-          const rejectedOnlyTrays = traysData.filter(tray => tray.rejected_tray && !tray.delink_tray);
-          
-          if (rejectedOnlyTrays.length > 0) {
-            html += `
-              <tr style="background-color: #ffebee; font-weight: bold;">
-                <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #c62828; padding: 8px;">
-                  ❌ REJECTED TRAYS
-                </td>
-              </tr>
-            `;
-
-            // Sort rejected trays by tray_quantity ascending
-            rejectedOnlyTrays.sort((a, b) => {
-              const qtyA = parseInt(a.tray_quantity) || 0;
-              const qtyB = parseInt(b.tray_quantity) || 0;
-              return qtyA - qtyB;
-            });
-      
-            // Add rejected trays
-            rejectedOnlyTrays.forEach((tray) => {
-              let displayQuantity = tray.ip_top_tray && tray.ip_top_tray_qty !== null ? tray.ip_top_tray_qty : tray.tray_quantity;
-              
-              html += `
-                <tr>
-                  <td>${rowCounter}</td>
-                  <td>
-                    <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-                    <span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>
-                  </td>
-                  <td>
-                    <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
-                  </td>
-                  ${showValidationColumn ? `
-                    <td>
-                      <div class="validation-status">
-                        <div class="status-icon fail">
-                          <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                        </div>
-                        <div class="status-icon pass">
-                          <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                        </div>
-                      </div>
-                    </td>
-                  ` : ''}
-                </tr>
-              `;
-              rowCounter++;
-            });
-          }
-
-          // ✅ SECTION 3: DELINKED TRAYS (separate from rejected)
-          // ✅ FIX: Exclude rejected trays from delink section — rejected takes priority
-          const delinkedTrays = traysData.filter(tray => tray.delink_tray && !tray.rejected_tray);
-          const hasShortage = rejectionSummary.shortage_rejections > 0;
-          
-          if (delinkedTrays.length > 0) {
-            html += `
-              <tr style="background-color: #fff3e0; font-weight: bold;">
-                <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #e65100; padding: 8px;">
-                  🔗 DELINKED TRAYS
-                </td>
-              </tr>
-            `;
-
-            // Sort delinked trays by tray_quantity ascending
-            delinkedTrays.sort((a, b) => {
-              const qtyA = parseInt(a.tray_quantity) || 0;
-              const qtyB = parseInt(b.tray_quantity) || 0;
-              return qtyA - qtyB;
-            });
-      
-            // Add delinked trays
-            delinkedTrays.forEach((tray) => {
-              // Delinked trays must always show blank quantity — never carry old/stale values
-              let displayQuantity = ''; 
-              
-              html += `
-                <tr>
-                  <td>${rowCounter}</td>
-                  <td>
-                    <span style="display: inline-block; width: 100%;">${tray.tray_id || ''}</span>
-                    <span style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">DELINKED</span>
-                  </td>
-                  <td>
-                    <span style="display: inline-block; width: 100%;">${displayQuantity}</span>
-                  </td>
-                  ${showValidationColumn ? `
-                    <td>
-                      <div class="validation-status">
-                        <div class="status-icon fail">
-                          <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" style="width:18px; height:18px;" />
-                        </div>
-                        <div class="status-icon pass">
-                          <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" style="width:18px; height:18px;" />
-                        </div>
-                      </div>
-                    </td>
-                  ` : ''}
-                </tr>
-              `;
-              rowCounter++;
-            });
-          }
-          
-          // ✅ SECTION 4: SHORTAGE (if any)
-          if (hasShortage) {
-              // Fetch SHORTAGE rejection details with quantities
-              fetch(`/inputscreening/get_shortage_rejections/?lot_id=${encodeURIComponent(stockLotId)}`)
-                .then(res => res.json())
-                .then(data => {
-                  if (data.success && data.shortage_rejections.length > 0) {
-                    data.shortage_rejections.forEach(shortage => {
-                      html += `
-                        <tr class="shortage-row">
-                          <td>${rowCounter}</td>
-                          <td>
-                            <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
-                            <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
-                          </td>
-                          <td>
-                            <input type="number" class="form-control" value="${shortage.quantity}" readonly style="width: 100%;" />
-                          </td>
-                          ${showValidationColumn ? `
-                            <td>
-                              <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
-                            </td>
-                          ` : ''}
-                        </tr>
-                      `;
-                      rowCounter++;
-                    });
-                    
-                    // Update the table content
-                    html += '</tbody></table>';
-                    detailsDiv.innerHTML = html;
-                  }
-                })
-                .catch(e => {
-                  console.error('Error fetching SHORTAGE details:', e);
-                  // Fallback: Add basic SHORTAGE row with "?" quantity
-                  for (let i = 0; i < rejectionSummary.shortage_rejections; i++) {
-                    html += `
-                      <tr class="shortage-row">
-                        <td>${rowCounter}</td>
-                        <td>
-                          <input type="text" class="form-control" value="SHORTAGE" readonly style="width: 100%; font-weight: bold;" />
-                          <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">No Tray-ID</span>
-                        </td>
-                        <td>
-                          <input type="number" class="form-control" value="?" readonly style="width: 100%;" />
-                        </td>
-                        ${showValidationColumn ? `
-                          <td>
-                            <span style="color: #666; font-size: 11px;">N/A for SHORTAGE</span>
-                          </td>
-                        ` : ''}
-                      </tr>
-                    `;
-                    rowCounter++;
-                  }
-                  html += '</tbody></table>';
-                  detailsDiv.innerHTML = html;
-                });
-              
-              // Return early since we're handling async update
-              return html;
-            }
-          } // Close if (traysData && traysData.length > 0)
-         
-        html += '</tbody></table>';
+      function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+      function _renderTraySnapshot(trays) {
+        if (!trays || !trays.length) return '<div style="color:#888;font-size:12px;padding:6px;">No trays</div>';
+        const rows = trays.map((t, i) => {
+          const top = t.top_tray ? '<span style="background:#0288d1;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">TOP</span>' : '';
+          const reason = t.reason_text ? `<span style="background:#b71c1c;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">${_esc(t.reason_text)}</span>` : '';
+          const src = t.source ? `<span style="color:#666;font-size:10px;margin-left:6px;">(${_esc(t.source)})</span>` : '';
+          return `<tr><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:center;">${i+1}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;font-family:monospace;">${_esc(t.tray_id)}${top}${reason}${src}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;">${_esc(t.qty)}</td></tr>`;
+        }).join('');
+        return `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;"><thead><tr style="background:#f5f5f5;"><th style="padding:4px 8px;border:1px solid #e0e0e0;width:40px;">#</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:left;">Tray ID</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;width:80px;">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
+      function _renderAcceptPanel(al, isFullAccept) {
+        const typeLabel = isFullAccept ? 'FULL ACCEPT' : 'PARTIAL ACCEPT';
+        const typeBg = isFullAccept ? '#1b5e20' : '#2e7d32';
+        return `<div style="border:1px solid #c8e6c9;background:#f1f8e9;border-radius:6px;padding:10px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:bold;">${typeLabel}</span>
+              <span style="font-family:monospace;color:#00695c;font-weight:bold;">${_esc(al.new_lot_id)}</span>
+            </div>
+            <div style="font-size:11px;color:#555;">${_esc(al.created_at || '')}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12px;">
+            <div><strong>Accepted Qty:</strong> <span style="color:#2e7d32;font-weight:bold;">${_esc(al.accepted_qty)}</span></div>
+            <div><strong>Accept Trays Count:</strong> ${_esc(al.accept_trays_count)}</div>
+          </div>
+          <div style="margin-top:6px;"><strong style="font-size:12px;">Trays Snapshot:</strong>${_renderTraySnapshot(al.trays || [])}</div>
+        </div>`;
+      }
+      function _renderRejectPanel(rl, isFullReject) {
+        const typeLabel = isFullReject ? 'FULL REJECT' : 'PARTIAL REJECT';
+        const typeBg = isFullReject ? '#b71c1c' : '#c62828';
+        const reasons = rl.rejection_reasons || {};
+        const reasonChips = Object.keys(reasons).map(k => {
+          const r = reasons[k] || {};
+          return `<span style="background:#ffcdd2;color:#b71c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;">${_esc(r.reason || k)}: ${_esc(r.qty)}</span>`;
+        }).join('') || '<span style="color:#888;font-size:11px;">None</span>';
+        const delinkList = (rl.delinked_tray_ids || []).map(t => `<span style="font-family:monospace;background:#eceff1;padding:1px 6px;border-radius:6px;margin-right:4px;font-size:11px;">${_esc(t)}</span>`).join('') || '<span style="color:#888;font-size:11px;">None</span>';
+        return `<div style="border:1px solid #ffcdd2;background:#ffebee;border-radius:6px;padding:10px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:bold;">${typeLabel}</span>
+              <span style="font-family:monospace;color:#b71c1c;font-weight:bold;">${_esc(rl.new_lot_id)}</span>
+            </div>
+            <div style="font-size:11px;color:#555;">${_esc(rl.created_at || '')}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12px;">
+            <div><strong>Rejected Qty:</strong> <span style="color:#c62828;font-weight:bold;">${_esc(rl.rejected_qty)}</span></div>
+            <div><strong>Reject Trays Count:</strong> ${_esc(rl.reject_trays_count)}</div>
+            <div><strong>Delink Count:</strong> ${_esc(rl.delink_count)}</div>
+            <div style="grid-column:1/-1;"><strong>Reasons:</strong> ${reasonChips}</div>
+          </div>
+          <div style="margin-top:6px;font-size:12px;"><strong>Delinked Trays:</strong> ${delinkList}</div>
+          <div style="margin-top:6px;"><strong style="font-size:12px;">Trays Snapshot:</strong>${_renderTraySnapshot(rl.trays || [])}</div>
+          ${rl.remarks ? `<div style="margin-top:6px;font-size:12px;"><strong>Remarks:</strong> ${_esc(rl.remarks)}</div>` : ''}
+        </div>`;
+      }
+      function buildTableHTML() {
+        if (!result || !result.success) {
+          return '<div style="padding:20px;text-align:center;color:#c62828;font-size:13px;">No submitted detail available for this lot.</div>';
+        }
+        const isFullAccept = !!(result.is_full_accept);
+        const isFullReject = !!(result.is_full_reject);
+        let html = '<div style="padding:8px;">';
+        const showAccept = (PANEL_MODE === 'accept' || PANEL_MODE === 'both');
+        const showReject = (PANEL_MODE === 'reject' || PANEL_MODE === 'both');
+        if (showAccept) (result.accept_lots || []).forEach(al => { html += _renderAcceptPanel(al, isFullAccept); });
+        if (showReject) (result.reject_lots || []).forEach(rl => { html += _renderRejectPanel(rl, isFullReject); });
+        const empty = (showAccept && (!result.accept_lots || !result.accept_lots.length)) &&
+                      (showReject && (!result.reject_lots || !result.reject_lots.length));
+        if (empty) html += '<div style="padding:20px;text-align:center;color:#888;font-size:13px;">No lot data found.</div>';
+        html += '</div>';
         return html;
-      } 
+      }
+      // legacy local vars retained for any downstream listeners
       
-// Show table 
-      detailsDiv.innerHTML = buildTableHTML(false);
+      // Show panels
+      // Remove table-grid class so CSS rule `> div { display:none !important; }` does not hide our panel divs
+      detailsDiv.classList.remove('table-grid');
+      detailsDiv.classList.add('panel-mode');
+      detailsDiv.innerHTML = buildTableHTML();
 
       // Store data for later use
       modal.buildTableHTML = buildTableHTML;

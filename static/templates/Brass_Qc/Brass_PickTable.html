@@ -786,6 +786,12 @@ tr.row-inactive td.action-td {
   font-size: 12px !important;
   color: #374151 !important;
 }
+/* Partial accept info panel spans all 3 grid columns */
+#trayScanDetails_DayPlanning.table-grid > div[style*="grid-column"] {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
 
 /* Remove content-wrapper dim when DayPlanning modal is open */
 .tray-scan-modal-DayPlanning.open ~ .content-wrapper {
@@ -2144,13 +2150,48 @@ document.addEventListener('DOMContentLoaded', function() {
         const trays = result.trays || [];
         if (modalPhysicalQty) modalPhysicalQty.textContent = result.total_qty || '0';
 
+        // ── ERR3 FIX: when backend returns child Partial-Accept lot data,
+        // update qty header and render an info panel. Backend is SSOT.
+        const isPartialAccept = result.source === 'IS_PartialAcceptLot' &&
+                                result.parent_lot_id && result.lot_id &&
+                                result.lot_id !== result.parent_lot_id;
+        if (isPartialAccept) {
+          if (modalLotQty) modalLotQty.textContent = result.total_qty || '0';
+        }
+
         if (trays.length === 0) {
           detailsDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">No trays found for this lot.</div>';
           return;
         }
 
+        // ── Build partial accept info panel (spans all 3 grid columns) ──
+        let infoPanelHtml = '';
+        if (isPartialAccept) {
+          const safeId = (result.lot_id || '').replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+          });
+          infoPanelHtml =
+            '<div style="grid-column:1/-1; background:#f0fdf7; border:1px solid #c8f0e0;' +
+            ' border-radius:6px; padding:10px 14px; margin-bottom:2px;">' +
+            '<div style="font-size:11px; font-weight:700; color:#028084; text-transform:uppercase;' +
+            ' letter-spacing:.6px; margin-bottom:6px;">Partial Accept Lot</div>' +
+            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px; font-size:12px;">' +
+            '<div><span style="color:#555; font-weight:600;">New Lot ID:</span>' +
+            ' <span style="font-family:monospace; font-weight:700; color:#028084;">' + safeId + '</span></div>' +
+            '<div><span style="color:#555; font-weight:600;">Accepted Qty:</span>' +
+            ' <span style="font-weight:700; color:#1ba878;">' + (result.total_qty || 0) + '</span></div>' +
+            '<div><span style="color:#555; font-weight:600;">Accept Trays Count:</span>' +
+            ' <span style="font-weight:700; color:#333;">' + (result.accept_trays_count || trays.length) + '</span></div>' +
+            (result.child_created_at
+              ? '<div><span style="color:#555; font-weight:600;">Created At:</span>' +
+                ' <span style="color:#666;">' + result.child_created_at + '</span></div>'
+              : '') +
+            '</div></div>';
+        }
+
         // Build tray table (same grid format as IS)
-        let html = '<div style="font-weight:bold; background:#f0f0f0; padding:6px;">S.No</div>';
+        let html = infoPanelHtml;
+        html += '<div style="font-weight:bold; background:#f0f0f0; padding:6px;">S.No</div>';
         html += '<div style="font-weight:bold; background:#f0f0f0; padding:6px;">Tray ID</div>';
         html += '<div style="font-weight:bold; background:#f0f0f0; padding:6px;">Tray Quantity</div>';
 
