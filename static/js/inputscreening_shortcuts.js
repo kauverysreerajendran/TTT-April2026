@@ -7,7 +7,7 @@
  *   - F1 is always intercepted (prevents browser Help dialog)
  *
  * Key map:
- *   F1     → open tray verification scan (Scan button)
+ *   F2     → Display "Please Scan" hint and open tray verification modal for selected / highlighted row (or first row if none selected)
  *   A      → accept selected / highlighted lot
  *   R      → open reject window for selected / highlighted lot
  *   Esc    → close top-most open popup (priority order below)
@@ -63,13 +63,11 @@
     // shows even when individual <td>s have their own background-color
     // (e.g. .row-inactive-blur). Outline on the row gives the border
     // effect and works regardless of cell-level styling.
+    // Outline only — avoids conflict with existing row background colours
     style.textContent =
       "tr." + ROW_SELECTED_CLASS +
       " { outline: 2px solid #028084 !important;" +
-      " outline-offset: -2px !important;" +
-      " box-shadow: inset 0 0 0 9999px #e8f7f7 !important; }" +
-      "tr." + ROW_SELECTED_CLASS + " > td" +
-      " { background-color: #e8f7f7 !important; }";
+      " outline-offset: -2px !important; }";
     document.head.appendChild(style);
   }
 
@@ -191,6 +189,40 @@
 
   // ─── Action helpers ────────────────────────────────────────────────────────
 
+  /**
+   * Show a SweetAlert2 confirm with Cancel as the default focused button.
+   * Left / Right arrows swap focus between Cancel and Accept.
+   * Only proceeds to acceptBtn.click() if the operator confirms.
+   */
+  function _confirmAndAccept(acceptBtn) {
+    if (!window.Swal) { acceptBtn.click(); return; }
+    Swal.fire({
+      title: "Accept this lot?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Accept",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#028084",
+      cancelButtonColor: "#6c757d",
+      focusCancel: true,   // Cancel is the default-focused (safe default)
+      reverseButtons: false,
+      didOpen: function (popup) {
+        // Left / Right arrows toggle focus between the two buttons
+        popup.addEventListener("keydown", function (ev) {
+          if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+          ev.preventDefault();
+          var focused = document.activeElement;
+          var confirmBtn = popup.querySelector(".swal2-confirm");
+          var cancelBtn  = popup.querySelector(".swal2-cancel");
+          if (focused === confirmBtn) cancelBtn.focus();
+          else confirmBtn.focus();
+        });
+      },
+    }).then(function (result) {
+      if (result.isConfirmed) acceptBtn.click();
+    });
+  }
+
   /** Open the tray verification scan for the selected row (or first row). */
   function _openScanMode() {
     // If a row is selected, open TVM for that lot
@@ -228,7 +260,8 @@
       );
       return;
     }
-    acceptBtn.click();
+    // Show confirm dialog with Cancel as default (safe) — arrow keys switch buttons
+    _confirmAndAccept(acceptBtn);
   }
 
   /** Trigger the Reject button on the selected / highlighted row. */

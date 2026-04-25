@@ -421,6 +421,18 @@ class IS_PartialSubmitV2API(APIView):
                 {"success": False, "error": "Submission failed due to an internal error."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        
+        # ✅ ENHANCED LOGGING FOR SUCCESSFUL SUBMISSION
+        log_msg = (
+            f"[IS][PARTIAL_SUBMIT_V2] ✅ SUCCESS: "
+            f"parent_lot={parsed.get('lot_id')}, "
+            f"accept_lot={result.get('accept_lot_id')} (qty={result.get('total_accept_qty', 0)}), "
+            f"reject_lot={result.get('reject_lot_id')} (qty={result.get('total_reject_qty', 0)}), "
+            f"user={getattr(request.user, 'username', 'anonymous')}"
+        )
+        logger.info(log_msg)
+        print(log_msg)  # visible in Django runserver console
+        
         return Response(result, status=status.HTTP_201_CREATED)
 
 
@@ -587,3 +599,89 @@ class IS_FullRejectAPI(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         return Response(result, status=status.HTTP_201_CREATED)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DELINK SELECTED TRAYS — DELINK REJECTED TRAYS FROM SELECTED LOTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_DelinkSelectedTraysAPI(APIView):
+    """POST: Delink all rejected trays from selected lots in the reject table.
+    
+    The frontend sends stock_lot_ids from checked rows in the reject table.
+    This endpoint will find all rejected trays from those lots and mark them
+    as delinked (delink_tray=True) so they become available for reuse.
+    
+    Body: {"stock_lot_ids": ["LID123", "LID456", ...]}
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        from django.db import transaction
+        from .models import IPTrayId
+        from modelmasterapp.models import TrayId
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        stock_lot_ids = request.data.get("stock_lot_ids", [])
+        if not stock_lot_ids or not isinstance(stock_lot_ids, list):
+            return Response(
+                {"success": False, "error": "stock_lot_ids is required and must be a list"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        try:
+            with transaction.atomic():
+                updated_trays = 0
+                lots_processed = 0
+                
+                for lot_id in stock_lot_ids:
+                    lot_id = lot_id.strip()
+                    if not lot_id:
+                        continue
+                    
+                    # Find all rejected trays for this lot in Input Screening
+                    rejected_trays = IPTrayId.objects.filter(
+                        lot_id=lot_id,
+                        rejected_tray=True,
+                        delink_tray=False  # Only delink trays that aren't already delinked
+                    )
+                    
+                    lot_updated = 0
+                    for tray_rec in rejected_trays:
+                        # Mark as delinked in IPTrayId table
+                        tray_rec.delink_tray = True
+                        tray_rec.save()
+                        
+                        # Also update master TrayId table to make tray available for reuse
+                        TrayId.objects.filter(tray_id=tray_rec.tray_id).update(
+                            lot_id=None,           # Release from current lot
+                            batch_id=None,        # Release from current batch
+                            delink_tray=False,     # Allow reuse (not delinked in master)
+                            rejected_tray=False,   # Allow reuse (not rejected in master)
+                            scanned=False          # Mark as not in use
+                        )
+                        
+                        lot_updated += 1
+                    
+                    if lot_updated > 0:
+                        lots_processed += 1
+                        updated_trays += lot_updated
+                        logger.info(f"[DELINK] Processed lot {lot_id}: delinked {lot_updated} rejected trays")
+                
+                logger.info(f"[DELINK] Total: {updated_trays} trays delinked from {lots_processed} lots")
+                
+                return Response({
+                    "success": True,
+                    "message": f"Successfully delinked {updated_trays} rejected trays from {lots_processed} lots",
+                    "updated": updated_trays,
+                    "lots_processed": lots_processed
+                }, status=status.HTTP_200_OK)
+                
+        except Exception as exc:
+            logger.exception("[DELINK] Unexpected error during delink operation")
+            return Response(
+                {"success": False, "error": f"Delink operation failed: {str(exc)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

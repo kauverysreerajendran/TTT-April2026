@@ -257,3 +257,95 @@ class Brass_Audit_RawSubmission(models.Model):
         accepted = self.payload.get('summary', {}).get('accepted', 0)
         rejected = self.payload.get('summary', {}).get('rejected', 0)
         return f"{self.lot_id} [{self.submission_type}] A:{accepted}/R:{rejected}/T:{total_qty}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BRASS AUDIT PARTIAL LOT TABLES — separate admin-visible tables
+# Mirrors the pattern established by BrassQC_PartialAcceptLot / BrassQC_PartialRejectLot
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class BrassAudit_PartialAcceptLot(models.Model):
+    """
+    Created when a Brass Audit submission is PARTIAL.
+    Stores the accepted child lot and its frozen tray snapshot.
+    Downstream (Jig Loading) reads ONLY this lot's trays.
+    """
+    new_lot_id = models.CharField(max_length=100, unique=True, db_index=True,
+                                  help_text="Generated lot ID for the accepted portion")
+    parent_lot_id = models.CharField(max_length=100, db_index=True,
+                                     help_text="Original parent lot ID before partial split")
+    parent_batch_id = models.CharField(max_length=100, db_index=True,
+                                       help_text="Parent batch ID")
+    parent_submission = models.ForeignKey(
+        'Brass_Audit_Submission',
+        on_delete=models.CASCADE,
+        related_name='partial_accept_lots',
+        help_text="Reference to parent Brass_Audit_Submission"
+    )
+    accepted_qty = models.IntegerField(help_text="Total accepted quantity")
+    accept_trays_count = models.IntegerField(default=0, help_text="Count of accepted trays")
+    trays_snapshot = models.JSONField(
+        default=list, blank=True,
+        help_text="Frozen accept tray snapshot: [{tray_id, qty, tray_order, top_tray}]"
+    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Brass Audit Partial Accept Lot"
+        verbose_name_plural = "Brass Audit Partial Accept Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['parent_batch_id']),
+        ]
+
+    def __str__(self):
+        return (f"BA-PartialAccept: {self.new_lot_id} "
+                f"(from {self.parent_lot_id}, qty={self.accepted_qty})")
+
+
+class BrassAudit_PartialRejectLot(models.Model):
+    """
+    Created when a Brass Audit submission is PARTIAL.
+    Stores the rejected child lot, rejection reasons, and frozen tray snapshot.
+    Rejected lot routes to IQF.
+    """
+    new_lot_id = models.CharField(max_length=100, unique=True, db_index=True,
+                                  help_text="Generated lot ID for the rejected portion")
+    parent_lot_id = models.CharField(max_length=100, db_index=True,
+                                     help_text="Original parent lot ID before partial split")
+    parent_batch_id = models.CharField(max_length=100, db_index=True,
+                                       help_text="Parent batch ID")
+    parent_submission = models.ForeignKey(
+        'Brass_Audit_Submission',
+        on_delete=models.CASCADE,
+        related_name='partial_reject_lots',
+        help_text="Reference to parent Brass_Audit_Submission"
+    )
+    rejected_qty = models.IntegerField(help_text="Total rejected quantity")
+    reject_trays_count = models.IntegerField(default=0, help_text="Count of rejected trays")
+    rejection_reasons = models.JSONField(
+        default=dict, blank=True,
+        help_text='Schema: {"R01": {"reason": "...", "qty": 10}}'
+    )
+    trays_snapshot = models.JSONField(
+        default=list, blank=True,
+        help_text="Frozen reject tray snapshot: [{tray_id, qty, tray_order, top_tray}]"
+    )
+    remarks = models.TextField(null=True, blank=True, help_text="Rejection remarks")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Brass Audit Partial Reject Lot"
+        verbose_name_plural = "Brass Audit Partial Reject Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['parent_batch_id']),
+        ]
+
+    def __str__(self):
+        return (f"BA-PartialReject: {self.new_lot_id} "
+                f"(from {self.parent_lot_id}, qty={self.rejected_qty})")

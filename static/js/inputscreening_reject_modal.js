@@ -674,6 +674,18 @@
       autoFillRemainingAcceptSlots();
       setInsight("success", res.tray_id + " accepted as ACCEPT (" + res.source + ").");
     } else if (slotType === "delink") {
+      // ✅ ERR1 FIX: Prevent duplicate tray IDs in delink scans
+      var delinkTrayExists = state.delinkScans.some(function (d) {
+        return (d.tray_id || "").toUpperCase() === (res.tray_id || "").toUpperCase();
+      });
+      if (delinkTrayExists) {
+        setStatus("error", res.tray_id + " is already queued for delink. Remove the existing entry to rescan.");
+        setInsight("error", res.tray_id + " already delinked – no duplicates allowed.");
+        input.classList.add("invalid");
+        input.value = "";
+        input.focus();
+        return;
+      }
       state.delinkScans.push({
         tray_id: res.tray_id, qty: res.tray_qty, top: res.top_tray,
       });
@@ -1163,6 +1175,13 @@
         var m = $("isRejectModal");
         if (m && m.classList.contains("open")) closeModal();
       }
+    });
+
+    // ── ERR1 FIX: Close IS reject modal on bfcache restore (browser back/forward) ──
+    window.addEventListener("pageshow", function (e) {
+      if (!e.persisted) return;
+      var m = $("isRejectModal");
+      if (m && m.classList.contains("open")) closeModal();
     });
   });
 

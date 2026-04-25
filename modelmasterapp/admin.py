@@ -24,3 +24,37 @@ admin.site.register(DP_TrayIdRescan)
 
 admin.site.register(TrayAutoSaveData)
 admin.site.register(LookLikeModel)
+
+
+# ── Universal Lot Hierarchy ──────────────────────────────────────────────────
+
+class LotTraySnapshotInline(admin.TabularInline):
+    model = LotTraySnapshot
+    extra = 0
+    readonly_fields = ('tray_id', 'tray_qty', 'tray_order', 'top_tray', 'tray_status', 'created_at')
+    ordering = ('tray_order',)
+    can_delete = False
+    fk_name = 'lot'
+
+
+class LotMasterAdmin(admin.ModelAdmin):
+    list_display  = ('lot_id', 'parent_lot_id', 'root_lot_id', 'module_name',
+                     'source_module', 'submission_type', 'total_qty', 'status', 'active',
+                     'created_by', 'created_at')
+    list_filter   = ('module_name', 'source_module', 'submission_type', 'status', 'active')
+    search_fields = ('lot_id', 'parent_lot_id', 'root_lot_id')
+    readonly_fields = ('created_at',)
+    inlines       = [LotTraySnapshotInline]
+
+
+class LotTraySnapshotAdmin(admin.ModelAdmin):
+    list_display  = ('tray_id', 'tray_qty', 'tray_order', 'top_tray',
+                     'tray_status', 'lot', 'created_at')
+    list_filter   = ('tray_status', 'top_tray')
+    search_fields = ('tray_id', 'lot__lot_id')
+    readonly_fields = ('created_at',)
+    ordering      = ('lot', 'tray_order')
+
+
+admin.site.register(LotMaster, LotMasterAdmin)
+admin.site.register(LotTraySnapshot, LotTraySnapshotAdmin)

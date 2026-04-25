@@ -22,3 +22,25 @@ class IQFSubmittedAdmin(admin.ModelAdmin):
 
 
 admin.site.register(IQF_Submitted, IQFSubmittedAdmin)
+
+
+# ── IQF Partial Lots ─────────────────────────────────────────────────────────
+
+class IQFPartialAcceptAdmin(admin.ModelAdmin):
+	list_display = ('new_lot_id', 'parent_lot_id', 'parent_batch_id',
+	                'accepted_qty', 'accept_trays_count', 'created_by', 'created_at')
+	list_filter = ('created_at',)
+	search_fields = ('new_lot_id', 'parent_lot_id', 'parent_batch_id')
+	readonly_fields = ('created_at',)
+
+
+class IQFPartialRejectAdmin(admin.ModelAdmin):
+	list_display = ('new_lot_id', 'parent_lot_id', 'parent_batch_id',
+	                'rejected_qty', 'reject_trays_count', 'created_by', 'created_at')
+	list_filter = ('created_at',)
+	search_fields = ('new_lot_id', 'parent_lot_id', 'parent_batch_id')
+	readonly_fields = ('created_at',)
+
+
+admin.site.register(IQF_PartialAcceptLot, IQFPartialAcceptAdmin)
+admin.site.register(IQF_PartialRejectLot, IQFPartialRejectAdmin)

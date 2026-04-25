@@ -803,6 +803,73 @@ tr.row-inactive td.action-td {
 /* ====================================================
    END BRASS QC MODAL UI REFRESH
    ==================================================== */
+
+/* ====================================================
+   UNIFIED BRASS QC ACTION BUTTON THEME
+   Overrides Bootstrap Social (btn-twitter / btn-youtube)
+   and all inline styles via !important.
+   Only targets Brass QC pick table action buttons.
+   ==================================================== */
+.btn-accept-is {
+  color: #ffffff !important;
+  border: none !important;
+  padding: 8px 8px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 28px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+}
+.btn-accept-is:hover:not(:disabled) {
+  background-color: #0b8a6a !important;
+}
+.btn-accept-is:disabled,
+.btn-accept-is[disabled] {
+  background-color: #0d9e7a !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.btn-reject-is {
+  background-color: #e57373 !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 5px 11px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 28px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+}
+.btn-reject-is:hover:not(:disabled) {
+  background-color: #a93226 !important;
+}
+.btn-reject-is:disabled,
+.btn-reject-is[disabled] {
+  background-color: #e57373 !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+/* Disabled-state visual (pointer-events: none inline override) */
+.btn-accept-is[style*="pointer-events: none"],
+.btn-reject-is[style*="pointer-events: none"] {
+  opacity: 0.5 !important;
+}
+/* ====================================================
+   END UNIFIED BRASS QC ACTION BUTTON THEME
+   ==================================================== */
 </style>
 
 <div class="content-wrapper">
@@ -852,6 +919,35 @@ tr.row-inactive td.action-td {
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
+                      Action <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Accept Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Process <br> Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Current Stage
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
                       Plating Color
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
@@ -866,45 +962,12 @@ tr.row-inactive td.action-td {
                     <th style="display:none;">
                       Version <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                     <th>
+                    <th>
                       Tray Cate- <br> Capacity
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
                       Input Source
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Lot Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-<!--                     <th>
-                      Physical Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                      </th> -->
-                    <th>
-                      Accept Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                      </th>
-                    <th>
-                      Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Process <br> Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Action <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Lot Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Current Stage
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
@@ -1004,13 +1067,151 @@ tr.row-inactive td.action-td {
                     </td>
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
 
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type|tray_full_name}}-{{data.tray_capacity}}</td>
-                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
-                    
+                    <!-- ACTION COLUMN (moved to position 5) -->
+                    <td class="action-td">
+                      <span {% if data.brass_hold_lot %}style="display:inline-block; filter:blur(1.5px); opacity:0.4; pointer-events:none;"{% endif %}>
+                      {% if data.can_delete %}
+                      <a href="#" class="delete-batch-btn" title="Delete" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.stock_lot_id }}">
+                        <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
+                      </a>
+                      {% else %}
+                        <span title="Delete Disabled" style="opacity: 0.5; pointer-events: none;">
+                          <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 20px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);" />
+                        </span>
+                      {% endif %}
+                      {% if data.action_state == 'IQF_RETURN' %}
+                        <!-- IQF Acceptance -->
+                        <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                style="background-color: #1ba878; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-lot-id="{{ data.stock_lot_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-check-circle"></i>Accept <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">A</kbd>
+                        </button>
+                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn btn-reject-is"
+                                style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-batch-id="{{ data.batch_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-times-circle"></i>Reject <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">R</kbd>
+                        </button>
+
+                      {% elif data.action_state == 'ONHOLD_DELINK' %}
+                          <!-- On-hold delink only -->
+                          <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                  style="background-color: #66bb6a; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; opacity: 0.6; cursor: not-allowed; pointer-events: none;"
+                                  data-lot-id="{{ data.stock_lot_id }}"
+                                  disabled>
+                            <i class="fa fa-check-circle"></i>Accept <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">A</kbd>
+                          </button>
+                          <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn btn-reject-is"
+                                  style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                  data-stock-lot-id="{{ data.stock_lot_id }}"
+                                  data-batch-id="{{ data.batch_id }}"
+                                  data-is-delink-only="false">
+                            <i class="fa fa-times-circle"></i>Set Delink <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">R</kbd>
+                          </button>
+
+                      {% elif data.action_state == 'ONHOLD_TOPTRAY' %}
+                          <!-- On-hold set top tray -->
+                          <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                  style="background-color: #66bb6a; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; opacity: 0.6; cursor: not-allowed; pointer-events: none;"
+                                  data-lot-id="{{ data.stock_lot_id }}"
+                                  disabled>
+                            <i class="fa fa-check-circle"></i>Accept <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">A</kbd>
+                          </button>
+                          <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn btn-reject-is"
+                                  style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                  data-stock-lot-id="{{ data.stock_lot_id }}"
+                                  data-batch-id="{{ data.batch_id }}"
+                                  data-is-delink-only="false"
+                                  data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
+                            <i class="fa fa-times-circle"></i>Set Top Tray <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">R</kbd>
+                          </button>
+
+                      {% elif data.action_state == 'SEND_BRASS_QC' %}
+                        <!-- Brass QC from IQF -->
+                        <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                style="background-color: #1ba878; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-lot-id="{{ data.stock_lot_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-check-circle"></i>Accept <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">A</kbd>
+                        </button>
+                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn btn-reject-is"
+                                style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-batch-id="{{ data.batch_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-times-circle"></i>Reject <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">R</kbd>
+                        </button>
+
+                      {% elif data.action_state == 'AUDIT_RETURN' %}
+                        <!-- Lot returned from Brass Audit -->
+                        <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                style="background-color: #1ba878; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-lot-id="{{ data.stock_lot_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-check-circle"></i>Accept <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">A</kbd>
+                        </button>
+                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn btn-reject-is"
+                                style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-batch-id="{{ data.batch_id }}"
+                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-times-circle"></i>Reject <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">R</kbd>
+                        </button>
+
+                      {% elif data.action_state == 'REJECTED' %}
+                        <!-- Brass QC Rejection or Few Cases Acceptance (disabled) -->
+                        <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                style="background-color: #66bb6a; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; pointer-events: none; opacity: 0.6; cursor: not-allowed;"
+                                disabled>
+                          <i class="fa fa-check-circle"></i>Accept
+                        </button>
+                        <span class="btn btn-social-icon-text btn-youtube btn-reject-is"
+                              style="background-color: #e57373; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; pointer-events: none; opacity: 0.8; cursor: not-allowed;">
+                          <i class="fa fa-times-circle"></i>Rejected
+                        </span>
+
+                      {% else %}
+                        <!-- Default state - Both buttons enabled -->
+                        <button type="button" class="btn btn-social-icon-text btn-twitter btn-accept-is"
+                                style="background-color: #1ba878; color: white; border: none; padding: 8px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-lot-id="{{ data.stock_lot_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          Accept <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">A</kbd>
+                        </button>
+                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn btn-reject-is"
+                                style="background-color: #e57373; color: white; border: none; padding: 8px 8px; border-radius: 4px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-batch-id="{{ data.batch_id }}"
+                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          Reject <kbd style="font-size:10px;opacity:.75;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:3px;padding:0 3px;">R</kbd>
+                        </button>
+                      {% endif %}
+                      </span>
+                      <!-- Eye icon to view submitted "Tray Scan Table" - ALWAYS visible -->
+                          <a href="#"
+                          title="View"
+                          class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig"
+                          style="text-decoration: underline"
+                          data-stock-lot-id="{{ data.stock_lot_id }}"
+                          data-batch-id="{{ data.batch_id }}"
+                          data-model-no="{{ data.plating_stk_no }}"
+                          data-no-of-trays="{{ data.no_of_trays }}"
+                          data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                          data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
+                          data-model-image="{{ data.model_images.0|default:'' }}"
+                          data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+                            data-total-batch-quantity="{{ data.display_accepted_qty|default:0 }}"
+                            data-brass-missing-qty="{{ data.brass_missing_qty|default:0 }}">
+                          <img src="{% static 'assets/icons/view.png' %}"
+                              alt="View"
+                              style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+                        </a>
+                    </td>
+                    <!-- NO OF TRAYS (moved to position 6) -->
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>
                       <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.display_accepted_qty }}</span>
@@ -1107,152 +1308,7 @@ tr.row-inactive td.action-td {
                         </div>
                       </div>
                     </td>
-                    <td class="action-td">
-                      <span {% if data.brass_hold_lot %}style="display:inline-block; filter:blur(1.5px); opacity:0.4; pointer-events:none;"{% endif %}>
-                      {% if data.can_delete %}
-
-                      <a href="#" class="delete-batch-btn" title="Delete" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.stock_lot_id }}">
-                        <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
-                      </a>
-                      {% else %}
-
-                        <span title="Delete Disabled" style="opacity: 0.5; pointer-events: none;">
-                          <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 20px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);" />
-                        </span>
-                      {% endif %}
-                      {% if data.action_state == 'IQF_RETURN' %}
-                        <!-- IQF Acceptance - Show buttons as ACTIVE/CLICKABLE -->
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                style="background-color: #66bb6a;"
-                                data-lot-id="{{ data.stock_lot_id }}"
-                          {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                style="background-color: #e57373;"
-                                data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-batch-id="{{ data.batch_id }}"
-                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-times-circle"></i>Reject
-                        </button>
-
-                      {% elif data.action_state == 'ONHOLD_DELINK' %}
-                          <!-- On-hold delink only -->
-                          <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                  style="background-color: #66bb6a; opacity: 0.6; cursor: not-allowed; pointer-events: none;"
-                                  data-lot-id="{{ data.stock_lot_id }}"
-                                  disabled>
-                            <i class="fa fa-check-circle"></i>Accept
-                          </button>
-                          <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                  style="background-color: #e57373;"
-                                  data-stock-lot-id="{{ data.stock_lot_id }}"
-                                  data-batch-id="{{ data.batch_id }}"
-                                  data-is-delink-only="false">
-                            <i class="fa fa-times-circle"></i>Set Delink
-                          </button>
-
-                      {% elif data.action_state == 'ONHOLD_TOPTRAY' %}
-                          <!-- On-hold set top tray -->
-                          <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                  style="background-color: #66bb6a; opacity: 0.6; cursor: not-allowed; pointer-events: none;"
-                                  data-lot-id="{{ data.stock_lot_id }}"
-                                  disabled>
-                            <i class="fa fa-check-circle"></i>Accept
-                          </button>
-                          <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                  style="background-color: #e57373;"
-                                  data-stock-lot-id="{{ data.stock_lot_id }}"
-                                  data-batch-id="{{ data.batch_id }}"
-                                  data-is-delink-only="false"
-                                  data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
-                            <i class="fa fa-times-circle"></i>Set Top Tray
-                          </button>
-
-                      {% elif data.action_state == 'SEND_BRASS_QC' %}
-                        <!-- Brass QC from IQF -->
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                style="background-color: #66bb6a;"
-                                data-lot-id="{{ data.stock_lot_id }}"
-                          {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                style="background-color: #e57373;"
-                                data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-batch-id="{{ data.batch_id }}"
-                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-times-circle"></i>Reject
-                        </button>
-
-                      {% elif data.action_state == 'AUDIT_RETURN' %}
-                        <!-- Lot returned from Brass Audit -->
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                style="background-color: #66bb6a"
-                                data-lot-id="{{ data.stock_lot_id }}"
-                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                style="background-color: #e57373;"
-                                data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-batch-id="{{ data.batch_id }}"
-                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-times-circle"></i>Reject
-                        </button>
-
-                      {% elif data.action_state == 'REJECTED' %}
-                        <!-- Brass QC Rejection or Few Cases Acceptance (disabled) -->
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                style="background-color: #66bb6a; pointer-events: none; opacity: 0.6; cursor: not-allowed;"
-                                disabled>
-                          <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <span class="btn btn-social-icon-text btn-youtube"
-                              style="background-color: #e57373; pointer-events: none; opacity: 0.8; cursor: not-allowed;">
-                          <i class="fa fa-times-circle"></i>Rejected
-                        </span>
-
-                      {% else %}
-                        <!-- Default state - Both buttons enabled -->
-                        <button type="button" class="btn btn-social-icon-text btn-twitter"
-                                style="background-color: #66bb6a"
-                                data-lot-id="{{ data.stock_lot_id }}"
-                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-check-circle"></i>Accept
-                        </button>
-                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
-                                style="background-color: #e57373;"
-                                data-stock-lot-id="{{ data.stock_lot_id }}"
-                                data-batch-id="{{ data.batch_id }}"
-                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
-                          <i class="fa fa-times-circle"></i>Reject
-                        </button>
-                      {% endif %}
-                      </span>
-                      <!-- Eye icon to view submitted "Tray Scan Table" - ALWAYS visible -->
-                          <a href="#"
-                          title="View"
-                          class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig"
-                          style="text-decoration: underline"
-                          data-stock-lot-id="{{ data.stock_lot_id }}"
-                          data-batch-id="{{ data.batch_id }}"
-                          data-model-no="{{ data.plating_stk_no }}"
-                          data-no-of-trays="{{ data.no_of_trays }}"
-                          data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-                          data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
-                          data-model-image="{{ data.model_images.0|default:'' }}"
-                          data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-                            data-total-batch-quantity="{{ data.display_accepted_qty|default:0 }}"
-                            data-brass-missing-qty="{{ data.brass_missing_qty|default:0 }}">
-
-                          <img src="{% static 'assets/icons/view.png' %}"
-                              alt="View"
-                              style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
-                        </a>
-                    </td>
+                    <!-- LOT STATUS (position 11) -->
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>
                       {% if data.lot_status == 'Draft' %}
                         <div
@@ -1283,12 +1339,21 @@ tr.row-inactive td.action-td {
                         </div>
                       {% endif %}
                     </td>
+                    <!-- CURRENT STAGE (position 12) -->
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>
                       <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                            style="border: 1px solid #d1edf3; background-color: #d1edf3; color: #033b5d; font-size: 13px; white-space: nowrap; padding: 5px;">
                         {{ data.last_process_module|default:"N/A" }}
                       </div>
                     </td>
+                    <!-- METADATA columns (positions 13-18, moved from earlier) -->
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type|tray_full_name}}-{{data.tray_capacity}}</td>
+                    <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
+                    <!-- REMARKS (position 19) -->
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur" {% endif %}>
 
                       <!-- VoiceRec with tooltip (audio remark) -->
@@ -2335,11 +2400,33 @@ document.addEventListener('DOMContentLoaded', function() {
           );
         }
         Promise.all(fetchChain).then(function(results) {
+          // ✅ VALIDATE: Check API responses for errors
+          if (!results[0].success) {
+            console.error('[BrassQC] GET_REASONS failed:', results[0]);
+            errorDiv.textContent = 'Failed to load rejection reasons: ' + (results[0].error || 'unknown error');
+            return;
+          }
+          if (!results[1].success) {
+            console.error('[BrassQC] GET_TRAYS failed:', results[1]);
+            errorDiv.textContent = 'Failed to load tray data: ' + (results[1].error || 'unknown error');
+            return;
+          }
+          
           _reasons = results[0].reasons || [];
           _trayData = (results[1].trays || []).filter(function(t) { return !t.is_delinked; });
           _totalQty = results[1].total_qty || _totalQty;
           _trayCapacity = results[1].tray_capacity || _trayCapacity;
           document.getElementById('rejectModalTotalQty').textContent = _totalQty;
+          
+          // ✅ LOG: Confirm API responses received
+          console.log('[Brass QC Reject Modal] API responses:', {
+            reasons_count: _reasons.length,
+            trays_count: _trayData.length,
+            total_qty: _totalQty,
+            tray_capacity: _trayCapacity,
+            has_draft: !!(results[2] && results[2].has_draft)
+          });
+          
           renderReasonsGrid();
 
           // Restore draft if present
@@ -2368,6 +2455,7 @@ document.addEventListener('DOMContentLoaded', function() {
           overlay.style.display = 'flex';
         }).catch(function(err) {
           console.error('[BrassQC] Reject modal fetch error:', err);
+          errorDiv.textContent = 'Network error loading rejection data. Please try again.';
           Swal.fire('Error', 'Failed to load rejection data', 'error');
         });
       });
@@ -2886,11 +2974,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // ── Helper: validate a new (non-original) tray ID against the backend ──
       async function validateTrayIdDB(trayId, errSpan) {
+        var normId = (trayId || '').trim().toUpperCase();  // ERR4 fix: always send uppercase
         try {
           var resp = await fetch('/brass_qc/api/action/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-            body: JSON.stringify({ action: 'VALIDATE_TRAY', tray_id: trayId, lot_id: _lotId })
+            body: JSON.stringify({ action: 'VALIDATE_TRAY', tray_id: normId, lot_id: _lotId })
           });
           var result = await resp.json();
           if (!result.valid) {
@@ -2909,7 +2998,8 @@ document.addEventListener('DOMContentLoaded', function() {
         inp.addEventListener('keydown', async function(e) {
           if (e.key !== 'Enter') return;
           e.preventDefault();
-          var scannedId = this.value.trim();
+          var scannedId = this.value.trim().toUpperCase();  // ERR4 fix: normalize to uppercase
+          this.value = scannedId;  // update field to show uppercase
           var errSpan = this.closest('td').querySelector('.slot-scan-error');
 
           if (!scannedId) {
@@ -2964,7 +3054,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Auto-trigger at 9 chars — valid moves next, invalid selects for retype
         inp.addEventListener('input', async function() {
-          var val = this.value.trim();
+          var val = this.value.trim().toUpperCase();  // ERR4 fix: normalize to uppercase
+          if (val !== this.value) this.value = val;  // update field to show uppercase
           if (val.length < 9) return;
           var errSpan = this.closest('td').querySelector('.slot-scan-error');
           var idx2 = parseInt(this.getAttribute('data-idx'), 10);
@@ -3018,7 +3109,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // ── Edit input (filled slot): real-time validation on input ──
       container.querySelectorAll('.slot-edit-input').forEach(function(inp) {
         inp.addEventListener('input', async function() {
-          var val = this.value.trim();
+          var val = this.value.trim().toUpperCase();  // ERR4 fix: normalize to uppercase
+          if (this.value !== val) { var pos = this.selectionStart; this.value = val; this.setSelectionRange(pos, pos); }
           var errSpan = this.closest('td').querySelector('.slot-scan-error');
           if (!errSpan) return;
           if (!val) { errSpan.style.display = 'none'; return; }
@@ -3072,7 +3164,8 @@ document.addEventListener('DOMContentLoaded', function() {
         inp.addEventListener('keydown', async function(e) {
           if (e.key !== 'Enter') return;
           e.preventDefault();
-          var newVal = this.value.trim();
+          var newVal = this.value.trim().toUpperCase();  // ERR4 fix: normalize to uppercase
+          this.value = newVal;  // update field to show uppercase
           var idx = parseInt(this.getAttribute('data-idx'), 10);
           var slotType = this.getAttribute('data-type');
           var targetSlots = slotType === 'accept' ? _acceptSlots : _rejectSlots;
@@ -3554,5 +3647,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-
+<!-- Brass QC Keyboard Shortcuts (external JS) -->
+<script nonce="{{ csp_nonce }}" src="{% static 'js/brass_qc_shortcuts.js' %}"></script>
+<!-- bfcache + shortcut handlers moved to brass_qc_shortcuts.js -->
 {% endblock %} {% endblock content %}

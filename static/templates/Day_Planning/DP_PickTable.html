@@ -207,7 +207,7 @@ thead th {
   max-width: 120px;
 } /* Polishing Stk No */
 #order-listing th:nth-child(5) {
-  min-width: 90px;
+  min-width: 75px;
   max-width: 100px;
 } /* Plating Color */
 #order-listing th:nth-child(6) {
@@ -223,11 +223,11 @@ thead th {
   max-width: 95px;
 } /* Version */
 #order-listing th:nth-child(9) {
-  min-width: 110px;
-  max-width: 110px;
+  min-width: 125px;
+  max-width: 150px;
 } /* Tray Cate-Capacity */
 #order-listing th:nth-child(10) {
-  min-width: 90px;
+  min-width: 95px;
   max-width: 100px;
 } /* Source */
 #order-listing th:nth-child(11) {
@@ -251,8 +251,8 @@ thead th {
   max-width: 100px;
 } /* Lot Status */
 #order-listing th:nth-child(16) {
-  min-width: 140px;
-  max-width: 150px;
+  min-width: 85px;
+  max-width: 85px;
 } /* Current Stage */
 #order-listing th:nth-child(17) {
   min-width: 110px;
@@ -424,15 +424,15 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
   left: 0 !important;
   z-index: 12; /* Above header */
   background: #f7fafd;
-  min-width: 75px;
-  max-width: 75px;
+  min-width: 80px;
+  max-width: 90px;
 }
 
 /* Freeze 2nd column - Last Updated*/
 #order-listing th:nth-child(2),
 #order-listing td:nth-child(2) {
   position: sticky;
-  left: 75px; /* Match min-width of 1st col */
+  left: 82px; /* Match min-width of 1st col */
   z-index: 12;
   background: #f7fafd;
   min-width: 100px; /* Increased width */
@@ -443,7 +443,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 #order-listing th:nth-child(3),
 #order-listing td:nth-child(3) {
   position: sticky;
-  left: 175px; /* 100px (1st) + 90px (2nd) */
+  left: 182px; /* 100px (1st) + 90px (2nd) */
   z-index: 12;
   background: #f7fafd;
   min-width: 130px; /* Increased width 100 - old value*/
@@ -721,7 +721,15 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
           {% endif %}
         {% endif %}
         {% if not data.Moved_to_D_Picker %}
-          <a href="#" class="text-primary tray-scan-btn" style="text-decoration: underline"
+          <a href="#" class="text-primary tray-scan-btn" style="text-decoration: none;
+    background: linear-gradient(135deg, #e0f7fa, #e8f5e9) !important;
+    padding: 5px 7px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid #a4f0e8;
+    color: #383737 !important;
+    font-weight: 500;
+    transition: all 0.2s ease;"
              data-batch-id="{{ data.batch_id }}" 
              data-model-no="{{ data.model_stock_no__model_no }}"
              data-no-of-trays="{{ data.no_of_trays }}" 
@@ -738,7 +746,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
             {% if data.needs_top_tray_scan %}
               Set Top Tray
             {% else %}
-              Tray Scan
+                Tray Scan (T)
             {% endif %}
           </a>
         {% endif %}
@@ -1300,6 +1308,8 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Function to validate and process barcode
     function validateBarcode(trayId) {
+      // Convert to uppercase
+      trayId = trayId.toUpperCase();
       console.log("🔍 [SCANNER] Processing tray ID:", trayId);
       
       // Get CSRF token for authenticated requests
@@ -1601,8 +1611,8 @@ document.addEventListener("DOMContentLoaded", function () {
       const activeElement = document.activeElement;
       if (activeElement && activeElement.classList.contains('tray-id-input') && activeElement.value.trim() === '' && activeElement.closest('#trayScanModal')) {
         activeElement.focus();
-        activeElement.value = trayId;
-        console.log(`📝 [DRAFT] Pre-filled tray ID "${trayId}" in currently focused empty slot`);
+        activeElement.value = trayId.toUpperCase();
+        console.log(`📝 [DRAFT] Pre-filled tray ID "${trayId.toUpperCase()}" in currently focused empty slot`);
         activeElement.dispatchEvent(new Event('input', { bubbles: true }));
         activeElement.dispatchEvent(new Event('change', { bubbles: true }));
         // Update scan status
@@ -1632,8 +1642,8 @@ document.addEventListener("DOMContentLoaded", function () {
       // Fill the target slot or warn if all are filled
       if (targetInput) {
         targetInput.focus();
-        targetInput.value = trayId;
-        console.log(`📝 [DRAFT] Pre-filled tray ID "${trayId}" in slot ${targetSlotIndex}`);
+        targetInput.value = trayId.toUpperCase();
+        console.log(`📝 [DRAFT] Pre-filled tray ID "${trayId.toUpperCase()}" in slot ${targetSlotIndex}`);
         
         // Trigger input event for any validation
         targetInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2464,8 +2474,9 @@ document.querySelectorAll('.edit-qty-btn').forEach(function(btn) {
     e.preventDefault();
     const row = btn.closest('tr');
     if (!row) return;
-    const qtyCell = row.querySelector('td:nth-child(12)');
-    const colorCell = row.querySelector('td:nth-child(5)');
+    // ✅ FIXED: Column 6 = Input Qty, Column 11 = Plating Color (was wrong: 12 and 5)
+    const qtyCell = row.querySelector('td:nth-child(6)');
+    const colorCell = row.querySelector('td:nth-child(11)');
     const batchId = btn.getAttribute('data-batch-id');
     const oldQty = qtyCell.textContent.trim();
     const oldColor = colorCell.textContent.trim();
@@ -3658,6 +3669,9 @@ function rebuildTrayScanTable(currentData, newRowCount, trayCapacity, topTrayQty
     const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
     trayIdInputs.forEach(input => {
       input.addEventListener('input', function() {
+        // ✅ Convert to uppercase and store as uppercase
+        this.value = this.value.toUpperCase();
+        
         // ✅ NEW: Uncheck checkbox when any tray ID is modified or cleared
         const verifyCheckbox = detailsDiv.querySelector('.tray-verify-checkbox');
         if (verifyCheckbox && !verifyCheckbox.disabled) {
@@ -6091,7 +6105,7 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
       #order-listing tbody tr.kb-focused td         { background-color: #e3f2fd !important; }
       #order-listing tbody tr.kb-pending-scan td    { background-color: #fff3e0 !important; }
       #order-listing tbody tr.kb-pending-delete td  { background-color: #ffebee !important; }
-      #kb-shortcut-hint { position: fixed; bottom: 16px; right: 16px; background: rgba(30,30,30,0.93); color: #fff; border-radius: 10px; padding: 12px 16px; font-size: 12px; line-height: 1.9; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; min-width: 220px; }
+      #kb-shortcut-hint { position: fixed; bottom: 16px; right: 16px; background: rgba(30,30,30,0.93); color: #fff; border-radius: 10px; padding: 14px 18px; font-size: 12px; line-height: 2; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; min-width: 300px; max-width: 350px; }
       #kb-shortcut-hint.visible { opacity: 1; }
       #kb-shortcut-hint .kb-key { display: inline-block; background: #555; border-radius: 4px; padding: 1px 6px; font-family: monospace; font-size: 11px; margin-right: 2px; }
       #kb-delete-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 9999; display: none; }
@@ -6101,6 +6115,8 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
       #kb-delete-confirm .kb-del-btns { display: flex; gap: 10px; justify-content: flex-end; }
       #kb-delete-confirm .kb-del-cancel  { background: #f0f0f0; border: none; border-radius: 6px; padding: 7px 18px; cursor: pointer; font-size: 13px; }
       #kb-delete-confirm .kb-del-confirm { background: #d32f2f; color: #fff; border: none; border-radius: 6px; padding: 7px 18px; cursor: pointer; font-size: 13px; font-weight: 600; }
+      .tray-scan-btn:hover { background-color: #ffe0b2 !important; border-color: #ffcc80 !important; }
+      .tray-scan-btn:active { background-color: #ffd699 !important; }
     `;
     document.head.appendChild(s);
   })();
@@ -6109,15 +6125,15 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
   const kbHint = document.createElement('div');
   kbHint.id = 'kb-shortcut-hint';
   kbHint.innerHTML = `
-    <div style="font-weight:700; margin-bottom:6px; font-size:13px;">&#9000; Keyboard Shortcuts</div>
+    <div style="font-weight:700; margin-bottom:8px; font-size:14px;">⌨️ Keyboard Shortcuts</div>
     <div><span class="kb-key">&uarr;&darr;</span> Navigate rows</div>
-    <div><span class="kb-key">Enter</span> Open tray scan</div>
-    <div><span class="kb-key">T</span> &rarr; <span class="kb-key">Enter</span> Tray scan</div>
+    <div><span class="kb-key">Enter</span> Open tray scan modal</div>
+    <div><span class="kb-key">T</span> &rarr; <span class="kb-key">Enter</span> Mark tray scan</div>
     <div><span class="kb-key">Del</span> &rarr; <span class="kb-key">Enter</span> Delete lot</div>
-    <div><span class="kb-key">F2</span> Scan / Open draft</div>
+    <div><span class="kb-key">F2</span> Activate scanner</div>
     <div><span class="kb-key">&larr;&rarr;</span> Scroll table</div>
-    <div><span class="kb-key">1&ndash;9</span> Go to page</div>
-    <div><span class="kb-key">Esc</span> Clear selection</div>
+    <div><span class="kb-key">1&ndash;9</span> Jump to page</div>
+    <div><span class="kb-key">Esc</span> Close / Clear</div>
   `;
   document.body.appendChild(kbHint);
 
@@ -6207,10 +6223,21 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
 
       switch (e.key) {
 
-        // ── ESC: clear selection ─────────────────────────────────────────
+        // ── ESC: close modal if open, otherwise clear selection ─────────
         case 'Escape': {
           e.preventDefault();
-          kbClear();
+          const modal = document.getElementById('trayScanModal_DayPlanning');
+          const closeBtn = document.getElementById('closeTrayScanModal_DayPlanning');
+          
+          // If modal is open, close it
+          if (modal && closeBtn &&
+              (modal.classList.contains('open') ||
+               (modal.style.display === 'flex' && modal.style.visibility !== 'hidden'))) {
+            closeBtn.click();
+          } else {
+            // Otherwise clear row selection
+            kbClear();
+          }
           break;
         }
 
@@ -6256,23 +6283,11 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
           break;
         }
 
-        // ── F2: "Please Scan" info OR open draft modal ──────────────────
+        // ── F2: Activate scanner (show "Please Scan") ──────────────────
         case 'F2': {
           e.preventDefault();
-          const idx = kbIndex >= 0 ? kbIndex : 0;
-          const row = rows[idx];
-          const trayScanBtn = row ? row.querySelector('.tray-scan-btn') : null;
-          const isDrafted = trayScanBtn &&
-            (trayScanBtn.getAttribute('data-draft-saved') === 'True' ||
-             trayScanBtn.getAttribute('data-draft-saved') === 'true');
-
-          if (isDrafted) {
-            kbHighlight(idx, null);
-            setTimeout(() => { kbClear(); trayScanBtn.click(); }, 150);
-          } else {
-            const scanButton = document.getElementById('scanButton');
-            if (scanButton) { scanButton.click(); }
-          }
+          const scanButton = document.getElementById('scanButton');
+          if (scanButton) { scanButton.click(); }
           break;
         }
 

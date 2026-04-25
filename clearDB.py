@@ -44,6 +44,15 @@ def clear_database():
     Brass_TopTray_Draft_Store.objects.all().delete()
     Brass_QC_Rejected_TrayScan.objects.all().delete()
     Brass_QC_Rejection_ReasonStore.objects.all().delete()
+    Brass_QC_RawSubmission.objects.all().delete()
+    # ⚠️ DO NOT DELETE THIS — master rejection reasons table (same as IQF_Rejection_Table)
+    # Brass_QC_Rejection_Table.objects.all().delete()
+    Brass_QC_Submission.objects.all().delete()
+    Brass_Qc_Accepted_TrayID_Store.objects.all().delete()
+    BrassQC_PartialAcceptLot.objects.all().delete()
+    BrassQC_PartialRejectLot.objects.all().delete()
+    
+    
 
     # -------------------------------
     # BRASS AUDIT
@@ -59,6 +68,10 @@ def clear_database():
     IP_Rejected_TrayScan.objects.all().delete()
     IP_Rejection_ReasonStore.objects.all().delete()
     IP_Rejection_Draft.objects.all().delete()
+    IS_AllocationTray.objects.all().delete()
+    IS_PartialAcceptLot.objects.all().delete()
+    IS_PartialRejectLot.objects.all().delete()
+    InputScreening_Submitted.objects.all().delete()
 
     # -------------------------------
     # IQF

@@ -806,6 +806,21 @@ def finalize_submission(
             tray_quantity=_a["qty"]
         )
 
+    # ✅ CRITICAL: Mark ALL rejected tray IDs as permanently rejected in both
+    # IPTrayId and TrayId master so no downstream module (Brass QC, IQF, etc.)
+    # can ever reuse them. New reject trays (not previously in this lot) also get
+    # flagged to prevent cross-lot reuse.
+    from .models import IPTrayId as _IPTrayId
+    from modelmasterapp.models import TrayId as _TrayId
+    _reject_tray_ids = {r["tray_id"] for r in reject_alloc}
+    if _reject_tray_ids:
+        _IPTrayId.objects.filter(tray_id__in=_reject_tray_ids).update(rejected_tray=True)
+        _TrayId.objects.filter(tray_id__in=_reject_tray_ids).update(rejected_tray=True)
+    logger.info(
+        "[IS][PARTIAL_SUBMIT] marked %d reject tray(s) as permanently rejected: %s",
+        len(_reject_tray_ids), sorted(_reject_tray_ids),
+    )
+
     # Mark the lot as submitted in the master. The submission flags
     # (rejected_ip_stock / few_cases_accepted_Ip_stock) live on
     # TotalStockModel; ModelMasterCreation has no such columns.
@@ -1325,6 +1340,20 @@ def finalize_submission_v2(
             tray_quantity=_a["qty"]
         )
 
+    # ✅ CRITICAL: Mark ALL rejected tray IDs as permanently rejected in both
+    # IPTrayId and TrayId master so no downstream module (Brass QC, IQF, etc.)
+    # can ever reuse them.
+    from .models import IPTrayId as _IPTrayId
+    from modelmasterapp.models import TrayId as _TrayId
+    _reject_tray_ids_v2 = {r["tray_id"] for r in reject_alloc}
+    if _reject_tray_ids_v2:
+        _IPTrayId.objects.filter(tray_id__in=_reject_tray_ids_v2).update(rejected_tray=True)
+        _TrayId.objects.filter(tray_id__in=_reject_tray_ids_v2).update(rejected_tray=True)
+    logger.info(
+        "[IS][PARTIAL_SUBMIT_V2] marked %d reject tray(s) as permanently rejected: %s",
+        len(_reject_tray_ids_v2), sorted(_reject_tray_ids_v2),
+    )
+
     _mark_lot_submitted_flags(lot_id, accepted_qty=total_accept)
 
     logger.info(
@@ -1339,6 +1368,8 @@ def finalize_submission_v2(
         "success": True,
         "lot_id": lot_id,
         "submission_id": submission.id,
+        "accept_lot_id": accept_lot.new_lot_id,
+        "reject_lot_id": reject_lot.new_lot_id,
         "total_reject_qty": total_reject,
         "total_accept_qty": total_accept,
         "reject_trays": len(reject_alloc),

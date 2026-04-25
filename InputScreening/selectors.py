@@ -190,6 +190,7 @@ def get_lot_tray_context(lot_id: str, lock: bool = False) -> Dict[str, Any]:
     """
     from DayPlanning.models import DPTrayId_History
     from modelmasterapp.models import ModelMasterCreation, TotalStockModel
+    from .models import IS_PartialAcceptLot, IS_PartialRejectLot
 
     # ``lot_id`` arriving here is the value stored on TotalStockModel.lot_id
     # (the same value rendered as ``data-stock-lot-id`` in the pick table).
@@ -200,6 +201,76 @@ def get_lot_tray_context(lot_id: str, lock: bool = False) -> Dict[str, Any]:
         .first()
     )
     if not ts_row or not ts_row.batch_id_id:
+        # Check if this is a child lot from IS partial rejection
+        partial_accept = IS_PartialAcceptLot.objects.filter(new_lot_id=lot_id).first()
+        if partial_accept:
+            # Use accepted lot data: parent batch_id and accepted qty
+            ts_row = TotalStockModel.objects.filter(lot_id=partial_accept.parent_lot_id).only("batch_id").first()
+            if ts_row and ts_row.batch_id_id:
+                # Build active_trays from trays_snapshot
+                active_trays: List[Dict[str, Any]] = [
+                    {
+                        "tray_id": t["tray_id"],
+                        "qty": t.get("qty", 0),
+                        "top_tray": bool(t.get("is_top", t.get("top_tray", False))),
+                    }
+                    for t in (partial_accept.trays_snapshot or [])
+                ]
+                
+                mmc = ModelMasterCreation.objects.filter(pk=ts_row.batch_id_id).select_related("model_stock_no").only(
+                    "batch_id", "total_batch_quantity", "tray_capacity", "tray_type", "plating_stk_no", "model_stock_no__model_no"
+                ).first()
+                
+                if mmc:
+                    capacity = mmc.tray_capacity or next((t["qty"] for t in active_trays if t["qty"] > 0), 16)
+                    tray_type_val = active_trays[0].get("tray_type") if active_trays else None
+                    
+                    return {
+                        "found": True,
+                        "lot_qty": partial_accept.accepted_qty,
+                        "tray_type": tray_type_val,
+                        "tray_capacity": capacity,
+                        "active_trays": active_trays,
+                        "batch_id": str(mmc.batch_id) if mmc.batch_id else None,
+                        "model_no": mmc.model_stock_no.model_no if mmc.model_stock_no_id else None,
+                        "plating_stk_no": mmc.plating_stk_no,
+                    }
+        
+        # Check if this is a reject lot from IS partial rejection (shouldn't reach Brass QC, but handle it)
+        partial_reject = IS_PartialRejectLot.objects.filter(new_lot_id=lot_id).first()
+        if partial_reject:
+            # Use rejected lot data: parent batch_id and rejected qty
+            ts_row = TotalStockModel.objects.filter(lot_id=partial_reject.parent_lot_id).only("batch_id").first()
+            if ts_row and ts_row.batch_id_id:
+                # Build active_trays from trays_snapshot
+                active_trays: List[Dict[str, Any]] = [
+                    {
+                        "tray_id": t["tray_id"],
+                        "qty": t.get("qty", 0),
+                        "top_tray": bool(t.get("is_top", t.get("top_tray", False))),
+                    }
+                    for t in (partial_reject.trays_snapshot or [])
+                ]
+                
+                mmc = ModelMasterCreation.objects.filter(pk=ts_row.batch_id_id).select_related("model_stock_no").only(
+                    "batch_id", "total_batch_quantity", "tray_capacity", "tray_type", "plating_stk_no", "model_stock_no__model_no"
+                ).first()
+                
+                if mmc:
+                    capacity = mmc.tray_capacity or next((t["qty"] for t in active_trays if t["qty"] > 0), 16)
+                    tray_type_val = active_trays[0].get("tray_type") if active_trays else None
+                    
+                    return {
+                        "found": True,
+                        "lot_qty": partial_reject.rejected_qty,
+                        "tray_type": tray_type_val,
+                        "tray_capacity": capacity,
+                        "active_trays": active_trays,
+                        "batch_id": str(mmc.batch_id) if mmc.batch_id else None,
+                        "model_no": mmc.model_stock_no.model_no if mmc.model_stock_no_id else None,
+                        "plating_stk_no": mmc.plating_stk_no,
+                    }
+        
         return {"found": False}
 
     mmc = (

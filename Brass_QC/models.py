@@ -199,6 +199,87 @@ class Brass_QC_Submission(models.Model):
         return f"{self.lot_id} - {self.submission_type} - A:{self.accepted_qty}/R:{self.rejected_qty}"
 
 
+class BrassQC_PartialAcceptLot(models.Model):
+    """
+    Partial accept lot — new lot ID created when partial acceptance occurs in Brass QC.
+    Stores the accepted quantity and tray allocation snapshot.
+    Mirrors IS_PartialAcceptLot so partial lots travel independently downstream.
+    """
+    new_lot_id = models.CharField(max_length=100, unique=True, db_index=True,
+                                  help_text="Generated lot ID for partial accept (BQP format)")
+    parent_lot_id = models.CharField(max_length=100, db_index=True, help_text="Original parent lot ID")
+    parent_batch_id = models.CharField(max_length=100, db_index=True, help_text="Parent batch ID")
+    parent_submission = models.ForeignKey(
+        'Brass_QC_Submission',
+        on_delete=models.CASCADE,
+        related_name='partial_accept_lots',
+        help_text="Reference to parent Brass_QC_Submission"
+    )
+    accepted_qty = models.IntegerField(help_text="Total accepted quantity for this lot")
+    accept_trays_count = models.IntegerField(default=0, help_text="Count of accept trays")
+    trays_snapshot = models.JSONField(
+        default=list, blank=True,
+        help_text="Accept tray snapshot: [{tray_id, qty, is_top}]"
+    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Brass QC Partial Accept Lot"
+        verbose_name_plural = "Brass QC Partial Accept Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['parent_batch_id']),
+        ]
+
+    def __str__(self):
+        return f"BQC-PartialAccept: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.accepted_qty})"
+
+
+class BrassQC_PartialRejectLot(models.Model):
+    """
+    Partial reject lot — new lot ID created when partial rejection occurs in Brass QC.
+    Stores the rejected quantity, rejection reasons, and tray allocation snapshot.
+    Mirrors IS_PartialRejectLot so partial lots travel independently to IQF.
+    """
+    new_lot_id = models.CharField(max_length=100, unique=True, db_index=True,
+                                  help_text="Generated lot ID for partial reject (BQP format)")
+    parent_lot_id = models.CharField(max_length=100, db_index=True, help_text="Original parent lot ID")
+    parent_batch_id = models.CharField(max_length=100, db_index=True, help_text="Parent batch ID")
+    parent_submission = models.ForeignKey(
+        'Brass_QC_Submission',
+        on_delete=models.CASCADE,
+        related_name='partial_reject_lots',
+        help_text="Reference to parent Brass_QC_Submission"
+    )
+    rejected_qty = models.IntegerField(help_text="Total rejected quantity for this lot")
+    reject_trays_count = models.IntegerField(default=0, help_text="Count of reject trays")
+    rejection_reasons = models.JSONField(
+        default=dict, blank=True,
+        help_text='Schema: {"R01": {"reason": "...", "qty": 10}}'
+    )
+    trays_snapshot = models.JSONField(
+        default=list, blank=True,
+        help_text="Reject tray snapshot: [{tray_id, qty, is_top}]"
+    )
+    remarks = models.TextField(null=True, blank=True, help_text="Rejection remarks")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Brass QC Partial Reject Lot"
+        verbose_name_plural = "Brass QC Partial Reject Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+            models.Index(fields=['parent_batch_id']),
+        ]
+
+    def __str__(self):
+        return f"BQC-PartialReject: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.rejected_qty})"
+
+
 class Brass_QC_RawSubmission(models.Model):
     """
     Raw submission storage — stores EXACT UI payload without transformation.

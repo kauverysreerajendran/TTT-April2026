@@ -738,11 +738,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td>
                       <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.total_stock }}</span>
                       <span style="display: inline-flex; align-items: center; gap: 4px;">
-                        <input type="checkbox"
-                                class="ip-checkbox"
-                                data-lot-id="{{ data.stock_lot_id }}"
-                                style="width: 15px; height: 15px"
-                                {% if data.ip_person_qty_verified %}checked disabled{% endif %} />
                         
                       </span>
                     </td>

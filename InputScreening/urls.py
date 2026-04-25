@@ -4,6 +4,7 @@ from .views import (
     IS_AcceptTable,
     IS_AllocationPreviewAPI,
     IS_Completed_Table,
+    IS_DelinkSelectedTraysAPI,
     IS_FullAcceptAPI,
     IS_FullRejectAPI,
     IS_GetDPTraysAPI,
@@ -74,5 +75,11 @@ urlpatterns = [
         'full_reject/',
         IS_FullRejectAPI.as_view(),
         name='IS_FullRejectAPI',
+    ),
+    # ── Delink functionality ────────────────────────────────────────────
+    path(
+        'delink_selected_trays/',
+        IS_DelinkSelectedTraysAPI.as_view(),
+        name='IS_DelinkSelectedTraysAPI',
     ),
 ]
