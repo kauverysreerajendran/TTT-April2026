@@ -160,6 +160,110 @@ class Nickel_Audit_Accepted_TrayID_Store(models.Model):
         return f"{self.tray_id} - {self.lot_id}"
 
 
+class NickelAudit_Submission(models.Model):
+    """
+    Full submission record for Nickel Audit.
+    Created for every accept / reject action (full or partial).
+    Mirrors NickelQC_Submission pattern.
+    """
+    SUBMISSION_TYPES = [
+        ('FULL_ACCEPT', 'Full Accept'),
+        ('PARTIAL', 'Partial Accept / Partial Reject'),
+        ('FULL_REJECT', 'Full Reject'),
+    ]
+    lot_id = models.CharField(max_length=100, db_index=True,
+                              help_text="Parent lot ID from JigUnloadAfterTable")
+    submission_type = models.CharField(max_length=20, choices=SUBMISSION_TYPES)
+    total_lot_qty = models.IntegerField(default=0)
+    accepted_qty = models.IntegerField(default=0)
+    rejected_qty = models.IntegerField(default=0)
+    accept_trays_data = models.JSONField(default=list, blank=True,
+                                        help_text="Accept tray snapshot: [{tray_id, qty, is_top}]")
+    reject_trays_data = models.JSONField(default=list, blank=True,
+                                        help_text="Reject tray snapshot: [{tray_id, qty}]")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Nickel Audit Submission"
+        verbose_name_plural = "Nickel Audit Submissions"
+        indexes = [models.Index(fields=['lot_id'])]
+
+    def __str__(self):
+        return f"NA-Submission: {self.lot_id} ({self.submission_type})"
+
+
+class NickelAudit_PartialAcceptLot(models.Model):
+    """
+    Partial accept child lot created when partial acceptance occurs in Nickel Audit.
+    new_lot_id = the auto-generated lot_id of the child JigUnloadAfterTable row.
+    """
+    new_lot_id = models.CharField(max_length=100, db_index=True,
+                                  help_text="Child lot ID (JigUnloadAfterTable.lot_id) for accepted portion")
+    parent_lot_id = models.CharField(max_length=100, db_index=True,
+                                     help_text="Original parent lot ID")
+    parent_submission = models.ForeignKey(
+        'NickelAudit_Submission',
+        on_delete=models.CASCADE,
+        related_name='partial_accept_lots',
+        null=True, blank=True,
+    )
+    accepted_qty = models.IntegerField(help_text="Total accepted quantity")
+    trays_snapshot = models.JSONField(default=list, blank=True,
+                                     help_text="Accept tray snapshot: [{tray_id, qty, is_top}]")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='na_partial_accept_lots')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Nickel Audit Partial Accept Lot"
+        verbose_name_plural = "Nickel Audit Partial Accept Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+        ]
+
+    def __str__(self):
+        return f"NA-PartialAccept: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.accepted_qty})"
+
+
+class NickelAudit_PartialRejectLot(models.Model):
+    """
+    Partial reject record created when partial rejection occurs in Nickel Audit.
+    parent_lot_id = the original JigUnloadAfterTable lot_id.
+    """
+    new_lot_id = models.CharField(max_length=100, db_index=True, unique=True,
+                                  help_text="Generated unique ID for this reject record")
+    parent_lot_id = models.CharField(max_length=100, db_index=True,
+                                     help_text="Original parent lot ID")
+    parent_submission = models.ForeignKey(
+        'NickelAudit_Submission',
+        on_delete=models.CASCADE,
+        related_name='partial_reject_lots',
+        null=True, blank=True,
+    )
+    rejected_qty = models.IntegerField(help_text="Total rejected quantity")
+    rejection_reasons = models.JSONField(default=dict, blank=True,
+                                        help_text='Schema: {"<reason_id>": {"reason": "...", "qty": N}}')
+    trays_snapshot = models.JSONField(default=list, blank=True,
+                                     help_text="Reject tray snapshot: [{tray_id, qty}]")
+    remarks = models.TextField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='na_partial_reject_lots')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Nickel Audit Partial Reject Lot"
+        verbose_name_plural = "Nickel Audit Partial Reject Lots"
+        indexes = [
+            models.Index(fields=['new_lot_id']),
+            models.Index(fields=['parent_lot_id']),
+        ]
+
+    def __str__(self):
+        return f"NA-PartialReject: {self.new_lot_id} (from {self.parent_lot_id}, qty={self.rejected_qty})"
+
+
 
 
 

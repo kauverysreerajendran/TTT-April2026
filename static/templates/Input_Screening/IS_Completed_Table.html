@@ -870,11 +870,9 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
       <h5 style="text-align: center; margin: 0; flex: 1; font-weight: 600; color:#595959">
         Input Screening - Tray Scan 
       </h5>
-      <button id="trayValidateBtn" type="button" style="display: flex; align-items: center; gap: 6px; background: #f5faff; border: 1px solid #023E4DCC; color: #023E4DCC; border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500; cursor: pointer;">
-        Tray Validate
-      </button>
+
       <input id="trayValidateInput" type="text" placeholder="Enter validation info..." style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;" />
-      <img src="{% static 'assets/icons/redo2.png' %}" alt="Redo" id="trayScanRedoBtn" style="width: 24px; height: 24px; cursor: pointer; margin-left: 8px;" title="Clear Tray IDs" />
+      
     </div>
     <div id="trayErrorMessage" style="display: none; background-color: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; text-align: center;">
       <span id="trayErrorText"></span>
@@ -1442,19 +1440,19 @@ document.addEventListener("DOMContentLoaded", function () {
       function _renderAcceptPanel(al, isFullAccept) {
         const typeLabel = isFullAccept ? 'FULL ACCEPT' : 'PARTIAL ACCEPT';
         const typeBg = isFullAccept ? '#1b5e20' : '#2e7d32';
-        return `<div style="border:1px solid #c8e6c9;background:#f1f8e9;border-radius:6px;padding:10px;margin-bottom:10px;">
+        return `<div style="border:1px solid #c8e6c9;background:#f1f8e9;border-radius:6px;padding:10px;margin-bottom:10px;font-weight:300;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:bold;">${typeLabel}</span>
-              <span style="font-family:monospace;color:#00695c;font-weight:bold;">${_esc(al.new_lot_id)}</span>
+              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500;">${typeLabel}</span>
+              <span style="font-family:monospace;color:#00695c;font-weight:400;">${_esc(al.new_lot_id)}</span>
             </div>
-            <div style="font-size:11px;color:#555;">${_esc(al.created_at || '')}</div>
+            <div style="font-size:11px;color:#888;">${_esc(al.created_at || '')}</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12px;">
-            <div><strong>Accepted Qty:</strong> <span style="color:#2e7d32;font-weight:bold;">${_esc(al.accepted_qty)}</span></div>
-            <div><strong>Accept Trays Count:</strong> ${_esc(al.accept_trays_count)}</div>
+            <div><span style="font-weight:500;color:#666;">Accepted Qty:</span> <span style="color:#2e7d32;font-weight:600;">${_esc(al.accepted_qty)}</span></div>
+            <div><span style="font-weight:500;color:#666;">Accept Trays Count:</span> ${_esc(al.accept_trays_count)}</div>
           </div>
-          <div style="margin-top:6px;"><strong style="font-size:12px;">Trays Snapshot:</strong>${_renderTraySnapshot(al.trays || [])}</div>
+          <div style="margin-top:6px;"><span style="font-size:12px;font-weight:500;color:#666;">Trays Snapshot:</span>${_renderTraySnapshot(al.trays || [])}</div>
         </div>`;
       }
       function _renderRejectPanel(rl, isFullReject) {
@@ -1463,26 +1461,26 @@ document.addEventListener("DOMContentLoaded", function () {
         const reasons = rl.rejection_reasons || {};
         const reasonChips = Object.keys(reasons).map(k => {
           const r = reasons[k] || {};
-          return `<span style="background:#ffcdd2;color:#b71c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;">${_esc(r.reason || k)}: ${_esc(r.qty)}</span>`;
-        }).join('') || '<span style="color:#888;font-size:11px;">None</span>';
-        const delinkList = (rl.delinked_tray_ids || []).map(t => `<span style="font-family:monospace;background:#eceff1;padding:1px 6px;border-radius:6px;margin-right:4px;font-size:11px;">${_esc(t)}</span>`).join('') || '<span style="color:#888;font-size:11px;">None</span>';
-        return `<div style="border:1px solid #ffcdd2;background:#ffebee;border-radius:6px;padding:10px;margin-bottom:10px;">
+          return `<span style="background:#ffcdd2;color:#b71c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;font-weight:400;">${_esc(r.reason || k)}: ${_esc(r.qty)}</span>`;
+        }).join('') || '<span style="color:#999;font-size:11px;font-weight:300;">None</span>';
+        const delinkList = (rl.delinked_tray_ids || []).map(t => `<span style="font-family:monospace;background:#eceff1;padding:1px 6px;border-radius:6px;margin-right:4px;font-size:11px;font-weight:400;">${_esc(t)}</span>`).join('') || '<span style="color:#999;font-size:11px;font-weight:300;">None</span>';
+        return `<div style="border:1px solid #ffcdd2;background:#ffebee;border-radius:6px;padding:10px;margin-bottom:10px;font-weight:300;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:bold;">${typeLabel}</span>
-              <span style="font-family:monospace;color:#b71c1c;font-weight:bold;">${_esc(rl.new_lot_id)}</span>
+              <span style="background:${typeBg};color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500;">${typeLabel}</span>
+              <span style="font-family:monospace;color:#b71c1c;font-weight:400;">${_esc(rl.new_lot_id)}</span>
             </div>
-            <div style="font-size:11px;color:#555;">${_esc(rl.created_at || '')}</div>
+            <div style="font-size:11px;color:#888;">${_esc(rl.created_at || '')}</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12px;">
-            <div><strong>Rejected Qty:</strong> <span style="color:#c62828;font-weight:bold;">${_esc(rl.rejected_qty)}</span></div>
-            <div><strong>Reject Trays Count:</strong> ${_esc(rl.reject_trays_count)}</div>
-            <div><strong>Delink Count:</strong> ${_esc(rl.delink_count)}</div>
-            <div style="grid-column:1/-1;"><strong>Reasons:</strong> ${reasonChips}</div>
+            <div><span style="font-weight:500;color:#666;">Rejected Qty:</span> <span style="color:#c62828;font-weight:600;">${_esc(rl.rejected_qty)}</span></div>
+            <div><span style="font-weight:500;color:#666;">Reject Trays Count:</span> ${_esc(rl.reject_trays_count)}</div>
+            <div><span style="font-weight:500;color:#666;">Delink Count:</span> ${_esc(rl.delink_count)}</div>
+            <div style="grid-column:1/-1;"><span style="font-weight:500;color:#666;">Reasons:</span> ${reasonChips}</div>
           </div>
-          <div style="margin-top:6px;font-size:12px;"><strong>Delinked Trays:</strong> ${delinkList}</div>
-          <div style="margin-top:6px;"><strong style="font-size:12px;">Trays Snapshot:</strong>${_renderTraySnapshot(rl.trays || [])}</div>
-          ${rl.remarks ? `<div style="margin-top:6px;font-size:12px;"><strong>Remarks:</strong> ${_esc(rl.remarks)}</div>` : ''}
+          <div style="margin-top:6px;font-size:12px;"><span style="font-weight:500;color:#666;">Delinked Trays:</span> ${delinkList}</div>
+          <div style="margin-top:6px;"><span style="font-size:12px;font-weight:500;color:#666;">Trays Snapshot:</span>${_renderTraySnapshot(rl.trays || [])}</div>
+          ${rl.remarks ? `<div style="margin-top:6px;font-size:12px;"><span style="font-weight:500;color:#666;">Remarks:</span> ${_esc(rl.remarks)}</div>` : ''}
         </div>`;
       }
       function buildTableHTML() {

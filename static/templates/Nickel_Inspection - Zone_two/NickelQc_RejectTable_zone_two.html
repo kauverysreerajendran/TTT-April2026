@@ -2,7 +2,7 @@
 {% load stock_filters %} 
 
   <style>
-/* ========== Tablet override — paste at file end (after other table styles) ========== */
+/* ========== Tablet override Ã¢â‚¬â€ paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
 @media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
 
@@ -571,6 +571,63 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     grid-template-columns: 30px 1fr 70px 90px !important;
   }
 }
+
+/* ====================================================
+   UNIFIED NICKEL QC ACTION BUTTON THEME (matches Brass QC)
+   ==================================================== */
+.btn-accept-is {
+  background-color: #1ba878 !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 28px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+}
+.btn-accept-is:hover:not(:disabled) {
+  background-color: #0b8a6a !important;
+}
+.btn-accept-is:disabled,
+.btn-accept-is[disabled] {
+  background-color: #1ba878 !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.btn-reject-is {
+  background-color: #e57373 !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 28px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+}
+.btn-reject-is:hover:not(:disabled) {
+  background-color: #a93226 !important;
+}
+.btn-reject-is:disabled,
+.btn-reject-is[disabled] {
+  background-color: #e57373 !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
 </style>
  
 
@@ -580,7 +637,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
       <div class="card">
          <div class="card-body" style="padding-bottom:12px;">
               <div style="margin-bottom: 12px;display: flex;flex-wrap: wrap;align-items: baseline;gap: 28px !important;">
-              <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Nickel QC Rejected Table</h5>
+              <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Nickel Wiping Rejected Table - Zone II</h5>
               <span id="selected-count" style="color: #2e7d32; font-weight: 600;">0 items selected</span>
               <button id="delink-selected-btn" class="btn btn-secondary" style="margin-left: 0px;padding: 8px;border-radius: 30px !important;" disabled>Delink Selected</button>
             </div>
@@ -600,7 +657,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       </div>
                     </th>
                     <th>
-                      
                       S.No <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
@@ -612,63 +668,150 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
+                      Action <i class="fa fa-filter" aria-hidden="true">
+                    </th>
+                    <th>
+                      Tray Cate- <br> Capacity
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th style="cursor: pointer;min-width: 95px;max-width: 95px;">
+                      Current <br> Stage
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Process Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polishing Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
                       Plating Color
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-
                     <th>
-                      Polish <br>Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                     <th>
-                      Tray Cate-<br>Capacity
+                      Polish Finish
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
                       Input Source
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                   
                     <th>
-                      No of <br>Tray <i class="fa fa-filter" aria-hidden="true"></i>
+                      Remarks <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                    <th>
-                      Reject Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Rejection Reasons
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th style="display:none;">
+                      Version <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                    
                   </tr>
-                </thead>
+                
+</thead>
                 <tbody>
                 {% for data in master_data %}
-                <tr class="highlighted-tray-scan"
-                    data-lot-id="{{ data.stock_lot_id }}">
-                    <td>
-                      {% if data.tray_id_in_trayid %}
-                        <input type="checkbox" class="row-checkbox" />
+                <tr class="highlighted-tray-scan" 
+                      data-lot-id="{{ data.lot_id }}"
+                      data-stock-lot-id="{{ data.lot_id }}"
+                      data-model-no="{{ data.plating_stk_no }}"
+                      data-available-qty="{{ data.available_qty }}" 
+                      data-brass-onhold-picking="{{ data.nq_onhold_picking }}"
+                      data-brass-batch-rejection="{{ data.nq_qc_rejection|yesno:'True,False' }}"
+                      data-brass-qc-accptance="{{ data.nq_qc_accptance|yesno:'True,False' }}"
+                      data-brass-qc-rejection="{{ data.nq_qc_rejection|yesno:'True,False' }}"
+                      data-brass-qc-few-cases-accptance="{{ data.nq_qc_few_cases_accptance|yesno:'True,False' }}"
+                      data-accepted-ip-stock="{{ data.accepted_Ip_stock|yesno:'True,False' }}"
+                      data-rejected-ip-stock="{{ data.rejected_ip_stock|yesno:'True,False' }}"
+                      data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'True,False' }}"
+                      data-brass-physical-qty="{{ data.nq_physical_qty|default:0 }}"
+                      data-brass-missing-qty="{{ data.nq_missing_qty|default:0 }}"
+                      data-brass-qc-accepted-qty-verified="{{ data.nq_qc_accepted_qty_verified|yesno:'True,False' }}">
+                      <!-- Checkbox column -->
+                      <td>
+                        {% if data.tray_id_in_trayid %}
+                          <input type="checkbox" class="row-checkbox" />
+                        {% else %}
+                          <input type="checkbox" class="row-checkbox" disabled title="No active trays, cannot delink" />
+                        {% endif %}
+                      </td>
+                      <!-- Column 1: S.No -->
+                      <td {% if data.nq_hold_lot %} class="row-inactive-blur"{% endif %}>
+                    <span style="display:flex; align-items:center; gap:3px;">
+                      {% if is_admin %}
+                        <!-- Admin users: Show toggle switch -->
+                        <label class="hold-toggle-switch" style="margin-bottom:0;">
+                          {% if not data.nq_hold_lot %}
+                            <input type="checkbox" class="hold-toggle-btn" checked />
+                            <span class="hold-slider"></span>
+                          {% else %}
+                            <input type="checkbox" class="hold-toggle-btn" />
+                            <span class="hold-slider"></span>
+                          {% endif %}
+                        </label>
+                        <!-- Hold remark icon -->
+                        <span class="hold-remark-icon" 
+                              style="display:{% if data.nq_hold_lot or data.nq_release_lot or data.nq_holding_reason or data.nq_release_reason %}inline-block{% else %}none{% endif %}; cursor:pointer;" 
+                              title="{% if data.nq_holding_reason %}Holding Reason: {{ data.nq_holding_reason }}{% endif %}{% if data.nq_holding_reason and data.nq_release_reason %}&#10;{% endif %}{% if data.nq_release_reason %}Release Reason: {{ data.nq_release_reason }}{% endif %}">
+                          {% if data.nq_hold_lot or data.nq_release_lot or data.nq_holding_reason or data.nq_release_reason %}
+                            <img src="{% static 'assets/icons/view2.png' %}" alt="Remark" style="width:12px; height:12px;" />
+                          {% endif %}
+                        </span>
                       {% else %}
-                        <input type="checkbox" class="row-checkbox" disabled title="Tray not found, cannot delink" />
+                        <!-- Non-admin: Only show view icon if there's a holding/release reason -->
+                        {% if data.nq_hold_lot or data.nq_release_lot or data.nq_holding_reason or data.nq_release_reason %}
+                          <span class="hold-remark-icon" 
+                                style="display:inline-block; cursor:pointer;" 
+                                title="{% if data.nq_holding_reason %}Holding Reason: {{ data.nq_holding_reason }}{% endif %}{% if data.nq_holding_reason and data.nq_release_reason %}&#10;{% endif %}{% if data.nq_release_reason %}Release Reason: {{ data.nq_release_reason }}{% endif %}">
+                            <img src="{% static 'assets/icons/view2.png' %}" alt="View Reason" style="width:18px; height:18px;" />
+                          </span>
+                        {% endif %}
+                      {% endif %}
+                      <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
+                    </span>
+                    {% if data.send_to_nickel_brass %}
+                      <i class="fa fa-times-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Audit"></i>
+                      {% endif %}
+                  </td>
+                  <!-- Column 2: Last Updated -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %} style="white-space:normal;word-break:break-all;">
+                      {% if data.send_to_nickel_brass %}
+                        {{ data.na_last_process_date_time|date:"d-M-y" }}<br>
+                        <span style="display:inline-block; margin-top:4px;word-break: break-all;">
+                          {{ data.na_last_process_date_time|date:"h:i A" }}
+                        </span>
+                      {% else %}
+                        {{ data.nq_last_process_date_time|date:"d-M-y" }}<br>
+                        <span style="display:inline-block; margin-top:4px;word-break: break-all;">
+                          {{ data.nq_last_process_date_time|date:"h:i A" }}
+                        </span>
                       {% endif %}
                     </td>
-                    <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
-                    <td>{{ data.nq_last_process_date_time|date:"Y-m-d" }}<br>
-                        <span style="display:inline-block; margin-top:4px;">{{ data.nq_last_process_date_time|date:"h:i A" }}</span>
-                    </td>
-                    <td >
+                    <!-- Column 3: Plating Stk No -->
+        <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
                       <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
                         {{ data.plating_stk_no|highlight_plating_color|safe_html }}
                         <div class="model-image-tooltip" style="position: absolute; left: 80%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
                           
-                          <!-- Header with Info and Close buttons - Initially hidden -->
+                          <!-- Header with Info and Close buttons -->
                           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <button class="info-btn" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
-                              Info
+                            <button class="info-btn" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">
+                               Info
                             </button>
-                            <button class="close-btn" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; display: none;">
+                            <button class="close-btn" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">
                                Close
                             </button>
                           </div>
@@ -683,9 +826,39 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         </div>
                       </span>
                     </td>
-                    <td>{{ data.plating_color }}</td>
-                    <td>{{ data.polish_finish }}</td>
-                    <td>
+                    <!-- Column 4: Action -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      {% if not data.nq_qc_accptance and not data.nq_qc_rejection and not data.nq_accepted_tray_scan_status and not data.nq_qc_few_cases_accptance and data.nq_qc_accepted_qty_verified %}
+                      <a href="#" class="delete-batch-btn" title="Delete" data-batch-id="{{ data.batch_id }}" data-stock-lot-id="{{ data.lot_id }}">
+                        <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
+                      </a>
+                      {% else %}
+                        <span title="Delete Disabled" style="opacity: 0.5; pointer-events: none;">
+                          <img src="{% static 'assets/icons/bin.png' %}" alt="Delete Disabled" style="width: 20px; margin-right: 8px; height: auto; filter: grayscale(1) opacity(0.5);" />
+                        </span>
+                      {% endif %}
+                      <!-- Eye icon to view submitted "Tray Scan Table" -->
+                      <a href="#"
+                        title="View"
+                        class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig"
+                        style="text-decoration: underline"
+                        data-stock-lot-id="{{ data.lot_id }}"
+                        data-batch-id="{{ data.batch_id }}"
+                        data-model-no="{{ data.plating_stk_no }}"
+                        data-no-of-trays="{{ data.no_of_trays }}"
+                        data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                        data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
+                        data-model-image="{{ data.model_images.0|default:'' }}"
+                        data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+                        data-total-batch-quantity="{{ data.nq_physical_qty|default:0 }}"
+                        data-brass-missing-qty="{{ data.nq_missing_qty|default:0 }}">
+                        <img src="{% static 'assets/icons/view.png' %}"
+                            alt="View"
+                            style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+                      </a>
+                    </td>
+                    <!-- Column 5: Tray Cate - Capacity -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
                       {% if data.tray_type and data.tray_capacity %}
                         {% if data.tray_capacity == 20 %}
                           <div class="tray-capacity-badge normal-tray"
@@ -710,47 +883,192 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <span style="color: #6c757d; font-style: italic; font-size: 12px;">No Tray Info</span>
                       {% endif %}
                     </td>
-                    <td>{{ data.location__location_name }}</td>
-                    <td>{{ data.no_of_trays }}</td>
-                    <td>
-                      {{ data.nickel_rejection_total_qty }}
-                      <a href="#"
-                        title="View"
-                        class="text-primary tray-scan-btn-Jig"
-                        style="text-decoration: underline; margin-left: 8px;"
-                        data-stock-lot-id="{{ data.stock_lot_id }}"
-                        data-batch-id="{{ data.batch_id }}"
-                        data-model-no="{{ data.plating_stk_no }}"
-                        data-no-of-trays="{{ data.no_of_trays }}"
-                        data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-                        data-model-image="{{ data.model_images.0|default:'' }}"
-                        data-total-batch-quantity="{{ data.nickel_rejection_total_qty }}">
-                        <img src="{% static 'assets/icons/view.png' %}"
-                            alt="View"
-                            style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
-                      </a>
+                    <!-- Column 6: No of Trays -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
+                    <!-- Column 7: Lot Qty -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.nq_physical_qty|default:0 }}</span>
                     </td>
-                    <td>
-                      <div class="avatar-group rejection-popup-trigger" style="cursor:pointer; max-width:120px; white-space:normal; word-break:break-word; overflow:hidden; text-overflow:ellipsis;" 
-                           onmouseover="this.style.overflow='visible'; this.style.whiteSpace='pre-line'; this.style.background='#f9f9f9'; this.style.zIndex='10';"
-                           onmouseout="this.style.overflow='hidden'; this.style.whiteSpace='normal'; this.style.background=''; this.style.zIndex='';"
-                           title="{% for letter in data.rejection_reason_letters %}{{ letter }} {% endfor %}{% if data.nq_missing_qty and data.nq_missing_qty > 0 %}S{% endif %}{% if data.batch_rejection and not data.rejection_reason_letters and not data.nq_missing_qty %}Lot Rejection{% endif %}">
-                        {% for letter in data.rejection_reason_letters %}
-                          <a href="#" class="avatar blue" style="text-decoration:underline; color:#1976d2; cursor:pointer; width: 20px; height: 20px; border-radius: 50%; background-color: #1e88e5; color: white; font-weight: bold; font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; margin-left: 5px; z-index: 1; box-shadow: 0 0 0 2px white;">
-                            {{ letter }}
-                          </a>
-                        {% endfor %}
-                        {% if data.nq_missing_qty and data.nq_missing_qty > 0 %}
-                          <a href="#" class="avatar orange" style="text-decoration:underline; color:#fb8c00; cursor:pointer; width: 20px; height: 20px; border-radius: 50%; background-color: #fb8c00; color: white; font-weight: bold; font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; margin-left: 5px; z-index: 1; box-shadow: 0 0 0 2px white;" title="Shortage">S</a>
-                        {% endif %}
-                        {% if data.batch_rejection and not data.rejection_reason_letters and not data.nq_missing_qty %}
-                          <span style="color:#fb8c00;font-weight:500;">
-                            Lot Rejection
-                          </span>
-                        {% endif %}
+                    <!-- Column 9: Reject Qty -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+                        {{ data.nickel_rejection_total_qty|default:0 }}
+                    </td>
+                    <!-- Column 10: Lot Status -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      {% if data.nq_onhold_picking or data.nq_draft %}
+                        <div
+                          class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="
+                            border: 1px solid #4997ac;
+                            background-color: #d1f2f3;
+                            color: #03425d;
+                            font-size: clamp(0.75rem, 2vw, 0.875rem);
+                            white-space: nowrap;
+                            padding: 5px;
+                          "
+                        >
+                          Draft
+                        </div>
+                      {% elif data.nq_hold_lot %}
+                       <div
+                          class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="
+                            border: 1px solid #dc3545;
+                            background-color: #f8d7da;
+                            color: #721c24;
+                            font-size: 13px;
+                            white-space: nowrap;
+                            padding: 5px;
+                          "
+                        >
+                          On Hold
+                        </div>
+
+                      {% elif data.nq_qc_rejection or data.nq_qc_few_cases_accptance or data.nq_qc_accptance %}
+                        <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                            style="border: 1px solid #0d5d17; background-color: #c5f9c2; color: #2f801b; font-size: 13px; white-space: nowrap; padding: 5px;">
+                          Yet to Release
+                        </div>
+                      
+                      {% else %}
+                        <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                            style="border: 1px solid #f9a825; background-color: #fff8e1; color: #b26a00; font-size:13px; white-space: nowrap; padding: 5px;">
+                          Yet to Start
+                        </div>
+                      {% endif %} 
+                    </td>
+                    <!-- Column 11: Current Stage -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                           style="border: 1px solid #d1edf3; background-color: #d1edf3; color: #033b5d; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        {{ data.last_process_module|default:"N/A" }}
                       </div>
                     </td>
-                </tr>
+                    <!-- Column 12: Process Status -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <div class="d-flex">
+                        <!-- Q: Green if nq_qc_accepted_qty_verified, else gray -->
+                        <div
+                          title="Tray Scan"
+                          class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+                          style="
+                            width: 25px;
+                            height: 25px;
+                            background-color: {% if data.nq_qc_accepted_qty_verified %}#0c8249{% else %}#bdbdbd{% endif %};
+                            color: white;
+                            font-weight: bold;
+                            line-height: 20px;
+                            text-align: center;
+                            padding-top: 1px;
+                            padding-right: 1px;
+                          "
+                        >
+                          Q
+                        </div>
+                        <!-- QC: Green if nq_qc_rejection or nq_qc_accptance, else gray -->
+                        <div
+                          title="Tray Scan"
+                          class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+                          style="
+                            width: 25px;
+                            height: 25px;
+                            background:
+                              {% if data.nq_onhold_picking or data.nq_draft %}
+                                linear-gradient(to right, #0c8249 50%, #bdbdbd 50%);
+                              {% elif data.nq_qc_rejection or data.nq_qc_accptance or data.nq_qc_few_cases_accptance %}
+                                #0c8249;
+                              {% else %}
+                                #bdbdbd;
+                              {% endif %}
+                            color: white;
+                            font-weight: bold;
+                            line-height: 20px;
+                            text-align: center;
+                            padding-top: 1px;
+                            padding-right: 1px;
+                          "
+                        >
+                          QC
+                        </div>
+                      </div>
+                    </td>
+                    <!-- Column 13: Polishing Stk No -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
+                    <!-- Column 14: Plating Color -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
+                    <!-- Column 15: Polish Finish -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
+                    <!-- Column 16: Input Source -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
+                    <!-- Column 17: Remarks -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %}>
+
+                      <!-- VoiceRec with tooltip (audio remark) -->
+                          <a href="#" title="Add Audio Remark" class="remark-tooltip-trigger" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; position: relative; cursor: pointer;">
+                            <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec" style="width: 20px; height: 20px"/>
+                            <div class="remark-tooltip" style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 265px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 10px; z-index: 1000;">
+                              <!-- Audio recording UI placeholder -->
+                              <div style="display: flex; align-items: center; gap: 10px;">
+                                <button type="button" style="background: #28a745; color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;">
+                                  <i class="fa fa-microphone"></i>
+                                </button>
+                                <span style="font-size: 14px; color: #333;">Hold to record audio</span>
+                                  <div style="text-align: right; margin-top: 10px;">
+                                <button type="button" style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                                  <i class="fa fa-send"></i>
+                                </button>
+                              </div>
+                              </div>
+                            
+                            </div>
+                          </a>
+                          <a
+                              href="#"
+                              title="Add Remark"
+                              class="remark-tooltip-trigger"
+                              data-jig-lot-id="{{ jig_detail.jig_lot_id }}"
+                              style="display: inline-flex; align-items: center; height: 20px; margin-left: 5px; position: relative; cursor: pointer;"
+                            >
+                              <img
+                                src="{% static 'assets/icons/chat_icon.png' %}"
+                                alt="Chat"
+                                style="width: 20px; height: 20px; {% if data.nq_pick_remarks %}filter: grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2); opacity: 1;{% endif %}"
+                              />
+                              <div
+                                class="remark-tooltip"
+                                style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;"
+                              >
+                                <textarea
+                                  placeholder="Type your remark..."
+                                  style="width: 85%; height: 40px; resize: vertical; border: 1px solid #ccc; padding: 5px; border-radius: 4px; font-family: Arial, sans-serif; font-size: 14px;"
+                                  {% if data.nq_pick_remarks %}readonly{% endif %}
+                                >{{ data.nq_pick_remarks|default_if_none:"" }}</textarea>
+                                <div style="text-align: right; margin-top: -35px">
+                                  {% if not data.nq_pick_remarks %}
+                                  <button
+                                    type="button"
+                                    style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;"
+                                  >
+                                    <i class="fa fa-send"></i>
+                                  </button>
+                                  {% else %}
+                                  <div style="margin-top: 40px; color: #31708f; background: #d9edf7; border: 1px solid #bce8f1; border-radius: 4px; padding: 8px 12px; font-size: 10px; text-align: left;">
+                                    <i class="fa fa-info-circle" style="margin-right: 6px;"></i>
+                                    Remark already saved and cannot be edited.
+                                  </div>
+                                  {% endif %}
+                                </div>
+                              </div>
+                          </a>
+                 
+                    </td>
+                    <!-- Column 18: Version (hidden) -->
+                    <td {% if data.nq_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
+                   
+                  </tr>
+
+
+
                 {% endfor %}
 
                 </tbody>
@@ -819,11 +1137,77 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     <div class="table-responsive rejection-table-responsive">
       <table class="rejection-table">
         <thead>
-          <tr>
-            <th>Rejected Reason</th>
-            <th>Rejection Qty</th>
-          </tr>
-        </thead>
+                  <tr>
+                    <th>
+                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Last<br>Updated
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating <br>Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Action <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Tray Cate- <br> Capacity
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Accept <br> Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th style="cursor: pointer;min-width: 95px;max-width: 95px;">
+                      Current <br> Stage
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Process Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polishing Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating Color
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polish Finish
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Input Source
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Remarks <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th style="display:none;">
+                      Version <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                   
+                  </tr>
+                
+</thead>
         <tbody id="rejection-details-body">
           <!-- Dynamic rows go here -->
         </tbody>
@@ -854,7 +1238,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                   {% if page_obj.number > 3 %}
                     <li><a href="?page=1">1</a></li>
                     {% if page_obj.number > 4 %}
-                      <li class="disabled"><span>…</span></li>
+                      <li class="disabled"><span>Ã¢â‚¬Â¦</span></li>
                     {% endif %}
                   {% endif %}
                 
@@ -872,7 +1256,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                   {# Show ellipsis and last page if needed #}
                   {% if page_obj.number < page_obj.paginator.num_pages|add:'-2' %}
                     {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %}
-                      <li class="disabled"><span>…</span></li>
+                      <li class="disabled"><span>Ã¢â‚¬Â¦</span></li>
                     {% endif %}
                     <li><a href="?page={{ page_obj.paginator.num_pages }}">{{ page_obj.paginator.num_pages }}</a></li>
                   {% endif %}
@@ -1060,16 +1444,16 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
-<!-- ✅ UPDATED: Tray Validation JavaScript with BrassTrayId awareness -->
+<!-- Ã¢Å“â€¦ UPDATED: Tray Validation JavaScript with BrassTrayId awareness -->
 <script nonce="{{ csp_nonce }}">
-// ✅ UPDATED: Tray validation with BrassTrayId awareness and enhanced logging
+// Ã¢Å“â€¦ UPDATED: Tray validation with BrassTrayId awareness and enhanced logging
 document.addEventListener("DOMContentLoaded", function () {
   const validateInput = document.getElementById("trayValidateInput");
   const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
   const errorMessage = document.getElementById("trayErrorMessage");
   const errorText = document.getElementById("trayErrorText");
 
-  console.log("🔍 [Tray Validation] Script loaded with BrassTrayId awareness");
+  console.log("Ã°Å¸â€Â [Tray Validation] Script loaded with BrassTrayId awareness");
 
   function getCurrentBatchId() {
     const modal = document.getElementById("trayScanModal_DayPlanning");
@@ -1086,7 +1470,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return false;
   }
 
-// ✅ COMPLETELY SIMPLIFIED: Only lot_id for all validation
+// Ã¢Å“â€¦ COMPLETELY SIMPLIFIED: Only lot_id for all validation
 function getValidationConfig() {
   const isVerified = getBrassQcAcceptedQtyVerifiedFromModal();
   
@@ -1095,22 +1479,22 @@ function getValidationConfig() {
   const stockLotId = modal?.dataset.stockLotId || getCurrentLotId();
   
   if (isVerified) {
-    console.log("✅ [Validation Config] Using AfterCheck validation (BrassTrayId data)");
+    console.log("Ã¢Å“â€¦ [Validation Config] Using AfterCheck validation (BrassTrayId data)");
     console.log(`   AfterCheck Parameters: lot_id=${stockLotId}`);
     
     return {
-      endpoint: "/nickle_inspection/nickel_CompleteTable_tray_id_list/",
+      endpoint: "/nickel_audit_zone_two/nickel_CompleteTable_tray_id_list/",
       dataSource: "BrassTrayId",
       params: {
         lot_id: stockLotId
       }
     };
   } else {
-    console.log("✅ [Validation Config] Using Pick validation (JigUnload_TrayId data)");
+    console.log("Ã¢Å“â€¦ [Validation Config] Using Pick validation (JigUnload_TrayId data)");
     console.log(`   Pick Parameters: lot_id=${stockLotId}`);
     
     return {
-      endpoint: "/nickle_inspection/nickel_complete_tray_validate/",
+      endpoint: "/nickel_audit_zone_two/nickel_complete_tray_validate/",
       dataSource: "JigUnload_TrayId", 
       params: {
         lot_id: stockLotId
@@ -1119,7 +1503,7 @@ function getValidationConfig() {
   }
 }
 function showError(message) {
-    console.log("🚨 [Validation Error]", message);
+    console.log("Ã°Å¸Å¡Â¨ [Validation Error]", message);
     if (errorMessage && errorText) {
       errorText.textContent = message;
       errorMessage.style.setProperty('display', 'block', 'important');
@@ -1140,7 +1524,7 @@ function showError(message) {
   }
 
   if (validateInput && detailsDiv) {
-// ✅ FIXED: Updated validation function in the keydown event listener
+// Ã¢Å“â€¦ FIXED: Updated validation function in the keydown event listener
 validateInput.addEventListener("keydown", function (e) {
   if (e.key === "Enter") {
     const trayId = validateInput.value.trim();
@@ -1149,10 +1533,10 @@ validateInput.addEventListener("keydown", function (e) {
       return;
     }
     
-    // ✅ Get validation configuration with lot_id only
+    // Ã¢Å“â€¦ Get validation configuration with lot_id only
     const validationConfig = getValidationConfig();
     
-    // ✅ FIXED: Check for lot_id instead of batch_id
+    // Ã¢Å“â€¦ FIXED: Check for lot_id instead of batch_id
     if (!validationConfig.params.lot_id) {
       showError("Lot ID not found. Please refresh and try again.");
       return;
@@ -1166,7 +1550,7 @@ validateInput.addEventListener("keydown", function (e) {
       tray_id: trayId
     };
 
-    console.log(`🚀 [Single Validation Call] Making request to: ${validationConfig.endpoint}`);
+    console.log(`Ã°Å¸Å¡â‚¬ [Single Validation Call] Making request to: ${validationConfig.endpoint}`);
     console.log(`   Data Source: ${validationConfig.dataSource}`);
     console.log(`   Parameters:`, requestData);
 
@@ -1179,11 +1563,11 @@ validateInput.addEventListener("keydown", function (e) {
       body: JSON.stringify(requestData)
     })
     .then(res => {
-      console.log("📡 [Validation Response] Status:", res.status);
+      console.log("Ã°Å¸â€œÂ¡ [Validation Response] Status:", res.status);
       return res.json();
     })
     .then(data => {
-      console.log("📊 [Validation Response] Data:", data);
+      console.log("Ã°Å¸â€œÅ  [Validation Response] Data:", data);
       
       // Enhanced response logging
       if (data.data_source) {
@@ -1217,7 +1601,7 @@ validateInput.addEventListener("keydown", function (e) {
                 setTimeout(() => {
                   row.style.backgroundColor = '';
                 }, 2000);
-                console.log(`✅ [Validation Success] Tray "${trayId}" validated successfully in ${validationConfig.dataSource}`);
+                console.log(`Ã¢Å“â€¦ [Validation Success] Tray "${trayId}" validated successfully in ${validationConfig.dataSource}`);
               } else {
                 statusCell.innerHTML = `
                   <div class="validation-status">
@@ -1233,7 +1617,7 @@ validateInput.addEventListener("keydown", function (e) {
                 setTimeout(() => {
                   row.style.backgroundColor = '';
                 }, 2000);
-                console.log(`❌ [Validation Failed] Tray "${trayId}" validation failed in ${validationConfig.dataSource}`);
+                console.log(`Ã¢ÂÅ’ [Validation Failed] Tray "${trayId}" validation failed in ${validationConfig.dataSource}`);
               }
             }
           }
@@ -1248,7 +1632,7 @@ validateInput.addEventListener("keydown", function (e) {
       validateInput.focus();
     })
     .catch(error => {
-      console.error('❌ [Validation Network Error]', error);
+      console.error('Ã¢ÂÅ’ [Validation Network Error]', error);
       showError(`Network error occurred while validating the tray ID in ${validationConfig.dataSource}.`);
       validateInput.value = "";
       validateInput.focus();
@@ -1274,7 +1658,7 @@ validateInput.addEventListener("keydown", function (e) {
 });
 </script>
 
-<!-- ✅ FIXED: JavaScript to prevent dual endpoint calls -->
+<!-- Ã¢Å“â€¦ FIXED: JavaScript to prevent dual endpoint calls -->
 <script nonce="{{ csp_nonce }}">
 // Enhanced JavaScript section for modal population with dynamic Lot Qty/Physical Qty
 document.addEventListener("DOMContentLoaded", function () {
@@ -1333,20 +1717,20 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById('modalMissingQty').textContent = brassMissingQty || '';
       document.getElementById('modalPhysicalQty').textContent = brassPhysicalQty || '';
 
-      // ✅ ENHANCED: Dynamic quantity display based on verification status
+      // Ã¢Å“â€¦ ENHANCED: Dynamic quantity display based on verification status
       if (modalLotQty && modalQtyLabel) {
         if (isVerified) {
           // Show Physical Qty when verified
           modalQtyLabel.textContent = "Physical Qty:";
           modalLotQty.textContent = brassPhysicalQty; // <-- This should be the correct value
           modalLotQty.style.color = "#28a745";
-          console.log(`✅ Showing Physical Qty: ${brassPhysicalQty}`);
+          console.log(`Ã¢Å“â€¦ Showing Physical Qty: ${brassPhysicalQty}`);
         } else {
           // Show Lot Qty when not verified
           modalQtyLabel.textContent = "Lot Qty:";
           modalLotQty.textContent = displayAcceptedQty;
           modalLotQty.style.color = "#e67e22";
-          console.log(`✅ Showing Lot Qty: ${displayAcceptedQty}`);
+          console.log(`Ã¢Å“â€¦ Showing Lot Qty: ${displayAcceptedQty}`);
         }
       }
 
@@ -1359,7 +1743,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (isVerified) {
         // AFTER CHECK: Use BrassTrayId data with Brass QC parameters
-        trayListEndpoint = '/nickle_inspection/nickel_complete_tray_validate/';
+        trayListEndpoint = '/nickel_audit_zone_two/nickel_complete_tray_validate/';
         dataSource = 'BrassTrayId';
         
         // Get Brass QC status from row data attributes
@@ -1368,19 +1752,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
         };
         
-        console.log(`✅ [AFTER CHECK MODE] Using: ${trayListEndpoint}`);
+        console.log(`Ã¢Å“â€¦ [AFTER CHECK MODE] Using: ${trayListEndpoint}`);
         console.log(`   Data Source: ${dataSource} (Physical Qty: ${brassPhysicalQty})`);
         console.log(`   Parameters:`, apiParams);
       } else {
         // PICK MODE: Use TrayId data with IP stock parameters  
-        trayListEndpoint = '/nickle_inspection/nickel_CompleteTable_tray_id_list/';
+        trayListEndpoint = '/nickel_audit_zone_two/nickel_CompleteTable_tray_id_list/';
         dataSource = 'TrayId (IPTrayId)';
 
         apiParams = {
           lot_id: stockLotId,
         };
         
-        console.log(`✅ [PICK MODE] Using: ${trayListEndpoint}`);
+        console.log(`Ã¢Å“â€¦ [PICK MODE] Using: ${trayListEndpoint}`);
         console.log(`   Data Source: ${dataSource} (Lot Qty: ${displayAcceptedQty})`);
         console.log(`   Parameters:`, apiParams);  
       }
@@ -1393,7 +1777,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const params = new URLSearchParams(apiParams);
         const finalUrl = `${trayListEndpoint}?${params}`;
         
-        console.log(`🚀 [SINGLE CALL] Making request to: ${finalUrl}`);
+        console.log(`Ã°Å¸Å¡â‚¬ [SINGLE CALL] Making request to: ${finalUrl}`);
         
         const resp = await fetch(finalUrl);
         const result = await resp.json();
@@ -1401,12 +1785,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (result.success) {
           traysData = result.trays || [];
           rejectionSummary = result.rejection_summary || {};
-          console.log(`✅ [SUCCESS] Fetched ${traysData.length} trays from ${dataSource}`);
+          console.log(`Ã¢Å“â€¦ [SUCCESS] Fetched ${traysData.length} trays from ${dataSource}`);
         } else {
-          console.error(`❌ [ERROR] API call failed:`, result);
+          console.error(`Ã¢ÂÅ’ [ERROR] API call failed:`, result);
         }
       } catch (e) {
-        console.error(`❌ [NETWORK ERROR] Failed to fetch tray data:`, e);
+        console.error(`Ã¢ÂÅ’ [NETWORK ERROR] Failed to fetch tray data:`, e);
       }
 
       // ...inside your modal script...
@@ -1415,10 +1799,9 @@ document.addEventListener("DOMContentLoaded", function () {
           <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
             <thead>
               <tr>
-                <th style="width:50px;">S.no</th>
+                <th style="width:50px; text-align:center;">S.No</th>
                 <th>Tray ID</th>
-                <th>Tray Qty</th>
-                ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
+                <th style="width:80px; text-align:center;">Tray Qty</th>
               </tr>
             </thead>
             <tbody>
@@ -1432,7 +1815,7 @@ document.addEventListener("DOMContentLoaded", function () {
           html += `
             <tr style="background-color: #e8f5e8; font-weight: bold;">
               <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
-                ✅ ACCEPTED TRAYS
+                Ã¢Å“â€¦ ACCEPTED TRAYS
               </td>
             </tr>
           `;
@@ -1471,7 +1854,7 @@ document.addEventListener("DOMContentLoaded", function () {
           html += `
             <tr style="background-color: #ffebee; font-weight: bold;">
               <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #c62828; padding: 8px;">
-                ❌ REJECTED TRAYS
+                Ã¢ÂÅ’ REJECTED TRAYS
               </td>
             </tr>
           `;
@@ -1510,7 +1893,7 @@ document.addEventListener("DOMContentLoaded", function () {
           html += `
             <tr style="background-color: #f8f9fa; font-weight: bold;">
               <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #6c757d; padding: 8px;">
-                🔗 DELINKED TRAYS
+                DELINKED TRAYS
               </td>
             </tr>
           `;
@@ -1559,7 +1942,7 @@ document.addEventListener("DOMContentLoaded", function () {
       modal.style.display = "block";
       modal.classList.add("open");
       
-      console.log(`🎯 [MODAL OPENED] Successfully displayed ${dataSource} data`);
+      console.log(`Ã°Å¸Å½Â¯ [MODAL OPENED] Successfully displayed ${dataSource} data`);
       console.log(`   Quantity Display: ${isVerified ? 'Physical Qty' : 'Lot Qty'} = ${isVerified ? brassPhysicalQty : displayAcceptedQty}`);
     });
   });
@@ -1711,7 +2094,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Disable delink button if no items selected
     delinkBtn.disabled = checkedCount === 0;
     
-    // ✅ FIXED: Disable "Select All" if no enabled checkboxes
+    // Ã¢Å“â€¦ FIXED: Disable "Select All" if no enabled checkboxes
     if (enabledCount === 0) {
       selectAll.disabled = true;
       selectAll.checked = false;
@@ -1735,7 +2118,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Select All logic - only affects enabled checkboxes
   if (selectAll) {
     selectAll.addEventListener("change", function () {
-      // ✅ FIXED: Only check/uncheck enabled checkboxes
+      // Ã¢Å“â€¦ FIXED: Only check/uncheck enabled checkboxes
       const enabledCheckboxes = document.querySelectorAll(".row-checkbox:not(:disabled)");
       enabledCheckboxes.forEach(cb => cb.checked = selectAll.checked);
       updateCheckboxes();
@@ -1923,7 +2306,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Helper function to completely close a tooltip
   function closeTooltip(tooltip, trigger) {
     if (tooltip) {
-      console.log('🔴 Closing tooltip completely');
+      console.log('Ã°Å¸â€Â´ Closing tooltip completely');
       
       // Remove pinned class
       tooltip.classList.remove("pinned");
@@ -1932,7 +2315,7 @@ document.addEventListener("DOMContentLoaded", function () {
       tooltip.style.opacity = "0";
       tooltip.style.pointerEvents = "none";
       tooltip.style.visibility = "hidden";
-      tooltip.style.display = "none"; // ✅ ADDED: Force display none
+      tooltip.style.display = "none"; // Ã¢Å“â€¦ ADDED: Force display none
       
       // Hide buttons
       const infoBtn = tooltip.querySelector('.info-btn');
@@ -1949,7 +2332,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Clear global reference
       openTooltip = null;
       
-      console.log('✅ Tooltip completely closed');
+      console.log('Ã¢Å“â€¦ Tooltip completely closed');
     }
   }
 
@@ -1959,8 +2342,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     trigger.addEventListener("mouseenter", function () {
       if (tooltip && !tooltip.classList.contains("pinned")) {
-        tooltip.style.display = "flex"; // ✅ ADDED: Reset display
-        tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
+        tooltip.style.display = "flex"; // Ã¢Å“â€¦ ADDED: Reset display
+        tooltip.style.visibility = "visible"; // Ã¢Å“â€¦ ADDED: Reset visibility
         tooltip.style.opacity = "1";
         tooltip.style.pointerEvents = "auto";
         
@@ -1989,8 +2372,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (tooltip) {
       tooltip.addEventListener("mouseenter", function () {
         if (!tooltip.classList.contains("pinned")) {
-          tooltip.style.display = "flex"; // ✅ ADDED: Reset display
-          tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
+          tooltip.style.display = "flex"; // Ã¢Å“â€¦ ADDED: Reset display
+          tooltip.style.visibility = "visible"; // Ã¢Å“â€¦ ADDED: Reset visibility
         }
         tooltip.style.opacity = "1";
         tooltip.style.pointerEvents = "auto";
@@ -2027,8 +2410,8 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         tooltip.classList.add("pinned");
-        tooltip.style.display = "flex"; // ✅ ADDED: Ensure display
-        tooltip.style.visibility = "visible"; // ✅ ADDED: Ensure visibility
+        tooltip.style.display = "flex"; // Ã¢Å“â€¦ ADDED: Ensure display
+        tooltip.style.visibility = "visible"; // Ã¢Å“â€¦ ADDED: Ensure visibility
         tooltip.style.opacity = "1";
         tooltip.style.pointerEvents = "auto";
         openTooltip = tooltip;
@@ -2045,7 +2428,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    // ✅ Handle Info button click
+    // Ã¢Å“â€¦ Handle Info button click
     const infoBtn = tooltip?.querySelector('.info-btn');
     if (infoBtn) {
       // Initially hide the button
@@ -2069,7 +2452,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
-    // ✅ FIXED: Handle Close button click - Complete tooltip closure
+    // Ã¢Å“â€¦ FIXED: Handle Close button click - Complete tooltip closure
     const closeBtn = tooltip?.querySelector('.close-btn');
     if (closeBtn) {
       // Initially hide the button
@@ -2077,7 +2460,7 @@ document.addEventListener("DOMContentLoaded", function () {
       
       closeBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        console.log('🔴 Close button clicked');
+        console.log('Ã°Å¸â€Â´ Close button clicked');
         
         // Use the helper function to completely close tooltip
         closeTooltip(tooltip, trigger);
@@ -2091,7 +2474,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 150);
       });
       
-      // ✅ Add hover effect for close button
+      // Ã¢Å“â€¦ Add hover effect for close button
       closeBtn.addEventListener('mouseenter', function() {
         closeBtn.style.backgroundColor = '#c82333';
         closeBtn.style.transform = 'scale(1.05)';
@@ -2104,7 +2487,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // ✅ ENHANCED: Close tooltip when clicking outside
+  // Ã¢Å“â€¦ ENHANCED: Close tooltip when clicking outside
   document.addEventListener("click", function (e) {
     if (openTooltip && !e.target.closest('.model-image-tooltip') && !e.target.closest('.model-hover-trigger')) {
       const openTrigger = openTooltip.closest('.model-hover-trigger');
@@ -2112,12 +2495,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // ✅ Close tooltip with ESC key
+  // Ã¢Å“â€¦ Close tooltip with ESC key
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && openTooltip) {
       const openTrigger = openTooltip.closest('.model-hover-trigger');
       closeTooltip(openTooltip, openTrigger);
-      console.log('✅ Tooltip closed with ESC key');
+      console.log('Ã¢Å“â€¦ Tooltip closed with ESC key');
     }
   });
 

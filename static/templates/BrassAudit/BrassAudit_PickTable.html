@@ -842,31 +842,7 @@ tr.row-inactive td.action-td {
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
-                      Polishing Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Plating Color
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Category
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Polish Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th style="display:none;">
-                      Version <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                     <th>
-                      Tray Cate- <br> Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Input Source
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      Action <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
                       No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
@@ -891,14 +867,34 @@ tr.row-inactive td.action-td {
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
-                      Action <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
                       Lot Status
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
                       Current Stage
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polishing Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating Color
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Category
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polish Finish
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th style="display:none;">
+                      Version <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Input Source
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
@@ -993,111 +989,6 @@ tr.row-inactive td.action-td {
                           </div>
                         </div>
                       </span>
-                    </td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
-
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type|tray_full_name}}-{{data.tray_capacity}}</td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
-                    
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
-                      <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.display_accepted_qty }}</span>
-                      <span style="display: inline-flex; align-items: center; gap: 4px;">
-                        {% if not data.brass_audit_accepted_qty_verified %}
-                          <!-- Show checkbox before save -->
-                          <input type="checkbox"
-                            class="brass-checkbox"
-                            data-lot-id="{{ data.stock_lot_id }}"
-                            style="width: 15px; height: 15px"
-                            {% if data.brass_audit_accepted_qty_verified %}checked disabled{% endif %} />
-                          {% else %}
-                          <!-- Show green tick after save -->
-                          <span style="
-                            display: inline-flex;
-                            align-items: center;
-                            justify-content: center;
-                            width: 19px;
-                            height: 19px;
-                            border-radius: 50%;
-                            background: #0c8249;
-                            color: white;
-                            font-size: 14px;
-                            font-weight: bold;
-                            margin-left: 2px;
-                          ">
-                            &#10003;
-                          </span>
-                        {% endif %}
-                        <!-- âœ… HIDDEN: Missing Qty Input -->
-                        <input type="number"
-                          class="missing-qty-input"
-                          value="{{ data.brass_audit_missing_qty|default_if_none:'' }}"
-                          autocomplete="off"
-                          style="width: 36px; padding: 1px 3px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; display: none;"
-                          {% if data.brass_audit_accepted_qty_verified %}disabled{% endif %} />
-                      </span>
-                    </td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        {{ data.brass_audit_physical_qty|default:0 }}
-                    </td>
-
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        {{ data.brass_audit_accepted_qty|default:0 }}    
-                    </td>
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
-                        {{ data.brass_rejection_total_qty|default:0 }}
-                    </td>
-                    <!-- Process Status Column -->
-                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
-                      <div class="d-flex">
-                        <!-- Q: Green if brass_qc_accepted_qty_verified, else gray -->
-                        <div
-                          title="Quantity"
-                          class="d-flex align-items-center justify-content-center rounded-circle ms-1"
-                          style="
-                            width: 25px;
-                            height: 25px;
-                            background-color: {% if data.brass_audit_accepted_qty_verified %}#0c8249{% else %}#bdbdbd{% endif %};
-                            color: white;
-                            font-weight: bold;
-                            line-height: 20px;
-                            text-align: center;
-                            padding-top: 1px;
-                            padding-right: 1px;
-                          "
-                        >
-                          Q
-                        </div>
-                        <!-- QC circle: backend-computed qc_circle flag -->
-                        <div
-                          title="Quality Check"
-                          class="d-flex align-items-center justify-content-center rounded-circle ms-1"
-                          style="
-                            width: 25px;
-                            height: 25px;
-                            background:
-                              {% if data.qc_circle == 'HALF' %}
-                                linear-gradient(to right, #0c8249 50%, #bdbdbd 50%);
-                              {% elif data.qc_circle == 'GREEN' %}
-                                #0c8249;
-                              {% else %}
-                                #bdbdbd;
-                              {% endif %}
-                            color: white;
-                            font-weight: bold;
-                            line-height: 20px;
-                            text-align: center;
-                            padding-top: 1px;
-                            padding-right: 1px;
-                          "
-                        >
-                          QC
-                        </div>
-                      </div>
                     </td>
                     <td class="action-td">
                       <span {% if data.brass_audit_hold_lot %}style="display:inline-block; filter:blur(1.5px); opacity:0.4; pointer-events:none;"{% endif %}>
@@ -1245,6 +1136,103 @@ tr.row-inactive td.action-td {
                               style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
                         </a>
                     </td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.no_of_trays}}</td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.display_accepted_qty }}</span>
+                      <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        {% if not data.brass_audit_accepted_qty_verified %}
+                          <!-- Show checkbox before save -->
+                          <input type="checkbox"
+                            class="brass-checkbox"
+                            data-lot-id="{{ data.stock_lot_id }}"
+                            style="width: 15px; height: 15px"
+                            {% if data.brass_audit_accepted_qty_verified %}checked disabled{% endif %} />
+                          {% else %}
+                          <!-- Show green tick after save -->
+                          <span style="
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            width: 19px;
+                            height: 19px;
+                            border-radius: 50%;
+                            background: #0c8249;
+                            color: white;
+                            font-size: 14px;
+                            font-weight: bold;
+                            margin-left: 2px;
+                          ">
+                            &#10003;
+                          </span>
+                        {% endif %}
+                        <!-- âœ… HIDDEN: Missing Qty Input -->
+                        <input type="number"
+                          class="missing-qty-input"
+                          value="{{ data.brass_audit_missing_qty|default_if_none:'' }}"
+                          autocomplete="off"
+                          style="width: 36px; padding: 1px 3px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; display: none;"
+                          {% if data.brass_audit_accepted_qty_verified %}disabled{% endif %} />
+                      </span>
+                    </td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
+                        {{ data.brass_audit_physical_qty|default:0 }}
+                    </td>
+
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
+                        {{ data.brass_audit_accepted_qty|default:0 }}    
+                    </td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
+                        {{ data.brass_rejection_total_qty|default:0 }}
+                    </td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.tray_type|tray_full_name}}-{{data.tray_capacity}}</td>
+                    <!-- Process Status Column -->
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <div class="d-flex">
+                        <!-- Q: Green if brass_qc_accepted_qty_verified, else gray -->
+                        <div
+                          title="Quantity"
+                          class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+                          style="
+                            width: 25px;
+                            height: 25px;
+                            background-color: {% if data.brass_audit_accepted_qty_verified %}#0c8249{% else %}#bdbdbd{% endif %};
+                            color: white;
+                            font-weight: bold;
+                            line-height: 20px;
+                            text-align: center;
+                            padding-top: 1px;
+                            padding-right: 1px;
+                          "
+                        >
+                          Q
+                        </div>
+                        <!-- QC circle: backend-computed qc_circle flag -->
+                        <div
+                          title="Quality Check"
+                          class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+                          style="
+                            width: 25px;
+                            height: 25px;
+                            background:
+                              {% if data.qc_circle == 'HALF' %}
+                                linear-gradient(to right, #0c8249 50%, #bdbdbd 50%);
+                              {% elif data.qc_circle == 'GREEN' %}
+                                #0c8249;
+                              {% else %}
+                                #bdbdbd;
+                              {% endif %}
+                            color: white;
+                            font-weight: bold;
+                            line-height: 20px;
+                            text-align: center;
+                            padding-top: 1px;
+                            padding-right: 1px;
+                          "
+                        >
+                          QC
+                        </div>
+                      </div>
+                    </td>
                     <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
                       {% if data.lot_status == 'Draft' %}
                         <div
@@ -1281,6 +1269,12 @@ tr.row-inactive td.action-td {
                         {{ data.last_process_module|default:"N/A" }}
                       </div>
                     </td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.category }}</td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.polish_finish}}</td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %} style="display:none">{{data.version__version_name}}</td>
+                    <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>{{data.location__location_name}}</td>
                     <td {% if data.brass_audit_hold_lot %} class="row-inactive-blur" {% endif %}>
 
                       <!-- VoiceRec with tooltip (audio remark) -->
