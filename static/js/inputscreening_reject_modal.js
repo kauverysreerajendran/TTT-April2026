@@ -171,6 +171,8 @@
     state.trayType = data.tray_type || null;
     state.activeTrays = data.active_trays || [];
     state.reasons = data.rejection_reasons || [];
+    // Store backend draft for restore after context is applied
+    state._backendDraft = data.draft_data || null;
 
     $("isrm-h-batch").textContent = data.plating_stk_no || "—";
     $("isrm-h-lotqty").textContent = state.lotQty;
@@ -929,31 +931,66 @@
 
   function loadDraftIfAny() {
     if (!state.lotId) return;
+
+    // Prefer backend draft (persists across sessions/browsers)
+    var backendDraft = state._backendDraft;
+    if (backendDraft) {
+      _restoreFromDraftData(backendDraft, true /* isBackend */);
+      return;
+    }
+
+    // Fallback: localStorage
     var raw = null;
     try { raw = window.localStorage.getItem(draftKey()); } catch (e) {}
     if (!raw) return;
     var data;
     try { data = JSON.parse(raw); } catch (e) { return; }
     if (!data || !data.reasons) return;
-    // Restore qtys
+    _restoreFromDraftData({
+      rejection_reasons_json: (function () {
+        var m = {};
+        (data.reasons || []).forEach(function (r) { m[r.reason_id] = { qty: r.qty }; });
+        return m;
+      })(),
+      remarks: data.remarks || "",
+      reject_assignments: data.rejectScans || [],
+      accept_assignments: data.acceptScans || [],
+      delinked_tray_ids: data.delinkScans || [],
+    }, false /* isBackend */);
+  }
+
+  function _restoreFromDraftData(draft, isBackend) {
+    // Restore qty inputs from rejection_reasons_json
+    var reasonsJson = draft.rejection_reasons_json || {};
     var grid = $("isrm-reason-grid");
-    if (grid && data.reasons.length) {
-      var byId = {};
-      data.reasons.forEach(function (r) { byId[r.reason_id] = r.qty; });
+    if (grid && Object.keys(reasonsJson).length) {
       grid.querySelectorAll(".isrm-qty-input").forEach(function (inp) {
         var id = inp.getAttribute("data-reason-id");
-        if (byId[id] != null) inp.value = byId[id];
+        var entry = reasonsJson[id] || reasonsJson[String(id)];
+        if (entry != null) {
+          var qty = typeof entry === "object" ? entry.qty : entry;
+          if (qty != null) inp.value = qty;
+        }
       });
     }
-    // Stash scans so applySlotPlan picks them back up by index
-    state.rejectScans = (data.rejectScans || []).slice();
-    state.acceptScans = (data.acceptScans || []).slice();
-    state.delinkScans = (data.delinkScans || []).slice();
+    // Restore tray assignments
+    if (isBackend) {
+      state.rejectScans = (draft.reject_assignments || []).slice();
+      state.acceptScans = (draft.accept_assignments || []).slice();
+      state.delinkScans = (draft.delinked_tray_ids || []).map(function (id) {
+        return typeof id === "string" ? { tray_id: id } : id;
+      });
+    } else {
+      // localStorage format: already arrays of scan objects
+      state.rejectScans = (draft.reject_assignments || []).slice();
+      state.acceptScans = (draft.accept_assignments || []).slice();
+      state.delinkScans = (draft.delinked_tray_ids || []).slice();
+    }
     var rmEl = $("isrm-remarks");
-    if (rmEl && data.remarks) rmEl.value = data.remarks;
+    if (rmEl && draft.remarks) rmEl.value = draft.remarks;
     updateTotals();
     scheduleSlotPlan();
-    setInsight("info", "Draft restored.");
+    setInsight("info", isBackend ? "Draft restored from server." : "Draft restored.");
   }
 
   function clearDraft() {

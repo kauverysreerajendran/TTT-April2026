@@ -370,3 +370,90 @@ def record_tray_verification(lot_id: str, tray_id: str, user) -> Tuple[Dict[str,
         },
         200,
     )
+
+
+def unverify_tray(lot_id: str, tray_id: str) -> Tuple[Dict[str, Any], int]:
+    """Revert a previously verified tray back to unverified state.
+
+    Deletes the ``IP_TrayVerificationStatus`` row for the given lot+tray,
+    then recomputes and returns fresh verification stats for the lot.
+    Also clears ``ip_person_qty_verified`` / ``tray_verify`` flags on the
+    parent lot if at least one tray becomes pending again.
+    """
+    from DayPlanning.models import DPTrayId_History
+    from .models import IP_TrayVerificationStatus
+
+    # Verify the tray belongs to this lot before allowing unverify.
+    tray_exists = DPTrayId_History.objects.filter(
+        lot_id=lot_id, tray_id=tray_id, delink_tray=False
+    ).exists()
+    if not tray_exists:
+        return (
+            {"success": False, "error": "Tray not found for this lot."},
+            404,
+        )
+
+    deleted_count, _ = IP_TrayVerificationStatus.objects.filter(
+        lot_id=lot_id, tray_id=tray_id
+    ).delete()
+
+    if deleted_count == 0:
+        return (
+            {"success": False, "error": "Tray was not verified."},
+            200,
+        )
+
+    # Re-compute stats
+    from DayPlanning.models import DPTrayId_History as _DPH
+    from django.db.models import Sum as _Sum
+    from .models import IP_TrayVerificationStatus as _TVS
+
+    total = _DPH.objects.filter(lot_id=lot_id, delink_tray=False).count()
+    verified = _TVS.objects.filter(lot_id=lot_id, is_verified=True).count()
+    pending = total - verified
+    all_verified = total > 0 and pending == 0
+
+    # Clear the ip_person_qty_verified flag since at least one tray is now unverified.
+    if not all_verified:
+        try:
+            from modelmasterapp.models import ModelMasterCreation as _MMC
+            _MMC.objects.filter(stock_lot_id=lot_id).update(
+                ip_person_qty_verified=False,
+                tray_verify=False,
+            )
+        except Exception:
+            logger.warning(
+                "[IS][UNVERIFY] could not clear ip_person_qty_verified for lot=%s", lot_id
+            )
+
+    total_qty = (
+        _DPH.objects.filter(lot_id=lot_id, delink_tray=False)
+        .aggregate(s=_Sum("tray_quantity"))["s"] or 0
+    )
+    verified_tray_ids = set(
+        _TVS.objects.filter(lot_id=lot_id, is_verified=True)
+        .values_list("tray_id", flat=True)
+    )
+    verified_qty = (
+        _DPH.objects.filter(
+            lot_id=lot_id, delink_tray=False, tray_id__in=verified_tray_ids
+        ).aggregate(s=_Sum("tray_quantity"))["s"] or 0
+        if verified_tray_ids else 0
+    )
+
+    return (
+        {
+            "success": True,
+            "status": "unverified",
+            "message": "Tray unverified.",
+            "tray_id": tray_id,
+            "verified": verified,
+            "total": total,
+            "pending": pending,
+            "all_verified": all_verified,
+            "enable_actions": {"accept": all_verified, "reject": all_verified},
+            "total_qty": total_qty,
+            "verified_qty": verified_qty,
+        },
+        200,
+    )

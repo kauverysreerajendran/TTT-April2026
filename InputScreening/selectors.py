@@ -470,6 +470,19 @@ def get_completed_table_rows(from_date=None, to_date=None) -> List[Dict[str, Any
         row.update(_enrich_from_batch(batch))
         row.update(_enrich_from_stock(stock))
 
+        # Override no_of_trays with actual tray count from the submission record
+        # (batch.no_of_trays is the original planned count, not the post-split actual count)
+        if accept_lot:
+            actual_tray_count = accept_lot.accept_trays_count
+            if not actual_tray_count and accept_lot.trays_snapshot:
+                actual_tray_count = len(accept_lot.trays_snapshot)
+            if actual_tray_count:
+                row["no_of_trays"] = actual_tray_count
+        elif reject_lot:
+            actual_tray_count = getattr(reject_lot, "reject_trays_count", 0)
+            if actual_tray_count:
+                row["no_of_trays"] = actual_tray_count
+
         # Fallback timestamp: use submitted_at when stock record is absent
         if not row.get("last_process_date_time"):
             row["last_process_date_time"] = sub.submitted_at

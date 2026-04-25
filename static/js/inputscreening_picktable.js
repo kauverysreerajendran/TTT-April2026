@@ -1,4 +1,4 @@
-// ====== Original inline block #1 ======
+﻿// ====== Original inline block #1 ======
 document.addEventListener("DOMContentLoaded", function () {
   // ✅ HELPER FUNCTION: Get edited tray qty from modal
   function getEditedTrayQtyFromModal() {
@@ -891,24 +891,19 @@ document.addEventListener("DOMContentLoaded", function () {
     "background:#f0fdf7;color:#1ba878;border:1px solid #c8f0e0;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;";
   const UNVERIFIED_BADGE_STYLE =
     "background:#fff5f0;color:#d67d3a;border:1px solid #fde8d0;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;";
-  // ─── Running info banner — splits label : value with different colours ────
+  // ─── Running info banner — updates the inner text span ────────────────────
   function tvmSetRunningInfo(text) {
-    const infoEl = document.getElementById("tvm-running-info");
-    if (!infoEl) return;
+    const textEl = document.getElementById("tvm-running-info-text");
+    if (!textEl) return;
     const colonIdx = text.indexOf(":");
     if (colonIdx !== -1) {
       const label = text.substring(0, colonIdx);
       const value = text.substring(colonIdx + 1);
-      infoEl.innerHTML =
-        '<span style="color:#028084;font-size:11px;letter-spacing:.5px;text-transform:uppercase;">' +
-        label +
-        "</span>" +
-        '<span style="color:#555;font-size:11px;">:' +
-        value +
-        "</span>";
+      textEl.innerHTML =
+        '<span style="color:#028084;font-weight:700;">' + label + ":</span>" +
+        '<span style="color:#555;">' + value + "</span>";
     } else {
-      infoEl.innerHTML =
-        '<span style="color:#028084;font-size:11px;">' + text + "</span>";
+      textEl.innerHTML = '<span style="color:#028084;">' + text + "</span>";
     }
   }
   // ─── Auto-scroll to tray row with smooth behavior and subtle highlight ───────────
@@ -1029,6 +1024,13 @@ document.addEventListener("DOMContentLoaded", function () {
         const topTag = t.top_tray
           ? ' <sup style="color:#028084;font-size:10px;font-weight:700;">TOP</sup>'
           : "";
+        const undoBtn = t.is_verified
+          ? '<button class="tvm-undo-btn" data-tray-id="' + t.tray_id + '" ' +
+            'title="Redo \u2013 revert to Not Verified" ' +
+            'style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80;border-radius:20px;' +
+            'padding:2px 9px;font-size:11px;font-weight:700;cursor:pointer;' +
+            'white-space:nowrap;margin-left:6px;">\u21ba Undo</button>'
+          : "";
         return (
           '<tr id="tvm-row-' +
           sid +
@@ -1053,6 +1055,7 @@ document.addEventListener("DOMContentLoaded", function () {
           '">' +
           label +
           "</span>" +
+          undoBtn +
           "</td>" +
           "</tr>"
         );
@@ -1082,12 +1085,115 @@ document.addEventListener("DOMContentLoaded", function () {
             }, 2000);
           })
           .catch(function () {
-            tvmSetActivity("error", "Failed to copy �?�");
+            tvmSetActivity("error", "Failed to copy \u274c");
           });
       });
     });
+    // Undo (unverify) button handlers
+    tbody.querySelectorAll(".tvm-undo-btn").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        tvmUnverifyTray(this.getAttribute("data-tray-id"));
+      });
+    });
   }
-  // ─── Enable/Disable action buttons based on verification status ────────────
+  // Unverify a tray (redo option)
+  function tvmUnverifyTray(trayId) {
+    var lotId = window._tvmCurrentLotId;
+    if (!lotId || !trayId) return;
+    tvmSetActivity("info", "Reverting: " + trayId + "\u2026");
+    fetch("/inputscreening/unverify_tray/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": tvmGetCookie("csrftoken") },
+      body: JSON.stringify({ lot_id: lotId, tray_id: trayId }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          tvmUpdateStats(data.verified, data.total, data.pending, data.verified_qty, data.total_qty);
+          var sid = tvmSafeId(trayId);
+          var badge = document.getElementById("tvm-badge-" + sid);
+          var row = document.getElementById("tvm-row-" + sid);
+          if (badge) { badge.style.cssText = UNVERIFIED_BADGE_STYLE; badge.textContent = "Not Verified"; }
+          if (row) { var btn = row.querySelector(".tvm-undo-btn"); if (btn) btn.remove(); }
+          if (window._tvmTrays) {
+            var tr = window._tvmTrays.find(function (t) { return t.tray_id === trayId; });
+            if (tr) tr.is_verified = false;
+          }
+          isEnableActionButtons(lotId, data.all_verified);
+          tvmSetActivity("wait", "Tray unverified \u2013 " + data.pending + " pending. Scan next tray\u2026");
+        } else {
+          tvmSetActivity("error", data.error || "Failed to unverify tray");
+        }
+      })
+      .catch(function () { tvmSetActivity("error", "Network error \u274c"); });
+  }
+
+  // ─── TVM Draft Save ─────────────────────────────────────────────────────
+  function tvmSaveDraft() {
+    var lotId = window._tvmCurrentLotId;
+    if (!lotId) return;
+    var btn = document.getElementById("tvm-save-draft-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+    tvmSetActivity("info", "Saving draft…");
+    fetch("/inputscreening/save_tvm_draft/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": tvmGetCookie("csrftoken") },
+      body: JSON.stringify({ lot_id: lotId }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          // Update the pick table row to show "Draft" badge immediately
+          var table = document.getElementById("order-listing");
+          if (table) {
+            var rows = table.querySelectorAll("tbody tr");
+            rows.forEach(function (row) {
+              if (row.getAttribute("data-stock-lot-id") === lotId) {
+                // Update Q circle to half-green (draft style)
+                var lotStatusCell = row.querySelector("[data-lot-status-cell]") ||
+                  (function () {
+                    // Find the "Lot Status" td — it contains the Yet to Start / Draft pill
+                    var tds = row.querySelectorAll("td");
+                    for (var i = 0; i < tds.length; i++) {
+                      if (tds[i].textContent.trim().match(/Yet to Start|Draft|On Hold/)) return tds[i];
+                    }
+                    return null;
+                  })();
+                if (lotStatusCell) {
+                  lotStatusCell.innerHTML =
+                    '<div class="d-inline-block px-3 fw-semibold text-center rounded-pill" ' +
+                    'style="border:1px solid #4997ac;background-color:#d1f2f3;color:#03425d;' +
+                    'font-size:12px;white-space:nowrap;padding:5px;">Draft</div>';
+                }
+                // Update Q icon to half-green gradient
+                var qIcon = row.querySelector(".process-status-group div:first-child");
+                if (qIcon) {
+                  qIcon.style.background = "linear-gradient(to right, #0c8249 50%, #bdbdbd 50%)";
+                }
+              }
+            });
+          }
+          tvmSetActivity("success", "Draft saved \u2714 You can resume scanning anytime.");
+          tvmSetRunningInfo("Status: Draft Saved \uD83D\uDCBE");
+          Swal.fire({
+            icon: "success",
+            title: "Draft Saved!",
+            text: "Verification progress saved. You can resume scanning anytime.",
+            timer: 1800,
+            timerProgressBar: true,
+            showConfirmButton: false,
+          }).then(function () { tvmClose(); });
+        } else {
+          tvmSetActivity("error", data.error || "Failed to save draft.");
+          if (btn) { btn.disabled = false; btn.innerHTML = "\uD83D\uDCBE Save Draft"; }
+        }
+      })
+      .catch(function () {
+        tvmSetActivity("error", "Network error \u274c");
+        if (btn) { btn.disabled = false; btn.innerHTML = "\uD83D\uDCBE Save Draft"; }
+      });
+  }
   function isEnableActionButtons(lotId, enable) {
     // Find row in table that has this lot_id
     const table = document.getElementById("order-listing");
@@ -1264,6 +1370,24 @@ document.addEventListener("DOMContentLoaded", function () {
           if (row) {
             // FIX 5: Auto-scroll to row and apply highlight
             tvmScrollToTray(trayId, true);
+            // Inject undo button into verification td if not already present
+            var verifyTd = row.querySelector("td:last-child");
+            if (verifyTd && !verifyTd.querySelector(".tvm-undo-btn")) {
+              var undoEl = document.createElement("button");
+              undoEl.className = "tvm-undo-btn";
+              undoEl.setAttribute("data-tray-id", trayId);
+              undoEl.title = "Redo \u2013 revert to Not Verified";
+              undoEl.style.cssText =
+                "background:#fff3e0;color:#e65100;border:1px solid #ffcc80;" +
+                "border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;" +
+                "cursor:pointer;white-space:nowrap;margin-left:6px;";
+              undoEl.textContent = "\u21ba Undo";
+              undoEl.addEventListener("click", function (e) {
+                e.stopPropagation();
+                tvmUnverifyTray(this.getAttribute("data-tray-id"));
+              });
+              verifyTd.appendChild(undoEl);
+            }
           }
           // Update local tray store so next scan of this tray auto-selects
           if (window._tvmTrays) {
@@ -1366,7 +1490,10 @@ document.addEventListener("DOMContentLoaded", function () {
     window._tvmCurrentBatchId = batchId;
     tvmUpdateStats(0, 0, 0, 0, 0);
     tvmSetActivity("wait", "Waiting for tray scan…");
-    tvmSetRunningInfo("User Insights");
+    tvmSetRunningInfo("Waiting for scan\u2026");
+    // Reset Save Draft button state (may have been disabled by a previous draft save)
+    var draftBtn = document.getElementById("tvm-save-draft-btn");
+    if (draftBtn) { draftBtn.disabled = false; draftBtn.innerHTML = "\uD83D\uDCBE Save Draft"; }
     // Reset success banner on modal open
     var banner = document.getElementById("tvm-success-banner");
     if (banner) banner.style.display = "none";
@@ -1394,6 +1521,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   // Expose globally so keyboard shortcut handler can close the modal via Esc
   window.tvmClose = tvmClose;
+  // ─── Event: Save Draft button ──────────────────────────────────────────────
+  var tvmDraftBtn = document.getElementById("tvm-save-draft-btn");
+  if (tvmDraftBtn) tvmDraftBtn.addEventListener("click", tvmSaveDraft);
   // ─── Event: view icon (delegated) ──────────────────────────────────────────
   document.addEventListener("click", function (e) {
     const viewBtn = e.target.closest(".tray-scan-btn-DayPlanning-view");
@@ -1488,17 +1618,51 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 60);
     });
   }
-  // ─── Event: FIX 6 - Clear button click ────────────────────────────────────
+  // ─── Event: FIX 6 - Clear button click — revert ALL verifications ─────────
   const clearBtn = document.getElementById("tvm-clear-btn");
   if (clearBtn) {
     clearBtn.addEventListener("click", function () {
-      const input = document.getElementById("tvm-scan-input");
-      if (input) {
-        input.value = "";
-        input.focus();
-        input.setSelectionRange(0, 0);
-        tvmSetActivity("wait", "Waiting for tray scan…");
+      const lotId = window._tvmCurrentLotId;
+      if (!lotId) {
+        // No lot loaded — just clear the scan input
+        const input = document.getElementById("tvm-scan-input");
+        if (input) { input.value = ""; input.focus(); input.setSelectionRange(0, 0); }
+        return;
       }
+      Swal.fire({
+        title: "Clear All Verifications?",
+        text: "This will reset all tray verifications for this lot. You will need to scan them again.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Yes, Clear All!",
+        cancelButtonText: "Cancel",
+      }).then(function (result) {
+        if (!result.isConfirmed) return;
+        fetch("/inputscreening/clear_all_verifications/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": tvmGetCookie("csrftoken"),
+          },
+          body: JSON.stringify({ lot_id: lotId }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.success) {
+              tvmSetActivity("wait", "All verifications cleared \u21ba Scan trays again\u2026");
+              tvmSetRunningInfo("Status: Cleared \u21ba");
+              isEnableActionButtons(lotId, false);
+              tvmLoadTrays(lotId); // Reload the tray table to show all unverified
+              const input = document.getElementById("tvm-scan-input");
+              if (input) { input.value = ""; input.focus(); input.setSelectionRange(0, 0); }
+            } else {
+              tvmSetActivity("error", data.error || "Failed to clear verifications \u274c");
+            }
+          })
+          .catch(function () { tvmSetActivity("error", "Network error \u274c"); });
+      });
     });
   }
   // ─── Event: Accept button click ─────────────────────
@@ -1593,4 +1757,53 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
   // ─── Reject button click ── handled by inputscreening_reject_modal.js ──────
+
+  // ─── Pick-table remark send button ──────────────────────────────────────
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".ip-remark-send-btn");
+    if (!btn) return;
+    e.preventDefault();
+    var tooltip = btn.closest(".remark-tooltip");
+    var textarea = tooltip ? tooltip.querySelector("textarea") : null;
+    var remark = textarea ? textarea.value.trim() : "";
+    var lotId = btn.getAttribute("data-lot-id");
+    if (!remark) {
+      if (typeof Swal !== "undefined") {
+        Swal.fire({ icon: "warning", title: "Remark required", text: "Please type a remark before sending.", timer: 1500, showConfirmButton: false });
+      }
+      return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+    fetch("/inputscreening/save_ip_remark/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCookie("csrftoken") },
+      body: JSON.stringify({ lot_id: lotId, remark: remark }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          if (typeof Swal !== "undefined") {
+            Swal.fire({ icon: "success", title: "Remark Saved!", timer: 1200, showConfirmButton: false }).then(function () {
+              location.reload();
+            });
+          } else {
+            location.reload();
+          }
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa fa-send"></i>';
+          if (typeof Swal !== "undefined") {
+            Swal.fire({ icon: "error", title: "Error", text: data.error || "Failed to save remark.", timer: 2000, showConfirmButton: false });
+          }
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-send"></i>';
+        if (typeof Swal !== "undefined") {
+          Swal.fire({ icon: "error", title: "Network Error", text: "Could not save remark.", timer: 2000, showConfirmButton: false });
+        }
+      });
+  });
 });

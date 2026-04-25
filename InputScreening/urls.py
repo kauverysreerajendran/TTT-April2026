@@ -3,7 +3,9 @@ from django.urls import path
 from .views import (
     IS_AcceptTable,
     IS_AllocationPreviewAPI,
+    IS_ClearAllVerificationsAPI,
     IS_Completed_Table,
+    IS_DeleteBatchAPI,
     IS_DelinkSelectedTraysAPI,
     IS_FullAcceptAPI,
     IS_FullRejectAPI,
@@ -14,7 +16,11 @@ from .views import (
     IS_RejectModalContextAPI,
     IS_RejectTable,
     IS_SaveDraftAPI,
+    IS_SaveHoldUnholdAPI,
+    IS_SaveIPRemarkAPI,
+    IS_SaveTVMDraftAPI,
     IS_SubmittedDetailAPI,
+    IS_UnverifyTrayAPI,
     IS_ValidateScanAPI,
     IS_VerifyTrayAPI,
 )
@@ -82,4 +88,38 @@ urlpatterns = [
         IS_DelinkSelectedTraysAPI.as_view(),
         name='IS_DelinkSelectedTraysAPI',
     ),
-]
+    # ── Unverify tray (redo) ────────────────────────────────────────────
+    path(
+        'unverify_tray/',
+        IS_UnverifyTrayAPI.as_view(),
+        name='IS_UnverifyTrayAPI',
+    ),
+    # ── Save TVM draft (tray verification in progress) ──────────────────
+    path(
+        'save_tvm_draft/',
+        IS_SaveTVMDraftAPI.as_view(),
+        name='IS_SaveTVMDraftAPI',
+    ),
+    # ── Clear all tray verifications for a lot ───────────────────────────
+    path(
+        'clear_all_verifications/',
+        IS_ClearAllVerificationsAPI.as_view(),
+        name='IS_ClearAllVerificationsAPI',
+    ),
+    # ── Hold / Unhold a lot in the pick table ────────────────────────────
+    path(
+        'ip_save_hold_unhold_reason/',
+        IS_SaveHoldUnholdAPI.as_view(),
+        name='IS_SaveHoldUnholdAPI',
+    ),
+    # ── Save pick-table remark for a lot ────────────────────────────────
+    path(
+        'save_ip_remark/',
+        IS_SaveIPRemarkAPI.as_view(),
+        name='IS_SaveIPRemarkAPI',
+    ),    # ── Admin: hard-delete a batch from IS pick table ─────────────────────
+    path(
+        'ip_delete_batch/',
+        IS_DeleteBatchAPI.as_view(),
+        name='IS_DeleteBatchAPI',
+    ),]

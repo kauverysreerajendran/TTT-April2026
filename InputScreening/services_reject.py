@@ -636,7 +636,7 @@ def get_reject_modal_context(lot_id: str) -> Dict[str, Any]:
     from the DB.  All data is read-only – no writes performed here.
     """
     from .selectors import get_lot_tray_context
-    from .models import IP_Rejection_Table
+    from .models import IP_Rejection_Table, InputScreening_Submitted
 
     ctx = get_lot_tray_context(lot_id)
     if not ctx["found"]:
@@ -650,6 +650,21 @@ def get_reject_modal_context(lot_id: str) -> Dict[str, Any]:
         )
     )
 
+    # ── Draft restore data ───────────────────────────────────────────────────
+    draft_data = None
+    saved_draft = InputScreening_Submitted.objects.filter(
+        lot_id=lot_id, Draft_Saved=True, is_submitted=False
+    ).first()
+    if saved_draft:
+        alloc = saved_draft.allocation_preview_json or {}
+        draft_data = {
+            "rejection_reasons_json": saved_draft.rejection_reasons_json or {},
+            "remarks": saved_draft.remarks or "",
+            "reject_assignments": alloc.get("reject_assignments", []),
+            "accept_assignments": alloc.get("accept_assignments", []),
+            "delinked_tray_ids": alloc.get("delinked_tray_ids", []),
+        }
+
     return {
         "success": True,
         "lot_id": lot_id,
@@ -662,6 +677,7 @@ def get_reject_modal_context(lot_id: str) -> Dict[str, Any]:
         "batch_id": ctx.get("batch_id"),
         "model_no": ctx.get("model_no"),
         "plating_stk_no": ctx.get("plating_stk_no"),
+        "draft_data": draft_data,
     }
 
 
@@ -1247,6 +1263,17 @@ def finalize_submission_v2(
         raise ValueError("Single-reason-per-tray rule violated.")
 
     delinked_ids = [_norm(t) for t in (delink_tray_ids or [])]
+
+    # Include delinked trays in reject snapshot so the view-icon selector
+    # can derive delinked_tray_ids from source=="reused" entries.
+    for _tid in delinked_ids:
+        reject_alloc.append({
+            "tray_id": _tid,
+            "qty": 0,
+            "reason_id": "",
+            "reason_text": "",
+            "source": "reused",
+        })
 
     rejection_reasons_json = {
         e["reason_id"]: {"reason": e.get("reason_text", ""), "qty": e["qty"]}

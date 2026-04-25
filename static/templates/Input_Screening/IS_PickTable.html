@@ -418,6 +418,8 @@
                                 {% if not data.IP_pick_remarks %}
                                   <button
                                     type="button"
+                                    class="ip-remark-send-btn"
+                                    data-lot-id="{{ data.stock_lot_id }}"
                                     style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;"
                                   >
                                     <i class="fa fa-send"></i>
@@ -773,6 +775,17 @@
         </div>
         <div style="display:flex; flex-direction:row; align-items:center; gap:12px;">
 
+          <button id="tvm-save-draft-btn"
+                  title="Save current verification state as Draft and close"
+                  style="background:#e8f5e9; border:1px solid #a5d6a7; color:#2e7d32;
+                         height:36px; padding:0 16px; border-radius:20px; font-size:12px;
+                         font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;
+                         transition:all .2s; white-space:nowrap; letter-spacing:.3px;"
+                  onmouseover="this.style.background='#c8e6c9'; this.style.borderColor='#81c784';"
+                  onmouseout="this.style.background='#e8f5e9'; this.style.borderColor='#a5d6a7';">
+            💾 Save Draft
+          </button>
+
           <button id="closeTrayVerificationModal"
                   style="background:#f0f5f6; border:1px solid #d0dfe1; color:#028084;
                          width:36px; height:36px; border-radius:50%; font-size:22px;
@@ -820,6 +833,15 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!--  User Insights Bar — shows what user typed and scan result (AT TOP)  -->
+    <div id="tvm-running-info"
+         style="background:#eaf6f7; border-bottom:1px solid #c4e7eb;
+                padding:7px 28px; flex-shrink:0; min-height:32px;
+                font-size:11px; color:#555; letter-spacing:.2px; display:flex; align-items:center; gap:8px;">
+      <span style="color:#028084; font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; flex-shrink:0;">&#128270; Insights:</span>
+      <span id="tvm-running-info-text" style="color:#028084; font-size:11px;">Waiting for scan&hellip;</span>
     </div>
 
     <!--  Live Activity Bar (Light Theme)  -->

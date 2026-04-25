@@ -25,6 +25,7 @@ from .services import (
     enrich_pick_table_rows,
     get_dp_tray_panel,
     record_tray_verification,
+    unverify_tray,
 )
 from .services_reject import (
     build_live_preview,
@@ -633,6 +634,7 @@ class IS_DelinkSelectedTraysAPI(APIView):
         
         try:
             with transaction.atomic():
+                from .models import IS_PartialRejectLot
                 updated_trays = 0
                 lots_processed = 0
                 
@@ -641,34 +643,49 @@ class IS_DelinkSelectedTraysAPI(APIView):
                     if not lot_id:
                         continue
                     
-                    # Find all rejected trays for this lot in Input Screening
-                    rejected_trays = IPTrayId.objects.filter(
-                        lot_id=lot_id,
-                        rejected_tray=True,
-                        delink_tray=False  # Only delink trays that aren't already delinked
+                    # Collect tray IDs from IS_PartialRejectLot (the correct source)
+                    tray_ids_to_free = set()
+                    
+                    reject_lots = IS_PartialRejectLot.objects.filter(
+                        parent_lot_id=lot_id
+                    ).prefetch_related("allocation_trays")
+                    
+                    for rl in reject_lots:
+                        # Primary source: IS_AllocationTray records linked to this reject lot
+                        for alloc_tray in rl.allocation_trays.all():
+                            tray_ids_to_free.add(alloc_tray.tray_id)
+                        # Secondary source: trays_snapshot JSON (for older records)
+                        for snap in (rl.trays_snapshot or []):
+                            if snap.get("tray_id"):
+                                tray_ids_to_free.add(snap["tray_id"])
+                    
+                    # Fallback: IPTrayId table (legacy path)
+                    if not tray_ids_to_free:
+                        for tray_rec in IPTrayId.objects.filter(
+                            lot_id=lot_id, rejected_tray=True, delink_tray=False
+                        ):
+                            tray_ids_to_free.add(tray_rec.tray_id)
+                            tray_rec.delink_tray = True
+                            tray_rec.save()
+                    
+                    if not tray_ids_to_free:
+                        continue
+                    
+                    # Free all collected trays in the master TrayId table
+                    freed = TrayId.objects.filter(tray_id__in=tray_ids_to_free).update(
+                        lot_id=None,
+                        batch_id=None,
+                        delink_tray=False,
+                        rejected_tray=False,
+                        scanned=False,
                     )
                     
-                    lot_updated = 0
-                    for tray_rec in rejected_trays:
-                        # Mark as delinked in IPTrayId table
-                        tray_rec.delink_tray = True
-                        tray_rec.save()
-                        
-                        # Also update master TrayId table to make tray available for reuse
-                        TrayId.objects.filter(tray_id=tray_rec.tray_id).update(
-                            lot_id=None,           # Release from current lot
-                            batch_id=None,        # Release from current batch
-                            delink_tray=False,     # Allow reuse (not delinked in master)
-                            rejected_tray=False,   # Allow reuse (not rejected in master)
-                            scanned=False          # Mark as not in use
-                        )
-                        
-                        lot_updated += 1
-                    
-                    if lot_updated > 0:
-                        lots_processed += 1
-                        updated_trays += lot_updated
-                        logger.info(f"[DELINK] Processed lot {lot_id}: delinked {lot_updated} rejected trays")
+                    updated_trays += freed
+                    lots_processed += 1
+                    logger.info(
+                        f"[DELINK] Processed lot {lot_id}: freed {freed} trays "
+                        f"(tray_ids={list(tray_ids_to_free)})"
+                    )
                 
                 logger.info(f"[DELINK] Total: {updated_trays} trays delinked from {lots_processed} lots")
                 
@@ -685,3 +702,294 @@ class IS_DelinkSelectedTraysAPI(APIView):
                 {"success": False, "error": f"Delink operation failed: {str(exc)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UNVERIFY TRAY — REDO OPTION IN TRAY VERIFICATION PANEL
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_UnverifyTrayAPI(APIView):
+    """POST: Revert a verified tray back to unverified state.
+
+    Body: {"lot_id": "...", "tray_id": "..."}
+
+    Response on success:
+        {
+            success, status, message, tray_id,
+            verified, total, pending, all_verified,
+            enable_actions, total_qty, verified_qty
+        }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id, tray_id = parse_lot_tray(request.data)
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payload, http_status = unverify_tray(lot_id, tray_id)
+        return Response(payload, status=http_status)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAVE TVM DRAFT — MARK LOT AS IN-PROGRESS TRAY VERIFICATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_SaveTVMDraftAPI(APIView):
+    """POST: Mark the lot as TVM-draft (tray verification in progress).
+
+    Sets draft_tray_verify = True on TotalStockModel so the pick table
+    row shows the "Draft" badge and the Q circle is half-green.
+
+    Body: {"lot_id": "..."}
+
+    Response: {success, message, lot_id}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id = require_lot_id(request.data.get("lot_id"))
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from modelmasterapp.models import TotalStockModel
+            updated = TotalStockModel.objects.filter(lot_id=lot_id).update(
+                draft_tray_verify=True
+            )
+            if not updated:
+                return Response(
+                    {"success": False, "error": "Lot not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            logger.info("IS TVM draft saved for lot_id=%s by user=%s", lot_id, request.user)
+            return Response(
+                {"success": True, "message": "TVM draft saved.", "lot_id": lot_id},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as exc:
+            logger.exception("IS_SaveTVMDraftAPI error for lot_id=%s", lot_id)
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLEAR ALL VERIFICATIONS — REVERT ALL TRAYS TO UNVERIFIED FOR A LOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_ClearAllVerificationsAPI(APIView):
+    """POST: Reset all IP_TrayVerificationStatus rows for a lot to is_verified=False.
+
+    Used by the Clear button in the Tray Verification Panel.
+    Also resets ip_person_qty_verified on TotalStockModel so the pick table
+    Q circle reverts to grey.
+
+    Body: {"lot_id": "..."}
+    Response: {success, message, lot_id, cleared}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id = require_lot_id(request.data.get("lot_id"))
+        except ValidationError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from django.db import transaction
+            from .models import IP_TrayVerificationStatus
+            from modelmasterapp.models import TotalStockModel
+
+            with transaction.atomic():
+                cleared = IP_TrayVerificationStatus.objects.filter(
+                    lot_id=lot_id
+                ).update(is_verified=False)
+
+                TotalStockModel.objects.filter(lot_id=lot_id).update(
+                    ip_person_qty_verified=False,
+                    draft_tray_verify=False,
+                )
+
+            logger.info(
+                "IS clear-all-verifications for lot_id=%s by user=%s: %d rows reset",
+                lot_id, request.user, cleared,
+            )
+            return Response(
+                {
+                    "success": True,
+                    "message": f"All {cleared} tray verifications cleared.",
+                    "lot_id": lot_id,
+                    "cleared": cleared,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as exc:
+            logger.exception("IS_ClearAllVerificationsAPI error for lot_id=%s", lot_id)
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HOLD / UNHOLD A LOT IN THE PICK TABLE
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_SaveHoldUnholdAPI(APIView):
+    """POST: Hold or unhold a lot in the IS pick table.
+
+    Body: {"lot_id": "...", "remark": "...", "action": "hold"|"unhold"}
+    Response: {success, message}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id = require_lot_id(request.data.get("lot_id"))
+        except ValidationError as exc:
+            return Response({"success": False, "error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from modelmasterapp.models import TotalStockModel
+
+            remark = (request.data.get("remark") or "").strip()
+            action = (request.data.get("action") or "").strip().lower()
+
+            if not remark:
+                return Response({"success": False, "error": "Remark is required."}, status=status.HTTP_400_BAD_REQUEST)
+            if action not in ("hold", "unhold"):
+                return Response({"success": False, "error": "Invalid action. Must be 'hold' or 'unhold'."}, status=status.HTTP_400_BAD_REQUEST)
+
+            obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if not obj:
+                return Response({"success": False, "error": "Lot not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if action == "hold":
+                obj.ip_hold_lot = True
+                obj.ip_holding_reason = remark
+                obj.ip_release_lot = False
+                obj.ip_release_reason = ""
+            else:
+                obj.ip_hold_lot = False
+                obj.ip_release_lot = True
+                obj.ip_release_reason = remark
+
+            obj.save(update_fields=["ip_hold_lot", "ip_holding_reason", "ip_release_lot", "ip_release_reason"])
+
+            logger.info(
+                "IS pick table lot_id=%s %s by user=%s with remark: %s",
+                lot_id, action, request.user, remark,
+            )
+            return Response({"success": True, "message": f"Lot {action} successful."}, status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.exception("IS_SaveHoldUnholdAPI error for lot_id=%s", lot_id)
+            return Response({"success": False, "error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAVE PICK-TABLE REMARK FOR A LOT
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_SaveIPRemarkAPI(APIView):
+    """POST: Save the operator remark for a lot in the IS pick table.
+
+    Stores the remark in TotalStockModel.IP_pick_remarks.
+    Once saved, the remark cannot be edited (read-only in UI).
+
+    Body: {"lot_id": "...", "remark": "..."}
+    Response: {success, message}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            lot_id = require_lot_id(request.data.get("lot_id"))
+        except ValidationError as exc:
+            return Response({"success": False, "error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from modelmasterapp.models import TotalStockModel
+
+            remark = (request.data.get("remark") or "").strip()
+            if not remark:
+                return Response({"success": False, "error": "Remark cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+            if len(remark) > 100:
+                return Response({"success": False, "error": "Remark must be 100 characters or less."}, status=status.HTTP_400_BAD_REQUEST)
+
+            updated = TotalStockModel.objects.filter(lot_id=lot_id, IP_pick_remarks__isnull=True).update(
+                IP_pick_remarks=remark
+            )
+            if not updated:
+                # Either lot not found or remark already saved
+                exists = TotalStockModel.objects.filter(lot_id=lot_id).exists()
+                if not exists:
+                    return Response({"success": False, "error": "Lot not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"success": False, "error": "Remark already saved and cannot be edited."}, status=status.HTTP_400_BAD_REQUEST)
+
+            logger.info("IS pick remark saved for lot_id=%s by user=%s", lot_id, request.user)
+            return Response({"success": True, "message": "Remark saved.", "remark": remark}, status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.exception("IS_SaveIPRemarkAPI error for lot_id=%s", lot_id)
+            return Response({"success": False, "error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DELETE BATCH — ADMIN ONLY: HARD DELETE A BATCH FROM IS PICK TABLE
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IS_DeleteBatchAPI(APIView):
+    """POST: Admin-only hard delete of a batch from the IS Pick Table.
+
+    Deletes all TotalStockModel records for the batch. This removes the
+    lot from the pick table. Only available to Admin group users.
+
+    Body: {"batch_id": "...", "stock_lot_id": "..."}
+    Response: {success, message}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _is_admin(request.user):
+            return Response({"success": False, "error": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            import json as _json
+            data = request.data if hasattr(request, "data") else _json.loads(request.body.decode("utf-8"))
+            batch_id = (data.get("batch_id") or "").strip()
+            stock_lot_id = (data.get("stock_lot_id") or "").strip()
+
+            if not batch_id and not stock_lot_id:
+                return Response({"success": False, "error": "Missing batch_id or stock_lot_id."}, status=status.HTTP_400_BAD_REQUEST)
+
+            from modelmasterapp.models import ModelMasterCreation, TotalStockModel
+
+            if batch_id:
+                batch_obj = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
+                if not batch_obj:
+                    return Response({"success": False, "error": "Batch not found."}, status=status.HTTP_404_NOT_FOUND)
+                deleted_count, _ = TotalStockModel.objects.filter(batch_id=batch_obj).delete()
+                if deleted_count == 0:
+                    return Response({"success": False, "error": "No stock records found for this batch."}, status=status.HTTP_404_NOT_FOUND)
+                logger.info("IS Delete Batch: batch_id=%s deleted %d records by user=%s", batch_id, deleted_count, request.user)
+                return Response({"success": True, "message": f"{deleted_count} stock record(s) deleted."}, status=status.HTTP_200_OK)
+            else:
+                obj = TotalStockModel.objects.filter(lot_id=stock_lot_id).first()
+                if not obj:
+                    return Response({"success": False, "error": "Stock lot not found."}, status=status.HTTP_404_NOT_FOUND)
+                TotalStockModel.objects.filter(batch_id=obj.batch_id).delete()
+                logger.info("IS Delete Batch: stock_lot_id=%s deleted by user=%s", stock_lot_id, request.user)
+                return Response({"success": True, "message": "Stock lot deleted."}, status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.exception("IS_DeleteBatchAPI error")
+            return Response({"success": False, "error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

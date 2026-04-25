@@ -576,8 +576,39 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
+                      Action <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      LOT Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      No of <br>Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Accept Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Process <br>Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Current <br> Stage
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Tray Cate-<br>Capacity
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
                       Polishing <br>Stock No
                       <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
                     <th>
                       Plating <br>Color
                       <i class="fa fa-filter" aria-hidden="true"></i>
@@ -591,48 +622,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
-                      Tray Cate-<br>Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-
-                    <th>
                       Input Source
-
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-
-                    <th>
-                      No of <br>Trays <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      LOT Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-
-                    <th>
-                      Accept Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                      </th>
-
-                    <th>
-                      Process <br>Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Action <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Lot Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Current <br> Stage
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
                     <th>
                       Remarks <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                   
                   </tr>
                 </thead>
                 <tbody>
@@ -645,12 +640,11 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       data-ip-onhold-picking="{{ data.ip_onhold_picking }}"
                       data-stock-lot-id="{{ data.stock_lot_id }}">
 
-                     <td>{{ page_obj.start_index|add:forloop.counter0 }}
-
-                    </td>                 
-<td>{{ data.last_process_date_time|date:"Y-m-d" }}<br>
-                        <span style="display:inline-block; margin-top:4px;">{{ data.last_process_date_time|date:"h:i A" }}</span>                    
-                          <!-- Plating Stk No - Mouse Hover Image -->
+                     <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
+                    <td>{{ data.last_process_date_time|date:"Y-m-d" }}<br>
+                        <span style="display:inline-block; margin-top:4px;">{{ data.last_process_date_time|date:"h:i A" }}</span>
+                    </td>
+                      <!-- Plating Stk No - Mouse Hover Image -->
                       <td>
                         <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
                           {{  data.plating_stk_no|highlight_plating_color|safe_html }}
@@ -669,147 +663,54 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         </span>
                       </td>
 
-
-                    <td>{{data.polishing_stk_no}}</td>
-                    <td>{{ data.plating_color }}</td>
-                    <td>{{ data.category}}</td>
-                    <td>{{data.polish_finish}}</td>
-                    <td>{{data.tray_type}}-{{data.tray_capacity}}</td>
-                    <td>{{data.location__location_name}}</td>
-                    <td>{{data.no_of_trays}}</td>
+                    <td>
+<!-- Status Display -->
+  {% if data.accepted_Ip_stock %}
+    <span class="status-badge accepted" style="background-color: #66bb6a; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+      <i class="fa fa-check-circle"></i>Accepted
+    </span>
+  {% elif data.rejected_ip_stock %}
+    <span class="status-badge rejected" style="background-color: #e57373; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+      <i class="fa fa-times-circle"></i>Rejected
+    </span>
+  {% elif data.few_cases_accepted_Ip_stock %}
+    <span class="status-badge partial-rejected" style="background-color: #7edd83; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+      <i class="fa fa-adjust"></i>Partial Accepted
+    </span>
+  {% endif %}
+  <a href="#" title="View" class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig" style="text-decoration: underline"
+     data-table-type="accept" data-stock-lot-id="{{ data.stock_lot_id|default:'' }}" data-batch-id="{{ data.batch_id }}"
+     data-model-no="{{ data.plating_stk_no }}" data-no-of-trays="{{ data.no_of_trays }}"
+     data-tray-capacity="{{ data.tray_capacity|default:'0' }}" data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
+     data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}" data-accepted-ip-stock="{{ data.accepted_Ip_stock|yesno:'true,false' }}"
+     data-rejected-ip-stock="{{ data.rejected_ip_stock|yesno:'true,false' }}" data-model-image="{{ data.model_images.0|default:'' }}"
+     data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'true,false' }}"
+     data-total-batch-quantity="{{ data.display_accepted_qty }}">
+    <img src="{% static 'assets/icons/view.png' %}" alt="View" style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+  </a>
+</td>
                     <td>
                       <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.total_stock }}</span>
                       <span style="display: inline-flex; align-items: center; gap: 4px;">
-                        <input type="checkbox"
-                                class="ip-checkbox"
-                                data-lot-id="{{ data.stock_lot_id }}"
-                                style="width: 15px; height: 15px"
-                                {% if data.ip_person_qty_verified %}checked disabled{% endif %} />
-                        
+      
                       </span>
                     </td>
-                    
-                    <td>
-                        {{ data.display_accepted_qty|default:0 }}    
-                    </td>
-
+                    <td>{{data.no_of_trays}}</td>
+                    <td>{{ data.display_accepted_qty|default:0 }}</td>
                     <td>
                       <div class="d-flex">
-                        <!-- Q: Green if ip_person_qty_verified, else gray -->
-                        <div
-                          data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quantity"
+                        <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quantity"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
-                          style="
-                            width: 20px;
-                            height: 20px;
-                            background-color: {% if data.ip_person_qty_verified %}#0c8249{% else %}#bdbdbd{% endif %};
-                            color: white;
-                            font-weight: 500;
-                            line-height: 20px;
-                            text-align: center;
-                            padding-top: 1px;
-                            padding-right: 1px;
-                          "
-                        >
+                          style="width: 20px; height: 20px; background-color: #0c8249; color: white; font-weight: 500; line-height: 20px; text-align: center; padding-top: 1px; padding-right: 1px;">
                           Q
                         </div>
-                       
-                        <!-- S: Green if rejected_ip_stock or accepted_Ip_stock, else gray -->
-                        <div
-                          data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Screening"
+                        <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Screening"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
-                          style="
-                            width: 20px;
-                            height: 20px;
-                            background-color: {% if data.rejected_ip_stock or data.accepted_Ip_stock or data.few_cases_accepted_Ip_stock %}#0c8249{% else %}#bdbdbd{% endif %};
-                            color: white;
-                            font-weight: 500;
-                            line-height: 20px;
-                            text-align: center;
-                            padding-top: 1px;
-                            padding-right: 1px;
-                          "
-                        >
+                          style="width: 20px; height: 20px; background-color: {% if data.rejected_ip_stock or data.accepted_Ip_stock or data.few_cases_accepted_Ip_stock %}#0c8249{% else %}#bdbdbd{% endif %}; color: white; font-weight: 500; line-height: 20px; text-align: center; padding-top: 1px; padding-right: 1px;">
                           S
                         </div>
                       </div>
                     </td>
-<td>
-<!-- Status Display (Simplified) -->
-  {% if data.accepted_Ip_stock %}
-    <!-- Show "Accepted" status -->
-    <span class="status-badge accepted" style="
-      background-color: #66bb6a; 
-      color: white; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 12px; 
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    ">
-      <i class="fa fa-check-circle"></i>Accepted
-    </span>
-
-  {% elif data.rejected_ip_stock %}
-    <!-- Show "Rejected" status -->
-    <span class="status-badge rejected" style="
-      background-color: #e57373; 
-      color: white; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 12px; 
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    ">
-      <i class="fa fa-times-circle"></i>Rejected
-    </span>
-
-  {% elif data.few_cases_accepted_Ip_stock %}
-    <!-- Show "Partial Reject" status -->
-    <span class="status-badge partial-rejected" style="
-      background-color: #7edd83; 
-      color: white; 
-      padding: 6px 12px; 
-      border-radius: 20px; 
-      font-size: 12px; 
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    ">
-      <i class="fa fa-adjust"></i>Partial Accepted
-    </span>
-
-  {% endif %}
-  <!-- Eye icon to view submitted "Tray Scan Table" -->
-      <!-- Find the tray-scan-btn-Jig link and update as below: -->
-      <a href="#"
-         title="View"
-         class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig"
-         style="text-decoration: underline"
-         data-table-type="accept"
-         data-stock-lot-id="{{ data.stock_lot_id|default:'' }}"
-         data-batch-id="{{ data.batch_id }}"
-         data-model-no="{{ data.plating_stk_no }}"
-         data-no-of-trays="{{ data.no_of_trays }}"
-         data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-         data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
-         data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-         data-accepted-ip-stock="{{ data.accepted_Ip_stock|yesno:'true,false' }}"
-         data-rejected-ip-stock="{{ data.rejected_ip_stock|yesno:'true,false' }}"
-         data-model-image="{{ data.model_images.0|default:'' }}"
-         data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'true,false' }}"
-            data-total-batch-quantity="{{ data.display_accepted_qty }}">
-
-         <img src="{% static 'assets/icons/view.png' %}"
-              alt="View"
-              style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
-      </a>
-</td>
                     <td>
                       {% if data.brass_qc_accepted_qty_verified %}
                          <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
@@ -830,6 +731,12 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         {{ data.last_process_module|default:"N/A" }}
                       </div>
                     </td>
+                    <td>{{data.tray_type}}-{{data.tray_capacity}}</td>
+                    <td>{{data.polishing_stk_no}}</td>
+                    <td>{{ data.plating_color }}</td>
+                    <td>{{ data.category}}</td>
+                    <td>{{data.polish_finish}}</td>
+                    <td>{{data.location__location_name}}</td>
                     <td>
 
   <!-- Audio Remark Icon -->
@@ -1533,7 +1440,8 @@ document.addEventListener("DOMContentLoaded", function () {
         const rows = trays.map((t, i) => {
           const top = t.top_tray ? '<span style="background:#0288d1;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">TOP</span>' : '';
           const reason = t.reason_text ? `<span style="background:#b71c1c;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">${_esc(t.reason_text)}</span>` : '';
-          const src = t.source ? `<span style="color:#666;font-size:10px;margin-left:6px;">(${_esc(t.source)})</span>` : '';
+          const _srcLabel = t.source === 'reused' ? 'Delinked' : t.source;
+          const src = _srcLabel ? `<span style="color:#666;font-size:10px;margin-left:6px;">(${_esc(_srcLabel)})</span>` : '';
           return `<tr><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:center;">${i+1}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;font-family:monospace;">${_esc(t.tray_id)}${top}${reason}${src}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;">${_esc(t.qty)}</td></tr>`;
         }).join('');
         return `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;"><thead><tr style="background:#f5f5f5;"><th style="padding:4px 8px;border:1px solid #e0e0e0;width:40px;">#</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:left;">Tray ID</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;width:80px;">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -2203,5 +2111,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 </script>
 
+<script nonce="{{ csp_nonce }}" src="{% static 'js/inputscreening_shortcuts.js' %}" defer></script>
 
 {% endblock %} {% endblock content %}

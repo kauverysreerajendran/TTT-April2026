@@ -732,6 +732,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     transition: all 0.2s ease;"
              data-batch-id="{{ data.batch_id }}" 
              data-model-no="{{ data.model_stock_no__model_no }}"
+             data-plating-stk-no="{{ data.plating_stk_no }}"
              data-no-of-trays="{{ data.no_of_trays }}" 
              data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
              data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}" 
@@ -920,22 +921,28 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
             class="tray-scan-modal"
             id="trayScanModal"
           >
-            <div class="tray-scan-modal-content">
-              <span id="closeTrayScanModal" class="tray-scan-close"
+            <div class="tray-scan-modal-content" style="position: relative;">
+              <span id="closeTrayScanModal" class="tray-scan-close" style="position: absolute;
+    top: -5px;
+    right: 20px;
+    font-size: 22px;
+    cursor: pointer;
+    color: #f75e5e;
+    z-index: 100;"
                 >&times;</span>
 
 <!-- New top header container: title + user profile aligned left -->
 <!-- Header Section -->
-    <div class="modal-top-header">
+    <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
       <img src="/static/assets/images/imagePlaceholder.jpg" alt="User Profile" style="border-radius: 50%; width: 44px; height: 44px; object-fit: cover;" />
       
-      <div style="font-weight: 600; color: #222; font-size: 17px;">
-        Model No:
-        <span id="modalModelNo" style="color: #028084; font-weight: 700;">(Fetch Dynamically)</span>
+      <div style="font-weight: 600; color: #222; font-size: 14px; display: flex; gap: 8px; align-items: center;">
+        <span>Plating Stk No:</span>
+        <span id="modalPlatingStk" style="color: #028084; font-weight: 700; word-break: break-word; max-width: 150px;">(Fetch Dynamically)</span>
       </div>
 
-      <div style="font-weight: 600; color: #222; font-size: 17px;">
-        Input Qty:
+      <div style="font-weight: 600; color: #222; font-size: 14px; display: flex; gap: 8px; align-items: center;">
+        <span>Input Qty:</span>
         <span id="modalTrayQty" style="color: #028084; font-weight: 700;">(Fetch Dynamically)</span>
       </div>
     </div>
@@ -1988,6 +1995,10 @@ function reattachAllEventListenersAfterRebuild() {
               const currentBatchId = window.currentTrayScanBatchId || '';
               const resp = await fetch(`/dayplanning/tray_id_unique_check/?tray_id=${encodeURIComponent(trayId)}&batch_id=${encodeURIComponent(currentBatchId)}`);
               const result = await resp.json();
+              
+              // Clear any existing validation messages before showing new ones
+              const existingErrors = input.parentNode.querySelectorAll('.global-tray-warning, .tray-id-error');
+              existingErrors.forEach(e => e.remove());
   
               if (result.tray_not_in_system) {
                   const errorDiv = document.createElement('div');
@@ -2349,13 +2360,28 @@ function autoFocusFirstTrayInput() {
   }
   
   const trayIdInputs = detailsDiv.querySelectorAll('input[type="text"]:not([readonly])');
+  
+  // Priority 1: Focus first input that has an error or global warning
+  for (let input of trayIdInputs) {
+    const hasError = !!input.parentNode.querySelector('.tray-id-error');
+    const hasGlobalWarning = !!input.parentNode.querySelector('.global-tray-warning');
+    if (hasError || hasGlobalWarning) {
+      setTimeout(() => {
+        input.focus();
+        input.select();
+        console.log('🎯 Auto-focused invalid tray ID input (error/warning)');
+      }, 150);
+      return;
+    }
+  }
+  
+  // Priority 2: Focus first empty input
   for (let input of trayIdInputs) {
     if (input.value.trim() === '') {
       setTimeout(() => {
         input.focus();
-        input.select();
         console.log('🎯 Auto-focused first empty tray ID input');
-      }, 50);
+      }, 150);
       return;
     }
   }
@@ -2363,20 +2389,35 @@ function autoFocusFirstTrayInput() {
   console.log('🎯 No empty tray ID inputs to focus');
 }
 
-// ✅ ENHANCED: Focus next empty tray ID input
+// ✅ ENHANCED: Focus next empty tray ID input (with error/warning priority)
 function focusNextEmptyTrayInput(currentInput) {
   const detailsDiv = document.getElementById("trayScanDetails");
   if (!detailsDiv) return;
   
-  const trayIdInputs = detailsDiv.querySelectorAll('input[type="text"]:not([readonly])');
-  const currentIndex = Array.from(trayIdInputs).indexOf(currentInput);
+  const trayIdInputs = Array.from(detailsDiv.querySelectorAll('input[type="text"]:not([readonly])'));
+  const currentIndex = trayIdInputs.indexOf(currentInput);
   if (currentIndex === -1) return;
   
+  // Priority 1: If ANY slot in the entire list has an error or global warning, go there first
+  for (let i = 0; i < trayIdInputs.length; i++) {
+    if (i === currentIndex) continue; // skip self
+    const hasError = !!trayIdInputs[i].parentNode.querySelector('.tray-id-error');
+    const hasGlobalWarning = !!trayIdInputs[i].parentNode.querySelector('.global-tray-warning');
+    if (hasError || hasGlobalWarning) {
+      setTimeout(() => {
+        trayIdInputs[i].focus();
+        trayIdInputs[i].select();
+        console.log('🎯 Redirected focus to invalid tray slot', i);
+      }, 50);
+      return;
+    }
+  }
+  
+  // Priority 2: Focus next empty slot
   for (let i = currentIndex + 1; i < trayIdInputs.length; i++) {
     if (trayIdInputs[i].value.trim() === '') {
       setTimeout(() => {
         trayIdInputs[i].focus();
-        trayIdInputs[i].select();
         console.log('🎯 Focused next empty tray ID input');
       }, 50);
       return;
@@ -3560,7 +3601,7 @@ const modal = document.getElementById("trayScanModal");
 const closeBtn = document.getElementById("closeTrayScanModal");
 const detailsDiv = document.getElementById("trayScanDetails");
 const modalModelNo = document.getElementById("modalModelNo");
-
+        const modalPlatingStk = document.getElementById("modalPlatingStk");
 // ===== ENHANCED TRAY SCAN MODAL WITH DYNAMIC ROW MANAGEMENT =====
 
     // ===== ENHANCED TRAY SCAN MODAL WITH DYNAMIC ROW MANAGEMENT =====
@@ -3822,15 +3863,45 @@ function attachEnhancedEventListeners() {
     // Attach listeners to tray ID inputs
     const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
     trayIdInputs.forEach(input => {
+        // ✅ NEW: Add global tray validation on input change
         input.addEventListener('input', function() {
-            // ✅ NEW: Uncheck checkbox when any tray ID is modified
+            const trayId = this.value.trim().toUpperCase();
+            
+            // Clear ALL existing validation messages first
+            const existingErrors = this.parentElement.querySelectorAll('.global-tray-warning, .tray-id-error');
+            existingErrors.forEach(e => e.remove());
+            
+            // Check against globally used trays
+            if (trayId && window.globallyUsedTrays && window.globallyUsedTrays.includes(trayId)) {
+                this.style.borderColor = '#dc3545';
+                this.style.backgroundColor = '#ffe6e6';
+                
+                // Show warning message
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'global-tray-warning';
+                warningDiv.style.color = '#d32f2f';
+                warningDiv.style.fontSize = '11px';
+                warningDiv.style.marginTop = '4px';
+                warningDiv.style.fontWeight = '600';
+                this.parentElement.appendChild(warningDiv);
+                warningDiv.textContent = '⚠️ Tray already drafted/submitted in another lot';
+                // Auto-select text when global warning detected
+                this.focus();
+                this.select();
+                console.log('⚠️ Duplicate global tray detected:', trayId);
+            } else {
+                this.style.borderColor = '';
+                this.style.backgroundColor = '';
+            }
+            
+            // ✅ EXISTING: Uncheck checkbox when any tray ID is modified
             const verifyCheckbox = detailsDiv.querySelector('.tray-verify-checkbox');
             if (verifyCheckbox && !verifyCheckbox.disabled) {
                 verifyCheckbox.checked = false;
                 console.log('🔄 Unchecked checkbox due to tray ID input change (Enhanced)');
             }
             
-            // ✅ NEW: Clear verification message when tray ID is modified
+            // ✅ EXISTING: Clear verification message when tray ID is modified
             const errorFooter = document.getElementById('trayQtyErrorFooter');
             if (errorFooter) {
                 errorFooter.textContent = '';
@@ -3975,6 +4046,7 @@ trayScanLinks.forEach((link) => {
         // Get dynamic data from the clicked row
         const batchId = event.target.getAttribute("data-batch-id");
         const modelNo = event.target.getAttribute("data-model-no");
+        const platingStkNo = event.target.getAttribute("data-plating-stk-no");
         const noOfTrays = parseInt(event.target.getAttribute("data-no-of-trays")) || 0;
         const trayCapacity = parseInt(event.target.getAttribute("data-tray-capacity")) || 12; 
         const topTrayQtyVerified = event.target.getAttribute("data-top-tray-qty-verified") === "True";
@@ -3985,6 +4057,7 @@ trayScanLinks.forEach((link) => {
         window.currentModalConfig = {
             batchId,
             modelNo,
+            platingStkNo,
             noOfTrays,
             trayCapacity,
             topTrayQtyVerified,
@@ -3992,10 +4065,13 @@ trayScanLinks.forEach((link) => {
             movedToDPicker
         };
 
-        // Update modal with dynamic model number
+        // ✅ ERR 3 FIX: Update modal with dynamic model number and plating stock number (full value)
         if (modalModelNo && modelNo) {
             modalModelNo.textContent = modelNo;
-            
+        }
+        if (modalPlatingStk && platingStkNo) {
+            modalPlatingStk.textContent = platingStkNo;
+            console.log('✅ ERR 3 FIXED: Plating Stk No fully displayed: ' + platingStkNo);
         }
 
           // --- Tray Type Identification ---
@@ -4073,6 +4149,23 @@ trayScanLinks.forEach((link) => {
             modalTrayQty.textContent = totalBatchQty;
         }
 
+        // ✅ NEW: Fetch globally used trays for real-time validation
+        // Pass current batch_id so the API excludes this batch's own trays from the list.
+        let globallyUsedTrays = [];
+        try {
+            const globalResp = await fetch(`/dayplanning/globally_drafted_trays/?batch_id=${encodeURIComponent(batchId)}`);
+            const globalResult = await globalResp.json();
+            if (globalResult.success && Array.isArray(globalResult.trays)) {
+                globallyUsedTrays = globalResult.trays;
+                console.log('✅ Loaded globally used trays:', globallyUsedTrays.length, globallyUsedTrays);
+            }
+        } catch (e) {
+            console.warn('⚠️ Could not fetch globally used trays:', e);
+        }
+        
+        // Store globally used trays in window for tray validation
+        window.globallyUsedTrays = globallyUsedTrays;
+        
         // Try to fetch DraftTrayId data first, fallback to TrayId
         let traysData = [];
         let isDraft = false;
@@ -4131,6 +4224,30 @@ trayScanLinks.forEach((link) => {
         
         rebuildTrayScanTable(currentData, totalRows, trayCapacity, topTrayQtyVerified, link);
 
+        // ✅ NEW: Validate pre-filled trays against globally used trays on modal open
+        setTimeout(() => {
+            const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
+            trayIdInputs.forEach(input => {
+                const trayId = input.value.trim().toUpperCase();
+                if (trayId && window.globallyUsedTrays && window.globallyUsedTrays.includes(trayId)) {
+                    input.style.borderColor = '#dc3545';
+                    input.style.backgroundColor = '#ffe6e6';
+                    
+                    let warningDiv = input.parentElement.querySelector('.global-tray-warning');
+                    if (!warningDiv) {
+                        warningDiv = document.createElement('div');
+                        warningDiv.className = 'global-tray-warning';
+                        warningDiv.style.color = '#d32f2f';
+                        warningDiv.style.fontSize = '11px';
+                        warningDiv.style.marginTop = '4px';
+                        warningDiv.style.fontWeight = '600';
+                        input.parentElement.appendChild(warningDiv);
+                    }
+                    warningDiv.textContent = '⚠️ Tray already drafted/submitted in another lot';
+                    console.log('✅ Pre-filled tray validation: Duplicate detected -', trayId);
+                }
+            });
+        }, 50);
 
         // 🚀 ENHANCED: Initialize UI validation with enhanced event listeners
         setTimeout(() => {
@@ -4380,6 +4497,10 @@ trayScanLinks.forEach((link) => {
                         const resp = await fetch(`/dayplanning/tray_id_unique_check/?tray_id=${encodeURIComponent(trayId)}&batch_id=${encodeURIComponent(currentBatchId)}`);
                         const result = await resp.json();
                         
+                        // Clear any existing validation messages before showing new ones
+                        const existingErrors = input.parentNode.querySelectorAll('.global-tray-warning, .tray-id-error');
+                        existingErrors.forEach(e => e.remove());
+                        
                         if (result.tray_not_in_system) {
                             const errorDiv = document.createElement('div');
                             errorDiv.className = 'tray-id-error';
@@ -4481,13 +4602,21 @@ trayScanLinks.forEach((link) => {
                           
                           // Auto-focus next empty field after successful delink validation
                           setTimeout(() => {
+                            // Only move focus if current input has no error or global warning
+                            const hasError = !!input.parentNode.querySelector('.tray-id-error');
+                            const hasGlobalWarning = !!input.parentNode.querySelector('.global-tray-warning');
+                            if (!hasError && !hasGlobalWarning) {
                               focusNextEmptyTrayInput(input);
                               updateUIElements();
+                            }
                           }, 200);
                                                     
                         } else if (result.available) {
                             input.style.borderColor = '#4caf50';
                             input.style.backgroundColor = '#f1f8e9';
+                            // Remove any global warning since tray is now confirmed valid
+                            const globalWarningDiv = input.parentNode.querySelector('.global-tray-warning');
+                            if (globalWarningDiv) globalWarningDiv.remove();
                             
                             if (result.status === 'pre_configured') {
                                 const successDiv = document.createElement('div');
@@ -4505,10 +4634,15 @@ trayScanLinks.forEach((link) => {
                                 }, 2000);
                             }
                             
-                            // Auto-focus next empty field after successful validation
+                            // For valid trays: auto-focus next empty field (no auto-select)
                             setTimeout(() => {
+                              const hasError = !!input.parentNode.querySelector('.tray-id-error');
+                              const hasGlobalWarning = !!input.parentNode.querySelector('.global-tray-warning');
+                              if (!hasError && !hasGlobalWarning) {
+                                // Valid tray: move to next without auto-selecting text
                                 focusNextEmptyTrayInput(input);
                                 updateUIElements();
+                              }
                             }, 200);
                         }
                     } catch (e) {
@@ -4528,15 +4662,19 @@ trayScanLinks.forEach((link) => {
                 input.addEventListener('keydown', async function (e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        input.blur();
-                        setTimeout(() => {
-                            if (!input.parentNode.querySelector('.tray-id-error')) {
+                        const hasError = !!input.parentNode.querySelector('.tray-id-error');
+                        const hasGlobalWarning = !!input.parentNode.querySelector('.global-tray-warning');
+                        if (hasError || hasGlobalWarning) {
+                            // Invalid or duplicate tray: auto-select and stay in field
+                            input.focus();
+                            input.select();
+                        } else {
+                            // Valid tray: move to next field
+                            input.blur();
+                            setTimeout(() => {
                                 focusNextEmptyTrayInput(input);
-                            } else {
-                                input.focus();
-                                input.select();
-                            }
-                        }, 50);
+                            }, 50);
+                        }
                     }
                 });
             });
@@ -4628,6 +4766,28 @@ trayScanLinks.forEach((link) => {
         const submitBtn = document.getElementById('trayScanSubmitBtn');
         if (submitBtn) {
             submitBtn.onclick = function() {
+                // ✅ NEW: Check for globally duplicate trays before submitting
+                const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
+                let globalDuplicates = [];
+                
+                trayIdInputs.forEach((input, idx) => {
+                    const trayId = input.value.trim().toUpperCase();
+                    if (trayId && window.globallyUsedTrays && window.globallyUsedTrays.includes(trayId)) {
+                        globalDuplicates.push({ trayId, position: idx + 1 });
+                    }
+                });
+                
+                if (globalDuplicates.length > 0) {
+                    const duplicateList = globalDuplicates.map(d => `  • ${d.trayId} (Row ${d.position})`).join('\n');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Duplicate Trays Detected',
+                        html: `The following trays are already used in other lots:<br/><pre style="text-align:left; font-size:13px;">${duplicateList}</pre><br/>Please use different trays or contact admin to delink these trays.`,
+                        confirmButtonColor: '#dc3545'
+                    });
+                    return;
+                }
+                
                 const verifyCheckbox = document.querySelector('.tray-verify-checkbox');
                 const isCheckboxChecked = verifyCheckbox && verifyCheckbox.checked;
                 
@@ -6025,28 +6185,51 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
     if (err) err.remove();
     const succ = input.parentNode.querySelector('.tray-id-success');
     if (succ) succ.remove();
+    const globalWarn = input.parentNode.querySelector('.global-tray-warning');
+    if (globalWarn) globalWarn.remove();
   }
 
   function autoFocusFirstTrayInput() {
-    const trayInputs = document.querySelectorAll('.tray-id-input');
+    const trayInputs = Array.from(document.querySelectorAll('.tray-id-input'));
+    // Priority 1: Focus first input with an error or global warning
     for (let input of trayInputs) {
-      if (!input.value.trim()) {
+      const hasError = !!input.parentNode.querySelector('.tray-id-error');
+      const hasGlobalWarning = !!input.parentNode.querySelector('.global-tray-warning');
+      if (hasError || hasGlobalWarning) {
         input.focus();
         input.select();
         return;
       }
     }
-    // If all filled, do not focus any to avoid interfering with checkbox
+    // Priority 2: Focus first empty input
+    for (let input of trayInputs) {
+      if (!input.value.trim()) {
+        input.focus();
+        return;
+      }
+    }
+    // If all filled and no errors, do not focus any
   }
 
   function focusNextEmptyTrayInput(currentInput) {
     const trayInputsList = Array.from(document.querySelectorAll('.tray-id-input'));
     const currentIndex = trayInputsList.indexOf(currentInput);
     if (currentIndex === -1) return;
+    // Priority 1: If ANY slot has an error or global warning, redirect there
+    for (let i = 0; i < trayInputsList.length; i++) {
+      if (i === currentIndex) continue;
+      const hasError = !!trayInputsList[i].parentNode.querySelector('.tray-id-error');
+      const hasGlobalWarning = !!trayInputsList[i].parentNode.querySelector('.global-tray-warning');
+      if (hasError || hasGlobalWarning) {
+        trayInputsList[i].focus();
+        trayInputsList[i].select();
+        return;
+      }
+    }
+    // Priority 2: Focus next empty slot
     for (let i = currentIndex + 1; i < trayInputsList.length; i++) {
       if (!trayInputsList[i].value.trim()) {
         trayInputsList[i].focus();
-        trayInputsList[i].select();
         return;
       }
     }
@@ -6121,20 +6304,8 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
     document.head.appendChild(s);
   })();
 
-  // Keyboard shortcut hint panel
-  const kbHint = document.createElement('div');
-  kbHint.id = 'kb-shortcut-hint';
-  kbHint.innerHTML = `
-    <div style="font-weight:700; margin-bottom:8px; font-size:14px;">⌨️ Keyboard Shortcuts</div>
-    <div><span class="kb-key">&uarr;&darr;</span> Navigate rows</div>
-    <div><span class="kb-key">Enter</span> Open tray scan modal</div>
-    <div><span class="kb-key">T</span> &rarr; <span class="kb-key">Enter</span> Mark tray scan</div>
-    <div><span class="kb-key">Del</span> &rarr; <span class="kb-key">Enter</span> Delete lot</div>
-    <div><span class="kb-key">F2</span> Activate scanner</div>
-    <div><span class="kb-key">&larr;&rarr;</span> Scroll table</div>
-    <div><span class="kb-key">1&ndash;9</span> Jump to page</div>
-    <div><span class="kb-key">Esc</span> Close / Clear</div>
-  `;
+
+  
   document.body.appendChild(kbHint);
 
   let kbHintTimer = null;
@@ -6219,7 +6390,7 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
       const rows = kbRows();
       if (rows.length === 0) return;
 
-      kbShowHint();
+      // kbShowHint(); // ✅ REMOVED: Keyboard shortcuts hint window
 
       switch (e.key) {
 
@@ -6340,5 +6511,244 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
     console.log('Keyboard shortcuts ready: Esc=clear | Up/Down=navigate | Enter=execute | F2=scan | T=tray-scan | Delete=delete | Arrows=scroll | 1-9=page');
   }
 </script>
+
+<!-- ✅ ERR 2 FIX: D Key Delete Mode for DP_PickTable -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  const table = document.getElementById("order-listing");
+  if (!table) return;
+  
+  let selectedDeleteRow = null;
+  let inDeleteMode = false; // ✅ NEW: Track delete mode separately from navigation mode
+  const RED_HIGHLIGHT = '#ffcccb';
+  const RED_BORDER = '3px solid #dc3545';
+  
+  document.addEventListener("keydown", function (e) {
+    // Don't trigger in input/textarea
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    const allRows = Array.from(table.querySelectorAll("tbody tr"));
+    
+    // ✅ ERR 2: D KEY - Select row for deletion with LIGHT RED highlight (SEPARATE MODE)
+    if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      inDeleteMode = true; // ✅ NEW: Enter delete mode
+      
+      // ✅ NEW: Clear any yellow navigation highlight first
+      const yellowRows = Array.from(table.querySelectorAll("tbody tr[style*='ffeb3b']"));
+      yellowRows.forEach(row => {
+        row.style.backgroundColor = '';
+        row.style.border = '';
+        const cells = row.querySelectorAll('td, th');
+        cells.forEach(cell => cell.style.backgroundColor = '');
+      });
+      
+      if (!selectedDeleteRow && allRows.length > 0) {
+        selectedDeleteRow = allRows[0];
+        applyRedHighlight(selectedDeleteRow);
+        selectedDeleteRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        console.log('✅ ERR 2: Row 1 selected for deletion (light red) - DELETE MODE ACTIVE');
+      } else if (selectedDeleteRow) {
+        const currentIndex = allRows.indexOf(selectedDeleteRow);
+        if (currentIndex < allRows.length - 1) {
+          removeRedHighlight(selectedDeleteRow);
+          selectedDeleteRow = allRows[currentIndex + 1];
+          applyRedHighlight(selectedDeleteRow);
+          selectedDeleteRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          console.log('✅ ERR 2: Row ' + (currentIndex + 2) + ' selected for deletion (delete mode)');
+        }
+      }
+      return;
+    }
+    
+    // ✅ ERR 2: UP/DOWN arrows while in delete mode to navigate rows for deletion
+    if (selectedDeleteRow && inDeleteMode) {
+      if (e.key === 'ArrowUp' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const currentIndex = allRows.indexOf(selectedDeleteRow);
+        if (currentIndex > 0) {
+          removeRedHighlight(selectedDeleteRow);
+          selectedDeleteRow = allRows[currentIndex - 1];
+          applyRedHighlight(selectedDeleteRow);
+          selectedDeleteRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          console.log('✅ ERR 2: Row ' + currentIndex + ' selected for deletion (up)');
+        }
+        return;
+      } else if (e.key === 'ArrowDown' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const currentIndex = allRows.indexOf(selectedDeleteRow);
+        if (currentIndex < allRows.length - 1) {
+          removeRedHighlight(selectedDeleteRow);
+          selectedDeleteRow = allRows[currentIndex + 1];
+          applyRedHighlight(selectedDeleteRow);
+          selectedDeleteRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          console.log('✅ ERR 2: Row ' + (currentIndex + 2) + ' selected for deletion (down)');
+        }
+        return;
+      }
+    }
+    
+    // Enter to confirm delete
+    if (e.key === 'Enter' && selectedDeleteRow) {
+      e.preventDefault();
+      showDeleteConfirmationAlert();
+      return;
+    }
+    
+    // Esc to clear delete selection and exit delete mode
+    if (e.key === 'Escape' && selectedDeleteRow && inDeleteMode) {
+      e.preventDefault();
+      removeRedHighlight(selectedDeleteRow);
+      selectedDeleteRow = null;
+      inDeleteMode = false; // ✅ NEW: Exit delete mode
+      console.log('✅ ERR 2: Delete selection cleared - EXITED DELETE MODE');
+      return;
+    }
+  });
+  
+  function applyRedHighlight(row) {
+    row.style.backgroundColor = RED_HIGHLIGHT;
+    row.style.border = RED_BORDER;
+    row.style.transition = 'background-color 0.2s, border 0.2s';
+    // Highlight all cells including frozen columns
+    const cells = row.querySelectorAll('td, th');
+    cells.forEach(cell => {
+      cell.style.backgroundColor = RED_HIGHLIGHT;
+      cell.style.transition = 'background-color 0.2s';
+    });
+  }
+  
+  function removeRedHighlight(row) {
+    row.style.backgroundColor = '';
+    row.style.border = '';
+    const cells = row.querySelectorAll('td, th');
+    cells.forEach(cell => {
+      cell.style.backgroundColor = '';
+    });
+  }
+  
+  function showDeleteConfirmationAlert() {
+    if (!selectedDeleteRow) return;
+    
+    // Get batch ID and details from selected row
+    const batchId = selectedDeleteRow.querySelector('[data-batch-id]')?.getAttribute('data-batch-id') || 'Unknown';
+    const rowData = Array.from(selectedDeleteRow.querySelectorAll('td')).map(td => td.textContent.trim()).join(' | ');
+    
+    // Create custom alert with keyboard support
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+    
+    const popup = document.createElement('div');
+    popup.style.cssText = 'background: white; padding: 28px 32px; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); text-align: center; min-width: 340px; max-width: 90vw;';
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Confirm Delete';
+    title.style.cssText = 'margin: 0 0 16px 0; color: #dc3545;';
+    
+    const msg = document.createElement('p');
+    msg.textContent = 'Are you sure you want to delete this row? (Batch: ' + batchId + ')';
+    msg.style.cssText = 'margin: 0 0 24px 0; color: #666; font-size: 14px;';
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 12px; justify-content: center;';
+    
+    const yesBtn = document.createElement('button');
+    yesBtn.textContent = 'Yes, Delete';
+    yesBtn.id = 'delete-yes-btn';
+    yesBtn.style.cssText = 'padding: 10px 24px; background: #dc3545; color: white; border: 2px solid #dc3545; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s;';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.id = 'delete-cancel-btn-delete';
+    cancelBtn.style.cssText = 'padding: 10px 24px; background: #6c757d; color: white; border: 2px solid #6c757d; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s;';
+    
+    buttonContainer.appendChild(yesBtn);
+    buttonContainer.appendChild(cancelBtn);
+    
+    popup.appendChild(title);
+    popup.appendChild(msg);
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    
+    let selectedBtn = 1; // Default to Cancel button (index 1)
+    cancelBtn.focus();
+    
+    function updateButtonState() {
+      if (selectedBtn === 0) {
+        yesBtn.style.background = '#bd2130';
+        yesBtn.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.5)';
+        cancelBtn.style.background = '#6c757d';
+        cancelBtn.style.boxShadow = 'none';
+        yesBtn.focus();
+      } else {
+        cancelBtn.style.background = '#5a6268';
+        cancelBtn.style.boxShadow = '0 0 0 3px rgba(108, 117, 125, 0.5)';
+        yesBtn.style.background = '#dc3545';
+        yesBtn.style.boxShadow = 'none';
+        cancelBtn.focus();
+      }
+    }
+    
+    updateButtonState();
+    
+    function handleKeyDown(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedBtn === 0) {
+          cleanup();
+          performDelete();
+        } else {
+          cleanup();
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedBtn = 0;
+        updateButtonState();
+        console.log('✅ ERR 2: Button nav to Yes');
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedBtn = 1;
+        updateButtonState();
+        console.log('✅ ERR 2: Button nav to Cancel');
+      }
+    }
+    
+    yesBtn.addEventListener('click', function() {
+      cleanup();
+      performDelete();
+    });
+    
+    cancelBtn.addEventListener('click', function() {
+      cleanup();
+    });
+    
+    document.addEventListener('keydown', handleKeyDown);
+    
+    function cleanup() {
+      document.removeEventListener('keydown', handleKeyDown);
+      overlay.remove();
+      removeRedHighlight(selectedDeleteRow);
+      selectedDeleteRow = null;
+    }
+    
+    function performDelete() {
+      const deleteBtn = selectedDeleteRow.querySelector('a img[src*="bin.png"]')?.parentElement;
+      if (deleteBtn) {
+        deleteBtn.click();
+        console.log('✅ ERR 2 FIXED: Delete confirmed and executed');
+      }
+    }
+  }
+  
+  console.log('✅ ERR 2 FIXED: D key delete mode loaded - press D to select row, arrows to navigate, Enter to confirm');
+});
+</script>
+
   {% endblock %} {% endblock content %}
 </div>

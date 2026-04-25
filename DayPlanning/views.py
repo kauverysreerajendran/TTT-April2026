@@ -1365,6 +1365,15 @@ class DayPlanningPickTableAPIView(APIView):
         user = request.user
         # is_admin = user.groups.filter(name='Admin').exists() if user.is_authenticated else False
         is_admin = is_admin_user(user)
+        
+        # ✅ NEW: Get all globally used trays for real-time validation across lots
+        draft_trays = DraftTrayId.objects.filter(
+            delink_tray=False
+        ).values_list('tray_id', flat=True).distinct()
+        submitted_trays = TrayId.objects.filter(
+            delink_tray=False
+        ).values_list('tray_id', flat=True).distinct()
+        globally_used_trays = list(set(list(draft_trays) + list(submitted_trays)))
  
         # Handle sorting parameters
         sort = request.GET.get('sort')
@@ -2494,6 +2503,44 @@ class DraftTrayIdAPIView(APIView):
             return JsonResponse({'success': False, 'error': 'Unexpected error: ' + str(e)}, status=500)
 
 @method_decorator(csrf_exempt, name='dispatch')
+class GlobalDraftedTraysAPIView(APIView):
+    """
+    Return trays that are genuinely active in Day Planning across all lots.
+    Accepts optional batch_id to EXCLUDE the current batch's own trays so that
+    re-opening a draft modal does not flag the batch's own trays as duplicates.
+
+    Uses DPTrayId_History (the real DP transaction log) instead of TrayId master
+    so that trays which have moved past Day Planning (accepted to IS/Brass QC etc.)
+    are NOT reported as globally used.
+    """
+    def get(self, request):
+        from .models import DPTrayId_History
+        current_batch_id = request.GET.get('batch_id', '').strip()
+
+        # ── Active drafted trays (not yet submitted) ──────────────────────────
+        draft_qs = DraftTrayId.objects.filter(delink_tray=False)
+        if current_batch_id:
+            draft_qs = draft_qs.exclude(batch_id__batch_id=current_batch_id)
+        draft_trays = list(draft_qs.values_list('tray_id', flat=True).distinct())
+
+        # ── Active submitted trays still sitting in DP (not delinked) ─────────
+        # Use DPTrayId_History — trays that moved to IS/Brass QC have
+        # DPTrayId_History rows with delink_tray=True after the lot moves on.
+        dp_qs = DPTrayId_History.objects.filter(delink_tray=False)
+        if current_batch_id:
+            dp_qs = dp_qs.exclude(batch_id__batch_id=current_batch_id)
+        dp_trays = list(dp_qs.values_list('tray_id', flat=True).distinct())
+
+        all_used_trays = list(set(draft_trays + dp_trays))
+
+        return JsonResponse({
+            'success': True,
+            'trays': all_used_trays,
+            'count': len(all_used_trays)
+        })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class DraftTrayIdListAPIView(APIView):
     def get(self, request):
         batch_id = request.GET.get('batch_id')
@@ -2560,14 +2607,32 @@ class TrayIdUniqueCheckAPIView(APIView):
                 'message': 'This tray must be added by admin before scanning.'
             })
 
+        # ── Cross-check helper: verify tray is genuinely still active in DP ──
+        def _is_tray_active_in_dp():
+            """Return True if there's a non-delinked DPTrayId_History record for this tray."""
+            from .models import DPTrayId_History
+            return DPTrayId_History.objects.filter(tray_id=tray_id, delink_tray=False).exists()
+
+        def _release_stale_tray():
+            """Reset TrayId master when it's dirty but no active DP record exists."""
+            existing_tray.lot_id = None
+            existing_tray.batch_id = None
+            existing_tray.scanned = False
+            existing_tray.delink_tray = False
+            existing_tray.save(update_fields=['lot_id', 'batch_id', 'scanned', 'delink_tray'])
+
         # NEW: Disallow tray if it already has a lot_id value
         if existing_tray.lot_id:
-            return JsonResponse({
-                'exists': True,
-                'available': False,
-                'error': f'Tray ID \"{tray_id}\" is already assigned.',
-                'message': 'This tray is already linked to a lot and cannot be reused until delinked.'
-            })
+            # Cross-check: if no active DP record exists, the lot_id is stale — reset and allow
+            if _is_tray_active_in_dp():
+                return JsonResponse({
+                    'exists': True,
+                    'available': False,
+                    'error': f'Tray ID "{tray_id}" is already assigned.',
+                    'message': 'This tray is already linked to a lot and cannot be reused until delinked.'
+                })
+            else:
+                _release_stale_tray()
         
         # ✅ NEW: Disallow if tray is rejected
         if getattr(existing_tray, 'rejected_tray', False):
@@ -2608,15 +2673,19 @@ class TrayIdUniqueCheckAPIView(APIView):
         
         # Check if tray is already scanned/used
         if existing_tray.scanned:
-            return JsonResponse({
-                'exists': True,
-                'available': False,
-                'already_scanned': True,
-                'delink_tray': getattr(existing_tray, 'delink_tray', False),  # <-- Add this line
-                'error': f'Tray ID "{tray_id}" has already been scanned and is in use',
-                'batch_info': existing_tray.batch_id.batch_id if existing_tray.batch_id else 'Unknown batch',
-                'scan_date': existing_tray.date.strftime('%d-%m-%Y %H:%M') if existing_tray.date else 'Unknown date'
-            })
+            # Cross-check: if no active DP record, scanned flag is stale — reset and allow
+            if _is_tray_active_in_dp():
+                return JsonResponse({
+                    'exists': True,
+                    'available': False,
+                    'already_scanned': True,
+                    'delink_tray': getattr(existing_tray, 'delink_tray', False),
+                    'error': f'Tray ID "{tray_id}" has already been scanned and is in use',
+                    'batch_info': existing_tray.batch_id.batch_id if existing_tray.batch_id else 'Unknown batch',
+                    'scan_date': existing_tray.date.strftime('%d-%m-%Y %H:%M') if existing_tray.date else 'Unknown date'
+                })
+            else:
+                _release_stale_tray()
         
         # Tray exists but not scanned - validate tray type compatibility
         if batch_id:

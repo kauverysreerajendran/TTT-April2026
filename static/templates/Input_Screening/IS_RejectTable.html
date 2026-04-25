@@ -725,51 +725,17 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <label for="select-all-checkbox" style="font-weight: 600; color: #fff; font-size: 11px; margin: 0; cursor:pointer;text-align: center;">Select All</label>
                       </div>
                     </th>
-                    <th>
-                      
-                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Last<br>Updated
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Plating <br>Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Plating Color
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                     <th>
-                      Category
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Polish <br>Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                     <th>
-                      Tray Cate-<br>Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Input Source
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                   
-                    <th>
-                      No of <br>Tray <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Reject Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                    <th>
-                      Rejection Reasons
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    </th>
-                   
+                    <th>S.No <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Last<br>Updated <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Plating <br>Stk No <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Reject Qty <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>No of <br>Trays <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Rejection Reasons <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Tray Cate-<br>Capacity <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Plating Color <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Category <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Polish <br>Finish <i class="fa fa-filter" aria-hidden="true"></i></th>
+                    <th>Input Source <i class="fa fa-filter" aria-hidden="true"></i></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -777,6 +743,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 
                   <tr class="highlighted-tray-scan"
                     data-lot-id="{{ data.stock_lot_id }}"
+                    data-stock-lot-id="{{ data.stock_lot_id }}"
                     data-batch-id="{{ data.batch_id }}">
                     <td>
                       {% if data.tray_id_in_trayid %}
@@ -785,22 +752,18 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <input type="checkbox" class="row-checkbox" disabled title="Tray not found, cannot delink" />
                       {% endif %}
                     </td>
-                     <td>{{ page_obj.start_index|add:forloop.counter0 }}
-
-                    </td>                 
+                    <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
                     <td>{{ data.last_process_date_time|date:"Y-m-d" }}<br>
                         <span style="display:inline-block; margin-top:4px;">{{ data.last_process_date_time|date:"h:i A" }}</span>
-                    <!-- Plating Stk No - Mouse Hover Image -->
-                      <td>
+                    </td>
+                    <td>
                         <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
                           {{ data.plating_stk_no|highlight_plating_color|safe_html }}
                           <div class="model-image-tooltip" style="position: absolute; left: 50%; top: 90%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s;">
                             <button class="info-btn">Info</button>
                             <button class="close-btn">Close</button>
                             <button class="img-scroll-left" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8592;</button>
-                            <!-- Image gallery section -->
                             <div style="display: flex; align-items: center; gap: 8px;">
-                              <!-- Hide scroll buttons since only one image is shown -->
                               <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
                                 <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
                               </div>
@@ -808,83 +771,60 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                             <button class="img-scroll-right" style="background: none; border: none; font-size: 20px; cursor: pointer;">&#8594;</button>
                           </div>
                         </span>
-                      </td>
-                     
-
+                    </td>
+                    <td>
+                      {{data.ip_rejection_total_qty}}
+                      <a href="#" title="View" class="text-primary tray-scan-btn-Jig" style="text-decoration: underline; margin-left: 8px;"
+                        data-stock-lot-id="{{ data.stock_lot_id }}" data-batch-id="{{ data.batch_id }}" data-model-no="{{ data.plating_stk_no }}"
+                        data-no-of-trays="{{ data.no_of_trays }}" data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                        data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}" data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
+                        data-accepted-ip-stock="{{ data.accepted_Ip_stock|yesno:'true,false' }}" data-rejected-ip-stock="{{ data.rejected_ip_stock|yesno:'true,false' }}"
+                        data-model-image="{{ data.model_images.0|default:'' }}" data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'true,false' }}"
+                        data-total-batch-quantity="{{ data.ip_rejection_total_qty }}">
+                        <img src="{% static 'assets/icons/view.png' %}" alt="View" style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+                      </a>
+                    </td>
+                    <td>{{data.no_of_trays}}</td>
+                    <td>
+                      <div class="avatar-group rejection-popup-trigger"
+                          style="cursor:pointer; max-width:120px; white-space:nowrap; word-break:break-word; overflow:hidden; text-overflow:ellipsis; display:flex; flex-direction:column; align-items:flex-start; gap:2px;"
+                          onmouseover="this.style.overflow='visible'; this.style.whiteSpace='nowrap'; this.style.background='#f9f9f9'; this.style.zIndex='10';"
+                          onmouseout="this.style.overflow='hidden'; this.style.whiteSpace='nowrap'; this.style.background=''; this.style.zIndex='';">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                          {% if data.rejection_reason_letters %}
+                            {% for letter in data.rejection_reason_letters %}
+                              <a href="#" class="avatar blue"
+                                style="color: #fff; cursor: pointer; background: #01802a; padding: 4px 0; width:18px; height:18px; border-radius: 50%; font-size: 11px; display:inline-flex; align-items:center; justify-content:center;">
+                                {{ letter }}
+                              </a>
+                            {% endfor %}
+                          {% elif data.dp_missing_qty and data.dp_missing_qty > 0 %}
+                            <div class="avatar orange" title="Shortage" style="width:20px; height:20px; padding:6px !important; font-size:11px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">S</div>
+                          {% else %}
+                            <span style="color:#888; font-size:12px; font-style:italic;">No rejection reason</span>
+                          {% endif %}
+                        </div>
+                        <div style="margin-top:2px;">
+                          {% if data.lot_rejected_comment %}
+                            <i class="fa fa-info-circle lot-rej-info"
+                              style="color:#d32f2f; font-size:15px; cursor:pointer;"
+                              tabindex="0"
+                              data-lot-comment="{{ data.lot_rejected_comment|default:''|escape }}"
+                              data-lot-id="{{ data.stock_lot_id }}"
+                              onclick="showRejectionRemarksModal('{{ data.stock_lot_id }}')"
+                              onkeypress="if(event.key==='Enter') showRejectionRemarksModal('{{ data.stock_lot_id }}')"></i>
+                          {% else %}
+                            <i class="fa fa-info-circle" style="color:#bdbdbd; font-size:15px; cursor:not-allowed; opacity:0.5;" title="No lot remarks"></i>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </td>
+                    <td>{{data.tray_type}}-{{data.tray_capacity}}</td>
                     <td>{{ data.plating_color }}</td>
                     <td>{{ data.category }}</td>
                     <td>{{data.polish_finish}}</td>
-                    <td>{{data.tray_type}}-{{data.tray_capacity}}</td>
                     <td>{{data.location__location_name}}</td>
-                    <td>{{data.no_of_trays}}</td>
-                    <td>
-                      {{data.ip_rejection_total_qty}}
-                          <a href="#"
-      title="View"
-      class="text-primary tray-scan-btn-Jig"
-      style="text-decoration: underline; margin-left: 8px;"
-      data-stock-lot-id="{{ data.stock_lot_id }}"
-      data-batch-id="{{ data.batch_id }}"
-      data-model-no="{{ data.plating_stk_no }}"
-      data-no-of-trays="{{ data.no_of_trays }}"
-      data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-      data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
-      data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-      data-accepted-ip-stock="{{ data.accepted_Ip_stock|yesno:'true,false' }}"
-      data-rejected-ip-stock="{{ data.rejected_ip_stock|yesno:'true,false' }}"
-      data-model-image="{{ data.model_images.0|default:'' }}"
-      data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'true,false' }}"
-        data-total-batch-quantity="{{ data.ip_rejection_total_qty }}">
-
-      <img src="{% static 'assets/icons/view.png' %}"
-          alt="View"
-          style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
-    </a>
-                    </td>
-
-    <!-- Rejection Remark -->
-    <!-- Only reduce circle size and force single-line display, keep everything else intact -->
-        <td>
-          <div class="avatar-group rejection-popup-trigger"
-              style="cursor:pointer; max-width:120px; white-space:nowrap; word-break:break-word; overflow:hidden; text-overflow:ellipsis; display:flex; flex-direction:column; align-items:flex-start; gap:2px;"
-              onmouseover="this.style.overflow='visible'; this.style.whiteSpace='nowrap'; this.style.background='#f9f9f9'; this.style.zIndex='10';"
-              onmouseout="this.style.overflow='hidden'; this.style.whiteSpace='nowrap'; this.style.background=''; this.style.zIndex='';"
-              title="">
-            <!-- Top: Rejection Reason Circles or Placeholder -->
-            <div style="display:flex; align-items:center; gap:4px;">
-              {% if data.rejection_reason_letters %}
-                {% for letter in data.rejection_reason_letters %}
-                  <a href="#" class="avatar blue"
-                    style="color: #fff; cursor: pointer; background: #01802a; padding: 4px 0; width:18px; height:18px; border-radius: 50%; font-size: 11px; display:inline-flex; align-items:center; justify-content:center;">
-                    {{ letter }}
-                  </a>
-                {% endfor %}
-              {% elif data.dp_missing_qty and data.dp_missing_qty > 0 %}
-                <div class="avatar orange" title="Shortage" style="width:20px; height:20px; padding:6px !important; font-size:11px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">S</div>
-              {% else %}
-                <span style="color:#888; font-size:12px; font-style:italic;">
-                  No rejection reason
-                </span>
-              {% endif %}
-            </div>
-            <!-- Bottom: Lot Rejection Remark Info Icon -->
-            <div style="margin-top:2px;">
-              {% if data.lot_rejected_comment %}
-                <i class="fa fa-info-circle lot-rej-info"
-                  style="color:#d32f2f; font-size:15px; cursor:pointer;"
-                  tabindex="0"
-                  data-lot-comment="{{ data.lot_rejected_comment|default:''|escape }}"
-                  data-lot-id="{{ data.stock_lot_id }}"
-                  onclick="showRejectionRemarksModal('{{ data.stock_lot_id }}')"
-                  onkeypress="if(event.key==='Enter') showRejectionRemarksModal('{{ data.stock_lot_id }}')"></i>
-              {% else %}
-                <i class="fa fa-info-circle" style="color:#bdbdbd; font-size:15px; cursor:not-allowed; opacity:0.5;" title="No lot remarks"></i>
-              {% endif %}
-            </div>
-          </div>
-        </td>
-
-       </tr>
+                  </tr>
                 {% endfor %}
 
         </tbody>
@@ -1681,7 +1621,8 @@ document.addEventListener("DOMContentLoaded", function () {
         const rows = trays.map((t, i) => {
           const top = t.top_tray ? '<span style="background:#0288d1;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">TOP</span>' : '';
           const reason = t.reason_text ? `<span style="background:#b71c1c;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">${_esc(t.reason_text)}</span>` : '';
-          const src = t.source ? `<span style="color:#666;font-size:10px;margin-left:6px;">(${_esc(t.source)})</span>` : '';
+          const _srcLabel = t.source === 'reused' ? 'Delinked' : t.source;
+          const src = _srcLabel ? `<span style="color:#666;font-size:10px;margin-left:6px;">(${_esc(_srcLabel)})</span>` : '';
           return `<tr><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:center;">${i+1}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;font-family:monospace;">${_esc(t.tray_id)}${top}${reason}${src}</td><td style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;">${_esc(t.qty)}</td></tr>`;
         }).join('');
         return `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;"><thead><tr style="background:#f5f5f5;"><th style="padding:4px 8px;border:1px solid #e0e0e0;width:40px;">#</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:left;">Tray ID</th><th style="padding:4px 8px;border:1px solid #e0e0e0;text-align:right;width:80px;">Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -2393,6 +2334,6 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
-
+<script nonce="{{ csp_nonce }}" src="{% static 'js/inputscreening_shortcuts.js' %}" defer></script>
 
 {% endblock %} {% endblock content %}

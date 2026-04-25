@@ -75,7 +75,7 @@
   function _getRows() {
     var tbody = document.querySelector("#order-listing tbody");
     if (!tbody) return [];
-    return Array.from(tbody.querySelectorAll("tr[data-stock-lot-id]")).filter(
+    return Array.from(tbody.querySelectorAll("tr[data-stock-lot-id], tr[data-lot-id]")).filter(
       function (r) {
         return !r.classList.contains("row-inactive");
       }
@@ -290,7 +290,7 @@
   function _openSelectedRowDetail() {
     var row = _selectedRow;
     if (!row) return;
-    var viewBtn = row.querySelector(".tray-scan-btn-DayPlanning-view");
+    var viewBtn = row.querySelector(".tray-scan-btn-DayPlanning-view, .tray-scan-btn-BQ-view, .tray-scan-btn-Jig");
     if (viewBtn) viewBtn.click();
   }
 
@@ -299,7 +299,7 @@
   /** Keep _selectedRow in sync when user clicks a table row directly. */
   function _initRowClickSync() {
     document.addEventListener("click", function (e) {
-      var tr = e.target.closest("#order-listing tbody tr[data-stock-lot-id]");
+      var tr = e.target.closest("#order-listing tbody tr[data-stock-lot-id], #order-listing tbody tr[data-lot-id]");
       if (tr) _selectRow(tr);
     });
   }

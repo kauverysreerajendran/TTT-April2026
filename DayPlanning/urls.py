@@ -23,6 +23,7 @@ urlpatterns = [
     path('tray_id_unique_check/', TrayIdUniqueCheckAPIView.as_view(), name='tray_id_unique_check'),
     path('draft_tray/', DraftTrayIdAPIView.as_view(), name='draft_tray'),
     path('draft_tray_id_list/', DraftTrayIdListAPIView.as_view(), name='draft_tray_id_list'),
+    path('globally_drafted_trays/', GlobalDraftedTraysAPIView.as_view(), name='globally_drafted_trays'),  # ✅ NEW
     
     path('dp_completed_table/', DPCompletedTableView.as_view(), name='dp_completed_table'),  # <-- Add this
     path('completed_tray_id_list/', CompletedTrayIdListAPIView.as_view(), name='completed_tray_id_list'),
